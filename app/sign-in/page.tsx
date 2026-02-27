@@ -9,7 +9,7 @@ function SignInContent() {
   const errorParam   = searchParams.get('error')
   const [loading, setLoading] = useState(false)
 
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? (typeof window !== 'undefined' ? window.location.origin : '')
+  const siteUrl = (typeof window !== 'undefined' ? window.location.origin : (process.env.NEXT_PUBLIC_SITE_URL ?? '')).replace('0.0.0.0', 'localhost')
 
   async function signIn() {
     setLoading(true)
