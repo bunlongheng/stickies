@@ -3520,7 +3520,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                             {/* LOCK — global only */}
                             {!activeFolder && (
                                 <button type="button" className="w-full flex items-center gap-4 px-6 py-4 text-left text-zinc-300 hover:bg-white/5 hover:text-white active:bg-white/10 transition"
-                                    onClick={async () => { setShowFolderActions(false); await fetch("/api/stickies/logout", { method: "POST" }); localStorage.removeItem("stickies_pw"); window.location.href = "/stickies-unlock"; }}>
+                                    onClick={async () => { setShowFolderActions(false); await fetch("/api/stickies/logout", { method: "POST" }); window.location.href = "/sign-in"; }}>
                                     <ArrowRightOnRectangleIcon className="w-5 h-5 flex-shrink-0" />
                                     <span className="text-xs font-black tracking-wide flex-1">Sign Out</span>
                                 </button>
