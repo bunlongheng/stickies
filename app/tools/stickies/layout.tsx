@@ -1,15 +1,13 @@
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
+import { createClient } from '@/lib/supabase/server'
+import { redirect } from 'next/navigation'
 
 export default async function StickiesLayout({ children }: { children: React.ReactNode }) {
-    // Gate is active whenever STICKIES_PASSWORD is configured (dev + prod)
-    if (process.env.STICKIES_PASSWORD) {
-        const cookieStore = await cookies();
-        const auth = cookieStore.get("stickies_auth");
-        if (auth?.value !== process.env.STICKIES_PASSWORD) {
-            redirect("/stickies-unlock");
-        }
-    }
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
 
-    return <>{children}</>;
+  if (!user) {
+    redirect('/sign-in')
+  }
+
+  return <>{children}</>
 }
