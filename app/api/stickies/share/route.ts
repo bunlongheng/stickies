@@ -1,18 +1,18 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient as createServiceClient } from "@supabase/supabase-js";
+import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
 
 function getSupabase() {
-    return createClient(
+    return createServiceClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
 }
 
 async function isAuthed(): Promise<boolean> {
-    const cookieStore = await cookies();
-    const auth = cookieStore.get("stickies_auth");
-    return auth?.value === process.env.STICKIES_PASSWORD;
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    return !!user;
 }
 
 // POST /api/stickies/share — create a burn-after-read link (auth required)
@@ -73,18 +73,3 @@ export async function GET(req: Request) {
     });
 }
 
-// DELETE /api/stickies/share?token=... — burn (called after user copies)
-export async function DELETE(req: Request) {
-    const token = new URL(req.url).searchParams.get("token");
-    if (!token) return NextResponse.json({ error: "Missing token" }, { status: 400 });
-
-    const supabase = getSupabase();
-    const { error } = await supabase.from("shared_notes").delete().eq("token", token);
-
-    if (error) {
-        console.error("[share DELETE]", error);
-        return NextResponse.json({ error: "DB error" }, { status: 500 });
-    }
-
-    return NextResponse.json({ ok: true });
-}
