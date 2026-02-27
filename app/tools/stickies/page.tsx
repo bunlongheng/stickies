@@ -37,7 +37,7 @@ const getSupabase = () => createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, pr
 const supabase = { from: (...a: Parameters<ReturnType<typeof getSupabase>["from"]>) => getSupabase().from(...a) } as ReturnType<typeof getSupabase>;
 
 // Server-side API helper — all writes go here (bypasses RLS via service role)
-const STICKIES_KEY = process.env.NEXT_PUBLIC_STICKIES_API_KEY ?? "sk_stickies_d218dfa0abe37b82c5269f40bd478ddca7b567bbd1310efc";
+const STICKIES_KEY = process.env.NEXT_PUBLIC_STICKIES_API_KEY ?? "";
 const notesApi = {
     update: async (id: string, fields: Record<string, unknown>) => {
         const res = await fetch("/api/stickies", {

@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import Pusher from "pusher";
+import crypto from "crypto";
 
 const palette12 = [
     "#FF3B30", "#FF6B4E", "#FF9500", "#FFCC00",
@@ -30,7 +31,13 @@ function authorize(req: Request): boolean {
     const apiKey = process.env.STICKIES_API_KEY;
     if (!apiKey) return false;
     const auth = req.headers.get("authorization") ?? "";
-    return auth === `Bearer ${apiKey}`;
+    const expected = `Bearer ${apiKey}`;
+    if (auth.length !== expected.length) return false;
+    try {
+        return crypto.timingSafeEqual(Buffer.from(auth), Buffer.from(expected));
+    } catch {
+        return false;
+    }
 }
 
 // GET /api/stickies — list notes/folders
