@@ -4,3 +4,15 @@
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
+
+[[redirects]]
+  from = "/stickies-share"
+  to = "https://bheng.vercel.app/stickies-share"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/*"
+  to = "https://bheng.vercel.app/tools/stickies"
+  status = 301
+  force = true
