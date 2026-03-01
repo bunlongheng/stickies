@@ -1,14 +1,1 @@
-{
-  "redirects": [
-    {
-      "source": "/stickies-share",
-      "destination": "https://bheng.vercel.app/stickies-share",
-      "permanent": true
-    },
-    {
-      "source": "/(.*)",
-      "destination": "https://bheng.vercel.app/tools/stickies",
-      "permanent": true
-    }
-  ]
-}
+{}
