@@ -1071,7 +1071,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         if (folderMeta) return Number(folderMeta.count) || 0;
         return dbData.filter((row) => !row.is_folder && String(row.folder_name || "") === activeFolder).length;
     }, [activeFolder, folders, dbData]);
-    const canDeleteActiveFolder = Boolean(activeFolder && activeFolderNoteCount === 0);
+    const canDeleteActiveFolder = Boolean(activeFolder);
     const isEmptyView = isDataLoaded && !editorOpen && !search.trim() && displayItems.length === 0;
     const folderNames = useMemo(() => {
         const names = new Set<string>();
@@ -1379,11 +1379,6 @@ const fireIntegrations = (trigger: string, note: any) => {
     const deleteFolderByName = useCallback(
         async (folderName: string) => {
             if (!folderName) return;
-            const noteCount = dbData.filter((row) => !row.is_folder && String(row.folder_name || "") === folderName).length;
-            if (noteCount > 0) {
-                showToast("Folder must be empty");
-                return;
-            }
             try {
                 await notesApi.deleteByFolder(folderName);
                 setDbData((prev) => prev.filter((row) => String(row.folder_name || "") !== folderName));
@@ -1430,7 +1425,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                 method: "PATCH",
                 headers: {
                     "Content-Type": "application/json",
-                    "Authorization": "Bearer sk_stickies_d218dfa0abe37b82c5269f40bd478ddca7b567bbd1310efc",
+                    "Authorization": `Bearer ${STICKIES_KEY}`,
                 },
                 body: JSON.stringify({ folderName, icon }),
             });
@@ -3756,7 +3751,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                     <div className="bg-zinc-900 border-2 border-red-500 p-7 sm:p-9 w-full max-w-sm text-center">
                         <ExclamationTriangleIcon className="w-14 h-14 text-red-500 mx-auto mb-4" />
                         <h2 className="text-sm font-black uppercase tracking-wider text-red-400 mb-2">{confirmDelete.type === "folder" ? "Delete Folder?" : confirmDelete.noteId ? "Delete Note?" : "Discard Draft?"}</h2>
-                        <p className="text-[11px] text-white/70 uppercase tracking-wide mb-5">{confirmDelete.type === "folder" ? "Only empty folders can be deleted." : "This action cannot be undone."}</p>
+                        <p className="text-[11px] text-white/70 uppercase tracking-wide mb-5">{confirmDelete.type === "folder" ? `All notes inside will also be deleted. This cannot be undone.` : "This action cannot be undone."}</p>
                         <div className="flex flex-col gap-2">
                             <button
                                 type="button"
