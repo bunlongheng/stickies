@@ -482,6 +482,29 @@ export async function POST(req: Request) {
     return NextResponse.json({ note: data }, { status: 201 });
 }
 
+// DELETE /api/stickies?folder_name=<name> — delete folder row + all notes inside it
+export async function DELETE(req: Request) {
+    if (!authorize(req)) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const url = new URL(req.url);
+    const folderName = url.searchParams.get("folder_name")?.trim();
+    if (!folderName) {
+        return NextResponse.json({ error: "folder_name is required" }, { status: 400 });
+    }
+    const supabase = getSupabase();
+    const { error } = await supabase
+        .from("notes")
+        .delete()
+        .eq("folder_name", folderName);
+    if (error) {
+        console.error("[stickies DELETE folder]", error);
+        return NextResponse.json({ error: "Database error" }, { status: 500 });
+    }
+    try { await getPusher().trigger("stickies", "note-deleted", { folder_name: folderName }); } catch {}
+    return NextResponse.json({ ok: true, deleted_folder: folderName });
+}
+
 // PATCH /api/stickies — update notes/folders or organize
 //
 // Single note update:    { id: string, ...fields }
