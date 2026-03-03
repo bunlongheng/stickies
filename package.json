@@ -7,7 +7,7 @@
     "dev": "node scripts/dev.mjs",
     "build": "next build",
     "start": "next start",
-    "smoke": "NODE_TLS_REJECT_UNAUTHORIZED=0 BASE_URL=http://localhost:4444 npx tsx tests/smoke-signup.ts"
+    "smoke": "sh -c 'set -a && . .env.local && set +a && NODE_TLS_REJECT_UNAUTHORIZED=0 BASE_URL=http://localhost:4444 npx tsx tests/smoke-signup.ts'"
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",

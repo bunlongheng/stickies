@@ -105,9 +105,6 @@ async function checkTables() {
     }
     assert("`users_stickies` table exists (user data)", true);
 
-    // Check RLS is enabled on users_stickies
-    const { data: rlsCheck } = await sb.rpc("check_rls" as any).catch(() => ({ data: null }));
-    // Verify RLS by attempting an anon query (should return empty, not error if RLS is set correctly)
     console.log("  ℹ️   RLS enforced via service-role scoping in API routes");
 
     return true;
