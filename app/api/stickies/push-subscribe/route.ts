@@ -9,28 +9,41 @@ function getSupabase() {
     );
 }
 
-function authorize(req: Request): boolean {
+type AuthResult = { type: "apikey" } | { type: "user"; userId: string };
+
+async function authenticate(req: Request): Promise<AuthResult | null> {
     const auth = req.headers.get("authorization") ?? "";
+    const bearer = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+    if (!bearer) return null;
+
     const candidates = [process.env.STICKIES_API_KEY, process.env.STICKIES_PASSWORD].filter(Boolean) as string[];
     for (const secret of candidates) {
         const expected = `Bearer ${secret}`;
         if (auth.length !== expected.length) continue;
-        try { if (crypto.timingSafeEqual(Buffer.from(auth), Buffer.from(expected))) return true; } catch {}
+        try { if (crypto.timingSafeEqual(Buffer.from(auth), Buffer.from(expected))) return { type: "apikey" }; } catch {}
     }
-    return false;
+
+    const { data: { user } } = await getSupabase().auth.getUser(bearer);
+    if (user) return { type: "user", userId: user.id };
+    return null;
 }
 
 export async function POST(req: Request) {
-    if (!authorize(req)) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const auth = await authenticate(req);
+    if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
     const { subscription } = await req.json();
     if (!subscription?.endpoint) {
         return NextResponse.json({ error: "Missing subscription" }, { status: 400 });
     }
     const sb = getSupabase();
     await sb.from("push_subscriptions").upsert(
-        { endpoint: subscription.endpoint, keys: subscription.keys, updated_at: new Date().toISOString() },
+        {
+            endpoint: subscription.endpoint,
+            keys: subscription.keys,
+            updated_at: new Date().toISOString(),
+            ...(auth.type === "user" ? { user_id: auth.userId } : {}),
+        },
         { onConflict: "endpoint" }
     );
     return NextResponse.json({ ok: true });

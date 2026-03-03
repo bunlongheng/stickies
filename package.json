@@ -3,9 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "lsof -ti:4444 | xargs kill -9 2>/dev/null; printf '╔════════════════════════════════════════╗\\n║                                        ║\\n║  ██████╗  ██████╗  ██╗                 ║\\n║  ╚════██╗ ██╔══██╗ ██║                 ║\\n║   █████╔╝ ██████╔╝ ██║                 ║\\n║   ╚═══██╗ ██╔═══╝  ██║                 ║\\n║  ██████╔╝ ██║      ██║                 ║\\n║  ╚═════╝  ╚═╝      ╚═╝                 ║\\n║                                        ║\\n║  ▶  http://localhost:4444              ║\\n║                                        ║\\n╚════════════════════════════════════════╝\\n'; NODE_TLS_REJECT_UNAUTHORIZED=0 next dev --port 4444 --hostname 0.0.0.0",
+    "predev": "node scripts/dev-banner.mjs; kill $(lsof -ti :4444) 2>/dev/null || true",
+    "dev": "node scripts/dev.mjs",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "smoke": "NODE_TLS_REJECT_UNAUTHORIZED=0 BASE_URL=http://localhost:4444 npx tsx tests/smoke-signup.ts"
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",
@@ -18,6 +20,7 @@
     "qrcode.react": "^4.2.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
+    "resend": "^6.9.3",
     "web-push": "^3.6.7"
   },
   "devDependencies": {

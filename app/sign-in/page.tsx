@@ -97,7 +97,7 @@ function SignInContent() {
             <h1 className="text-white text-2xl font-bold tracking-tight">Stickies</h1>
           </div>
           <p className="text-center text-zinc-500 text-sm mb-8">
-            Your personal note board
+            Sign in or create your free account
           </p>
 
           {/* Error */}
@@ -105,7 +105,7 @@ function SignInContent() {
             <div className="mb-5 px-4 py-3 rounded-xl text-center text-xs text-red-400"
               style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
               {errorParam === 'unauthorized'
-                ? 'Access denied — this board is private.'
+                ? 'Sign-in failed. Please try again.'
                 : 'Sign-in failed. Please try again.'}
             </div>
           )}
@@ -135,6 +135,10 @@ function SignInContent() {
               Continue with Google
             </button>
           </div>
+
+          <p className="fade-up-3 text-center text-zinc-600 text-xs mt-5">
+            New? Google sign-in creates your account instantly — no email verification needed.
+          </p>
 
         </div>
 

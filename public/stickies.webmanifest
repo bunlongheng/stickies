@@ -1,0 +1,24 @@
+{
+  "name": "Stickies",
+  "short_name": "Stickies",
+  "description": "Your personal sticky notes board",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0a0a",
+  "theme_color": "#FFCC00",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/icons/stickies/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/stickies/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
