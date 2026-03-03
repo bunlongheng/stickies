@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import crypto from "crypto";
 
 function getSupabase() {
     return createClient(
@@ -8,23 +9,42 @@ function getSupabase() {
     );
 }
 
-function authorize(req: Request): boolean {
-    const apiKey = process.env.STICKIES_API_KEY;
-    if (!apiKey) return false;
+type AuthResult = { type: "apikey" } | { type: "user"; userId: string };
+
+async function authenticate(req: Request): Promise<AuthResult | null> {
     const auth = req.headers.get("authorization") ?? "";
-    return auth === `Bearer ${apiKey}`;
+    const bearer = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+    if (!bearer) return null;
+
+    const apiKey = process.env.STICKIES_API_KEY;
+    if (apiKey) {
+        const expected = `Bearer ${apiKey}`;
+        if (auth.length === expected.length) {
+            try {
+                if (crypto.timingSafeEqual(Buffer.from(auth), Buffer.from(expected))) return { type: "apikey" };
+            } catch {}
+        }
+    }
+
+    const { data: { user } } = await getSupabase().auth.getUser(bearer);
+    if (user) return { type: "user", userId: user.id };
+    return null;
+}
+
+function getTable(auth: { type: string }): string {
+    return auth.type === "user" ? "users_stickies" : "notes";
 }
 
 // GET /api/stickies/folder-icon — read all folder icons { [folderName]: emoji }
 export async function GET(req: Request) {
-    if (!authorize(req)) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const auth = await authenticate(req);
+    if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
     const supabase = getSupabase();
-    const { data, error } = await supabase
-        .from("notes")
-        .select("folder_name, content")
-        .eq("is_folder", true);
+    const table = getTable(auth);
+    let q = supabase.from(table).select("folder_name, content").eq("is_folder", true);
+    if (auth.type === "user") q = (q as any).eq("user_id", (auth as any).userId);
+    const { data, error } = await q;
 
     if (error) {
         console.error("[stickies/folder-icon GET]", error);
@@ -42,9 +62,8 @@ export async function GET(req: Request) {
 
 // PATCH /api/stickies/folder-icon — save emoji icon for a folder
 export async function PATCH(req: Request) {
-    if (!authorize(req)) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const auth = await authenticate(req);
+    if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     let folderName: string, icon: string;
     try {
@@ -60,11 +79,10 @@ export async function PATCH(req: Request) {
     }
 
     const supabase = getSupabase();
-    const { error } = await supabase
-        .from("notes")
-        .update({ content: icon, updated_at: new Date().toISOString() })
-        .eq("is_folder", true)
-        .eq("folder_name", folderName);
+    const table = getTable(auth);
+    let q = supabase.from(table).update({ content: icon, updated_at: new Date().toISOString() }).eq("is_folder", true).eq("folder_name", folderName);
+    if (auth.type === "user") q = (q as any).eq("user_id", (auth as any).userId);
+    const { error } = await q;
 
     if (error) {
         console.error("[stickies/folder-icon PATCH]", error);
