@@ -1,15 +1,12 @@
-name: Deploy
+name: Deploy to Vercel
 
 on:
   push:
     branches: [main]
 
 jobs:
-  # Vercel handles its own auto-deploy via GitHub integration.
-  # This job exists to make the intent explicit and block Netlify
-  # from treating any push as a trigger (netlify.toml ignore = exit 0).
-  verify:
-    name: Verify build
+  deploy:
+    name: Build & deploy (Vercel)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -21,14 +18,26 @@ jobs:
 
       - run: npm ci
 
-      - name: Build
-        run: npm run build
+      # Pull Vercel project config + env vars
+      - name: Pull Vercel env
+        run: npx vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
         env:
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-          NEXT_PUBLIC_SITE_URL: ${{ secrets.NEXT_PUBLIC_SITE_URL }}
-          NEXT_PUBLIC_PUSHER_KEY: ${{ secrets.NEXT_PUBLIC_PUSHER_KEY }}
-          NEXT_PUBLIC_PUSHER_CLUSTER: ${{ secrets.NEXT_PUBLIC_PUSHER_CLUSTER }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
-  # Netlify: intentionally disabled — backup only, manual deploy via dashboard
+      # Build on GitHub — saves Vercel build minutes
+      - name: Build
+        run: npx vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      # Upload prebuilt output — Vercel skips its own build
+      - name: Deploy
+        run: npx vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+  # Netlify: backup only — manual deploy via dashboard
   # netlify.toml: ignore = "exit 0"
