@@ -15,6 +15,7 @@ import SwatchIcon from "@heroicons/react/24/outline/SwatchIcon";
 import DocumentDuplicateIcon from "@heroicons/react/24/outline/DocumentDuplicateIcon";
 import ListBulletIcon from "@heroicons/react/24/outline/ListBulletIcon";
 import PaperAirplaneIcon from "@heroicons/react/24/outline/PaperAirplaneIcon";
+import PaperClipIcon from "@heroicons/react/24/outline/PaperClipIcon";
 import CheckCircleIcon from "@heroicons/react/24/solid/CheckCircleIcon";
 import TrashIcon from "@heroicons/react/24/outline/TrashIcon";
 import QrCodeIcon from "@heroicons/react/24/outline/QrCodeIcon";
@@ -54,8 +55,10 @@ import PusherClient from "pusher-js";
 const getSupabase = () => createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
 const supabase = { from: (...a: Parameters<ReturnType<typeof getSupabase>["from"]>) => getSupabase().from(...a) } as ReturnType<typeof getSupabase>;
 
-// Get the current user's Supabase JWT to authenticate API calls
 async function getAuthToken(): Promise<string> {
+    if (process.env.NODE_ENV === 'development') {
+        return process.env.NEXT_PUBLIC_STICKIES_API_KEY ?? "";
+    }
     const { data: { session } } = await getSupabase().auth.getSession();
     return session?.access_token ?? "";
 }
@@ -635,6 +638,10 @@ export default function NotesMaster() {
     const [cmdKQuery, setCmdKQuery] = useState("");
     const [cmdKCursor, setCmdKCursor] = useState(0);
     const cmdKInputRef = useRef<HTMLInputElement | null>(null);
+    const [images, setImages] = useState<Array<{ url: string; name: string; type: string }>>([]);
+    const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+    const [uploadingImages, setUploadingImages] = useState(false);
+    const imageFileInputRef = useRef<HTMLInputElement | null>(null);
 
     const isSavingRef = useRef(false);
     const localWriteRef = useRef<Map<string, number>>(new Map()); // noteId → timestamp, self-echo guard
@@ -1131,6 +1138,7 @@ const fireIntegrations = (trigger: string, note: any) => {
             setEditingNote(note);
             setTitle(note.title || "");
             setContent(note.content || "");
+            setImages((note as any).images ?? []);
             setTargetFolder(note.folder_name || "General");
             setNoteColor(note.folder_color || palette12[0]);
             setActiveLine(0);
@@ -1219,6 +1227,7 @@ const fireIntegrations = (trigger: string, note: any) => {
             setEditingNote(matchedNote);
             setTitle(matchedNote.title || "");
             setContent(matchedNote.content || "");
+            setImages((matchedNote as any).images ?? []);
             setTargetFolder(matchedNote.folder_name || matchedFolder || "General");
             setNoteColor(matchedNote.folder_color || palette12[0]);
             setActiveLine(0);
@@ -1459,20 +1468,19 @@ const fireIntegrations = (trigger: string, note: any) => {
             const byTitle = (a: any, b: any) => String(a.title || "").localeCompare(String(b.title || ""));
             const pinnedNotes = notes.filter((n) => pinnedIds.has(String(n.id))).sort(byTitle);
             const unpinned = notes.filter((n) => !pinnedIds.has(String(n.id)));
-            return [...currentLevelFolders, ...pinnedNotes, ...unpinned];
+            return [...currentLevelFolders, ...unpinned, ...pinnedNotes];
         }
         // Root view — pinned + recent 3 + folders with section headers
         const allNotes = dbData.filter((n) => !n.is_folder);
         const byTitle = (a: any, b: any) => String(a.title || "").localeCompare(String(b.title || ""));
         const pinned = allNotes.filter((n) => pinnedIds.has(String(n.id))).sort(byTitle);
         const result: any[] = [];
-        if (pinned.length > 0) {
-            result.push({ _header: "PINNED", id: "hdr-pinned" });
-            result.push(...pinned);
-        }
         if (currentLevelFolders.length > 0) {
-            if (result.length > 0) result.push({ _header: "FOLDERS", id: "hdr-folders" });
             result.push(...currentLevelFolders);
+        }
+        if (pinned.length > 0) {
+            if (result.length > 0) result.push({ _header: "PINNED", id: "hdr-pinned" });
+            result.push(...pinned);
         }
         return result.length > 0 ? result : currentLevelFolders;
     }, [dbData, activeFolder, search, currentLevelFolders, pendingNoteOrder, pinnedIds]);
@@ -1482,7 +1490,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         if (!cmdKQuery.trim()) {
             const pinned = notes.filter((n: any) => pinnedIds.has(String(n.id))).sort((a: any, b: any) => String(a.title || "").localeCompare(String(b.title || "")));
             const recent = notes.filter((n: any) => !pinnedIds.has(String(n.id))).sort(byDate).slice(0, 8);
-            return [...pinned, ...recent];
+            return [...recent, ...pinned];
         }
         const q = cmdKQuery.toLowerCase();
         const score = (n: any): number => {
@@ -1702,12 +1710,14 @@ const fireIntegrations = (trigger: string, note: any) => {
         void saveNote();
         closeEditorTools();
         setEditorOpen(false);
+        setImages([]);
     }, [saveNote, closeEditorTools]);
 
     const backToRootFromEditor = useCallback(() => {
         void saveNote();
         closeEditorTools();
         setEditorOpen(false);
+        setImages([]);
         // Stay in the note's folder; only go to root if no folder
         setActiveFolder(targetFolder || null);
         setSearch("");
@@ -1729,6 +1739,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         setEditingNote(null);
         setTitle("");
         setContent("");
+        setImages([]);
         setTargetFolder(activeFolder || "General");
         setNoteColor(pickUniqueColor());
         shouldFocusTitleOnOpenRef.current = true;
@@ -1744,6 +1755,55 @@ const fireIntegrations = (trigger: string, note: any) => {
         setToast(msg);
         setTimeout(() => setToast(""), 3000);
     };
+
+    async function uploadImage(file: File): Promise<{ url: string; name: string; type: string }> {
+        const fd = new FormData();
+        fd.append("file", file);
+        const noteId = editingNote?.id;
+        if (noteId) fd.append("noteId", String(noteId));
+        const res = await fetch("/api/stickies/upload", {
+            method: "POST",
+            headers: { Authorization: `Bearer ${await getAuthToken()}` },
+            body: fd,
+        });
+        if (!res.ok) throw new Error("Upload failed");
+        return res.json();
+    }
+
+    async function addImages(files: FileList | File[]) {
+        setUploadingImages(true);
+        try {
+            const uploads = await Promise.all(Array.from(files).map(uploadImage));
+            setImages((prev) => {
+                const updated = [...prev, ...uploads];
+                const noteId = editingNote?.id;
+                if (noteId) notesApi.update(String(noteId), { images: updated }).catch(console.error);
+                return updated;
+            });
+        } catch {
+            showToast("Upload failed", "#FF3B30");
+        } finally {
+            setUploadingImages(false);
+        }
+    }
+
+    function removeImage(index: number) {
+        setImages((prev) => {
+            const updated = prev.filter((_, i) => i !== index);
+            const noteId = editingNote?.id;
+            if (noteId) notesApi.update(String(noteId), { images: updated }).catch(console.error);
+            return updated;
+        });
+    }
+
+    function handleEditorPaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
+        const items = Array.from(e.clipboardData.items);
+        const imageItems = items.filter((i) => i.type.startsWith("image/"));
+        if (imageItems.length === 0) return;
+        e.preventDefault();
+        const files = imageItems.map((i) => i.getAsFile()).filter(Boolean) as File[];
+        void addImages(files);
+    }
 
     const handleCursorUpdate = (e: any) => {
         const target = e.target as HTMLTextAreaElement;
@@ -2135,6 +2195,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         setEditingNote(note);
         setTitle(note.title);
         setContent(note.content);
+        setImages((note as any).images ?? []);
         setTargetFolder(note.folder_name || activeFolder || "General");
         setNoteColor(note.folder_color || folders.find((f: any) => f.name === (note.folder_name || activeFolder))?.color || palette12[0]);
         setShowColorPicker(false);
@@ -2159,9 +2220,9 @@ const fireIntegrations = (trigger: string, note: any) => {
     const graphMode = currentNoteId ? graphModeNotes.has(currentNoteId) : false;
     const mindmapMode = currentNoteId ? mindmapModeNotes.has(currentNoteId) : false;
     const stackMode = currentNoteId ? stackModeNotes.has(currentNoteId) : false;
-    // Markdown & HTML are auto-detected from content — no manual toggle
-    const markdownMode = !listMode && !graphMode && !mindmapMode && !stackMode && detectMarkdown(content);
-    const htmlMode = !listMode && !graphMode && !mindmapMode && !stackMode && !markdownMode && detectHtml(content);
+    // Markdown & HTML are auto-detected but can be overridden to Text by the user
+    const markdownMode = !listMode && !graphMode && !mindmapMode && !stackMode && detectMarkdown(content) && !markdownModeNotes.has(currentNoteId ?? "");
+    const htmlMode = !listMode && !graphMode && !mindmapMode && !stackMode && !markdownMode && detectHtml(content) && !htmlModeNotes.has(currentNoteId ?? "");
     // Unified active mode label for the dropdown
     const noteViewMode = stackMode ? "Stack" : mindmapMode ? "Mindmap" : graphMode ? "Graph" : listMode ? "Checklist" : markdownMode ? "Markdown" : htmlMode ? "HTML" : "Text";
 
@@ -3617,6 +3678,12 @@ const fireIntegrations = (trigger: string, note: any) => {
                         </button>
                         <span className="text-[8px] font-black uppercase tracking-widest text-zinc-500 select-none flex-shrink-0 px-0.5">{noteViewMode}</span>
                         <button type="button"
+                            onClick={() => imageFileInputRef.current?.click()}
+                            className="p-2 sm:p-3 text-zinc-300 hover:text-white active:text-white transition flex-shrink-0"
+                            title="Attach image">
+                            <PaperClipIcon className="w-6 h-6 sm:w-6 sm:h-6" />
+                        </button>
+                        <button type="button"
                             onClick={() => { setSharePickerOpen(true); setShowNoteActions(false); closeEditorTools(); }}
                             className="p-2 sm:p-3 text-zinc-300 hover:text-white active:text-white transition flex-shrink-0">
                             <PaperAirplaneIcon className="w-6 h-6 sm:w-6 sm:h-6" />
@@ -3954,6 +4021,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 onBlur={() => {
                                     void saveNote({ silent: false });
                                 }}
+                                onPaste={handleEditorPaste}
                                 className="note-textarea ios-editor-scroll relative z-10 w-full h-full bg-black pt-2 px-3 pb-3 outline-none resize-none font-mono leading-5 overflow-x-hidden overscroll-none touch-pan-y"
                                 style={{ caretColor: activeAccentColor, paddingRight: "80px" }}
                                 placeholder="START TYPING..."
@@ -3983,6 +4051,26 @@ const fireIntegrations = (trigger: string, note: any) => {
                         </>
                         )}
                     </div>
+
+                    {/* Image attachment strip */}
+                    {(images.length > 0 || uploadingImages) && (
+                        <div className="flex items-center gap-2 px-3 py-2 flex-wrap border-t border-white/[0.06] shrink-0 bg-black">
+                            {images.map((img, i) => (
+                                <div key={i} className="relative group w-16 h-16 rounded-lg overflow-hidden shrink-0 cursor-pointer"
+                                     onClick={() => setLightboxUrl(img.url)}>
+                                    <img src={img.url} alt={img.name} className="w-full h-full object-cover" />
+                                    <button
+                                        onClick={(ev) => { ev.stopPropagation(); removeImage(i); }}
+                                        className="absolute top-0.5 right-0.5 opacity-0 group-hover:opacity-100 w-4 h-4 rounded-full bg-black/70 text-white text-[9px] flex items-center justify-center leading-none">✕</button>
+                                </div>
+                            ))}
+                            {uploadingImages && (
+                                <div className="w-16 h-16 rounded-lg border border-white/10 flex items-center justify-center">
+                                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </section>
             ) : (
                 <>
@@ -4122,6 +4210,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             setEditingNote(item);
                                             setTitle(item.title);
                                             setContent(item.content);
+                                            setImages((item as any).images ?? []);
                                             setTargetFolder(item.folder_name || activeFolder || "General");
                                             setNoteColor(item.folder_color || folders.find((f) => f.name === (item.folder_name || activeFolder))?.color || palette12[0]);
                                             setShowColorPicker(false);
@@ -4145,7 +4234,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     }}
                                     style={mainListMode
                                         ? { position: "relative", "--row-color": item.color || item.folder_color || "#ffffff" } as React.CSSProperties
-                                        : { position: "relative", backgroundColor: item.color || item.folder_color }}
+                                        : { position: "relative", backgroundColor: item.is_folder ? (item.color || item.folder_color) : `${item.color || item.folder_color || "#888888"}66` }}
                                     className={`${mainListMode
                                         ? `group list-row-hover flex items-center gap-3 px-4 py-2 border-b border-white/5 cursor-pointer select-none transition-colors hover:bg-white/5 active:bg-white/10 ${isDragging ? "opacity-30" : dt?.mode === "into" ? "bg-cyan-950/60 ring-1 ring-inset ring-cyan-400" : ""} ${isSelectMode && !item.is_folder && selectedIds.has(String(item.id)) ? "bg-blue-950/50" : ""} ${isFolderSelectMode && item.is_folder && selectedFolderNames.includes(item.name || "") ? "bg-emerald-950/50" : ""}`
                                         : `relative min-w-0 cursor-pointer transition-all hover:opacity-90 group ${isDragging ? "opacity-30 scale-95" : dt?.mode === "into" ? "ring-4 ring-cyan-400 ring-inset z-10" : ""} ${isSelectMode && !item.is_folder && selectedIds.has(String(item.id)) ? "ring-2 ring-inset ring-blue-500" : ""} ${isFolderSelectMode && item.is_folder && selectedFolderNames.includes(item.name || "") ? "ring-2 ring-inset ring-emerald-500" : ""}`}`}>
@@ -4555,6 +4644,10 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                     else if (mode === "Graph") toggleGraphMode();
                                                     else if (mode === "Mindmap") toggleMindmapMode();
                                                     else if (mode === "Stack") toggleStackMode();
+                                                    else if (mode === "Text") {
+                                                        if (markdownMode) toggleMarkdownMode();
+                                                        if (htmlMode) toggleHtmlMode();
+                                                    }
                                                     if (window.innerWidth < 1024) setShowNoteActions(false);
                                                 }}
                                                 className="flex flex-col items-center gap-1.5 py-3 px-1 transition-all text-[10px] font-black"
@@ -5142,16 +5235,13 @@ const fireIntegrations = (trigger: string, note: any) => {
                         </div>
                         {/* Results */}
                         <div className="max-h-[360px] overflow-y-auto">
-                            {!cmdKQuery.trim() && cmdKResults.some((n: any) => pinnedIds.has(String(n.id))) && (
-                                <div className="px-4 pt-3 pb-1 text-[9px] font-black tracking-[0.2em] text-zinc-600 uppercase">Pinned</div>
-                            )}
                             {cmdKResults.map((note: any, i: number) => {
                                 const isPinned = pinnedIds.has(String(note.id));
-                                const showRecentHdr = !cmdKQuery.trim() && !isPinned && i > 0 && pinnedIds.has(String(cmdKResults[i - 1].id));
+                                const showPinnedHdr = !cmdKQuery.trim() && isPinned && i > 0 && !pinnedIds.has(String(cmdKResults[i - 1].id));
                                 return (
                                     <React.Fragment key={note.id}>
-                                        {showRecentHdr && (
-                                            <div className="px-4 pt-3 pb-1 text-[9px] font-black tracking-[0.2em] text-zinc-600 uppercase">Recent</div>
+                                        {showPinnedHdr && (
+                                            <div className="px-4 pt-3 pb-1 text-[9px] font-black tracking-[0.2em] text-zinc-600 uppercase">Pinned</div>
                                         )}
                                         <button
                                             type="button"
@@ -5600,6 +5690,25 @@ const fireIntegrations = (trigger: string, note: any) => {
                             </button>
                         </div>
                     </div>
+                </div>
+            )}
+
+            {/* Hidden file input for image attachments */}
+            <input
+                ref={imageFileInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={(e) => { if (e.target.files) void addImages(e.target.files); e.target.value = ""; }}
+            />
+
+            {/* Lightbox */}
+            {lightboxUrl && (
+                <div
+                    className="fixed inset-0 z-[9999] bg-black/90 flex items-center justify-center"
+                    onClick={() => setLightboxUrl(null)}>
+                    <img src={lightboxUrl} alt="Attachment" className="max-w-[90vw] max-h-[90vh] object-contain rounded-xl shadow-2xl" />
                 </div>
             )}
         </div>

@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#f4f4f4"/>
+    </linearGradient>
+    <linearGradient id="hue-grad" gradientUnits="userSpaceOnUse" x1="10" y1="0" x2="110" y2="0">
+      <stop offset="0%"   stop-color="#E31E24"/>
+      <stop offset="28%"  stop-color="#F47920"/>
+      <stop offset="50%"  stop-color="#FBB040"/>
+      <stop offset="68%"  stop-color="#8DC63F"/>
+      <stop offset="84%"  stop-color="#00AEEF"/>
+      <stop offset="100%" stop-color="#0072CE"/>
+    </linearGradient>
+  </defs>
+  <rect width="120" height="120" rx="24" fill="url(#bg)"/>
+  <text
+    x="60" y="79"
+    text-anchor="middle"
+    font-family="'Arial Rounded MT Bold', 'Nunito', 'Varela Round', Arial, sans-serif"
+    font-size="58"
+    font-weight="900"
+    letter-spacing="-1"
+    fill="url(#hue-grad)"
+  >hue</text>
+</svg>

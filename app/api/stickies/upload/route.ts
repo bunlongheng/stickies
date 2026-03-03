@@ -9,8 +9,9 @@ function getSupabase() {
     );
 }
 
-function isAuthorized(req: Request): boolean {
+async function isAuthorized(req: Request): Promise<boolean> {
     const auth = req.headers.get("authorization") ?? "";
+    const bearer = auth.startsWith("Bearer ") ? auth.slice(7) : "";
     const candidates = [
         process.env.STICKIES_API_KEY,
         process.env.STICKIES_PASSWORD,
@@ -22,11 +23,18 @@ function isAuthorized(req: Request): boolean {
             if (crypto.timingSafeEqual(Buffer.from(auth), Buffer.from(expected))) return true;
         } catch {}
     }
+    // Also accept a valid Supabase JWT (production users)
+    if (bearer) {
+        try {
+            const { data: { user } } = await getSupabase().auth.getUser(bearer);
+            if (user) return true;
+        } catch {}
+    }
     return false;
 }
 
 export async function POST(req: Request) {
-    if (!isAuthorized(req)) {
+    if (!await isAuthorized(req)) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 

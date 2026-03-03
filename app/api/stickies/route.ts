@@ -285,7 +285,8 @@ export async function POST(req: Request) {
         catch { return NextResponse.json({ error: "Invalid body — send JSON or raw markdown text" }, { status: 400 }); }
         title       = typeof body.title   === "string" ? body.title.trim() : "";
         content     = typeof body.content === "string" ? body.content : "";
-        folder_name = typeof body.folder  === "string" && body.folder.trim() ? body.folder.trim() : "CLAUDE";
+        const folderField = (typeof body.folder === "string" ? body.folder : "") || (typeof body.folder_name === "string" ? body.folder_name : "");
+        folder_name = folderField.trim() || "CLAUDE";
         rawColor    = typeof body.color   === "string" ? body.color.trim().toUpperCase() : "";
     }
 

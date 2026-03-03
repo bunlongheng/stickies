@@ -4,6 +4,12 @@ import { NextResponse } from "next/server";
 
 const CLIENT_ID     = process.env.HUE_CLIENT_ID?.trim();
 const CLIENT_SECRET = process.env.HUE_CLIENT_SECRET?.trim();
+const RESTORE_DELAY = 60_000; // 1 minute of inactivity → restore
+
+// Module-level debounce state (persists in PM2 process; ignored on Vercel)
+let restoreTimer: ReturnType<typeof setTimeout> | null = null;
+let origXySnapshot: { x: number; y: number } | null = null;
+let origBrightnessSnapshot: number | null = null;
 
 function getSupabase() {
     return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -82,6 +88,34 @@ async function getRemoteToken(integration: any): Promise<string | null> {
     return tokens.access_token;
 }
 
+// Schedule a restore back to original color after 1m of inactivity
+function scheduleRestore(targetGroup: string, via: "remote" | "local", token: string | null, bridgeIp: string | undefined, appKey: string) {
+    if (restoreTimer) clearTimeout(restoreTimer);
+
+    restoreTimer = setTimeout(async () => {
+        const xy   = origXySnapshot ?? { x: 0.3127, y: 0.3290 };
+        const bri  = origBrightnessSnapshot ?? 100;
+        origXySnapshot = null;
+        origBrightnessSnapshot = null;
+        restoreTimer = null;
+
+        try {
+            if (via === "remote" && token) {
+                const { data: freshInt } = await getSupabase().from("integrations").select("*").eq("type", "hue").eq("active", true).single();
+                const freshToken = freshInt ? await getRemoteToken(freshInt) : token;
+                if (!freshToken) return;
+                const base = `https://api.meethue.com/route/clip/v2/resource/grouped_light/${targetGroup}`;
+                const headers = { "Authorization": `Bearer ${freshToken}`, "hue-application-key": appKey, "Content-Type": "application/json" };
+                await fetch(base, { method: "PUT", headers, body: JSON.stringify({ color: { xy }, dimming: { brightness: bri } }) });
+            } else if (via === "local" && bridgeIp) {
+                await localFetch(bridgeIp, appKey, `/clip/v2/resource/grouped_light/${targetGroup}`, "PUT", { color: { xy }, dimming: { brightness: bri } });
+            }
+        } catch {
+            // Best-effort restore — silently ignore
+        }
+    }, RESTORE_DELAY);
+}
+
 // POST /api/hue/trigger
 export async function POST(req: Request) {
     const supabase = getSupabase();
@@ -98,8 +132,8 @@ export async function POST(req: Request) {
         return NextResponse.json({ ok: false, error: "No active Hue integration found" }, { status: 503 });
     }
 
-    const appKey  = integration.config?.app_key?.trim();
-    const groupId = integration.config?.group_id?.trim();
+    const appKey   = integration.config?.app_key?.trim();
+    const groupId  = integration.config?.group_id?.trim();
     const bridgeIp = integration.config?.bridge_ip?.trim();
 
     if (!groupId) return NextResponse.json({ ok: false, error: "group_id not configured" }, { status: 503 });
@@ -128,14 +162,16 @@ export async function POST(req: Request) {
             const current = state?.data?.[0];
             if (current?.on?.on !== true) return NextResponse.json({ ok: false, reason: "lights off" });
 
-            const origBrightness = current?.dimming?.brightness ?? 100;
-            const origXy = current?.color?.xy ?? { x: 0.3127, y: 0.3290 };
+            // Snapshot original only on first trigger (before any restore timer fires)
+            if (!origXySnapshot) {
+                origXySnapshot = current?.color?.xy ?? { x: 0.3127, y: 0.3290 };
+                origBrightnessSnapshot = current?.dimming?.brightness ?? 100;
+            }
 
-            await fetch(base, { method: "PUT", headers, body: JSON.stringify({ color: { xy }, dimming: { brightness: 20 } }) });
-            await new Promise(r => setTimeout(r, 600));
-            await fetch(base, { method: "PUT", headers, body: JSON.stringify({ color: { xy: origXy }, dimming: { brightness: origBrightness } }) });
+            await fetch(base, { method: "PUT", headers, body: JSON.stringify({ color: { xy } }) });
 
-            return NextResponse.json({ ok: true, via: "remote", color, xy });
+            scheduleRestore(targetGroup, "remote", token, bridgeIp, appKey);
+            return NextResponse.json({ ok: true, via: "remote", color, xy, restoreIn: RESTORE_DELAY });
         } catch (e: any) {
             return NextResponse.json({ ok: false, via: "remote-error", error: e?.message }, { status: 500 });
         }
@@ -148,14 +184,16 @@ export async function POST(req: Request) {
         const current = state?.data?.[0];
         if (current?.on?.on !== true) return NextResponse.json({ ok: false, reason: "lights off" });
 
-        const origBrightness = current?.dimming?.brightness ?? 100;
-        const origXy = current?.color?.xy ?? { x: 0.3127, y: 0.3290 };
+        // Snapshot original only on first trigger
+        if (!origXySnapshot) {
+            origXySnapshot = current?.color?.xy ?? { x: 0.3127, y: 0.3290 };
+            origBrightnessSnapshot = current?.dimming?.brightness ?? 100;
+        }
 
-        await localFetch(bridgeIp, appKey, `/clip/v2/resource/grouped_light/${targetGroup}`, "PUT", { color: { xy }, dimming: { brightness: 20 } });
-        await new Promise(r => setTimeout(r, 600));
-        await localFetch(bridgeIp, appKey, `/clip/v2/resource/grouped_light/${targetGroup}`, "PUT", { color: { xy: origXy }, dimming: { brightness: origBrightness } });
+        await localFetch(bridgeIp, appKey, `/clip/v2/resource/grouped_light/${targetGroup}`, "PUT", { color: { xy } });
 
-        return NextResponse.json({ ok: true, via: "local", color, xy });
+        scheduleRestore(targetGroup, "local", null, bridgeIp, appKey);
+        return NextResponse.json({ ok: true, via: "local", color, xy, restoreIn: RESTORE_DELAY });
     } catch (e: any) {
         return NextResponse.json({ ok: false, error: e.message }, { status: 500 });
     }
