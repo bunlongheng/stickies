@@ -430,9 +430,15 @@ const secureCopy = (text: string) => {
     return Promise.resolve();
 };
 
-type SoundType = "create" | "delete" | "move" | "add" | "check" | "uncheck";
+type SoundType = "create" | "delete" | "move" | "add" | "check" | "uncheck" | "hover" | "click" | "toast" | "toast-error" | "navigate";
+let _lastHoverSoundAt = 0;
 function playSound(type: SoundType) {
     try {
+        if (type === "hover") {
+            const now = Date.now();
+            if (now - _lastHoverSoundAt < 80) return;
+            _lastHoverSoundAt = now;
+        }
         const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
         const now = ctx.currentTime;
         const tone = (freq: number, delay: number, vol: number, dur: number, oscType: OscillatorType = "sine") => {
@@ -446,7 +452,36 @@ function playSound(type: SoundType) {
             g.gain.exponentialRampToValueAtTime(0.001, now + delay + dur);
             osc.start(now + delay); osc.stop(now + delay + dur + 0.02);
         };
-        if (type === "create") {
+        if (type === "hover") {
+            tone(1200, 0, 0.035, 0.055, "sine");
+        } else if (type === "click") {
+            const osc = ctx.createOscillator();
+            const g = ctx.createGain();
+            osc.connect(g); g.connect(ctx.destination);
+            osc.type = "triangle";
+            osc.frequency.setValueAtTime(800, now);
+            osc.frequency.exponentialRampToValueAtTime(400, now + 0.055);
+            g.gain.setValueAtTime(0.12, now);
+            g.gain.exponentialRampToValueAtTime(0.001, now + 0.065);
+            osc.start(now); osc.stop(now + 0.08);
+        } else if (type === "navigate") {
+            tone(440, 0,    0.08, 0.10); // A4
+            tone(660, 0.07, 0.07, 0.12); // E5
+        } else if (type === "toast") {
+            tone(784, 0,    0.10, 0.14); // G5
+            tone(988, 0.09, 0.09, 0.16); // B5
+            tone(1175, 0.18, 0.07, 0.18); // D6
+        } else if (type === "toast-error") {
+            const osc = ctx.createOscillator();
+            const g = ctx.createGain();
+            osc.connect(g); g.connect(ctx.destination);
+            osc.type = "sine";
+            osc.frequency.setValueAtTime(440, now);
+            osc.frequency.exponentialRampToValueAtTime(260, now + 0.20);
+            g.gain.setValueAtTime(0.10, now);
+            g.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+            osc.start(now); osc.stop(now + 0.24);
+        } else if (type === "create") {
             tone(523, 0,    0.14, 0.18); // C5
             tone(659, 0.09, 0.12, 0.18); // E5
         } else if (type === "add") {
@@ -1802,6 +1837,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         setToastColor(color);
         setToast(msg);
         setTimeout(() => setToast(""), 3000);
+        playSound(color === "#FF3B30" ? "toast-error" : "toast");
     };
 
     async function uploadImage(file: File): Promise<{ url: string; name: string; type: string }> {
@@ -4318,6 +4354,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     onDrop={(e) => { void handleTileDrop(e, item); }}
                                     onDragEnd={handleTileDragEnd}
                                     onMouseEnter={(e) => {
+                                        playSound("hover");
                                         const r = e.currentTarget.getBoundingClientRect();
                                         setGlowCard({ id: tileId, x: ((e.clientX - r.left) / r.width) * 100, y: ((e.clientY - r.top) / r.height) * 100 });
                                     }}
@@ -4360,10 +4397,13 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         }
                                         createRipple(e, item.color || item.folder_color || "#FFFFFF");
                                         if (item.is_folder) {
+                                            playSound("navigate");
                                             enterFolder({ id: String(item.id), name: item.name, color: item.color || palette12[0] });
                                         } else if (!item.is_folder && looksLikeUrl(item.content || "")) {
+                                            playSound("click");
                                             window.open(item.content.trim(), "_blank", "noopener,noreferrer");
                                         } else {
+                                            playSound("click");
                                             setEditingNote(item);
                                             setTitle(item.title);
                                             setContent(item.content);
