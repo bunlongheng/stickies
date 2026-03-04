@@ -6,6 +6,7 @@ import { usePageMeta } from "@/lib/usePageMeta";
 
 // Icons
 import MagnifyingGlassIcon from "@heroicons/react/24/outline/MagnifyingGlassIcon";
+import BookmarkIcon from "@heroicons/react/24/solid/BookmarkIcon";
 import PlusIcon from "@heroicons/react/24/outline/PlusIcon";
 import Bars3Icon from "@heroicons/react/24/outline/Bars3Icon";
 import ArrowLeftIcon from "@heroicons/react/24/outline/ArrowLeftIcon";
@@ -39,6 +40,8 @@ import RectangleStackIcon from "@heroicons/react/24/outline/RectangleStackIcon";
 import Squares2X2Icon from "@heroicons/react/24/outline/Squares2X2Icon";
 import HeartIcon from "@heroicons/react/24/outline/HeartIcon";
 import HeartSolidIcon from "@heroicons/react/24/solid/HeartIcon";
+import ArrowTopRightOnSquareIcon from "@heroicons/react/24/outline/ArrowTopRightOnSquareIcon";
+import PencilSquareIcon from "@heroicons/react/24/outline/PencilSquareIcon";
 import { marked, Renderer } from "marked";
 
 // Custom renderer: wraps code blocks with a copy button
@@ -152,6 +155,12 @@ function detectMarkdown(text: string): boolean {
     if (/^>\s+\S/m.test(t)) return true;             // > blockquote
     if (/\|.+\|.+\|/.test(t)) return true;           // | table |
     return false;
+}
+
+/** Detect plain URL content — single line, no whitespace, http(s) scheme */
+function looksLikeUrl(text: string): boolean {
+    const t = text.trim();
+    return /^https?:\/\/\S+$/.test(t);
 }
 
 function timeAgo(dateStr: string): string {
@@ -633,6 +642,7 @@ export default function NotesMaster() {
     const [botColor, setBotColor] = useState({ primary: "#7c3aed", secondary: "#a78bfa", light: "#c4b5fd" });
     const [mainListMode, setMainListMode] = useState(true);
     const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set());
+    const [glowCard, setGlowCard] = useState<{ id: string; x: number; y: number } | null>(null);
     const [now, setNow] = useState(() => new Date());
     const [showCmdK, setShowCmdK] = useState(false);
     const [cmdKQuery, setCmdKQuery] = useState("");
@@ -653,6 +663,8 @@ export default function NotesMaster() {
     const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const mainScrollRef = useRef<HTMLElement | null>(null);
     const editorTextRef = useRef<HTMLTextAreaElement | null>(null);
+    const tower3dRef = useRef<HTMLDivElement | null>(null);
+    const tower3dDrag = useRef({ active: false, startX: 0, startY: 0, rotX: 12, rotY: -28 });
     const titleInputRef = useRef<HTMLInputElement | null>(null);
     const editorToolsRef = useRef<HTMLDivElement | null>(null);
     const folderFabShellRef = useRef<HTMLDivElement | null>(null);
@@ -1369,42 +1381,52 @@ const fireIntegrations = (trigger: string, note: any) => {
             if (!firstNoteColorByFolder.has(folderName) && item.folder_color) firstNoteColorByFolder.set(folderName, item.folder_color);
         });
 
-        const folderRowsByName = new Map<string, any>();
+        // UUID-keyed — allows same folder_name in different parent directories
+        const folderRowsById = new Map<string, any>();
         dbData
             .filter((item) => item.is_folder)
             .forEach((row) => {
-                const folderName = String(row.folder_name || "General");
-                if (!folderRowsByName.has(folderName)) folderRowsByName.set(folderName, row);
+                folderRowsById.set(String(row.id), row);
             });
 
-        // Compute latest note updated_at per folder for sorting
-        const latestUpdatedByFolder = new Map<string, string>();
+        // Note count per folder_id (UUID-based for accuracy)
+        const noteCountByFolderId = new Map<string, number>();
+        dbData.filter((item) => !item.is_folder && item.folder_id).forEach((item) => {
+            const fid = String(item.folder_id);
+            noteCountByFolderId.set(fid, (noteCountByFolderId.get(fid) || 0) + 1);
+        });
+
+        // Compute latest note updated_at per folder (by folder_id)
+        const latestUpdatedByFolderId = new Map<string, string>();
         dbData.filter((item) => !item.is_folder).forEach((item) => {
-            const fn = String(item.folder_name || "General");
+            const fid = String(item.folder_id || "");
+            if (!fid) return;
             const t = String(item.updated_at || "");
-            if (!latestUpdatedByFolder.has(fn) || t > latestUpdatedByFolder.get(fn)!) {
-                latestUpdatedByFolder.set(fn, t);
+            if (!latestUpdatedByFolderId.has(fid) || t > latestUpdatedByFolderId.get(fid)!) {
+                latestUpdatedByFolderId.set(fid, t);
             }
         });
 
-        const foldersFromRows = Array.from(folderRowsByName.values())
+        const foldersFromRows = Array.from(folderRowsById.values())
             .map((row) => {
                 const folderName = String(row.folder_name || "General");
+                const rowId = String(row.id);
                 return {
-                    id: row.id,
+                    id: rowId,
                     order: typeof row.order === "number" ? row.order : Number.MAX_SAFE_INTEGER,
-                    latestUpdatedAt: latestUpdatedByFolder.get(folderName) || String(row.updated_at || ""),
+                    latestUpdatedAt: latestUpdatedByFolderId.get(rowId) || String(row.updated_at || ""),
                     name: folderName,
                     color: folderColors[folderName] || row.folder_color || palette12[0],
-                    count: noteCountByFolder.get(folderName) || 0,
+                    count: noteCountByFolderId.get(rowId) || noteCountByFolder.get(folderName) || 0,
                     subfolderCount: subfolderCountByFolder.get(folderName) || 0,
                     icon: folderIcons[folderName] || "",
                 };
             })
             .sort((a, b) => b.latestUpdatedAt.localeCompare(a.latestUpdatedAt));
 
+        const knownFolderNames = new Set(foldersFromRows.map((f) => f.name));
         const missingFolders = Array.from(noteCountByFolder.keys())
-            .filter((folderName) => !folderRowsByName.has(folderName))
+            .filter((folderName) => !knownFolderNames.has(folderName))
             .sort((a, b) => a.localeCompare(b))
             .map((folderName) => ({
                 id: `virtual-${folderName}`,
@@ -1428,11 +1450,23 @@ const fireIntegrations = (trigger: string, note: any) => {
 
     // Folders visible at the current navigation level (root or sub-folder)
     const currentLevelFolders = useMemo(() => {
-        const parentFilter = folderStack.length === 0 ? null : activeFolder;
+        const activeFolderId = folderStack.at(-1)?.id ?? null;
+        const useUuidFilter = activeFolderId !== null && !activeFolderId.startsWith("virtual-");
         return folders
             .filter((f) => {
-                const row = dbData.find((r) => r.is_folder && r.folder_name === f.name);
-                return (row?.parent_folder_name ?? null) === parentFilter;
+                const row = dbData.find((r) => r.is_folder && String(r.id) === String(f.id));
+                if (folderStack.length === 0) {
+                    // Root view: folders with no parent
+                    if (useUuidFilter || row?.parent_folder_id) {
+                        return (row?.parent_folder_id ?? null) === null;
+                    }
+                    return (row?.parent_folder_name ?? null) === null;
+                }
+                // Inside a folder: match by parent_folder_id (UUID) for precision
+                if (useUuidFilter) {
+                    return String(row?.parent_folder_id ?? null) === activeFolderId;
+                }
+                return (row?.parent_folder_name ?? null) === activeFolder;
             })
             .map((f) => ({ ...f, is_folder: true as const }));
     }, [folders, folderStack, activeFolder, dbData]);
@@ -1460,7 +1494,12 @@ const fireIntegrations = (trigger: string, note: any) => {
                 .sort((a, b) => { const sd = score(a) - score(b); return sd !== 0 ? sd : byUpdated(a, b); });
         }
         if (activeFolder) {
-            let notes = dbData.filter((n) => !n.is_folder && n.folder_name === activeFolder).sort(byUpdated);
+            const activeFolderId = folderStack.at(-1)?.id ?? null;
+            const useUuid = activeFolderId && !activeFolderId.startsWith("virtual-");
+            let notes = (useUuid
+                ? dbData.filter((n) => !n.is_folder && String(n.folder_id) === activeFolderId)
+                : dbData.filter((n) => !n.is_folder && n.folder_name === activeFolder)
+            ).sort(byUpdated);
             if (pendingNoteOrder) {
                 const idx = new Map(pendingNoteOrder.map((id, i) => [id, i]));
                 notes = [...notes].sort((a, b) => (idx.has(String(a.id)) ? idx.get(String(a.id))! : notes.length) - (idx.has(String(b.id)) ? idx.get(String(b.id))! : notes.length));
@@ -1512,6 +1551,15 @@ const fireIntegrations = (trigger: string, note: any) => {
                 return byDate(a, b);
             });
     }, [dbData, cmdKQuery, pinnedIds]);
+
+    const dbStats = useMemo(() => {
+        const folderCount = dbData.filter(r => r.is_folder).length;
+        const noteCount   = dbData.filter(r => !r.is_folder).length;
+        const enc         = new TextEncoder();
+        const bytes       = dbData.reduce((acc, r) => acc + enc.encode(r.title || "").byteLength + enc.encode(r.content || "").byteLength, 0);
+        const size        = bytes >= 1_048_576 ? `${(bytes / 1_048_576).toFixed(1)} MB` : `${(bytes / 1024).toFixed(1)} KB`;
+        return { folderCount, noteCount, size };
+    }, [dbData]);
 
     const activeFolderNoteCount = useMemo(() => {
         if (!activeFolder) return 0;
@@ -2185,7 +2233,11 @@ const fireIntegrations = (trigger: string, note: any) => {
         });
     }, []);
 
-    const openNoteFromCmdK = useCallback((note: any) => {
+    const openNoteFromCmdK = useCallback((note: any, cmdClick = false) => {
+        if (cmdClick && looksLikeUrl(note.content || "")) {
+            window.open(note.content.trim(), "_blank", "noopener,noreferrer");
+            return;
+        }
         setShowCmdK(false);
         setCmdKQuery("");
         if (note.folder_name) {
@@ -3472,10 +3524,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                     word-break: break-word;
                 }
                 .list-row-hover {
-                    transition: background-color 0.3s ease;
-                }
-                .list-row-hover:hover {
-                    background-color: color-mix(in srgb, var(--row-color, #ffffff) 12%, transparent) !important;
+                    transition: background-color 0.15s ease;
                 }
                 @keyframes islandToastInOut {
                     0% {
@@ -3515,6 +3564,15 @@ const fireIntegrations = (trigger: string, note: any) => {
                 }
                 .empty-quote-anim {
                     animation: emptyQuotePulse 10s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+                }
+                @keyframes snakeAround {
+                    from { stroke-dashoffset: 0; }
+                    to   { stroke-dashoffset: -100; }
+                }
+                .list-snake-path {
+                    stroke-dasharray: 24 76;
+                    stroke-dashoffset: 0;
+                    animation: snakeAround 1.5s linear infinite;
                 }
                 @keyframes folderFabPulse {
                     0% {
@@ -3757,40 +3815,86 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 )}
                             </div>
                         ) : stackMode ? (
-                            <div className="relative flex-1 flex flex-col items-center justify-center select-none" style={{ overflow: "visible" }}>
+                            <div
+                                className="relative flex-1 flex flex-col items-center justify-center select-none"
+                                style={{ overflow: "visible", cursor: "grab" }}
+                                onMouseDown={(e) => { tower3dDrag.current.active = true; tower3dDrag.current.startX = e.clientX; tower3dDrag.current.startY = e.clientY; e.preventDefault(); }}
+                                onMouseMove={(e) => {
+                                    if (!tower3dDrag.current.active) return;
+                                    tower3dDrag.current.rotY += (e.clientX - tower3dDrag.current.startX) * 0.55;
+                                    tower3dDrag.current.rotX -= (e.clientY - tower3dDrag.current.startY) * 0.3;
+                                    tower3dDrag.current.rotX = Math.max(-70, Math.min(70, tower3dDrag.current.rotX));
+                                    tower3dDrag.current.startX = e.clientX; tower3dDrag.current.startY = e.clientY;
+                                    if (tower3dRef.current) tower3dRef.current.style.transform = `rotateX(${tower3dDrag.current.rotX}deg) rotateY(${tower3dDrag.current.rotY}deg)`;
+                                }}
+                                onMouseUp={() => { tower3dDrag.current.active = false; }}
+                                onMouseLeave={() => { tower3dDrag.current.active = false; }}
+                                onTouchStart={(e) => { tower3dDrag.current.active = true; tower3dDrag.current.startX = e.touches[0].clientX; tower3dDrag.current.startY = e.touches[0].clientY; }}
+                                onTouchMove={(e) => {
+                                    if (!tower3dDrag.current.active) return;
+                                    tower3dDrag.current.rotY += (e.touches[0].clientX - tower3dDrag.current.startX) * 0.55;
+                                    tower3dDrag.current.rotX -= (e.touches[0].clientY - tower3dDrag.current.startY) * 0.3;
+                                    tower3dDrag.current.rotX = Math.max(-70, Math.min(70, tower3dDrag.current.rotX));
+                                    tower3dDrag.current.startX = e.touches[0].clientX; tower3dDrag.current.startY = e.touches[0].clientY;
+                                    if (tower3dRef.current) tower3dRef.current.style.transform = `rotateX(${tower3dDrag.current.rotX}deg) rotateY(${tower3dDrag.current.rotY}deg)`;
+                                }}
+                                onTouchEnd={() => { tower3dDrag.current.active = false; }}
+                            >
                                 {parsedTasks.length === 0 ? (
                                     <div className="text-zinc-500 text-center text-sm font-bold uppercase tracking-wider">No tasks — switch to Checklist to add</div>
                                 ) : (
-                                    /* CodePen sireeshav/LNZOrb technique: all layers at same position, separated by translateZ */
-                                    <div style={{ width: 260, height: 70, position: "relative", perspective: 1350, transformStyle: "preserve-3d" }}>
-                                        {parsedTasks.map((task, i) => {
-                                            const c = taskColor(i, parsedTasks.length);
-                                            const isDone = task.done;
-                                            const STEP = 65;
-                                            return (
-                                                <button key={i} type="button" onClick={() => toggleTask(i)}
-                                                    className="task-row-enter"
-                                                    style={{
-                                                        width: 260, height: 70,
-                                                        position: "absolute", top: 0, left: 0,
-                                                        transform: `rotateX(45deg) rotateZ(45deg) translateZ(${i * STEP}px)`,
-                                                        background: isDone ? `${c}50` : c,
-                                                        cursor: "pointer", border: "none",
-                                                        opacity: isDone ? 0.45 : 1,
-                                                        transition: "all 0.35s ease",
-                                                        display: "flex", alignItems: "center",
-                                                        paddingLeft: 16, paddingRight: 12, gap: 8,
-                                                        animationDelay: `${i * 0.06}s`,
-                                                        boxShadow: isDone ? "none" : `inset 0 1px 0 rgba(255,255,255,0.25), 0 4px 16px rgba(0,0,0,0.3)`,
-                                                    }}>
-                                                    <span style={{ position: "absolute", inset: 0, background: "linear-gradient(135deg,rgba(255,255,255,0.18) 0%,transparent 55%)", pointerEvents: "none" }} />
-                                                    <span style={{ position: "relative", fontWeight: 900, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em", color: "white", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textAlign: "left" }}>{task.text}</span>
-                                                    {isDone && <CheckIcon style={{ width: 13, height: 13, color: "rgba(255,255,255,0.7)", flexShrink: 0 }} />}
-                                                </button>
-                                            );
-                                        })}
+                                    <div style={{ perspective: 1000, perspectiveOrigin: "50% 50%" }}>
+                                        <div ref={tower3dRef} style={{ transformStyle: "preserve-3d", position: "relative", transform: `rotateX(${tower3dDrag.current.rotX}deg) rotateY(${tower3dDrag.current.rotY}deg)` }}>
+                                            {parsedTasks.map((task, i) => {
+                                                const c = taskColor(i, parsedTasks.length);
+                                                const isDone = task.done;
+                                                const num = String(i + 1).padStart(2, "0");
+                                                const darken = (hex: string, amt: number) => {
+                                                    const n = parseInt(hex.slice(1), 16);
+                                                    const r = Math.max(0, (n >> 16) - amt);
+                                                    const g = Math.max(0, ((n >> 8) & 0xff) - amt);
+                                                    const b = Math.max(0, (n & 0xff) - amt);
+                                                    return `rgb(${r},${g},${b})`;
+                                                };
+                                                return (
+                                                    <div key={i} onClick={() => toggleTask(i)} style={{ position: "relative", width: 200, height: 48, transformStyle: "preserve-3d", marginBottom: 3, cursor: "pointer", opacity: isDone ? 0.4 : 1, transition: "opacity 0.3s" }}>
+                                                        {/* Front */}
+                                                        <div style={{ position: "absolute", width: 200, height: 48, transform: "translateZ(40px)", background: `linear-gradient(160deg, color-mix(in srgb, ${c} 60%, white 60%) 0%, ${c} 40%, ${darken(c, 40)} 100%)`, display: "flex", alignItems: "center", padding: "0 14px", gap: 10, overflow: "hidden" }}>
+                                                            <span style={{ position: "absolute", top: 0, left: 0, width: "55%", height: "100%", background: "linear-gradient(105deg, rgba(255,255,255,0.28) 0%, rgba(255,255,255,0.06) 50%, transparent 100%)", pointerEvents: "none" }} />
+                                                            <span style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "35%", background: "linear-gradient(to top, rgba(255,255,255,0.12), transparent)", pointerEvents: "none" }} />
+                                                            <span style={{ fontSize: 13, fontWeight: 800, color: "rgba(255,255,255,0.95)", minWidth: 22, textShadow: "0 1px 4px rgba(0,0,0,0.4)", position: "relative", zIndex: 1 }}>{num}</span>
+                                                            <span style={{ width: 1, height: 24, background: "rgba(255,255,255,0.35)", flexShrink: 0, position: "relative", zIndex: 1 }} />
+                                                            <span style={{ display: "flex", flexDirection: "column", position: "relative", zIndex: 1 }}>
+                                                                <span style={{ fontSize: 11, fontWeight: 700, color: "#fff", textDecoration: isDone ? "line-through" : "none", textShadow: "0 1px 3px rgba(0,0,0,0.3)" }}>{task.text}</span>
+                                                            </span>
+                                                        </div>
+                                                        {/* Back */}
+                                                        <div style={{ position: "absolute", width: 200, height: 48, transform: "rotateY(180deg) translateZ(40px)", background: `linear-gradient(20deg, color-mix(in srgb, ${c} 60%, white 60%) 0%, ${c} 40%, ${darken(c, 40)} 100%)`, display: "flex", alignItems: "center", padding: "0 14px", gap: 10, overflow: "hidden", scale: "-1 1" }}>
+                                                            <span style={{ fontSize: 13, fontWeight: 800, color: "rgba(255,255,255,0.95)", minWidth: 22, scale: "-1 1" }}>{num}</span>
+                                                            <span style={{ width: 1, height: 24, background: "rgba(255,255,255,0.35)", flexShrink: 0, scale: "-1 1" }} />
+                                                            <span style={{ fontSize: 11, fontWeight: 700, color: "#fff", scale: "-1 1" }}>{task.text}</span>
+                                                        </div>
+                                                        {/* Left */}
+                                                        <div style={{ position: "absolute", width: 80, height: 48, transformOrigin: "left center", transform: "rotateY(-90deg)", background: `linear-gradient(to right, ${darken(c, 60)}, ${darken(c, 45)})`, overflow: "hidden" }}>
+                                                            <span style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom, rgba(255,255,255,0.15) 0%, transparent 50%)" }} />
+                                                        </div>
+                                                        {/* Right */}
+                                                        <div style={{ position: "absolute", width: 80, height: 48, left: 200, transformOrigin: "left center", transform: "rotateY(90deg)", background: `linear-gradient(to right, ${darken(c, 45)}, ${darken(c, 60)})`, overflow: "hidden" }}>
+                                                            <span style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom, rgba(255,255,255,0.1) 0%, transparent 60%)" }} />
+                                                        </div>
+                                                        {/* Top */}
+                                                        <div style={{ position: "absolute", width: 200, height: 80, transformOrigin: "top center", transform: "rotateX(90deg)", background: `linear-gradient(135deg, color-mix(in srgb, ${c} 30%, white 80%) 0%, color-mix(in srgb, ${c} 55%, white 50%) 60%, color-mix(in srgb, ${c} 65%, white 30%) 100%)`, overflow: "hidden" }}>
+                                                            <span style={{ position: "absolute", inset: 0, background: "linear-gradient(120deg, rgba(255,255,255,0.5) 0%, transparent 55%)" }} />
+                                                        </div>
+                                                        {/* Bottom */}
+                                                        <div style={{ position: "absolute", width: 200, height: 80, top: 48, transformOrigin: "top center", transform: "rotateX(-90deg)", background: darken(c, 80) }} />
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
                                     </div>
                                 )}
+                                <div style={{ marginTop: 24, fontSize: 10, color: "rgba(255,255,255,0.2)", letterSpacing: "0.2em", textTransform: "uppercase" }}>⟳ drag to rotate</div>
                             </div>
                         ) : listMode ? (
                             <div
@@ -4110,9 +4214,19 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     <input value={search} onChange={(e) => setSearch(e.target.value)} onFocus={() => setSearchFocused(true)} onBlur={() => setSearchFocused(false)} autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false} inputMode="search" className="w-full bg-transparent border-0 outline-none focus:outline-none focus:ring-0 shadow-none appearance-none pl-12 pr-3 py-3 text-xs font-black tracking-tight" placeholder="search" />
                                 </div>
                                 {!searchFocused && !search.trim() && (
-                                    <div className="hidden sm:flex flex-col items-end leading-tight flex-shrink-0 select-none pointer-events-none">
-                                        <span className="text-[11px] font-black text-white/70">{now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
-                                        <span className="text-[9px] font-medium text-zinc-500 uppercase tracking-wide">{now.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}</span>
+                                    <div className="hidden sm:flex items-center gap-3 flex-shrink-0 select-none pointer-events-none">
+                                        <div className="flex items-center gap-2 tabular-nums text-[11px] font-semibold">
+                                            <span style={{ color: "#38bdf8" }}>{dbStats.folderCount} folders</span>
+                                            <span className="text-zinc-700">·</span>
+                                            <span style={{ color: "#fb923c" }}>{dbStats.noteCount} notes</span>
+                                            <span className="text-zinc-700">·</span>
+                                            <span style={{ color: "#34d399" }}>{dbStats.size}</span>
+                                        </div>
+                                        <div className="flex items-center gap-1 text-[11px] font-black text-white/70">
+                                            <span>{now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                                            <span className="text-zinc-600 font-thin italic">/</span>
+                                            <span className="text-zinc-500 uppercase tracking-wide text-[9px] font-medium">{now.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}</span>
+                                        </div>
                                     </div>
                                 )}
                                 <div className="ml-auto flex items-center gap-1">
@@ -4172,6 +4286,16 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     onDragLeave={handleTileDragLeave}
                                     onDrop={(e) => { void handleTileDrop(e, item); }}
                                     onDragEnd={handleTileDragEnd}
+                                    onMouseEnter={(e) => {
+                                        const r = e.currentTarget.getBoundingClientRect();
+                                        setGlowCard({ id: tileId, x: ((e.clientX - r.left) / r.width) * 100, y: ((e.clientY - r.top) / r.height) * 100 });
+                                    }}
+                                    onMouseMove={(e) => {
+                                        if (glowCard?.id !== tileId) return;
+                                        const r = e.currentTarget.getBoundingClientRect();
+                                        setGlowCard(g => g ? { ...g, x: ((e.clientX - r.left) / r.width) * 100, y: ((e.clientY - r.top) / r.height) * 100 } : g);
+                                    }}
+                                    onMouseLeave={() => setGlowCard(null)}
                                     onTouchStart={() => {
                                         longPressTimer.current = setTimeout(() => {
                                             longPressTimer.current = null;
@@ -4206,6 +4330,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         createRipple(e, item.color || item.folder_color || "#FFFFFF");
                                         if (item.is_folder) {
                                             enterFolder({ id: String(item.id), name: item.name, color: item.color || palette12[0] });
+                                        } else if (!item.is_folder && looksLikeUrl(item.content || "")) {
+                                            window.open(item.content.trim(), "_blank", "noopener,noreferrer");
                                         } else {
                                             setEditingNote(item);
                                             setTitle(item.title);
@@ -4233,11 +4359,29 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         }
                                     }}
                                     style={mainListMode
-                                        ? { position: "relative", "--row-color": item.color || item.folder_color || "#ffffff" } as React.CSSProperties
-                                        : { position: "relative", backgroundColor: item.is_folder ? (item.color || item.folder_color) : `${item.color || item.folder_color || "#888888"}66` }}
+                                        ? { position: "relative", isolation: "isolate", "--row-color": item.color || item.folder_color || "#ffffff" } as React.CSSProperties
+                                        : { position: "relative", isolation: "isolate", backgroundColor: item.is_folder ? (item.color || item.folder_color) : `${item.color || item.folder_color || "#888888"}66` }}
                                     className={`${mainListMode
-                                        ? `group list-row-hover flex items-center gap-3 px-4 py-2 border-b border-white/5 cursor-pointer select-none transition-colors hover:bg-white/5 active:bg-white/10 ${isDragging ? "opacity-30" : dt?.mode === "into" ? "bg-cyan-950/60 ring-1 ring-inset ring-cyan-400" : ""} ${isSelectMode && !item.is_folder && selectedIds.has(String(item.id)) ? "bg-blue-950/50" : ""} ${isFolderSelectMode && item.is_folder && selectedFolderNames.includes(item.name || "") ? "bg-emerald-950/50" : ""}`
-                                        : `relative min-w-0 cursor-pointer transition-all hover:opacity-90 group ${isDragging ? "opacity-30 scale-95" : dt?.mode === "into" ? "ring-4 ring-cyan-400 ring-inset z-10" : ""} ${isSelectMode && !item.is_folder && selectedIds.has(String(item.id)) ? "ring-2 ring-inset ring-blue-500" : ""} ${isFolderSelectMode && item.is_folder && selectedFolderNames.includes(item.name || "") ? "ring-2 ring-inset ring-emerald-500" : ""}`}`}>
+                                        ? `group list-row-hover flex items-center gap-3 px-4 py-1 border-b border-white/5 cursor-pointer select-none transition-colors active:bg-white/10 overflow-hidden ${isDragging ? "opacity-30" : dt?.mode === "into" ? "bg-cyan-950/60 ring-1 ring-inset ring-cyan-400" : ""} ${isSelectMode && !item.is_folder && selectedIds.has(String(item.id)) ? "bg-blue-950/50" : ""} ${isFolderSelectMode && item.is_folder && selectedFolderNames.includes(item.name || "") ? "bg-emerald-950/50" : ""}`
+                                        : `relative min-w-0 cursor-pointer transition-all group overflow-hidden ${isDragging ? "opacity-30 scale-95" : dt?.mode === "into" ? "ring-4 ring-cyan-400 ring-inset z-10" : ""} ${isSelectMode && !item.is_folder && selectedIds.has(String(item.id)) ? "ring-2 ring-inset ring-blue-500" : ""} ${isFolderSelectMode && item.is_folder && selectedFolderNames.includes(item.name || "") ? "ring-2 ring-inset ring-emerald-500" : ""}`}`}>
+                                    {/* HeroCard — cursor spotlight + snake border */}
+                                    {glowCard?.id === tileId && (() => {
+                                        const c = item.color || item.folder_color || "#888888";
+                                        const hex = c.replace("#", "").padEnd(6, "0");
+                                        const r = parseInt(hex.substring(0, 2), 16);
+                                        const g = parseInt(hex.substring(2, 4), 16);
+                                        const b = parseInt(hex.substring(4, 6), 16);
+                                        return (
+                                            <>
+                                                {/* Background glow — behind text/icon */}
+                                                <div className="absolute inset-0 pointer-events-none z-[-1]" style={{ background: `radial-gradient(circle at ${glowCard.x}% ${glowCard.y}%, rgba(${r},${g},${b},0.4) 0%, rgba(${r},${g},${b},0.2) 50%, rgba(${r},${g},${b},0.03) 100%)`, transition: "background 0.05s" }} />
+                                                {/* Snake border — 1px stroke crawling around the row in 10s */}
+                                                <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 2 }}>
+                                                    <rect className="list-snake-path" x="0" y="0" width="100%" height="100%" fill="none" stroke={c} strokeWidth="2" pathLength="100" />
+                                                </svg>
+                                            </>
+                                        );
+                                    })()}
                                     {/* Insertion line indicator — before */}
                                     {dt?.mode === "before" && (
                                         <div className={`absolute z-20 bg-cyan-400 pointer-events-none ${mainListMode ? "left-0 right-0 top-0 h-0.5" : "top-0 left-0 bottom-0 w-1"}`} />
@@ -4269,7 +4413,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 const g = parseInt(hex.substring(2, 4), 16);
                                                 const b = parseInt(hex.substring(4, 6), 16);
                                                 return (
-                                                    <div className="flex-shrink-0 aspect-square w-[88px] flex items-center justify-center text-4xl font-black"
+                                                    <div className="flex-shrink-0 w-[36px] h-[36px] flex items-center justify-center text-sm font-black"
                                                         style={item.is_folder
                                                             ? { backgroundColor: c, color: "#fff", boxShadow: (item.name === "PAGES" || item.name === "CLAUDE") ? "inset 0 0 0 1px rgba(255,255,255,0.85)" : undefined }
                                                             : { backgroundColor: "transparent", border: `1.5px solid rgba(${r},${g},${b},0.6)`, color: `rgba(${r},${g},${b},0.9)` }}>
@@ -4280,7 +4424,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 );
                                             })()}
                                             <div className="flex-1 min-w-0">
-                                                <div className="text-base font-semibold tracking-tight text-white truncate">
+                                                <div className="text-base sm:text-[14.4px] font-semibold tracking-tight text-white truncate">
                                                     {item.is_folder ? item.name : item.title}
                                                 </div>
                                                 {item.is_folder ? (
@@ -4299,6 +4443,29 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 <span className="text-[13px] text-zinc-500 flex-shrink-0 font-medium">
                                                     {timeAgo(item.updated_at)}
                                                 </span>
+                                            )}
+                                            {!item.is_folder && looksLikeUrl(item.content || "") && !isSelectMode && (
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setEditingNote(item);
+                                                        setTitle(item.title);
+                                                        setContent(item.content);
+                                                        setImages((item as any).images ?? []);
+                                                        setTargetFolder(item.folder_name || activeFolder || "General");
+                                                        setNoteColor(item.folder_color || folders.find((f) => f.name === (item.folder_name || activeFolder))?.color || palette12[0]);
+                                                        setShowColorPicker(false);
+                                                        setShowSwitcher(false);
+                                                        setActiveLine(0);
+                                                        setEditorScrollTop(0);
+                                                        setEditorOpen(true);
+                                                    }}
+                                                    className="p-1 opacity-0 group-hover:opacity-100 transition text-zinc-400 hover:text-white flex-shrink-0"
+                                                    title="Edit bookmark"
+                                                >
+                                                    <PencilSquareIcon className="w-4 h-4" />
+                                                </button>
                                             )}
                                             {!item.is_folder && pinnedIds.has(String(item.id)) && !isSelectMode && (
                                                 <HeartSolidIcon className="w-3.5 h-3.5 text-white flex-shrink-0" />
@@ -4334,6 +4501,29 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                     >
                                                         {pinnedIds.has(String(item.id)) ? <HeartSolidIcon className="w-3.5 h-3.5" /> : <HeartIcon className="w-3.5 h-3.5" />}
                                                     </button>
+                                                    {looksLikeUrl(item.content || "") && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setEditingNote(item);
+                                                                setTitle(item.title);
+                                                                setContent(item.content);
+                                                                setImages((item as any).images ?? []);
+                                                                setTargetFolder(item.folder_name || activeFolder || "General");
+                                                                setNoteColor(item.folder_color || folders.find((f) => f.name === (item.folder_name || activeFolder))?.color || palette12[0]);
+                                                                setShowColorPicker(false);
+                                                                setShowSwitcher(false);
+                                                                setActiveLine(0);
+                                                                setEditorScrollTop(0);
+                                                                setEditorOpen(true);
+                                                            }}
+                                                            className="absolute top-1 right-1 z-10 p-1 opacity-0 group-hover:opacity-100 transition text-white/60 hover:text-white"
+                                                            title="Edit bookmark"
+                                                        >
+                                                            <PencilSquareIcon className="w-3.5 h-3.5" />
+                                                        </button>
+                                                    )}
                                                 </>
                                             )}
                                             <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-1.5 overflow-hidden">
@@ -4378,6 +4568,20 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 </div>
                             </div>
                         )}
+                        {/* Stats footer — desktop list mode only */}
+                        {mainListMode && !isEmptyView && (() => {
+                            const realItems = displayItems.filter((i: any) => !i._header);
+                            const fCount = realItems.filter((i: any) => i.is_folder).length;
+                            const nCount = realItems.filter((i: any) => !i.is_folder).length;
+                            const totalChars = realItems.filter((i: any) => !i.is_folder).reduce((acc: number, i: any) => acc + (i.content || "").length, 0);
+                            const sizeStr = totalChars >= 1_000_000 ? `${(totalChars / 1_000_000).toFixed(1)}M chars` : totalChars >= 1000 ? `${(totalChars / 1000).toFixed(1)}k chars` : `${totalChars} chars`;
+                            const parts = [fCount > 0 && `${fCount} folder${fCount !== 1 ? "s" : ""}`, nCount > 0 && `${nCount} note${nCount !== 1 ? "s" : ""}`, sizeStr].filter(Boolean);
+                            return (
+                                <div className="hidden sm:block text-right px-4 py-2 text-[10px] text-zinc-700 font-medium select-none pointer-events-none">
+                                    {parts.join(" · ")}
+                                </div>
+                            );
+                        })()}
                     </main>
 
                     {/* FOLDER MERGE ACTION BAR */}
@@ -5218,7 +5422,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                             if (e.key === "Escape") { setShowCmdK(false); return; }
                             if (e.key === "ArrowDown") { e.preventDefault(); setCmdKCursor(v => Math.min(v + 1, cmdKResults.length - 1)); }
                             if (e.key === "ArrowUp") { e.preventDefault(); setCmdKCursor(v => Math.max(v - 1, 0)); }
-                            if (e.key === "Enter" && cmdKResults[cmdKCursor]) openNoteFromCmdK(cmdKResults[cmdKCursor]);
+                            if (e.key === "Enter" && cmdKResults[cmdKCursor]) openNoteFromCmdK(cmdKResults[cmdKCursor], e.metaKey);
                         }}>
                         {/* Input */}
                         <div className="flex items-center gap-3 px-4 py-3.5 border-b border-white/10">
@@ -5245,12 +5449,15 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         )}
                                         <button
                                             type="button"
-                                            onClick={() => openNoteFromCmdK(note)}
+                                            onClick={(e) => openNoteFromCmdK(note, e.metaKey)}
                                             onMouseEnter={() => setCmdKCursor(i)}
                                             className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition ${i === cmdKCursor ? "bg-white/10" : "hover:bg-white/5"}`}>
-                                            <div className="w-7 h-7 flex-shrink-0 flex items-center justify-center text-sm font-black text-white"
+                                            <div className="relative w-7 h-7 flex-shrink-0 flex items-center justify-center text-sm font-black text-white"
                                                 style={{ backgroundColor: note.color || note.folder_color || "#3f3f46" }}>
                                                 {[...(note.title || "N")][0]?.toUpperCase()}
+                                                {looksLikeUrl(note.content || "") && (
+                                                    <BookmarkIcon className="absolute -top-1 -right-1 w-3 h-3 text-white drop-shadow-sm" style={{ filter: "drop-shadow(0 0 2px rgba(0,0,0,0.8))" }} />
+                                                )}
                                             </div>
                                             <div className="flex-1 min-w-0">
                                                 {note.folder_name && (
@@ -5259,6 +5466,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 <div className="text-sm font-semibold text-white truncate">{note.title || "Untitled"}</div>
                                             </div>
                                             {isPinned && <HeartSolidIcon className="w-3.5 h-3.5 text-white flex-shrink-0" />}
+                                            {looksLikeUrl(note.content || "") && i === cmdKCursor && <span className="text-[9px] text-zinc-500 flex-shrink-0">⌘ open</span>}
                                             <span className="text-[10px] text-zinc-600 flex-shrink-0">{timeAgo(note.updated_at)}</span>
                                             {i === cmdKCursor && <kbd className="text-[9px] text-zinc-600 border border-zinc-700 px-1 py-0.5 font-mono flex-shrink-0">↵</kbd>}
                                         </button>
