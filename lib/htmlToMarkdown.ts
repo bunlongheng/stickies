@@ -8,20 +8,16 @@
 
 import TurndownService from "turndown";
 
-/** Fetch an image and return it as a base64 data URI. Returns original src on failure. */
+/** Fetch an image via server-side proxy and return as base64 data URI. */
 async function toBase64(src: string): Promise<string> {
     if (src.startsWith("data:")) return src; // already base64
+    if (!src.startsWith("http")) return src;
 
     try {
-        const res = await fetch(src, { mode: "cors" });
+        const res = await fetch(`/api/stickies/img-proxy?url=${encodeURIComponent(src)}`);
         if (!res.ok) return src;
-        const blob = await res.blob();
-        return new Promise((resolve) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(reader.result as string);
-            reader.onerror = () => resolve(src);
-            reader.readAsDataURL(blob);
-        });
+        const dataUri = await res.text();
+        return dataUri.startsWith("data:") ? dataUri : src;
     } catch {
         return src;
     }
