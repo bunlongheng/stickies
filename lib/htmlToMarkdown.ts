@@ -2,81 +2,45 @@
  * htmlToMarkdown.ts — browser-side utility
  *
  * Converts rich HTML (e.g. pasted from Notion) into Markdown.
- * Inline images are uploaded to Supabase storage (or Google Drive when
- * NEXT_PUBLIC_USE_GDRIVE=1 and credentials are configured server-side).
- *
- * Folder structure mirrors Google Drive intent:
- *   stickies-files/{noteTitle}/{timestamp}-image-{n}.png
+ * Inline images are fetched and embedded as base64 data URIs —
+ * no external storage required.
  */
 
 import TurndownService from "turndown";
 
-const API_KEY = process.env.NEXT_PUBLIC_STICKIES_API_KEY ?? "";
-
-/** Upload a single image (base64 data URI or remote URL) and return the new public URL. */
-async function uploadImage(src: string, noteTitle: string, index: number): Promise<string> {
-    let blob: Blob | null = null;
-
-    if (src.startsWith("data:")) {
-        // Base64 data URI → convert to blob
-        try {
-            const res = await fetch(src);
-            blob = await res.blob();
-        } catch {
-            return src;
-        }
-    } else if (src.startsWith("http")) {
-        // Remote URL (Notion CDN, etc.) — re-upload so links don't expire
-        try {
-            const res = await fetch(src, { mode: "cors" });
-            if (res.ok) blob = await res.blob();
-        } catch {
-            // CORS blocked or network error — keep original URL
-            return src;
-        }
-    }
-
-    if (!blob) return src;
-
-    const ext = blob.type.split("/")[1]?.replace("jpeg", "jpg") || "png";
-    const filename = `image-${index + 1}.${ext}`;
-    // Use note title as the "folder" — mirrors the Google Drive folder structure
-    const folder = noteTitle.replace(/[^a-zA-Z0-9\-_]/g, "_").slice(0, 60) || "paste";
-
-    const formData = new FormData();
-    formData.append("file", blob, filename);
-    formData.append("noteId", folder);
+/** Fetch an image and return it as a base64 data URI. Returns original src on failure. */
+async function toBase64(src: string): Promise<string> {
+    if (src.startsWith("data:")) return src; // already base64
 
     try {
-        const res = await fetch("/api/stickies/upload", {
-            method: "POST",
-            headers: { Authorization: `Bearer ${API_KEY}` },
-            body: formData,
-        });
+        const res = await fetch(src, { mode: "cors" });
         if (!res.ok) return src;
-        const data = await res.json();
-        return (data.url as string) ?? src;
+        const blob = await res.blob();
+        return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = () => resolve(src);
+            reader.readAsDataURL(blob);
+        });
     } catch {
         return src;
     }
 }
 
-/** Convert rich HTML to Markdown, uploading any embedded images inline. */
-export async function htmlToMarkdown(html: string, noteTitle: string): Promise<string> {
+/** Convert rich HTML to Markdown, embedding images as base64. */
+export async function htmlToMarkdown(html: string, _noteTitle: string): Promise<string> {
     const parser = new DOMParser();
     const doc = parser.parseFromString(html, "text/html");
 
     // Remove Notion-specific junk elements
     doc.querySelectorAll("[data-token-index], .notion-selectable-halo, meta, style").forEach(el => el.remove());
 
-    // Collect all img tags and upload in parallel
+    // Embed all images as base64
     const imgs = Array.from(doc.querySelectorAll("img"));
     if (imgs.length > 0) {
-        const newUrls = await Promise.all(
-            imgs.map((img, i) => uploadImage(img.getAttribute("src") ?? "", noteTitle, i))
-        );
+        const b64s = await Promise.all(imgs.map(img => toBase64(img.getAttribute("src") ?? "")));
         imgs.forEach((img, i) => {
-            img.setAttribute("src", newUrls[i]);
+            img.setAttribute("src", b64s[i]);
             if (!img.getAttribute("alt")) img.setAttribute("alt", `image-${i + 1}`);
         });
     }
