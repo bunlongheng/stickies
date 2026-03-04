@@ -1844,13 +1844,41 @@ const fireIntegrations = (trigger: string, note: any) => {
         });
     }
 
-    function handleEditorPaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
+    async function handleEditorPaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
         const items = Array.from(e.clipboardData.items);
         const imageItems = items.filter((i) => i.type.startsWith("image/"));
-        if (imageItems.length === 0) return;
-        e.preventDefault();
-        const files = imageItems.map((i) => i.getAsFile()).filter(Boolean) as File[];
-        void addImages(files);
+        const htmlData = e.clipboardData.getData("text/html");
+
+        // Rich HTML paste (Notion, Google Docs, etc.) — convert to Markdown + upload images inline
+        if (htmlData && htmlData.includes("<") && (htmlData.includes("<img") || htmlData.includes("<h") || htmlData.includes("<strong") || htmlData.includes("<li") || htmlData.includes("<p"))) {
+            e.preventDefault();
+            const textarea = e.currentTarget;
+            const start = textarea.selectionStart ?? content.length;
+            const end = textarea.selectionEnd ?? content.length;
+            showToast("Converting rich text…", "#32ADE6");
+            try {
+                const { htmlToMarkdown } = await import("@/lib/htmlToMarkdown");
+                const noteTitle = title || editingNote?.title || "note";
+                const md = await htmlToMarkdown(htmlData, noteTitle);
+                const newContent = content.slice(0, start) + md + content.slice(end);
+                setContent(newContent);
+                // Auto-enable markdown mode for this note
+                const nid = editingNote?.id ? String(editingNote.id) : null;
+                if (nid) setMarkdownModeNotes(prev => new Set([...prev, nid]));
+                showToast("Rich text pasted ✓", "#34C759");
+            } catch (err) {
+                console.error("Rich paste failed:", err);
+                showToast("Paste failed", "#FF3B30");
+            }
+            return;
+        }
+
+        // Direct image file paste → attachment strip
+        if (imageItems.length > 0) {
+            e.preventDefault();
+            const files = imageItems.map((i) => i.getAsFile()).filter(Boolean) as File[];
+            void addImages(files);
+        }
     }
 
     const handleCursorUpdate = (e: any) => {
@@ -3471,6 +3499,9 @@ const fireIntegrations = (trigger: string, note: any) => {
                 .copy-code-btn.copied { background: rgba(34,197,94,0.15); color: #4ade80; border-color: rgba(34,197,94,0.3); }
                 .md-preview blockquote { border-left: 3px solid rgba(255,255,255,0.2); padding-left: 1em; margin: 0.75em 0; color: #71717a; font-style: italic; }
                 .md-preview a { color: #38bdf8; text-decoration: underline; }
+                .md-preview img { max-width: 100%; height: auto; border-radius: 4px; margin: 0.6em 0; display: block; border: 1px solid rgba(255,255,255,0.08); }
+                .md-preview input[type="checkbox"] { margin-right: 0.4em; accent-color: #38bdf8; }
+                .md-preview del, .md-preview s { color: #71717a; }
                 .md-preview hr { border: none; border-top: 1px solid rgba(255,255,255,0.1); margin: 1.5em 0; }
                 .md-preview table { width: 100%; border-collapse: collapse; margin: 0.75em 0; font-size: 0.85em; }
                 .md-preview th { background: rgba(255,255,255,0.06); color: #fff; font-weight: 900; text-transform: uppercase; font-size: 0.75em; letter-spacing: 0.05em; }
