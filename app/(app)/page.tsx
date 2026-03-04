@@ -1190,9 +1190,6 @@ const fireIntegrations = (trigger: string, note: any) => {
             setNoteColor(note.folder_color || palette12[0]);
             setActiveLine(0);
             setEditorScrollTop(0);
-            if (note.id && looksLikeMarkdown(note.content || "")) {
-                setMarkdownModeNotes((prev) => new Set([...prev, String(note.id)]));
-            }
             if (note.id && looksLikeHtml(note.content || "")) {
                 setHtmlModeNotes((prev) => new Set([...prev, String(note.id)]));
             }
@@ -1898,9 +1895,9 @@ const fireIntegrations = (trigger: string, note: any) => {
                 const md = await htmlToMarkdown(htmlData, noteTitle);
                 const newContent = content.slice(0, start) + md + content.slice(end);
                 setContent(newContent);
-                // Auto-enable markdown mode for this note
+                // Ensure markdown preview is active (remove from text-override set)
                 const nid = editingNote?.id ? String(editingNote.id) : null;
-                if (nid) setMarkdownModeNotes(prev => new Set([...prev, nid]));
+                if (nid) setMarkdownModeNotes(prev => { const next = new Set(prev); next.delete(nid); return next; });
                 showToast("Rich text pasted ✓", "#34C759");
             } catch (err) {
                 console.error("Rich paste failed:", err);
@@ -2318,7 +2315,6 @@ const fireIntegrations = (trigger: string, note: any) => {
         setShowSwitcher(false);
         setActiveLine(0);
         setEditorScrollTop(0);
-        if (note.id && looksLikeMarkdown(note.content || "")) setMarkdownModeNotes((p: Set<string>) => new Set([...p, String(note.id)]));
         if (note.id && looksLikeHtml(note.content || "")) setHtmlModeNotes((p: Set<string>) => new Set([...p, String(note.id)]));
         if (note.id && note.list_mode) setListModeNotes((p: Set<string>) => new Set([...p, String(note.id)]));
         if (note.id && note.mindmap_mode) setMindmapModeNotes((p: Set<string>) => new Set([...p, String(note.id)]));
