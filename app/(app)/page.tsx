@@ -18,7 +18,6 @@ import SwatchIcon from "@heroicons/react/24/outline/SwatchIcon";
 import DocumentDuplicateIcon from "@heroicons/react/24/outline/DocumentDuplicateIcon";
 import ListBulletIcon from "@heroicons/react/24/outline/ListBulletIcon";
 import PaperAirplaneIcon from "@heroicons/react/24/outline/PaperAirplaneIcon";
-import PaperClipIcon from "@heroicons/react/24/outline/PaperClipIcon";
 import CheckCircleIcon from "@heroicons/react/24/solid/CheckCircleIcon";
 import TrashIcon from "@heroicons/react/24/outline/TrashIcon";
 import QrCodeIcon from "@heroicons/react/24/outline/QrCodeIcon";
@@ -233,6 +232,7 @@ const looksLikeHtml = (text: string) =>
 const MAIN_LIST_MODE_KEY = "stickies:main-list-mode:v1";
 const DRILL_MODE_KEY = "stickies:drill-mode:v1";
 const KANBAN_MODE_KEY = "stickies:kanban-mode:v1";
+const EDIT_MODE_KEY = "stickies:edit-mode:v1";
 const LIST_MODE_KEY = "stickies:list-mode-notes:v1";
 const GRAPH_MODE_KEY = "stickies:graph-mode-notes:v1";
 const MARKDOWN_MODE_KEY = "stickies:markdown-mode-notes:v1";
@@ -720,6 +720,7 @@ export default function NotesMaster() {
     const [mainListMode, setMainListMode] = useState(true);
     const [drillMode, setDrillMode] = useState(false);
     const [kanbanMode, setKanbanMode] = useState(false);
+    const [editMode, setEditMode] = useState(false);
     const [showAddMenu, setShowAddMenu] = useState(false);
     const [colPath, setColPath] = useState<string[]>([]);
     const colDragNoteRef = useRef<string | null>(null);
@@ -737,7 +738,6 @@ export default function NotesMaster() {
     const [images, setImages] = useState<Array<{ url: string; name: string; type: string }>>([]);
     const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
     const [uploadingImages, setUploadingImages] = useState(false);
-    const imageFileInputRef = useRef<HTMLInputElement | null>(null);
 
     const isSavingRef = useRef(false);
     const localWriteRef = useRef<Map<string, number>>(new Map()); // noteId → timestamp, self-echo guard
@@ -957,14 +957,21 @@ export default function NotesMaster() {
                         setFolderStack(parsed.folderStack);
                     } else if (typeof parsed?.activeFolder === "string") {
                         setActiveFolder(parsed.activeFolder);
+                    } else {
+                        // Default notebook
+                        setActiveFolder("Work");
                     }
                     if ((parsed?.editorOpen || parsed?.noteModalOpen) && parsed?.editingNoteId) {
                         shouldWaitForInitialTarget = true;
                         setPendingRestoreNoteId(String(parsed.editingNoteId));
                     }
+                } else {
+                    // No saved state at all — open Work by default
+                    setActiveFolder("Work");
                 }
             } catch (err) {
                 console.error("Failed to restore local view state:", err);
+                setActiveFolder("Work");
             }
         }
         try {
@@ -1023,6 +1030,8 @@ export default function NotesMaster() {
             if (rawDrill) setDrillMode(rawDrill === "true");
             const rawKanban = localStorage.getItem(KANBAN_MODE_KEY);
             if (rawKanban) setKanbanMode(rawKanban === "true");
+            const rawEdit = localStorage.getItem(EDIT_MODE_KEY);
+            if (rawEdit) setEditMode(rawEdit === "true");
         } catch { /* ignore */ }
         if (!shouldWaitForInitialTarget) setIsUrlChecking(false);
         setHydratedViewState(true);
@@ -1108,6 +1117,10 @@ export default function NotesMaster() {
     useEffect(() => {
         try { localStorage.setItem(KANBAN_MODE_KEY, String(kanbanMode)); } catch { /* ignore */ }
     }, [kanbanMode]);
+
+    useEffect(() => {
+        try { localStorage.setItem(EDIT_MODE_KEY, String(editMode)); } catch { /* ignore */ }
+    }, [editMode]);
 
     // Load pinned note IDs from localStorage
     useEffect(() => {
@@ -1599,32 +1612,14 @@ const fireIntegrations = (trigger: string, note: any) => {
         if (activeFolder) {
             const activeFolderId = folderStack.at(-1)?.id ?? null;
             const useUuid = activeFolderId && !activeFolderId.startsWith("virtual-");
-            let notes = (useUuid
+            const notes = (useUuid
                 ? dbData.filter((n) => !n.is_folder && (String(n.folder_id) === activeFolderId || (!n.folder_id && n.folder_name === activeFolder)))
                 : dbData.filter((n) => !n.is_folder && n.folder_name === activeFolder)
             ).sort(byUpdated);
-            if (pendingNoteOrder) {
-                const idx = new Map(pendingNoteOrder.map((id, i) => [id, i]));
-                notes = [...notes].sort((a, b) => (idx.has(String(a.id)) ? idx.get(String(a.id))! : notes.length) - (idx.has(String(b.id)) ? idx.get(String(b.id))! : notes.length));
-            }
-            const byTitle = (a: any, b: any) => String(a.title || "").localeCompare(String(b.title || ""));
-            const pinnedNotes = notes.filter((n) => pinnedIds.has(String(n.id))).sort(byTitle);
-            const unpinned = notes.filter((n) => !pinnedIds.has(String(n.id)));
-            return [...currentLevelFolders, ...unpinned, ...pinnedNotes];
+            return notes;
         }
-        // Root view — pinned + recent 3 + folders with section headers
-        const allNotes = dbData.filter((n) => !n.is_folder);
-        const byTitle = (a: any, b: any) => String(a.title || "").localeCompare(String(b.title || ""));
-        const pinned = allNotes.filter((n) => pinnedIds.has(String(n.id))).sort(byTitle);
-        const result: any[] = [];
-        if (currentLevelFolders.length > 0) {
-            result.push(...currentLevelFolders);
-        }
-        if (pinned.length > 0) {
-            if (result.length > 0) result.push({ _header: "PINNED", id: "hdr-pinned" });
-            result.push(...pinned);
-        }
-        return result.length > 0 ? result : currentLevelFolders;
+        // Root view — all notes sorted by last updated
+        return dbData.filter((n) => !n.is_folder).sort(byUpdated);
     }, [dbData, activeFolder, search, currentLevelFolders, pendingNoteOrder, pinnedIds]);
     const cmdKResults = useMemo(() => {
         const notes = dbData.filter((n: any) => !n.is_folder);
@@ -1632,9 +1627,14 @@ const fireIntegrations = (trigger: string, note: any) => {
         if (!cmdKQuery.trim()) {
             const pinned = notes.filter((n: any) => pinnedIds.has(String(n.id))).sort((a: any, b: any) => String(a.title || "").localeCompare(String(b.title || "")));
             const recent = notes.filter((n: any) => !pinnedIds.has(String(n.id))).sort(byDate).slice(0, 8);
-            return [...recent, ...pinned];
+            const folderItems = folders.slice(0, 5).map(f => ({ ...f, _isFolder: true }));
+            return [...folderItems, ...recent, ...pinned];
         }
         const q = cmdKQuery.toLowerCase();
+        const matchingFolders = folders
+            .filter(f => f.name.toLowerCase().includes(q))
+            .map(f => ({ ...f, _isFolder: true }))
+            .slice(0, 3);
         const score = (n: any): number => {
             const t = (n.title || "").toLowerCase();
             const f = (n.folder_name || "").toLowerCase();
@@ -1651,14 +1651,15 @@ const fireIntegrations = (trigger: string, note: any) => {
             if (c.includes(q))     return 8;
             return 9;
         };
-        return notes
+        const matchedNotes = notes
             .filter((n: any) => score(n) < 9)
             .sort((a: any, b: any) => {
                 const sd = score(a) - score(b);
                 if (sd !== 0) return sd;
                 return byDate(a, b);
             });
-    }, [dbData, cmdKQuery, pinnedIds]);
+        return [...matchingFolders, ...matchedNotes];
+    }, [dbData, cmdKQuery, pinnedIds, folders]);
 
     const dbStats = useMemo(() => {
         const folderCount = dbData.filter(r => r.is_folder).length;
@@ -2459,6 +2460,9 @@ const fireIntegrations = (trigger: string, note: any) => {
     const htmlMode = !listMode && !graphMode && !mindmapMode && !stackMode && !markdownMode && detectHtml(content) && !htmlModeNotes.has(currentNoteId ?? "");
     // Unified active mode label for the dropdown
     const noteViewMode = stackMode ? "Stack" : mindmapMode ? "Mindmap" : graphMode ? "Graph" : listMode ? "Checklist" : markdownMode ? "Markdown" : htmlMode ? "HTML" : "Text";
+    // Rich note = has images, file attachments, headings, code blocks, blockquotes, or tables → hide mode toggle
+    const isRichNote = !listMode && !graphMode && !mindmapMode && !stackMode &&
+        /(<img[\s>]|data-file-attachment|<h[1-6][\s>]|<pre[\s>]|<blockquote[\s>]|<table[\s>])/i.test(content);
 
     const saveFolderIconToDb = useCallback(async (folderName: string, icon: string) => {
         try {
@@ -3628,6 +3632,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                             rgba(255,255,255,0.055) 8px
                         );
                 }
+                @keyframes spin { to { transform: rotate(360deg); } }
                 .rich-editor { display: flex; flex-direction: column; }
                 .rich-editor .tiptap { flex: 1; min-height: 100%; outline: none; padding: 1rem 2rem; color: #e4e4e7; line-height: 1.7; font-family: ui-sans-serif, system-ui, sans-serif; font-size: 14px; }
                 .rich-editor .tiptap p { margin: 0.5em 0; }
@@ -3654,6 +3659,13 @@ const fireIntegrations = (trigger: string, note: any) => {
                 .rich-editor .tiptap ul[data-type="taskList"] li { display: flex; align-items: flex-start; gap: 0.5em; }
                 .rich-editor .tiptap ul[data-type="taskList"] li > label { flex-shrink: 0; margin-top: 0.2em; }
                 .rich-editor .tiptap ul[data-type="taskList"] li input[type="checkbox"] { accent-color: #38bdf8; cursor: pointer; }
+                .rich-editor .tiptap table { border-collapse: collapse; width: 100%; margin: 0.75em 0; table-layout: fixed; }
+                .rich-editor .tiptap th, .rich-editor .tiptap td { border: 1px solid rgba(255,255,255,0.15); padding: 0.5em 0.75em; text-align: left; vertical-align: top; min-width: 60px; position: relative; }
+                .rich-editor .tiptap th { background: rgba(255,255,255,0.06); font-weight: 900; font-size: 0.8em; text-transform: uppercase; letter-spacing: 0.05em; color: #a1a1aa; }
+                .rich-editor .tiptap td { background: transparent; }
+                .rich-editor .tiptap td p, .rich-editor .tiptap th p { margin: 0; }
+                .rich-editor .tiptap td img, .rich-editor .tiptap th img { margin: 0; border-radius: 3px; }
+                .rich-editor .tiptap .selectedCell:after { background: rgba(255,255,255,0.1); content: ""; left: 0; right: 0; top: 0; bottom: 0; pointer-events: none; position: absolute; z-index: 2; }
                 .md-preview { color: #e4e4e7; line-height: 1.6; font-family: ui-sans-serif, system-ui, sans-serif; font-size: 9px; text-align: left; }
                 .md-preview h1,.md-preview h2,.md-preview h3,.md-preview h4,.md-preview h5,.md-preview h6 { font-weight: 900; text-transform: uppercase; letter-spacing: -0.02em; color: #fff; margin: 1em 0 0.4em; line-height: 1.2; text-align: left; }
                 .md-preview h1 { font-size: 1.3rem; border-bottom: 2px solid rgba(255,255,255,0.12); padding-bottom: 0.3em; }
@@ -3873,8 +3885,13 @@ const fireIntegrations = (trigger: string, note: any) => {
                 </div>
             )}
 
-            {editorOpen ? (
-                <section className={`flex-1 min-h-0 flex flex-col overflow-hidden overscroll-none ${listMode || mindmapMode || htmlMode ? "" : "border-2"}`} style={{ borderColor: listMode || mindmapMode || htmlMode ? "transparent" : activeAccentColor }} onClick={(e) => e.stopPropagation()}>
+            {/* ── two-panel layout ── */}
+            <div className={`flex-1 min-h-0 overflow-hidden flex ${editMode ? "flex-row" : "flex-col"}`}>
+
+                {/* RIGHT PANEL: editor — only visible in edit mode */}
+                <div className={`flex-1 flex flex-col overflow-hidden ${editMode ? "flex" : editorOpen ? "flex" : "hidden"}`}>
+                {editorOpen ? (
+                <section className="flex-1 min-h-0 flex flex-col overflow-hidden overscroll-none" onClick={(e) => e.stopPropagation()}>
                     {pendingShare && (
                         <div
                             onClick={() => {
@@ -3895,9 +3912,10 @@ const fireIntegrations = (trigger: string, note: any) => {
                     )}
                     <div className="safe-top-bar shrink-0" style={{ backgroundColor: activeAccentColor }} />
                     <div className="relative h-auto min-h-[3.5rem] sm:min-h-[4rem] px-2 sm:px-4 bg-zinc-900 border-b border-white/10 flex items-center gap-1 sm:gap-2 shrink-0">
+                        {/* Back button — hidden on desktop or in edit mode (left panel always visible) */}
                         <button
                             onClick={(e) => { e.stopPropagation(); void backToRootFromEditor(); }}
-                            className="p-2 text-blue-500 hover:bg-white/10 transition flex-shrink-0"
+                            className={`${editMode ? "hidden" : "flex"} p-2 text-blue-500 hover:bg-white/10 transition flex-shrink-0`}
                             title={`Back to ${targetFolder || "folders"}`}
                             aria-label={`Back to ${targetFolder || "folders"}`}>
                             <ArrowLeftIcon className="w-[38px] h-[38px]" />
@@ -3931,26 +3949,24 @@ const fireIntegrations = (trigger: string, note: any) => {
                         </span>
                         <input ref={titleInputRef} value={title} onChange={(e) => setTitle(e.target.value)} onFocus={() => { closeEditorTools(); setShowNoteActions(false); }} autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false} className="sm:hidden bg-transparent border-0 appearance-none shadow-none ring-0 outline-none focus:outline-none focus:ring-0 px-2 flex-grow min-w-0 text-sm text-white placeholder:text-zinc-500" style={{ caretColor: activeAccentColor, border: "none" }} placeholder="NOTE TITLE" />
 
-                        <button type="button"
-                            onClick={cycleNoteMode}
-                            title={`Switch to next mode`}
-                            className="p-2 sm:p-3 text-white hover:text-white active:text-white transition flex-shrink-0">
-                            {(() => {
-                                const modeIcons = { Text: Bars3Icon, Checklist: ListBulletIcon, Graph: CubeTransparentIcon, Mindmap: ShareIcon, Stack: RectangleStackIcon };
-                                const allModes = ["Text", "Checklist", "Graph", "Mindmap", "Stack"] as const;
-                                const cur = stackMode ? "Stack" : mindmapMode ? "Mindmap" : graphMode ? "Graph" : listMode ? "Checklist" : "Text";
-                                const next = allModes[(allModes.indexOf(cur) + 1) % allModes.length];
-                                const NextIcon = modeIcons[next];
-                                return <NextIcon className="w-[26px] h-[26px] sm:w-7 sm:h-7" />;
-                            })()}
-                        </button>
-                        <span className="text-[8px] font-black uppercase tracking-widest text-zinc-500 select-none flex-shrink-0 px-0.5">{noteViewMode}</span>
-                        <button type="button"
-                            onClick={() => imageFileInputRef.current?.click()}
-                            className="p-2 sm:p-3 text-zinc-300 hover:text-white active:text-white transition flex-shrink-0"
-                            title="Attach image">
-                            <PaperClipIcon className="w-6 h-6 sm:w-6 sm:h-6" />
-                        </button>
+                        {!isRichNote && (
+                            <>
+                                <button type="button"
+                                    onClick={cycleNoteMode}
+                                    title={`Switch to next mode`}
+                                    className="p-2 sm:p-3 text-white hover:text-white active:text-white transition flex-shrink-0">
+                                    {(() => {
+                                        const modeIcons = { Text: Bars3Icon, Checklist: ListBulletIcon, Graph: CubeTransparentIcon, Mindmap: ShareIcon, Stack: RectangleStackIcon };
+                                        const allModes = ["Text", "Checklist", "Graph", "Mindmap", "Stack"] as const;
+                                        const cur = stackMode ? "Stack" : mindmapMode ? "Mindmap" : graphMode ? "Graph" : listMode ? "Checklist" : "Text";
+                                        const next = allModes[(allModes.indexOf(cur) + 1) % allModes.length];
+                                        const NextIcon = modeIcons[next];
+                                        return <NextIcon className="w-[26px] h-[26px] sm:w-7 sm:h-7" />;
+                                    })()}
+                                </button>
+                                <span className="text-[8px] font-black uppercase tracking-widest text-zinc-500 select-none flex-shrink-0 px-0.5">{noteViewMode}</span>
+                            </>
+                        )}
                         <button type="button"
                             onClick={() => { setSharePickerOpen(true); setShowNoteActions(false); closeEditorTools(); }}
                             className="p-2 sm:p-3 text-zinc-300 hover:text-white active:text-white transition flex-shrink-0">
@@ -4294,6 +4310,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     return (d2.url as string) ?? "";
                                 }}
                                 accentColor={activeAccentColor}
+                                onDelete={() => void deleteCurrentNote(editingNote, title)}
                             />
                         )}
                     </div>
@@ -4318,7 +4335,22 @@ const fireIntegrations = (trigger: string, note: any) => {
                         </div>
                     )}
                 </section>
-            ) : (
+                ) : (
+                    /* Desktop empty state — select a note */
+                    <div className="flex-1 flex flex-col items-center justify-center select-none text-center gap-2">
+                        <PencilSquareIcon className="w-14 h-14 text-zinc-800" />
+                        <p className="text-xs font-black uppercase tracking-[0.2em] text-zinc-700">Select a note</p>
+                        <button
+                            onClick={openNewNote}
+                            className="mt-2 px-4 py-2 text-[10px] font-black uppercase tracking-widest border border-white/10 text-zinc-600 hover:text-white hover:border-white/30 transition">
+                            + New note
+                        </button>
+                    </div>
+                )}
+                </div>{/* ── end right panel ── */}
+
+                {/* LEFT PANEL: slim notes list */}
+                <div className={`bg-black flex flex-col overflow-hidden ${editMode ? "w-[240px] min-w-[180px] max-w-[300px] flex-shrink-0 border-r border-white/10" : editorOpen ? "hidden" : "flex-1"}`}>
                 <>
                     <div className="safe-top-bar shrink-0 bg-black sticky top-0 z-40" />
                     <header className="ios-mobile-header relative h-auto min-h-[4rem] px-4 flex items-center gap-2 sticky top-0 bg-zinc-900 z-40 shrink-0">
@@ -4357,11 +4389,11 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 </div>
                                 <div className="ml-auto flex items-center gap-1">
                                     {/* view modes */}
-                                    <HeaderIconBtn icon={ListBulletIcon} label="List" onClick={() => { setMainListMode(true); setDrillMode(false); setKanbanMode(false); }} style={mainListMode && !drillMode && !kanbanMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
-                                    <HeaderIconBtn icon={Squares2X2Icon} label="Grid" onClick={() => { setMainListMode(false); setDrillMode(false); setKanbanMode(false); }} style={!mainListMode && !drillMode && !kanbanMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
+                                    <HeaderIconBtn icon={ListBulletIcon} label="List" onClick={() => { setMainListMode(true); setKanbanMode(false); setEditMode(false); }} style={mainListMode && !drillMode && !kanbanMode && !editMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
+                                    <HeaderIconBtn icon={Squares2X2Icon} label="Grid" onClick={() => { setMainListMode(false); setKanbanMode(false); setEditMode(false); }} style={!mainListMode && !drillMode && !kanbanMode && !editMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
                                     <div className="hidden sm:contents">
-                                        <HeaderIconBtn icon={ViewColumnsIcon} label="Kanban" onClick={() => { setKanbanMode((v) => !v); setDrillMode(false); setMainListMode(false); }} style={kanbanMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
-                                        <HeaderIconBtn icon={ArrowRightIcon} label="Drill" onClick={() => { setDrillMode((v) => { if (v) setColPath([]); return !v; }); setKanbanMode(false); setMainListMode(false); }} style={drillMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
+                                        <HeaderIconBtn icon={ViewColumnsIcon} label="Kanban" onClick={() => { setKanbanMode((v) => !v); setMainListMode(false); setEditMode(false); }} style={kanbanMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
+                                        <HeaderIconBtn icon={PencilSquareIcon} label="Edit" onClick={() => { setEditMode((v) => !v); setKanbanMode(false); }} style={editMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
                                     </div>
                                     {/* divider */}
                                     <div className="w-px h-4 bg-white/10 mx-1" />
@@ -4398,11 +4430,11 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 ) : (
                                     <>
                                         {/* view modes */}
-                                        <HeaderIconBtn icon={ListBulletIcon} label="List" onClick={() => { setMainListMode(true); setDrillMode(false); setKanbanMode(false); }} style={mainListMode && !drillMode && !kanbanMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
-                                        <HeaderIconBtn icon={Squares2X2Icon} label="Grid" onClick={() => { setMainListMode(false); setDrillMode(false); setKanbanMode(false); }} style={!mainListMode && !drillMode && !kanbanMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
+                                        <HeaderIconBtn icon={ListBulletIcon} label="List" onClick={() => { setMainListMode(true); setKanbanMode(false); setEditMode(false); }} style={mainListMode && !drillMode && !kanbanMode && !editMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
+                                        <HeaderIconBtn icon={Squares2X2Icon} label="Grid" onClick={() => { setMainListMode(false); setKanbanMode(false); setEditMode(false); }} style={!mainListMode && !drillMode && !kanbanMode && !editMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
                                         <div className="hidden sm:contents">
-                                            <HeaderIconBtn icon={ViewColumnsIcon} label="Kanban" onClick={() => { setKanbanMode((v) => !v); setDrillMode(false); setMainListMode(false); }} style={kanbanMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
-                                            <HeaderIconBtn icon={ArrowRightIcon} label="Drill" onClick={() => { setDrillMode((v) => { if (v) setColPath([]); return !v; }); setKanbanMode(false); setMainListMode(false); }} style={drillMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
+                                            <HeaderIconBtn icon={ViewColumnsIcon} label="Kanban" onClick={() => { setKanbanMode((v) => !v); setMainListMode(false); setEditMode(false); }} style={kanbanMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
+                                            <HeaderIconBtn icon={PencilSquareIcon} label="Edit" onClick={() => { setEditMode((v) => !v); setKanbanMode(false); }} style={editMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
                                         </div>
                                         {/* divider */}
                                         <div className="w-px h-4 bg-white/10 mx-1" />
@@ -4788,21 +4820,21 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                     {selectedIds.has(String(item.id)) && <CheckIcon className="w-3 h-3 text-white" />}
                                                 </div>
                                             )}
-                                            {(() => {
+                                            {item.is_folder && (() => {
                                                 const c = item.color || item.folder_color || palette12[0];
-                                                const hex = c.replace("#", "");
-                                                const r = parseInt(hex.substring(0, 2), 16);
-                                                const g = parseInt(hex.substring(2, 4), 16);
-                                                const b = parseInt(hex.substring(4, 6), 16);
                                                 return (
                                                     <div className="flex-shrink-0 w-[36px] h-[36px] flex items-center justify-center text-sm font-black"
-                                                        style={item.is_folder
-                                                            ? { backgroundColor: c, color: "#fff", boxShadow: (item.name === "PAGES" || item.name === "CLAUDE") ? "inset 0 0 0 1px rgba(255,255,255,0.85)" : undefined }
-                                                            : { backgroundColor: "transparent", border: `1.5px solid rgba(${r},${g},${b},0.6)`, color: `rgba(${r},${g},${b},0.9)` }}>
-                                                        {item.is_folder
-                                                            ? (item.icon || meaningfulInitial(item.name, "F"))
-                                                            : meaningfulInitial(item.title, item.folder_name?.charAt(0) || "N")}
+                                                        style={{ backgroundColor: c, color: "#fff", boxShadow: (item.name === "PAGES" || item.name === "CLAUDE") ? "inset 0 0 0 1px rgba(255,255,255,0.85)" : undefined }}>
+                                                        {item.icon || meaningfulInitial(item.name, "F")}
                                                     </div>
+                                                );
+                                            })()}
+                                            {!item.is_folder && !activeFolder && item.folder_name && (() => {
+                                                const fc = folders.find(f => f.name === item.folder_name);
+                                                const c = fc?.color || '#52525b';
+                                                const icon = fc ? (folderIcons[fc.name] || fc.name.charAt(0).toUpperCase()) : item.folder_name.charAt(0).toUpperCase();
+                                                return (
+                                                    <span className="flex-shrink-0 w-9 h-9 flex items-center justify-center text-sm font-black text-white leading-none" style={{ backgroundColor: c }} title={item.folder_name}>{icon}</span>
                                                 );
                                             })()}
                                             <div className="flex-1 min-w-0">
@@ -4815,7 +4847,9 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                         {item.count > 0 && <span>{item.count} note{item.count !== 1 ? "s" : ""}</span>}
                                                     </div>
                                                 ) : (
-                                                    <div className="text-[13px] text-zinc-500 truncate">{(() => { const s = previewText(item.content || "").split("\n").find((l: string) => l.trim()) || ""; return s.length > 60 ? s.slice(0, 60) + "..." : s; })()}</div>
+                                                    <div className="text-[13px] text-zinc-500 truncate">
+                                                        <span className="truncate">{(() => { const s = previewText(item.content || "").split("\n").find((l: string) => l.trim()) || ""; return s.length > 60 ? s.slice(0, 60) + "..." : s; })()}</span>
+                                                    </div>
                                                 )}
                                             </div>
                                             {item.is_folder && item.latestUpdatedAt && (
@@ -5028,7 +5062,9 @@ const fireIntegrations = (trigger: string, note: any) => {
                     )}
 
                 </>
-            )}
+                </div>{/* ── end left panel ── */}
+
+            </div>{/* ── end two-panel wrapper ── */}
 
             {showNoteActions && (
                 <div className="fixed inset-0 z-[510] bg-black/30 backdrop-blur-[2px] flex items-center justify-center p-4 lg:bg-transparent lg:backdrop-blur-none lg:items-stretch lg:justify-end lg:p-0" onClick={() => { setShowNoteActions(false); closeEditorTools(); }}>
@@ -5744,13 +5780,12 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 </div>
                             )}
                             {/* GLOBAL GRAPH */}
-                            {!activeFolder && (
-                                <button type="button" className="w-full flex items-center gap-4 px-6 py-4 text-left text-zinc-300 hover:bg-white/5 hover:text-white active:bg-white/10 transition"
-                                    onClick={() => { setShowFolderActions(false); setShowGlobalGraph(true); }}>
-                                    <CubeTransparentIcon className="w-5 h-5 flex-shrink-0" />
-                                    <span className="text-xs font-black tracking-wide flex-1">Graph</span>
-                                </button>
-                            )}
+                            {activeFolder && <div className="px-6 pt-4 pb-1 text-[9px] font-black uppercase tracking-[0.15em] text-zinc-600">App Settings</div>}
+                            <button type="button" className="w-full flex items-center gap-4 px-6 py-4 text-left text-zinc-300 hover:bg-white/5 hover:text-white active:bg-white/10 transition"
+                                onClick={() => { setShowFolderActions(false); setShowGlobalGraph(true); }}>
+                                <CubeTransparentIcon className="w-5 h-5 flex-shrink-0" />
+                                <span className="text-xs font-black tracking-wide flex-1">Graph</span>
+                            </button>
                             {/* DELETE FOLDER */}
                             {activeFolder && canDeleteActiveFolder && (
                                 <button type="button" className="w-full flex items-center gap-4 px-6 py-4 text-left text-red-400 hover:bg-red-500/10 active:bg-red-500/20 transition"
@@ -5759,8 +5794,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     <span className="text-xs font-black tracking-wide">Delete</span>
                                 </button>
                             )}
-                            {/* LIGHT MODE — global only, shown when Hue is active */}
-                            {!activeFolder && integrationsRef.current.some(ig => ig.type === "hue") && (() => {
+                            {/* LIGHT MODE — shown when Hue is active */}
+                            {integrationsRef.current.some(ig => ig.type === "hue") && (() => {
                                 const hueInt = integrationsRef.current.find(ig => ig.type === "hue")!;
                                 const MODES: { key: "off" | "flash" | "ambient"; label: string; desc: string }[] = [
                                     { key: "off",     label: "Off",     desc: "Don't trigger lights" },
@@ -5805,31 +5840,50 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 >{label}</button>
                                             ))}
                                         </div>
+                                        <button
+                                            type="button"
+                                            className="mt-2 w-full py-2 rounded text-[10px] font-black uppercase tracking-wide bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                                            onClick={async (e) => {
+                                                const btn = e.currentTarget;
+                                                btn.disabled = true;
+                                                const RAINBOW = ["#FF3B30","#FF9500","#FFCC00","#34C759","#007AFF","#5856D6","#AF52DE"];
+                                                const NAMES   = ["Red","Orange","Yellow","Green","Blue","Indigo","Violet"];
+                                                showToast("💡 Testing lights…", "#FFD60A");
+                                                for (let i = 0; i < RAINBOW.length; i++) {
+                                                    await fetch("/api/hue/trigger", {
+                                                        method: "POST",
+                                                        headers: { "Content-Type": "application/json" },
+                                                        body: JSON.stringify({ color: RAINBOW[i] }),
+                                                    }).catch(() => {});
+                                                    showToast(`💡 ${NAMES[i]}`, RAINBOW[i]);
+                                                    if (i < RAINBOW.length - 1) await new Promise(r => setTimeout(r, 1200));
+                                                }
+                                                await fetch("/api/hue/trigger", { method: "DELETE" }).catch(() => {});
+                                                showToast("💡 Lights restored", "#FFD60A");
+                                                btn.disabled = false;
+                                            }}
+                                        >Test Rainbow</button>
                                     </div>
                                 );
                             })()}
-                            {/* INTEGRATIONS — global only */}
-                            {!activeFolder && (
-                                <button type="button" className="w-full flex items-center gap-4 px-6 py-4 text-left text-zinc-300 hover:bg-white/5 hover:text-white active:bg-white/10 transition"
-                                    onClick={() => { setIntegrationsSnapshot([...integrationsRef.current]); setShowIntegrationsPanel(true); }}>
-                                    <PuzzlePieceIcon className="w-5 h-5 flex-shrink-0" />
-                                    <span className="text-xs font-black tracking-wide flex-1">Integrations</span>
-                                    <div className="flex items-center gap-2">
-                                        {integrationsRef.current.length > 0 && (
-                                            <span className="text-[10px] font-black text-emerald-400">{integrationsRef.current.length} active</span>
-                                        )}
-                                        <ArrowRightIcon className="w-4 h-4 text-zinc-600 flex-shrink-0" />
-                                    </div>
-                                </button>
-                            )}
-                            {/* LOCK — global only */}
-                            {!activeFolder && (
-                                <button type="button" className="w-full flex items-center gap-4 px-6 py-4 text-left text-zinc-300 hover:bg-white/5 hover:text-white active:bg-white/10 transition"
-                                    onClick={async () => { setShowFolderActions(false); await fetch("/api/stickies/logout", { method: "POST" }); window.location.href = "/sign-in"; }}>
-                                    <ArrowRightOnRectangleIcon className="w-5 h-5 flex-shrink-0" />
-                                    <span className="text-xs font-black tracking-wide flex-1">Sign Out</span>
-                                </button>
-                            )}
+                            {/* INTEGRATIONS */}
+                            <button type="button" className="w-full flex items-center gap-4 px-6 py-4 text-left text-zinc-300 hover:bg-white/5 hover:text-white active:bg-white/10 transition"
+                                onClick={() => { setIntegrationsSnapshot([...integrationsRef.current]); setShowIntegrationsPanel(true); }}>
+                                <PuzzlePieceIcon className="w-5 h-5 flex-shrink-0" />
+                                <span className="text-xs font-black tracking-wide flex-1">Integrations</span>
+                                <div className="flex items-center gap-2">
+                                    {integrationsRef.current.length > 0 && (
+                                        <span className="text-[10px] font-black text-emerald-400">{integrationsRef.current.length} active</span>
+                                    )}
+                                    <ArrowRightIcon className="w-4 h-4 text-zinc-600 flex-shrink-0" />
+                                </div>
+                            </button>
+                            {/* SIGN OUT */}
+                            <button type="button" className="w-full flex items-center gap-4 px-6 py-4 text-left text-zinc-300 hover:bg-white/5 hover:text-white active:bg-white/10 transition"
+                                onClick={async () => { setShowFolderActions(false); await fetch("/api/stickies/logout", { method: "POST" }); window.location.href = "/sign-in"; }}>
+                                <ArrowRightOnRectangleIcon className="w-5 h-5 flex-shrink-0" />
+                                <span className="text-xs font-black tracking-wide flex-1">Sign Out</span>
+                            </button>
                         </div>
                         <div className="border-t border-white/10 p-4">
                             <button type="button" onClick={() => { setShowFolderActions(false); setShowFolderColorPicker(false); setShowFolderIconPicker(false); setShowFolderMovePicker(false); }} className="w-full py-3 bg-white text-black font-black uppercase text-xs tracking-wide hover:bg-zinc-100 transition">Close</button>
@@ -5865,50 +5919,79 @@ const fireIntegrations = (trigger: string, note: any) => {
                         </div>
                         {/* Results */}
                         <div className="max-h-[360px] overflow-y-auto">
-                            {cmdKResults.map((note: any, i: number) => {
-                                const isPinned = pinnedIds.has(String(note.id));
-                                const showPinnedHdr = !cmdKQuery.trim() && isPinned && i > 0 && !pinnedIds.has(String(cmdKResults[i - 1].id));
+                            {(() => {
+                                const folderItems = cmdKResults.filter((r: any) => r._isFolder);
+                                const noteItems = cmdKResults.filter((r: any) => !r._isFolder);
                                 return (
-                                    <React.Fragment key={note.id}>
-                                        {showPinnedHdr && (
-                                            <div className="px-4 pt-3 pb-1 text-[9px] font-black tracking-[0.2em] text-zinc-600 uppercase">Pinned</div>
+                                    <>
+                                        {folderItems.length > 0 && (
+                                            <>
+                                                <div className="px-4 pt-3 pb-1 text-[9px] font-black tracking-[0.2em] text-zinc-600 uppercase">Notebooks</div>
+                                                {folderItems.map((folder: any, i: number) => (
+                                                    <button key={`f-${folder.id}`} type="button"
+                                                        onMouseEnter={() => setCmdKCursor(i)}
+                                                        onClick={() => {
+                                                            setShowCmdK(false); setCmdKQuery("");
+                                                            const fr = dbData.find((r: any) => r.is_folder && (r.folder_name === folder.name || r.name === folder.name));
+                                                            enterFolder({ id: fr ? String(fr.id) : `virtual-${folder.name}`, name: folder.name, color: folder.color || palette12[0] });
+                                                        }}
+                                                        className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition ${i === cmdKCursor ? "bg-white/10" : "hover:bg-white/5"}`}>
+                                                        <div className="w-7 h-7 flex-shrink-0 flex items-center justify-center text-sm font-black text-white"
+                                                            style={{ backgroundColor: folder.color || "#3f3f46" }}>
+                                                            {folder.icon || [...(folder.name || "F")][0]?.toUpperCase()}
+                                                        </div>
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className="text-sm font-semibold text-white truncate">{folder.name}</div>
+                                                            <div className="text-[10px] text-zinc-500">{folder.count ?? 0} note{(folder.count ?? 0) !== 1 ? "s" : ""}</div>
+                                                        </div>
+                                                        <ChevronRightIcon className="w-4 h-4 text-zinc-600 flex-shrink-0" />
+                                                    </button>
+                                                ))}
+                                            </>
                                         )}
-                                        <button
-                                            type="button"
-                                            onClick={(e) => openNoteFromCmdK(note, e.metaKey)}
-                                            onMouseEnter={() => setCmdKCursor(i)}
-                                            className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition ${i === cmdKCursor ? "bg-white/10" : "hover:bg-white/5"}`}>
-                                            <div className="relative w-7 h-7 flex-shrink-0 flex items-center justify-center text-sm font-black text-white"
-                                                style={{ backgroundColor: note.color || note.folder_color || "#3f3f46" }}>
-                                                {[...(note.title || "N")][0]?.toUpperCase()}
-                                                {looksLikeUrl(note.content || "") && (
-                                                    <BookmarkIcon className="absolute -top-1 -right-1 w-3 h-3 text-white drop-shadow-sm" style={{ filter: "drop-shadow(0 0 2px rgba(0,0,0,0.8))" }} />
-                                                )}
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                {note.folder_name && (
-                                                    <div className="text-[10px] text-zinc-500 font-bold uppercase tracking-wide truncate">{note.folder_name}</div>
-                                                )}
-                                                <div className="text-sm font-semibold text-white truncate">{note.title || "Untitled"}</div>
-                                            </div>
-                                            {isPinned && <HeartSolidIcon className="w-3.5 h-3.5 text-white flex-shrink-0" />}
-                                            {looksLikeUrl(note.content || "") && i === cmdKCursor && <span className="text-[9px] text-zinc-500 flex-shrink-0">⌘ open</span>}
-                                            <span className="text-[10px] text-zinc-600 flex-shrink-0">{timeAgo(note.updated_at)}</span>
-                                            {i === cmdKCursor && <kbd className="text-[9px] text-zinc-600 border border-zinc-700 px-1 py-0.5 font-mono flex-shrink-0">↵</kbd>}
-                                        </button>
-                                    </React.Fragment>
+                                        {noteItems.length > 0 && (
+                                            <div className="px-4 pt-3 pb-1 text-[9px] font-black tracking-[0.2em] text-zinc-600 uppercase">Notes</div>
+                                        )}
+                                        {noteItems.map((note: any, ni: number) => {
+                                            const i = folderItems.length + ni;
+                                            const isPinned = pinnedIds.has(String(note.id));
+                                            return (
+                                                <button key={note.id} type="button"
+                                                    onClick={(e) => openNoteFromCmdK(note, e.metaKey)}
+                                                    onMouseEnter={() => setCmdKCursor(i)}
+                                                    className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition ${i === cmdKCursor ? "bg-white/10" : "hover:bg-white/5"}`}>
+                                                    <div className="relative w-7 h-7 flex-shrink-0 flex items-center justify-center text-sm font-black text-white"
+                                                        style={{ backgroundColor: note.color || note.folder_color || "#3f3f46" }}>
+                                                        {[...(note.title || "N")][0]?.toUpperCase()}
+                                                        {looksLikeUrl(note.content || "") && (
+                                                            <BookmarkIcon className="absolute -top-1 -right-1 w-3 h-3 text-white drop-shadow-sm" style={{ filter: "drop-shadow(0 0 2px rgba(0,0,0,0.8))" }} />
+                                                        )}
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        {note.folder_name && (
+                                                            <div className="text-[10px] text-zinc-500 font-bold uppercase tracking-wide truncate">{note.folder_name}</div>
+                                                        )}
+                                                        <div className="text-sm font-semibold text-white truncate">{note.title || "Untitled"}</div>
+                                                    </div>
+                                                    {isPinned && <HeartSolidIcon className="w-3.5 h-3.5 text-white flex-shrink-0" />}
+                                                    {looksLikeUrl(note.content || "") && i === cmdKCursor && <span className="text-[9px] text-zinc-500 flex-shrink-0">⌘ open</span>}
+                                                    <span className="text-[10px] text-zinc-600 flex-shrink-0">{timeAgo(note.updated_at)}</span>
+                                                    {i === cmdKCursor && <kbd className="text-[9px] text-zinc-600 border border-zinc-700 px-1 py-0.5 font-mono flex-shrink-0">↵</kbd>}
+                                                </button>
+                                            );
+                                        })}
+                                        {cmdKResults.length === 0 && (
+                                            <div className="px-4 py-10 text-center text-zinc-600 text-sm">No results found</div>
+                                        )}
+                                    </>
                                 );
-                            })}
-                            {cmdKResults.length === 0 && (
-                                <div className="px-4 py-10 text-center text-zinc-600 text-sm">No notes found</div>
-                            )}
+                            })()}
                         </div>
                         {/* Footer */}
                         <div className="border-t border-white/10 px-4 py-2 flex items-center gap-3">
                             <span className="flex items-center gap-1.5 text-[10px] text-zinc-600"><kbd className="border border-zinc-700 px-1 font-mono">↑↓</kbd> navigate</span>
                             <span className="flex items-center gap-1.5 text-[10px] text-zinc-600"><kbd className="border border-zinc-700 px-1 font-mono">↵</kbd> open</span>
                             <span className="flex items-center gap-1.5 text-[10px] text-zinc-600"><kbd className="border border-zinc-700 px-1 font-mono">esc</kbd> close</span>
-                            <span className="ml-auto text-[10px] text-zinc-600">{cmdKResults.length} note{cmdKResults.length !== 1 ? "s" : ""}</span>
                         </div>
                     </div>
                 </div>
@@ -6327,15 +6410,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                 </div>
             )}
 
-            {/* Hidden file input for image attachments */}
-            <input
-                ref={imageFileInputRef}
-                type="file"
-                accept="image/*"
-                multiple
-                className="hidden"
-                onChange={(e) => { if (e.target.files) void addImages(e.target.files); e.target.value = ""; }}
-            />
 
             {/* Lightbox */}
             {lightboxUrl && (
