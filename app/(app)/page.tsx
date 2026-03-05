@@ -1609,7 +1609,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                 .filter((n) => !n.is_folder && score(n) < 9)
                 .sort((a, b) => { const sd = score(a) - score(b); return sd !== 0 ? sd : byUpdated(a, b); });
         }
-        if (activeFolder) {
+        if (activeFolder && editMode) {
             const activeFolderId = folderStack.at(-1)?.id ?? null;
             const useUuid = activeFolderId && !activeFolderId.startsWith("virtual-");
             const notes = (useUuid
@@ -1620,7 +1620,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         }
         // Root view — all notes sorted by last updated
         return dbData.filter((n) => !n.is_folder).sort(byUpdated);
-    }, [dbData, activeFolder, search, currentLevelFolders, pendingNoteOrder, pinnedIds]);
+    }, [dbData, activeFolder, editMode, search, currentLevelFolders, pendingNoteOrder, pinnedIds]);
     const cmdKResults = useMemo(() => {
         const notes = dbData.filter((n: any) => !n.is_folder);
         const byDate = (a: any, b: any) => String(b.updated_at || "").localeCompare(String(a.updated_at || ""));
