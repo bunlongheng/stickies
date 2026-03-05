@@ -3724,7 +3724,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                             border-bottom-color: transparent !important;
                         }
                         .ios-mobile-main {
-                            gap: 1px !important;
                             padding-top: 0 !important;
                             overscroll-behavior: none !important;
                         }
