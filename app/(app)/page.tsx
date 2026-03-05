@@ -849,20 +849,26 @@ export default function NotesMaster() {
     // --- CORE SYNC ---
     const sync = async () => {
         try {
-            const [notesResult, iconsResult, integrationsResult] = await Promise.all([
-                supabase.from("notes").select("*").order("updated_at", { ascending: false }),
+            const token = await getAuthToken();
+            const [notesRes, foldersRes, iconsResult, integrationsResult] = await Promise.all([
+                fetch("/api/stickies", {
+                    headers: { Authorization: `Bearer ${token}` },
+                }).then((r) => r.ok ? r.json() : { notes: [] }).catch(() => ({ notes: [] })),
+                fetch("/api/stickies?folders=1", {
+                    headers: { Authorization: `Bearer ${token}` },
+                }).then((r) => r.ok ? r.json() : { folders: [] }).catch(() => ({ folders: [] })),
                 fetch("/api/stickies/folder-icon", {
-                    headers: { Authorization: `Bearer ${await getAuthToken()}` },
+                    headers: { Authorization: `Bearer ${token}` },
                 }).then((r) => r.ok ? r.json() : { icons: {} }).catch(() => ({ icons: {} })),
                 fetch("/api/stickies/integrations", {
-                    headers: { Authorization: `Bearer ${await getAuthToken()}` },
+                    headers: { Authorization: `Bearer ${token}` },
                 }).then((r) => r.ok ? r.json() : []).catch(() => []),
             ]);
-            if (notesResult.error) {
-                console.error("Failed to sync notes:", notesResult.error);
-            } else if (notesResult.data) {
-                setDbData(notesResult.data);
-            }
+            const allItems = [
+                ...(foldersRes.folders ?? []).map((f: any) => ({ ...f, is_folder: true })),
+                ...(notesRes.notes ?? []),
+            ];
+            setDbData(allItems);
             if (iconsResult.icons && Object.keys(iconsResult.icons).length > 0) {
                 setFolderIcons((prev) => ({ ...prev, ...iconsResult.icons }));
             }
