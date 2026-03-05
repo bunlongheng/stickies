@@ -1282,6 +1282,32 @@ const fireIntegrations = (trigger: string, note: any) => {
         setIsUrlChecking(false);
     }, [pendingRestoreNoteId, dbData, isDataLoaded]);
 
+    // Auto-select the most-recently-updated note when entering edit mode
+    useEffect(() => {
+        if (!editMode || !isDataLoaded) return;
+        if (editorOpen && editingNote) return; // already viewing a note
+        const topNote = dbData.filter((n) => !n.is_folder).sort((a, b) =>
+            String(b.updated_at || "").localeCompare(String(a.updated_at || ""))
+        )[0];
+        if (!topNote) return;
+        setEditingNote(topNote);
+        setTitle(topNote.title || "");
+        setContent(topNote.content || "");
+        setImages((topNote as any).images ?? []);
+        setTargetFolder(topNote.folder_name || "General");
+        setNoteColor(topNote.folder_color || palette12[0]);
+        setActiveLine(0);
+        setEditorScrollTop(0);
+        if (topNote.id && looksLikeHtml(topNote.content || "")) {
+            setHtmlModeNotes((prev) => new Set([...prev, String(topNote.id)]));
+        }
+        if (topNote.id && topNote.list_mode) {
+            setListModeNotes((prev) => new Set([...prev, String(topNote.id)]));
+        }
+        setEditorOpen(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [editMode, isDataLoaded]);
+
     useEffect(() => {
         if (!pendingFolderQuery && !pendingNoteQuery && !pendingNoteIdQuery) return;
         if (!isDataLoaded) return;
@@ -3970,6 +3996,16 @@ const fireIntegrations = (trigger: string, note: any) => {
                             className="p-2 sm:p-3 text-zinc-300 hover:text-white active:text-white transition flex-shrink-0">
                             <Cog6ToothIcon className="w-[29px] h-[29px] sm:w-7 sm:h-7" />
                         </button>
+                        {/* Nav mode buttons — shown on the right in edit mode */}
+                        {editMode && (
+                            <>
+                                <div className="w-px h-4 bg-white/10 mx-1 flex-shrink-0" />
+                                <HeaderIconBtn icon={ListBulletIcon} label="List" onClick={() => { setMainListMode(true); setKanbanMode(false); setEditMode(false); }} style={mainListMode && !kanbanMode && !editMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
+                                <HeaderIconBtn icon={Squares2X2Icon} label="Grid" onClick={() => { setMainListMode(false); setKanbanMode(false); setEditMode(false); }} style={!mainListMode && !kanbanMode && !editMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
+                                <HeaderIconBtn icon={ViewColumnsIcon} label="Kanban" onClick={() => { setKanbanMode((v) => !v); setMainListMode(false); setEditMode(false); }} style={kanbanMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
+                                <HeaderIconBtn icon={PencilSquareIcon} label="Edit" onClick={() => { setEditMode((v) => !v); setKanbanMode(false); }} style={{ color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" }} />
+                            </>
+                        )}
                     </div>
                     <div className="flex-1 flex overflow-hidden bg-black font-mono">
                         {mindmapMode ? (
@@ -4381,15 +4417,19 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     <input value={search} onChange={(e) => setSearch(e.target.value)} onFocus={() => setSearchFocused(true)} onBlur={() => setSearchFocused(false)} autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false} inputMode="search" className="w-full bg-transparent border-0 outline-none focus:outline-none focus:ring-0 shadow-none appearance-none pl-12 pr-3 py-3 text-xs font-black tracking-tight" placeholder="search" />
                                 </div>
                                 <div className="ml-auto flex items-center gap-1">
-                                    {/* view modes */}
-                                    <HeaderIconBtn icon={ListBulletIcon} label="List" onClick={() => { setMainListMode(true); setKanbanMode(false); setEditMode(false); }} style={mainListMode && !kanbanMode && !editMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
-                                    <HeaderIconBtn icon={Squares2X2Icon} label="Grid" onClick={() => { setMainListMode(false); setKanbanMode(false); setEditMode(false); }} style={!mainListMode && !kanbanMode && !editMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
-                                    <div className="hidden sm:contents">
-                                        <HeaderIconBtn icon={ViewColumnsIcon} label="Kanban" onClick={() => { setKanbanMode((v) => !v); setMainListMode(false); setEditMode(false); }} style={kanbanMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
-                                        <HeaderIconBtn icon={PencilSquareIcon} label="Edit" onClick={() => { setEditMode((v) => !v); setKanbanMode(false); }} style={editMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
-                                    </div>
-                                    {/* divider */}
-                                    <div className="w-px h-4 bg-white/10 mx-1" />
+                                    {/* view modes — hidden in edit mode (moved to editor panel header) */}
+                                    {!editMode && (
+                                        <>
+                                            <HeaderIconBtn icon={ListBulletIcon} label="List" onClick={() => { setMainListMode(true); setKanbanMode(false); setEditMode(false); }} style={mainListMode && !kanbanMode && !editMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
+                                            <HeaderIconBtn icon={Squares2X2Icon} label="Grid" onClick={() => { setMainListMode(false); setKanbanMode(false); setEditMode(false); }} style={!mainListMode && !kanbanMode && !editMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
+                                            <div className="hidden sm:contents">
+                                                <HeaderIconBtn icon={ViewColumnsIcon} label="Kanban" onClick={() => { setKanbanMode((v) => !v); setMainListMode(false); setEditMode(false); }} style={kanbanMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
+                                                <HeaderIconBtn icon={PencilSquareIcon} label="Edit" onClick={() => { setEditMode((v) => !v); setKanbanMode(false); }} style={editMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
+                                            </div>
+                                            {/* divider */}
+                                            <div className="w-px h-4 bg-white/10 mx-1" />
+                                        </>
+                                    )}
                                     {/* actions */}
                                     <div className="relative">
                                         <HeaderIconBtn icon={PlusIcon} label="New" onClick={() => setShowAddMenu(v => !v)} style={showAddMenu ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
@@ -4422,15 +4462,19 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     </div>
                                 ) : (
                                     <>
-                                        {/* view modes */}
-                                        <HeaderIconBtn icon={ListBulletIcon} label="List" onClick={() => { setMainListMode(true); setKanbanMode(false); setEditMode(false); }} style={mainListMode && !kanbanMode && !editMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
-                                        <HeaderIconBtn icon={Squares2X2Icon} label="Grid" onClick={() => { setMainListMode(false); setKanbanMode(false); setEditMode(false); }} style={!mainListMode && !kanbanMode && !editMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
-                                        <div className="hidden sm:contents">
-                                            <HeaderIconBtn icon={ViewColumnsIcon} label="Kanban" onClick={() => { setKanbanMode((v) => !v); setMainListMode(false); setEditMode(false); }} style={kanbanMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
-                                            <HeaderIconBtn icon={PencilSquareIcon} label="Edit" onClick={() => { setEditMode((v) => !v); setKanbanMode(false); }} style={editMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
-                                        </div>
-                                        {/* divider */}
-                                        <div className="w-px h-4 bg-white/10 mx-1" />
+                                        {/* view modes — hidden in edit mode (moved to editor panel header) */}
+                                        {!editMode && (
+                                            <>
+                                                <HeaderIconBtn icon={ListBulletIcon} label="List" onClick={() => { setMainListMode(true); setKanbanMode(false); setEditMode(false); }} style={mainListMode && !kanbanMode && !editMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
+                                                <HeaderIconBtn icon={Squares2X2Icon} label="Grid" onClick={() => { setMainListMode(false); setKanbanMode(false); setEditMode(false); }} style={!mainListMode && !kanbanMode && !editMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
+                                                <div className="hidden sm:contents">
+                                                    <HeaderIconBtn icon={ViewColumnsIcon} label="Kanban" onClick={() => { setKanbanMode((v) => !v); setMainListMode(false); setEditMode(false); }} style={kanbanMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
+                                                    <HeaderIconBtn icon={PencilSquareIcon} label="Edit" onClick={() => { setEditMode((v) => !v); setKanbanMode(false); }} style={editMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
+                                                </div>
+                                                {/* divider */}
+                                                <div className="w-px h-4 bg-white/10 mx-1" />
+                                            </>
+                                        )}
                                         {/* actions */}
                                         <div className="relative">
                                             <HeaderIconBtn icon={PlusIcon} label="New" onClick={() => setShowAddMenu(v => !v)} style={showAddMenu ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
