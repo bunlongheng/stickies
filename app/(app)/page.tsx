@@ -1558,7 +1558,7 @@ const fireIntegrations = (trigger: string, note: any) => {
             const activeFolderId = folderStack.at(-1)?.id ?? null;
             const useUuid = activeFolderId && !activeFolderId.startsWith("virtual-");
             let notes = (useUuid
-                ? dbData.filter((n) => !n.is_folder && String(n.folder_id) === activeFolderId)
+                ? dbData.filter((n) => !n.is_folder && (String(n.folder_id) === activeFolderId || (!n.folder_id && n.folder_name === activeFolder)))
                 : dbData.filter((n) => !n.is_folder && n.folder_name === activeFolder)
             ).sort(byUpdated);
             if (pendingNoteOrder) {
