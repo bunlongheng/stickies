@@ -4369,6 +4369,21 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         {/* divider */}
                                         <div className="w-px h-4 bg-white/10 mx-1" />
                                         {/* actions */}
+                                        <div className="relative">
+                                            <HeaderIconBtn icon={PlusIcon} label="New" onClick={() => setShowAddMenu(v => !v)} style={showAddMenu ? { color: "#a855f7" } : undefined} />
+                                            {showAddMenu && (
+                                                <div className="absolute right-0 top-full mt-1 z-[200] flex flex-col overflow-hidden rounded-lg" style={{ background: "#1a1a1a", border: "1px solid rgba(255,255,255,0.12)", boxShadow: "0 8px 24px rgba(0,0,0,0.6)", minWidth: 130 }}>
+                                                    <button onClick={() => { setShowAddMenu(false); openNewNote(); }} className="flex items-center gap-2.5 px-3 py-2.5 text-left text-[13px] text-zinc-300 hover:bg-white/8 transition-colors">
+                                                        <PlusIcon className="w-3.5 h-3.5 text-zinc-500 flex-shrink-0" />
+                                                        New file
+                                                    </button>
+                                                    <button onClick={() => { setShowAddMenu(false); openCreateFolder(); }} className="flex items-center gap-2.5 px-3 py-2.5 text-left text-[13px] text-zinc-300 hover:bg-white/8 transition-colors">
+                                                        <PlusIcon className="w-3.5 h-3.5 text-zinc-500 flex-shrink-0" />
+                                                        New folder
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
                                         <HeaderIconBtn icon={Cog6ToothIcon} label="Settings" onClick={() => { setShowFolderActions(true); setShowFolderColorPicker(false); setShowFolderIconPicker(false); setShowFolderMovePicker(false); }} />
                                     </>
                                 )}
