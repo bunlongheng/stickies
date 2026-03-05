@@ -952,21 +952,14 @@ export default function NotesMaster() {
                         setFolderStack(parsed.folderStack);
                     } else if (typeof parsed?.activeFolder === "string") {
                         setActiveFolder(parsed.activeFolder);
-                    } else {
-                        // Default notebook
-                        setActiveFolder("Work");
                     }
                     if ((parsed?.editorOpen || parsed?.noteModalOpen) && parsed?.editingNoteId) {
                         shouldWaitForInitialTarget = true;
                         setPendingRestoreNoteId(String(parsed.editingNoteId));
                     }
-                } else {
-                    // No saved state at all — open Work by default
-                    setActiveFolder("Work");
                 }
             } catch (err) {
                 console.error("Failed to restore local view state:", err);
-                setActiveFolder("Work");
             }
         }
         try {
