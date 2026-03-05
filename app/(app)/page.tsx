@@ -3,7 +3,8 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { usePageMeta } from "@/lib/usePageMeta";
-import { RichTextEditor } from "@/components/RichTextEditor";
+import dynamic from "next/dynamic";
+const RichTextEditor = dynamic(() => import("@/components/RichTextEditor").then(m => m.RichTextEditor), { ssr: false });
 
 // Icons
 import MagnifyingGlassIcon from "@heroicons/react/24/outline/MagnifyingGlassIcon";
