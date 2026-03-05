@@ -3880,10 +3880,10 @@ const fireIntegrations = (trigger: string, note: any) => {
             )}
 
             {/* ── two-panel layout ── */}
-            <div className={`flex-1 min-h-0 overflow-hidden flex ${editMode ? "flex-row" : "flex-col md:flex-row"}`}>
+            <div className={`flex-1 min-h-0 overflow-hidden flex ${editMode ? "flex-row" : "flex-col"}`}>
 
-                {/* RIGHT PANEL: editor */}
-                <div className={`flex-1 flex flex-col overflow-hidden ${editMode ? "flex" : `md:order-2 ${editorOpen ? "flex" : "hidden md:flex"}`}`}>
+                {/* RIGHT PANEL: editor — only shown in edit mode or when a note is open (mobile nav) */}
+                <div className={`flex-1 flex flex-col overflow-hidden ${editMode ? "flex" : editorOpen ? "flex" : "hidden"}`}>
                 {editorOpen ? (
                 <section className="flex-1 min-h-0 flex flex-col overflow-hidden overscroll-none" onClick={(e) => e.stopPropagation()}>
                     {pendingShare && (
@@ -3909,7 +3909,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                         {/* Back button — hidden on desktop or in edit mode (left panel always visible) */}
                         <button
                             onClick={(e) => { e.stopPropagation(); void backToRootFromEditor(); }}
-                            className={`${editMode ? "hidden" : "md:hidden"} p-2 text-blue-500 hover:bg-white/10 transition flex-shrink-0`}
+                            className={`${editMode ? "hidden" : "flex"} p-2 text-blue-500 hover:bg-white/10 transition flex-shrink-0`}
                             title={`Back to ${targetFolder || "folders"}`}
                             aria-label={`Back to ${targetFolder || "folders"}`}>
                             <ArrowLeftIcon className="w-[38px] h-[38px]" />
@@ -4344,7 +4344,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                 </div>{/* ── end right panel ── */}
 
                 {/* LEFT PANEL: slim notes list */}
-                <div className={`bg-black flex flex-col overflow-hidden ${editMode ? "w-[240px] min-w-[180px] max-w-[300px] flex-shrink-0 border-r border-white/10" : `md:order-1 md:w-[240px] md:min-w-[180px] md:max-w-[300px] md:flex-shrink-0 md:border-r md:border-white/10 ${editorOpen ? "hidden md:flex" : "flex-1"}`}`}>
+                <div className={`bg-black flex flex-col overflow-hidden ${editMode ? "w-[240px] min-w-[180px] max-w-[300px] flex-shrink-0 border-r border-white/10" : editorOpen ? "hidden" : "flex-1"}`}>
                 <>
                     <div className="safe-top-bar shrink-0 bg-black sticky top-0 z-40" />
                     <header className="ios-mobile-header relative h-auto min-h-[4rem] px-4 flex items-center gap-2 sticky top-0 bg-zinc-900 z-40 shrink-0">
