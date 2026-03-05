@@ -230,7 +230,6 @@ const looksLikeMarkdown = (text: string) =>
 const looksLikeHtml = (text: string) =>
     /^\s*<!DOCTYPE\s+html/i.test(text) || /^\s*<html[\s>]/i.test(text);
 const MAIN_LIST_MODE_KEY = "stickies:main-list-mode:v1";
-const DRILL_MODE_KEY = "stickies:drill-mode:v1";
 const KANBAN_MODE_KEY = "stickies:kanban-mode:v1";
 const EDIT_MODE_KEY = "stickies:edit-mode:v1";
 const LIST_MODE_KEY = "stickies:list-mode-notes:v1";
@@ -718,15 +717,11 @@ export default function NotesMaster() {
     const [aiMode, setAiMode] = useState<{ active: boolean; message: string }>({ active: false, message: "" });
     const [botColor, setBotColor] = useState({ primary: "#7c3aed", secondary: "#a78bfa", light: "#c4b5fd" });
     const [mainListMode, setMainListMode] = useState(true);
-    const [drillMode, setDrillMode] = useState(false);
     const [kanbanMode, setKanbanMode] = useState(false);
     const [editMode, setEditMode] = useState(false);
     const [showAddMenu, setShowAddMenu] = useState(false);
-    const [colPath, setColPath] = useState<string[]>([]);
     const colDragNoteRef = useRef<string | null>(null);
-    const colDragOverRef = useRef<string | null>(null);
     const [colDragOver, setColDragOver] = useState<string | null>(null);
-    const colScrollRef = useRef<HTMLDivElement | null>(null);
     const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set());
     const [glowCard, setGlowCard] = useState<{ id: string; x: number; y: number } | null>(null);
     const [imgPopover, setImgPopover] = useState<{ src: string; alt: string; x: number; y: number } | null>(null);
@@ -1026,8 +1021,6 @@ export default function NotesMaster() {
             if (rawMainList) setMainListMode(rawMainList === "true");
         } catch { /* ignore */ }
         try {
-            const rawDrill = localStorage.getItem(DRILL_MODE_KEY);
-            if (rawDrill) setDrillMode(rawDrill === "true");
             const rawKanban = localStorage.getItem(KANBAN_MODE_KEY);
             if (rawKanban) setKanbanMode(rawKanban === "true");
             const rawEdit = localStorage.getItem(EDIT_MODE_KEY);
@@ -1109,10 +1102,6 @@ export default function NotesMaster() {
         document.addEventListener("click", close);
         return () => document.removeEventListener("click", close);
     }, [showAddMenu]);
-
-    useEffect(() => {
-        try { localStorage.setItem(DRILL_MODE_KEY, String(drillMode)); } catch { /* ignore */ }
-    }, [drillMode]);
 
     useEffect(() => {
         try { localStorage.setItem(KANBAN_MODE_KEY, String(kanbanMode)); } catch { /* ignore */ }
@@ -4389,8 +4378,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 </div>
                                 <div className="ml-auto flex items-center gap-1">
                                     {/* view modes */}
-                                    <HeaderIconBtn icon={ListBulletIcon} label="List" onClick={() => { setMainListMode(true); setKanbanMode(false); setEditMode(false); }} style={mainListMode && !drillMode && !kanbanMode && !editMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
-                                    <HeaderIconBtn icon={Squares2X2Icon} label="Grid" onClick={() => { setMainListMode(false); setKanbanMode(false); setEditMode(false); }} style={!mainListMode && !drillMode && !kanbanMode && !editMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
+                                    <HeaderIconBtn icon={ListBulletIcon} label="List" onClick={() => { setMainListMode(true); setKanbanMode(false); setEditMode(false); }} style={mainListMode && !kanbanMode && !editMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
+                                    <HeaderIconBtn icon={Squares2X2Icon} label="Grid" onClick={() => { setMainListMode(false); setKanbanMode(false); setEditMode(false); }} style={!mainListMode && !kanbanMode && !editMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
                                     <div className="hidden sm:contents">
                                         <HeaderIconBtn icon={ViewColumnsIcon} label="Kanban" onClick={() => { setKanbanMode((v) => !v); setMainListMode(false); setEditMode(false); }} style={kanbanMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
                                         <HeaderIconBtn icon={PencilSquareIcon} label="Edit" onClick={() => { setEditMode((v) => !v); setKanbanMode(false); }} style={editMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
@@ -4430,8 +4419,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 ) : (
                                     <>
                                         {/* view modes */}
-                                        <HeaderIconBtn icon={ListBulletIcon} label="List" onClick={() => { setMainListMode(true); setKanbanMode(false); setEditMode(false); }} style={mainListMode && !drillMode && !kanbanMode && !editMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
-                                        <HeaderIconBtn icon={Squares2X2Icon} label="Grid" onClick={() => { setMainListMode(false); setKanbanMode(false); setEditMode(false); }} style={!mainListMode && !drillMode && !kanbanMode && !editMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
+                                        <HeaderIconBtn icon={ListBulletIcon} label="List" onClick={() => { setMainListMode(true); setKanbanMode(false); setEditMode(false); }} style={mainListMode && !kanbanMode && !editMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
+                                        <HeaderIconBtn icon={Squares2X2Icon} label="Grid" onClick={() => { setMainListMode(false); setKanbanMode(false); setEditMode(false); }} style={!mainListMode && !kanbanMode && !editMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
                                         <div className="hidden sm:contents">
                                             <HeaderIconBtn icon={ViewColumnsIcon} label="Kanban" onClick={() => { setKanbanMode((v) => !v); setMainListMode(false); setEditMode(false); }} style={kanbanMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
                                             <HeaderIconBtn icon={PencilSquareIcon} label="Edit" onClick={() => { setEditMode((v) => !v); setKanbanMode(false); }} style={editMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
@@ -4462,8 +4451,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                     </header>
 
                     <main ref={mainScrollRef}
-                        className={`ios-mobile-main relative flex-1 ${(drillMode || kanbanMode) && isFolderGridView ? "overflow-x-auto overflow-y-hidden touch-pan-x" : "overflow-x-hidden overflow-y-auto touch-pan-y"} overscroll-none bg-black ${(!showGlobalGraph) && !((drillMode || kanbanMode) && isFolderGridView) ? "pb-24 sm:pb-32" : ""} ${!mainListMode && !((drillMode || kanbanMode) && isFolderGridView) ? "p-1.5 sm:p-2" : ""}`}
-                        style={(drillMode || kanbanMode) && isFolderGridView
+                        className={`ios-mobile-main relative flex-1 ${kanbanMode && isFolderGridView ? "overflow-x-auto overflow-y-hidden touch-pan-x" : "overflow-x-hidden overflow-y-auto touch-pan-y"} overscroll-none bg-black ${(!showGlobalGraph) && !(kanbanMode && isFolderGridView) ? "pb-24 sm:pb-32" : ""} ${!mainListMode && !(kanbanMode && isFolderGridView) ? "p-1.5 sm:p-2" : ""}`}
+                        style={kanbanMode && isFolderGridView
                             ? { display: "flex", flexDirection: "column", height: "100%", overflowX: "auto", overflowY: "hidden" }
                             : mainListMode
                                 ? { display: "block" }
@@ -4576,104 +4565,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 })}
                             </div>
                         )}
-                        {drillMode && isFolderGridView && (() => {
-                            // Miller columns (macOS Finder column view)
-                            const getSubfolders = (parentName: string | null) =>
-                                dbData.filter(r => r.is_folder && (parentName === null ? !r.parent_folder_name : r.parent_folder_name === parentName))
-                                      .sort((a, b) => (a.order ?? 999) - (b.order ?? 999) || String(a.folder_name || "").localeCompare(String(b.folder_name || "")));
-                            const getFolderNotes = (folderName: string) =>
-                                dbData.filter(r => !r.is_folder && r.folder_name === folderName)
-                                      .sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")));
-                            const getFolderMeta = (name: string) => folders.find(f => f.name === name);
-
-                            // Build column list: col 0 = root, then one per selection in colPath
-                            type ColSpec = { items: any[]; parentName: string | null };
-                            const cols: ColSpec[] = [{ items: getSubfolders(null), parentName: null }];
-                            for (let i = 0; i < colPath.length; i++) {
-                                const sel = colPath[i];
-                                const subs = getSubfolders(sel);
-                                const notes = getFolderNotes(sel);
-                                cols.push({ items: [...subs, ...notes], parentName: sel });
-                            }
-
-                            return (
-                                <div ref={colScrollRef} className="flex h-full overflow-x-auto overflow-y-hidden" style={{ scrollbarWidth: "thin", scrollbarColor: "rgba(255,255,255,0.1) transparent" }}>
-                                    {cols.map((col, colIdx) => {
-                                        const selectedInCol = colPath[colIdx] ?? null;
-                                        return (
-                                            <div key={colIdx} className="flex-shrink-0 overflow-y-auto overflow-x-hidden flex flex-col" style={{ width: 200, borderRight: "1px solid rgba(255,255,255,0.07)", scrollbarWidth: "none" }}>
-                                                {col.items.length === 0 && (
-                                                    <div className="px-4 py-3 text-[11px] text-zinc-700">Empty</div>
-                                                )}
-                                                {col.items.map((item) => {
-                                                    const isFolder = !!item.is_folder;
-                                                    const folderName = isFolder ? String(item.folder_name || item.name || "") : null;
-                                                    const meta = isFolder ? getFolderMeta(folderName!) : null;
-                                                    const label = isFolder ? folderName! : String(item.title || "Untitled");
-                                                    const isSelected = isFolder && folderName === selectedInCol;
-                                                    const isDragTarget = colDragOver === (isFolder ? folderName : null);
-                                                    const hasChildren = isFolder && (getSubfolders(folderName!).length > 0 || getFolderNotes(folderName!).length > 0);
-                                                    return (
-                                                        <div
-                                                            key={String(item.id || label)}
-                                                            draggable={!isFolder}
-                                                            onDragStart={() => { if (!isFolder) colDragNoteRef.current = String(item.id); }}
-                                                            onDragEnd={() => { colDragNoteRef.current = null; setColDragOver(null); }}
-                                                            onDragOver={isFolder ? (e) => { e.preventDefault(); setColDragOver(folderName); } : undefined}
-                                                            onDragLeave={isFolder ? (e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setColDragOver(null); } : undefined}
-                                                            onDrop={isFolder ? async (e) => {
-                                                                e.preventDefault();
-                                                                setColDragOver(null);
-                                                                const noteId = colDragNoteRef.current;
-                                                                if (!noteId) return;
-                                                                colDragNoteRef.current = null;
-                                                                const note = dbData.find(n => String(n.id) === noteId);
-                                                                if (!note || note.folder_name === folderName) return;
-                                                                setDbData(prev => prev.map(n => String(n.id) === noteId ? { ...n, folder_name: folderName } : n));
-                                                                await notesApi.update(noteId, { folder_name: folderName! });
-                                                            } : undefined}
-                                                            onClick={() => {
-                                                                if (isFolder) {
-                                                                    setColPath(prev => {
-                                                                        const next = [...prev.slice(0, colIdx), folderName!];
-                                                                        // Auto-scroll right after render
-                                                                        setTimeout(() => colScrollRef.current?.scrollTo({ left: 99999, behavior: "smooth" }), 50);
-                                                                        return next;
-                                                                    });
-                                                                } else {
-                                                                    setEditingNote(item);
-                                                                }
-                                                            }}
-                                                            className="flex items-center gap-2 px-3 flex-shrink-0 cursor-pointer select-none transition-colors"
-                                                            style={{
-                                                                height: 30,
-                                                                background: isSelected
-                                                                    ? (meta?.color ? meta.color + "33" : "rgba(168,85,247,0.2)")
-                                                                    : isDragTarget ? "rgba(255,255,255,0.08)" : "transparent",
-                                                                borderLeft: isSelected ? `2px solid ${meta?.color || "#a855f7"}` : "2px solid transparent",
-                                                            }}
-                                                        >
-                                                            {isFolder ? (
-                                                                <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: meta?.color || "#a855f7" }} />
-                                                            ) : (
-                                                                <div className="w-3 h-3 flex-shrink-0 flex items-center justify-center text-[9px] text-zinc-600">◻</div>
-                                                            )}
-                                                            <span className={`flex-1 text-[13px] truncate ${isSelected ? "text-white font-medium" : "text-zinc-400"}`}>{label}</span>
-                                                            {isFolder && hasChildren && (
-                                                                <ChevronRightIcon className={`w-3 h-3 flex-shrink-0 ${isSelected ? "text-white/60" : "text-zinc-700"}`} />
-                                                            )}
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        );
-                                    })}
-                                    {/* spacer so last col isn't flush against edge */}
-                                    <div className="flex-shrink-0 w-8" />
-                                </div>
-                            );
-                        })()}
-                        {!((drillMode || kanbanMode) && isFolderGridView) && displayItems.map((item, idx) => {
+                        {!(kanbanMode && isFolderGridView) && displayItems.map((item, idx) => {
                             // Section header sentinel
                             if (item._header) {
                                 return (
