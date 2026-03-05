@@ -8,7 +8,9 @@
     "build": "next build",
     "start": "next start",
     "smoke": "sh -c 'set -a && . .env.local && set +a && NODE_TLS_REJECT_UNAUTHORIZED=0 BASE_URL=http://localhost:4444 npx tsx tests/smoke-signup.ts'",
-    "smoke:images": "sh -c 'set -a && . .env.local && set +a && NODE_TLS_REJECT_UNAUTHORIZED=0 BASE_URL=http://localhost:4444 npx tsx tests/smoke-images.ts'"
+    "smoke:images": "sh -c 'set -a && . .env.local && set +a && NODE_TLS_REJECT_UNAUTHORIZED=0 BASE_URL=http://localhost:4444 npx tsx tests/smoke-images.ts'",
+    "test:ui": "playwright test",
+    "test:ui:headed": "playwright test --headed"
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",
@@ -40,6 +42,7 @@
     "web-push": "^3.6.7"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "@tailwindcss/typography": "^0.5.19",
     "@types/node": "^20",
     "@types/react": "^19",
