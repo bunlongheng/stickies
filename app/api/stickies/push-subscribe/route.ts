@@ -25,8 +25,8 @@ async function authenticate(req: Request): Promise<AuthResult | null> {
 
     const { data: { user } } = await getSupabase().auth.getUser(bearer);
     if (user) {
-        const ownerEmail = process.env.OWNER_EMAIL;
-        if (ownerEmail && user.email === ownerEmail) return { type: "apikey" };
+        const ownerUserId = process.env.OWNER_USER_ID;
+        if (ownerUserId && user.id === ownerUserId) return { type: "apikey" };
         return { type: "user", userId: user.id };
     }
     return null;
