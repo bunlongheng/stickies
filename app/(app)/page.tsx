@@ -1054,8 +1054,8 @@ export default function NotesMaster() {
     useEffect(() => {
         if (!showAddMenu) return;
         const close = () => setShowAddMenu(false);
-        document.addEventListener("mousedown", close);
-        return () => document.removeEventListener("mousedown", close);
+        document.addEventListener("click", close);
+        return () => document.removeEventListener("click", close);
     }, [showAddMenu]);
 
     useEffect(() => {
@@ -4346,7 +4346,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                     <PlusIcon className="w-3.5 h-3.5 text-zinc-500 flex-shrink-0" />
                                                     New file
                                                 </button>
-                                                <button onClick={(e) => { e.stopPropagation(); setShowAddMenu(false); openCreateFolder(); }} className="flex items-center gap-2.5 px-3 py-2.5 text-left text-[13px] text-zinc-300 hover:bg-white/8 transition-colors">
+                                                <button onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); setShowAddMenu(false); openCreateFolder(); }} className="flex items-center gap-2.5 px-3 py-2.5 text-left text-[13px] text-zinc-300 hover:bg-white/8 transition-colors">
                                                     <PlusIcon className="w-3.5 h-3.5 text-zinc-500 flex-shrink-0" />
                                                     New folder
                                                 </button>
@@ -4387,7 +4387,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                         <PlusIcon className="w-3.5 h-3.5 text-zinc-500 flex-shrink-0" />
                                                         New file
                                                     </button>
-                                                    <button onClick={(e) => { e.stopPropagation(); setShowAddMenu(false); openCreateFolder(); }} className="flex items-center gap-2.5 px-3 py-2.5 text-left text-[13px] text-zinc-300 hover:bg-white/8 transition-colors">
+                                                    <button onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); setShowAddMenu(false); openCreateFolder(); }} className="flex items-center gap-2.5 px-3 py-2.5 text-left text-[13px] text-zinc-300 hover:bg-white/8 transition-colors">
                                                         <PlusIcon className="w-3.5 h-3.5 text-zinc-500 flex-shrink-0" />
                                                         New folder
                                                     </button>
@@ -4883,17 +4883,17 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 {item.is_folder ? (
                                                     <>
                                                         {item.icon
-                                                            ? <div style={{ fontSize: fitAllMode ? "clamp(2rem, 5.2vw, 5.2rem)" : "clamp(2.6rem, 7.8vw, 9.1rem)", lineHeight: 1 }}>{item.icon}</div>
-                                                            : <div style={{ fontSize: fitAllMode ? "clamp(2.6rem, 6.5vw, 7.2rem)" : "clamp(3.25rem, 10.4vw, 11.7rem)", lineHeight: 1 }} className="font-black text-white">{meaningfulInitial(item.name, "F")}</div>
+                                                            ? <div style={{ fontSize: "2.8rem", lineHeight: 1 }}>{item.icon}</div>
+                                                            : <div style={{ fontSize: "3rem", lineHeight: 1 }} className="font-black text-white">{meaningfulInitial(item.name, "F")}</div>
                                                         }
-                                                        <div className="mt-0.5 text-[7px] sm:text-[9px] font-medium text-white tracking-tight line-clamp-1 w-full text-center">
+                                                        <div className="mt-0.5 text-[9px] font-medium text-white tracking-tight line-clamp-1 w-full text-center">
                                                             {item.name} <span className="opacity-70">({item.count})</span>
                                                         </div>
                                                     </>
                                                 ) : (
                                                     <>
-                                                        <div className={`${fitAllMode ? "text-2xl sm:text-3xl" : "text-3xl sm:text-4xl"} font-black text-white uppercase leading-none`}>{[...(item.title || "N")][0]}</div>
-                                                        <div className="text-[7px] sm:text-[8px] font-semibold text-white leading-tight mt-0.5 line-clamp-2 w-full">{item.title}</div>
+                                                        <div className="text-3xl font-black text-white uppercase leading-none">{[...(item.title || "N")][0]}</div>
+                                                        <div className="text-[8px] font-semibold text-white leading-tight mt-0.5 line-clamp-2 w-full">{item.title}</div>
                                                     </>
                                                 )}
                                             </div>
