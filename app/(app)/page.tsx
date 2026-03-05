@@ -1598,18 +1598,9 @@ const fireIntegrations = (trigger: string, note: any) => {
                 .filter((n) => !n.is_folder && score(n) < 9)
                 .sort((a, b) => { const sd = score(a) - score(b); return sd !== 0 ? sd : byUpdated(a, b); });
         }
-        if (activeFolder && editMode) {
-            const activeFolderId = folderStack.at(-1)?.id ?? null;
-            const useUuid = activeFolderId && !activeFolderId.startsWith("virtual-");
-            const notes = (useUuid
-                ? dbData.filter((n) => !n.is_folder && (String(n.folder_id) === activeFolderId || (!n.folder_id && n.folder_name === activeFolder)))
-                : dbData.filter((n) => !n.is_folder && n.folder_name === activeFolder)
-            ).sort(byUpdated);
-            return notes;
-        }
-        // Root view — all notes sorted by last updated
+        // All notes sorted by last updated
         return dbData.filter((n) => !n.is_folder).sort(byUpdated);
-    }, [dbData, activeFolder, editMode, search, currentLevelFolders, pendingNoteOrder, pinnedIds]);
+    }, [dbData, search, currentLevelFolders, pendingNoteOrder, pinnedIds]);
     const cmdKResults = useMemo(() => {
         const notes = dbData.filter((n: any) => !n.is_folder);
         const byDate = (a: any, b: any) => String(b.updated_at || "").localeCompare(String(a.updated_at || ""));
@@ -3875,10 +3866,10 @@ const fireIntegrations = (trigger: string, note: any) => {
             )}
 
             {/* ── two-panel layout ── */}
-            <div className={`flex-1 min-h-0 overflow-hidden flex ${editMode ? "flex-row" : "flex-col"}`}>
+            <div className={`flex-1 min-h-0 overflow-hidden flex ${editMode ? "flex-row" : "flex-col md:flex-row"}`}>
 
-                {/* RIGHT PANEL: editor — only visible in edit mode */}
-                <div className={`flex-1 flex flex-col overflow-hidden ${editMode ? "flex" : editorOpen ? "flex" : "hidden"}`}>
+                {/* RIGHT PANEL: editor */}
+                <div className={`flex-1 flex flex-col overflow-hidden ${editMode ? "flex" : `md:order-2 ${editorOpen ? "flex" : "hidden md:flex"}`}`}>
                 {editorOpen ? (
                 <section className="flex-1 min-h-0 flex flex-col overflow-hidden overscroll-none" onClick={(e) => e.stopPropagation()}>
                     {pendingShare && (
@@ -3904,7 +3895,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                         {/* Back button — hidden on desktop or in edit mode (left panel always visible) */}
                         <button
                             onClick={(e) => { e.stopPropagation(); void backToRootFromEditor(); }}
-                            className={`${editMode ? "hidden" : "flex"} p-2 text-blue-500 hover:bg-white/10 transition flex-shrink-0`}
+                            className={`${editMode ? "hidden" : "md:hidden"} p-2 text-blue-500 hover:bg-white/10 transition flex-shrink-0`}
                             title={`Back to ${targetFolder || "folders"}`}
                             aria-label={`Back to ${targetFolder || "folders"}`}>
                             <ArrowLeftIcon className="w-[38px] h-[38px]" />
@@ -4339,7 +4330,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                 </div>{/* ── end right panel ── */}
 
                 {/* LEFT PANEL: slim notes list */}
-                <div className={`bg-black flex flex-col overflow-hidden ${editMode ? "w-[240px] min-w-[180px] max-w-[300px] flex-shrink-0 border-r border-white/10" : editorOpen ? "hidden" : "flex-1"}`}>
+                <div className={`bg-black flex flex-col overflow-hidden ${editMode ? "w-[240px] min-w-[180px] max-w-[300px] flex-shrink-0 border-r border-white/10" : `md:order-1 md:w-[240px] md:min-w-[180px] md:max-w-[300px] md:flex-shrink-0 md:border-r md:border-white/10 ${editorOpen ? "hidden md:flex" : "flex-1"}`}`}>
                 <>
                     <div className="safe-top-bar shrink-0 bg-black sticky top-0 z-40" />
                     <header className="ios-mobile-header relative h-auto min-h-[4rem] px-4 flex items-center gap-2 sticky top-0 bg-zinc-900 z-40 shrink-0">
