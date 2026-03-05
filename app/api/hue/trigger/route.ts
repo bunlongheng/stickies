@@ -210,3 +210,37 @@ export async function POST(req: Request) {
         return NextResponse.json({ ok: false, error: e.message }, { status: 500 });
     }
 }
+
+// DELETE /api/hue/trigger — immediately restore light to original color
+export async function DELETE() {
+    if (restoreTimer) { clearTimeout(restoreTimer); restoreTimer = null; }
+
+    const xy  = origXySnapshot  ?? { x: 0.3127, y: 0.3290 };
+    const bri = origBrightnessSnapshot ?? 100;
+    origXySnapshot = null;
+    origBrightnessSnapshot = null;
+
+    const supabase = getSupabase();
+    const { data: integration } = await supabase.from("integrations").select("*").eq("type", "hue").eq("active", true).single();
+    if (!integration) return NextResponse.json({ ok: false, error: "No active Hue integration" }, { status: 503 });
+
+    const appKey  = integration.config?.app_key?.trim();
+    const groupId = integration.config?.group_id?.trim();
+    if (!appKey || !groupId) return NextResponse.json({ ok: false, error: "Hue not configured" }, { status: 503 });
+
+    const token = await getRemoteToken(integration);
+    try {
+        if (token) {
+            const base = `https://api.meethue.com/route/clip/v2/resource/grouped_light/${groupId}`;
+            const headers = { "Authorization": `Bearer ${token}`, "hue-application-key": appKey, "Content-Type": "application/json" };
+            await fetch(base, { method: "PUT", headers, body: JSON.stringify({ color: { xy }, dimming: { brightness: bri } }) });
+            return NextResponse.json({ ok: true, via: "remote", restored: { xy, bri } });
+        }
+        const bridgeIp = integration.config?.bridge_ip?.trim();
+        if (!bridgeIp) return NextResponse.json({ ok: false, error: "No bridge IP" }, { status: 503 });
+        await localFetch(bridgeIp, appKey, `/clip/v2/resource/grouped_light/${groupId}`, "PUT", { color: { xy }, dimming: { brightness: bri } });
+        return NextResponse.json({ ok: true, via: "local", restored: { xy, bri } });
+    } catch (e: any) {
+        return NextResponse.json({ ok: false, error: e.message }, { status: 500 });
+    }
+}
