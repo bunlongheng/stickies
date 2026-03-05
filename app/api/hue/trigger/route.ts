@@ -141,9 +141,14 @@ export async function POST(req: Request) {
     const appKey   = integration.config?.app_key?.trim();
     const groupId  = integration.config?.group_id?.trim();
     const bridgeIp = integration.config?.bridge_ip?.trim();
+    // Light mode: "flash" (default) | "ambient" | "off"
+    const mode: string = integration.config?.mode ?? "flash";
 
     if (!groupId) return NextResponse.json({ ok: false, error: "group_id not configured" }, { status: 503 });
     if (!appKey)  return NextResponse.json({ ok: false, error: "app_key not configured" }, { status: 503 });
+
+    // Off mode — skip entirely
+    if (mode === "off") return NextResponse.json({ ok: false, reason: "light mode is off" });
 
     const body = await req.json().catch(() => ({}));
     const rawColor: string = body.color ?? "#FFCC00";
@@ -176,8 +181,9 @@ export async function POST(req: Request) {
 
             await fetch(base, { method: "PUT", headers, body: JSON.stringify({ color: { xy } }) });
 
-            scheduleRestore(targetGroup, "remote", token, bridgeIp, appKey);
-            return NextResponse.json({ ok: true, via: "remote", color, xy, restoreIn: RESTORE_DELAY });
+            // Ambient mode — hold color indefinitely, no restore
+            if (mode !== "ambient") scheduleRestore(targetGroup, "remote", token, bridgeIp, appKey);
+            return NextResponse.json({ ok: true, via: "remote", mode, color, xy, restoreIn: mode === "ambient" ? null : RESTORE_DELAY });
         } catch (e: any) {
             return NextResponse.json({ ok: false, via: "remote-error", error: e?.message }, { status: 500 });
         }
@@ -198,8 +204,8 @@ export async function POST(req: Request) {
 
         await localFetch(bridgeIp, appKey, `/clip/v2/resource/grouped_light/${targetGroup}`, "PUT", { color: { xy } });
 
-        scheduleRestore(targetGroup, "local", null, bridgeIp, appKey);
-        return NextResponse.json({ ok: true, via: "local", color, xy, restoreIn: RESTORE_DELAY });
+        if (mode !== "ambient") scheduleRestore(targetGroup, "local", null, bridgeIp, appKey);
+        return NextResponse.json({ ok: true, via: "local", mode, color, xy, restoreIn: mode === "ambient" ? null : RESTORE_DELAY });
     } catch (e: any) {
         return NextResponse.json({ ok: false, error: e.message }, { status: 500 });
     }
