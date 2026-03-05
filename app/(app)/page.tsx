@@ -4434,7 +4434,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                     <main ref={mainScrollRef}
                         className={`ios-mobile-main relative flex-1 ${(drillMode || kanbanMode) && isFolderGridView ? "overflow-x-auto overflow-y-hidden touch-pan-x" : "overflow-x-hidden overflow-y-auto touch-pan-y"} overscroll-none bg-black ${(!showGlobalGraph) && !((drillMode || kanbanMode) && isFolderGridView) ? "pb-24 sm:pb-32" : ""} ${!mainListMode && !((drillMode || kanbanMode) && isFolderGridView) ? "p-1.5 sm:p-2" : ""}`}
                         style={(drillMode || kanbanMode) && isFolderGridView
-                            ? { display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }
+                            ? { display: "flex", flexDirection: "column", height: "100%", overflowX: "auto", overflowY: "hidden" }
                             : mainListMode
                                 ? { display: "block" }
                                 : { display: "grid", gridTemplateColumns: `repeat(${gridCols}, 1fr)`, gap: "6px", alignContent: "start", alignItems: "start" }}
