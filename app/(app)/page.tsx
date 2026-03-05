@@ -36,6 +36,7 @@ import CalendarDaysIcon from "@heroicons/react/24/outline/CalendarDaysIcon";
 import PuzzlePieceIcon from "@heroicons/react/24/outline/PuzzlePieceIcon";
 import ChevronRightIcon from "@heroicons/react/24/outline/ChevronRightIcon";
 import BoltIcon from "@heroicons/react/24/outline/BoltIcon";
+import LightBulbIcon from "@heroicons/react/24/outline/LightBulbIcon";
 import ShareIcon from "@heroicons/react/24/outline/ShareIcon";
 import CursorArrowRaysIcon from "@heroicons/react/24/outline/CursorArrowRaysIcon";
 import RectangleStackIcon from "@heroicons/react/24/outline/RectangleStackIcon";
@@ -700,6 +701,7 @@ export default function NotesMaster() {
     const globalGraphNodesRef = useRef<{ id: string; type: "folder" | "note"; label: string; color: string; folderName?: string; r: number; x: number; y: number; vx: number; vy: number }[]>([]);
     const [globalGraphTick, setGlobalGraphTick] = useState(0);
     const [showFolderActions, setShowFolderActions] = useState(false);
+    const [lightMode, setLightMode] = useState<"off" | "flash" | "ambient">("flash");
     const [isEditingFolderTitle, setIsEditingFolderTitle] = useState(false);
     const [editingFolderTitleValue, setEditingFolderTitleValue] = useState("");
     const [showFolderColorPicker, setShowFolderColorPicker] = useState(false);
@@ -4376,7 +4378,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             </div>
                                         )}
                                     </div>
-                                    <HeaderIconBtn icon={Cog6ToothIcon} label="Settings" onClick={() => setShowFolderActions(true)} />
+                                    <HeaderIconBtn icon={Cog6ToothIcon} label="Settings" onClick={() => { const hueInt = integrationsRef.current.find(ig => ig.type === "hue"); setLightMode((hueInt?.config?.mode as any) ?? "flash"); setShowFolderActions(true); }} />
                                 </div>
                             </>
                         ) : (
@@ -4417,7 +4419,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 </div>
                                             )}
                                         </div>
-                                        <HeaderIconBtn icon={Cog6ToothIcon} label="Settings" onClick={() => { setShowFolderActions(true); setShowFolderColorPicker(false); setShowFolderIconPicker(false); setShowFolderMovePicker(false); }} />
+                                        <HeaderIconBtn icon={Cog6ToothIcon} label="Settings" onClick={() => { const hueInt = integrationsRef.current.find(ig => ig.type === "hue"); setLightMode((hueInt?.config?.mode as any) ?? "flash"); setShowFolderActions(true); setShowFolderColorPicker(false); setShowFolderIconPicker(false); setShowFolderMovePicker(false); }} />
                                     </>
                                 )}
                             </div>
@@ -5754,6 +5756,47 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     <span className="text-xs font-black tracking-wide">Delete</span>
                                 </button>
                             )}
+                            {/* LIGHT MODE — global only, shown when Hue is active */}
+                            {!activeFolder && integrationsRef.current.some(ig => ig.type === "hue") && (() => {
+                                const hueInt = integrationsRef.current.find(ig => ig.type === "hue")!;
+                                const MODES: { key: "off" | "flash" | "ambient"; label: string; desc: string }[] = [
+                                    { key: "off",     label: "Off",     desc: "Don't trigger lights" },
+                                    { key: "flash",   label: "Flash",   desc: "Change color, restore after 60s" },
+                                    { key: "ambient", label: "Ambient", desc: "Hold color until next note" },
+                                ];
+                                return (
+                                    <div className="px-6 py-4 border-t border-white/5">
+                                        <div className="flex items-center gap-3 mb-3">
+                                            <LightBulbIcon className="w-4 h-4 text-zinc-400 flex-shrink-0" />
+                                            <span className="text-xs font-black tracking-wide text-zinc-300 uppercase">Lights</span>
+                                        </div>
+                                        <div className="flex gap-1.5">
+                                            {MODES.map(({ key, label }) => (
+                                                <button
+                                                    key={key}
+                                                    type="button"
+                                                    title={MODES.find(m => m.key === key)?.desc}
+                                                    className={`flex-1 py-2 rounded text-[10px] font-black uppercase tracking-wide transition ${lightMode === key ? "bg-white text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"}`}
+                                                    onClick={async () => {
+                                                        setLightMode(key);
+                                                        const updatedConfig = { ...hueInt.config, mode: key };
+                                                        integrationsRef.current = integrationsRef.current.map(ig =>
+                                                            ig.type === "hue" ? { ...ig, config: updatedConfig } : ig
+                                                        );
+                                                        try {
+                                                            await fetch(`/api/stickies/integrations/${hueInt.id}`, {
+                                                                method: "PATCH",
+                                                                headers: { "Authorization": `Bearer ${await getAuthToken()}`, "Content-Type": "application/json" },
+                                                                body: JSON.stringify({ config: updatedConfig }),
+                                                            });
+                                                        } catch { /* ignore */ }
+                                                    }}
+                                                >{label}</button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                );
+                            })()}
                             {/* INTEGRATIONS — global only */}
                             {!activeFolder && (
                                 <button type="button" className="w-full flex items-center gap-4 px-6 py-4 text-left text-zinc-300 hover:bg-white/5 hover:text-white active:bg-white/10 transition"
