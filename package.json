@@ -9,6 +9,7 @@
     "start": "next start",
     "smoke": "sh -c 'set -a && . .env.local && set +a && NODE_TLS_REJECT_UNAUTHORIZED=0 BASE_URL=http://localhost:4444 npx tsx tests/smoke-signup.ts'",
     "smoke:images": "sh -c 'set -a && . .env.local && set +a && NODE_TLS_REJECT_UNAUTHORIZED=0 BASE_URL=http://localhost:4444 npx tsx tests/smoke-images.ts'",
+    "smoke:flow": "sh -c 'set -a && . .env.local && set +a && NODE_TLS_REJECT_UNAUTHORIZED=0 BASE_URL=http://localhost:4444 npx tsx tests/smoke-user-flow.ts'",
     "test:ui": "playwright test",
     "test:ui:headed": "playwright test --headed"
   },
