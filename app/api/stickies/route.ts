@@ -82,9 +82,13 @@ async function authenticate(req: Request): Promise<AuthResult | null> {
         }
     }
 
-    // Supabase JWT → regular user (reads/writes to `users_stickies` table)
+    // Supabase JWT → check if owner email, else regular user
     const { data: { user } } = await getSupabase().auth.getUser(bearer);
-    if (user) return { type: "user", userId: user.id };
+    if (user) {
+        const ownerEmail = process.env.OWNER_EMAIL;
+        if (ownerEmail && user.email === ownerEmail) return { type: "apikey" };
+        return { type: "user", userId: user.id };
+    }
 
     return null;
 }
