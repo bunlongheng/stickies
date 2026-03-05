@@ -3006,7 +3006,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         [animateFolderFabBack],
     );
 
-    const isFolderGridView = !search.trim() && ((!activeFolder) || (kanbanMode && currentLevelFolders.length > 0));
+    const isFolderGridView = !search.trim() && ((!activeFolder) || (kanbanMode && dbData.some(r => r.is_folder && r.parent_folder_name === activeFolder)));
     const isNoteGridView = Boolean(activeFolder) && !search.trim();
     const fitAllMode = (isFolderGridView || isNoteGridView) && displayItems.length > 12;
     const fitCols = fitAllMode ? Math.ceil(Math.sqrt(displayItems.length)) : 0;
@@ -4712,7 +4712,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         if (item.is_folder) {
                                             playSound("navigate");
                                             enterFolder({ id: String(item.id), name: item.name, color: item.color || palette12[0] });
-                                        } else if (!item.is_folder && looksLikeUrl(item.content || "") && (item.folder_name || "").toUpperCase() === "BOOKMARKS") {
+                                        } else if (!item.is_folder && looksLikeUrl(item.content || "") && (activeFolder?.toUpperCase() === "BOOKMARKS" || (!activeFolder && (item.folder_name || "").toUpperCase() === "BOOKMARKS"))) {
                                             playSound("click");
                                             window.open(item.content.trim(), "_blank", "noopener,noreferrer");
                                         } else {
