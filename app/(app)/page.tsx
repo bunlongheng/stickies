@@ -1680,13 +1680,16 @@ const fireIntegrations = (trigger: string, note: any) => {
             isSavingRef.current = true;
 
             const folderName = targetFolder || activeFolder || editingNote?.folder_name || "General";
-            const payload = {
+            const activeFolderRow = folderStack.at(-1);
+            const folderId = activeFolderRow && !activeFolderRow.id.startsWith("virtual-") ? activeFolderRow.id : null;
+            const payload: any = {
                 title: title.trim() || "Untitled",
                 content,
                 folder_name: folderName,
                 folder_color: noteColor || folders.find((f) => f.name === folderName)?.color || editingNote?.folder_color || palette12[0],
                 is_folder: false,
                 updated_at: new Date().toISOString(),
+                ...(folderId ? { folder_id: folderId } : {}),
             };
             const existingNoteId = editingNote?.id ?? null;
             const existingNoteIdStr = existingNoteId !== null ? String(existingNoteId) : null;
@@ -1736,7 +1739,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                 isSavingRef.current = false;
             }
         },
-        [isDraftDirty, targetFolder, noteColor, activeFolder, editingNote, title, content, folders, dbData],
+        [isDraftDirty, targetFolder, noteColor, activeFolder, folderStack, editingNote, title, content, folders, dbData],
     );
 
     const closeEditorTools = useCallback(() => {
