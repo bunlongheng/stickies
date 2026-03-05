@@ -5686,7 +5686,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                             )}
                             {/* LIGHT MODE — shown when Hue is active */}
                             {integrationsRef.current.some(ig => ig.type === "hue") && (() => {
-                                const hueInt = integrationsRef.current.find(ig => ig.type === "hue")!;
+                                const hueInt = integrationsRef.current.find(ig => ig.type === "hue") as any;
                                 const MODES: { key: "off" | "flash" | "ambient"; label: string; desc: string }[] = [
                                     { key: "off",     label: "Off",     desc: "Don't trigger lights" },
                                     { key: "flash",   label: "Flash",   desc: "Change color, restore after 60s" },
