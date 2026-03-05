@@ -159,6 +159,15 @@ function detectMarkdown(text: string): boolean {
 }
 
 /** Detect plain URL content — single line, no whitespace, http(s) scheme */
+/** Strip base64 images and HTML tags for safe single-line preview text */
+function previewText(raw: string): string {
+    return raw
+        .replace(/!\[[^\]]*\]\(data:[^)]+\)/g, "[image]") // base64 images → placeholder
+        .replace(/<[^>]+>/g, "")                           // HTML tags
+        .replace(/\s+/g, " ")
+        .trim();
+}
+
 function looksLikeUrl(text: string): boolean {
     const t = text.trim();
     return /^https?:\/\/\S+$/.test(t);
@@ -1922,8 +1931,10 @@ const fireIntegrations = (trigger: string, note: any) => {
         const imageItems = items.filter((i) => i.type.startsWith("image/"));
         const htmlData = e.clipboardData.getData("text/html");
 
-        // Rich HTML paste (Notion, Google Docs, etc.) — convert to Markdown + upload images inline
-        if (htmlData && htmlData.includes("<") && (htmlData.includes("<img") || htmlData.includes("<h") || htmlData.includes("<strong") || htmlData.includes("<li") || htmlData.includes("<p"))) {
+        // Rich HTML paste (Notion, Google Docs, etc.) — only if NOT explicitly in plain text mode
+        const nid = editingNote?.id ? String(editingNote.id) : null;
+        const isPlainTextMode = nid ? markdownModeNotes.has(nid) : false;
+        if (!isPlainTextMode && htmlData && htmlData.includes("<") && (htmlData.includes("<img") || htmlData.includes("<h") || htmlData.includes("<strong") || htmlData.includes("<li") || htmlData.includes("<p"))) {
             e.preventDefault();
             const textarea = e.currentTarget;
             const start = textarea.selectionStart ?? content.length;
@@ -1935,8 +1946,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                 const md = await htmlToMarkdown(htmlData, noteTitle);
                 const newContent = content.slice(0, start) + md + content.slice(end);
                 setContent(newContent);
-                // Ensure markdown preview is active (remove from text-override set)
-                const nid = editingNote?.id ? String(editingNote.id) : null;
                 if (nid) setMarkdownModeNotes(prev => { const next = new Set(prev); next.delete(nid); return next; });
                 showToast("Rich text pasted ✓", "#34C759");
             } catch (err) {
@@ -4514,7 +4523,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                                 </svg>
                                                             </>)}
                                                             <div className="relative text-[12px] font-semibold text-white/85 leading-none" style={{ overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>{(note.title || "Untitled").slice(0, 28)}</div>
-                                                            <div className="relative text-[11px] text-white/35 leading-none" style={{ overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>{(note.content ? note.content.replace(/<[^>]+>/g, "").trim() : "—").slice(0, 32)}</div>
+                                                            <div className="relative text-[11px] text-white/35 leading-none" style={{ overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>{(note.content ? previewText(note.content) : "—").slice(0, 32)}</div>
                                                         </div>
                                                     );
                                                 })}
@@ -4795,7 +4804,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                         {item.count > 0 && <span>{item.count} note{item.count !== 1 ? "s" : ""}</span>}
                                                     </div>
                                                 ) : (
-                                                    <div className="text-[13px] text-zinc-500 truncate">{(() => { const s = (item.content || "").split("\n").find((l: string) => l.trim()) || ""; return s.length > 60 ? s.slice(0, 60) + "..." : s; })()}</div>
+                                                    <div className="text-[13px] text-zinc-500 truncate">{(() => { const s = previewText(item.content || "").split("\n").find((l: string) => l.trim()) || ""; return s.length > 60 ? s.slice(0, 60) + "..." : s; })()}</div>
                                                 )}
                                             </div>
                                             {item.is_folder && item.latestUpdatedAt && (
