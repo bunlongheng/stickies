@@ -10,6 +10,7 @@ const RESTORE_DELAY = 60_000; // 1 minute of inactivity → restore
 let restoreTimer: ReturnType<typeof setTimeout> | null = null;
 let origXySnapshot: { x: number; y: number } | null = null;
 let origBrightnessSnapshot: number | null = null;
+let lastTriggerAt = 0; // epoch ms — updated on every incoming trigger
 
 function getSupabase() {
     return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -93,6 +94,9 @@ function scheduleRestore(targetGroup: string, via: "remote" | "local", token: st
     if (restoreTimer) clearTimeout(restoreTimer);
 
     restoreTimer = setTimeout(async () => {
+        // Abort if a new trigger arrived while this timer was waiting
+        if (Date.now() - lastTriggerAt < RESTORE_DELAY - 1_000) return;
+
         const xy   = origXySnapshot ?? { x: 0.3127, y: 0.3290 };
         const bri  = origBrightnessSnapshot ?? 100;
         origXySnapshot = null;
@@ -118,6 +122,8 @@ function scheduleRestore(targetGroup: string, via: "remote" | "local", token: st
 
 // POST /api/hue/trigger
 export async function POST(req: Request) {
+    lastTriggerAt = Date.now(); // stamp immediately — blocks any pending restore timer
+
     const supabase = getSupabase();
 
     // Load active Hue integration
