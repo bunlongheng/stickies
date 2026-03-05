@@ -1595,15 +1595,20 @@ const fireIntegrations = (trigger: string, note: any) => {
             const t = (n.title || "").toLowerCase();
             const f = (n.folder_name || "").toLowerCase();
             const c = (n.content || "").toLowerCase();
-            if (t === q) return 0;                  // exact title match
-            if (t.startsWith(q)) return 1;          // title starts with query
-            if (t.includes(q)) return 2;            // title contains query
-            if (c.includes(q)) return 3;            // content contains query
-            if (f.includes(q)) return 4;            // folder name contains query
-            return 5;
+            const pinned = pinnedIds.has(String(n.id));
+            // priority: folder > file name > bookmark > content
+            if (f === q)           return 0;
+            if (f.startsWith(q))   return 1;
+            if (f.includes(q))     return 2;
+            if (t === q)           return 3;
+            if (t.startsWith(q))   return 4;
+            if (t.includes(q))     return pinned ? 5 : 6;
+            if (pinned && c.includes(q)) return 7;
+            if (c.includes(q))     return 8;
+            return 9;
         };
         return notes
-            .filter((n: any) => score(n) < 5)
+            .filter((n: any) => score(n) < 9)
             .sort((a: any, b: any) => {
                 const sd = score(a) - score(b);
                 if (sd !== 0) return sd;
