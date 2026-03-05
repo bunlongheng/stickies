@@ -348,7 +348,10 @@ export async function POST(req: Request) {
     }]).select().single();
 
     if (error) { console.error("[stickies POST]", error); return NextResponse.json({ error: "Database error" }, { status: 500 }); }
-    try { await getPusher().trigger("stickies", "note-created", data); } catch {}
+
+    if (auth.type === "apikey") {
+        try { await getPusher().trigger("stickies", "note-created", data); } catch {}
+    }
 
     if (auth.type === "apikey") {
         fetch(`${process.env.PROD_BASE_URL ?? "https://bheng.vercel.app"}/api/hue/trigger`, {
