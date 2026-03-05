@@ -3048,6 +3048,7 @@ const fireIntegrations = (trigger: string, note: any) => {
     );
 
     const isFolderGridView = !search.trim() && ((!activeFolder) || (kanbanMode && dbData.some(r => r.is_folder && r.parent_folder_name === activeFolder)));
+    const isListMode = editMode || mainListMode; // edit mode always forces list layout
     const isNoteGridView = Boolean(activeFolder) && !search.trim();
     const fitAllMode = (isFolderGridView || isNoteGridView) && displayItems.length > 12;
     const fitCols = fitAllMode ? Math.ceil(Math.sqrt(displayItems.length)) : 0;
@@ -4455,10 +4456,10 @@ const fireIntegrations = (trigger: string, note: any) => {
                     </header>
 
                     <main ref={mainScrollRef}
-                        className={`ios-mobile-main relative flex-1 ${kanbanMode && isFolderGridView ? "overflow-x-auto overflow-y-hidden touch-pan-x" : "overflow-x-hidden overflow-y-auto touch-pan-y"} overscroll-none bg-black ${(!showGlobalGraph) && !(kanbanMode && isFolderGridView) ? "pb-24 sm:pb-32" : ""} ${!mainListMode && !(kanbanMode && isFolderGridView) ? "p-1.5 sm:p-2" : ""}`}
+                        className={`ios-mobile-main relative flex-1 ${kanbanMode && isFolderGridView ? "overflow-x-auto overflow-y-hidden touch-pan-x" : "overflow-x-hidden overflow-y-auto touch-pan-y"} overscroll-none bg-black ${(!showGlobalGraph) && !(kanbanMode && isFolderGridView) ? "pb-24 sm:pb-32" : ""} ${!isListMode && !(kanbanMode && isFolderGridView) ? "p-1.5 sm:p-2" : ""}`}
                         style={kanbanMode && isFolderGridView
                             ? { display: "flex", flexDirection: "column", height: "100%", overflowX: "auto", overflowY: "hidden" }
-                            : mainListMode
+                            : isListMode
                                 ? { display: "block" }
                                 : { display: "grid", gridTemplateColumns: `repeat(${gridCols}, 1fr)`, gap: "6px", alignContent: "start", alignItems: "start" }}
                     >
@@ -4575,7 +4576,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 return (
                                     <div key={item.id || `hdr-${idx}`}
                                         className="px-4 pt-4 pb-1 text-[9px] font-black tracking-[0.2em] text-zinc-600 uppercase select-none"
-                                        style={!mainListMode ? { gridColumn: "1 / -1" } : undefined}>
+                                        style={!isListMode ? { gridColumn: "1 / -1" } : undefined}>
                                         {item._header}
                                     </div>
                                 );
@@ -4669,16 +4670,16 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             setEditorOpen(true);
                                         }
                                     }}
-                                    style={mainListMode
+                                    style={isListMode
                                         ? { position: "relative", isolation: "isolate", "--row-color": item.color || item.folder_color || "#ffffff" } as React.CSSProperties
                                         : item.is_folder
                                         ? { position: "relative", isolation: "isolate", backgroundColor: item.color || item.folder_color || "#888888" }
                                         : { position: "relative", isolation: "isolate", backgroundColor: `${item.color || item.folder_color || "#888888"}55`, border: `1.5px solid ${item.color || item.folder_color || "#888888"}88` }}
-                                    className={`${mainListMode
+                                    className={`${isListMode
                                         ? `group list-row-hover flex items-center gap-3 px-4 py-1 border-b border-white/5 cursor-pointer select-none transition-colors active:bg-white/10 overflow-hidden ${isDragging ? "opacity-30" : dt?.mode === "into" ? "bg-cyan-950/60 ring-1 ring-inset ring-cyan-400" : ""} ${isSelectMode && !item.is_folder && selectedIds.has(String(item.id)) ? "bg-blue-950/50" : ""} ${isFolderSelectMode && item.is_folder && selectedFolderNames.includes(item.name || "") ? "bg-emerald-950/50" : ""}`
                                         : `relative min-w-0 cursor-pointer transition-all group overflow-hidden ${isDragging ? "opacity-30 scale-95" : dt?.mode === "into" ? "ring-4 ring-cyan-400 ring-inset z-10" : ""} ${isSelectMode && !item.is_folder && selectedIds.has(String(item.id)) ? "ring-2 ring-inset ring-blue-500" : ""} ${isFolderSelectMode && item.is_folder && selectedFolderNames.includes(item.name || "") ? "ring-2 ring-inset ring-emerald-500" : ""}`}`}>
                                     {/* HeroCard — cursor spotlight + snake border */}
-                                    {mainListMode && glowCard?.id === tileId && (() => {
+                                    {isListMode && glowCard?.id === tileId && (() => {
                                         const c = item.color || item.folder_color || "#888888";
                                         const hex = c.replace("#", "").padEnd(6, "0");
                                         const r = parseInt(hex.substring(0, 2), 16);
@@ -4697,13 +4698,13 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     })()}
                                     {/* Insertion line indicator — before */}
                                     {dt?.mode === "before" && (
-                                        <div className={`absolute z-20 bg-cyan-400 pointer-events-none ${mainListMode ? "left-0 right-0 top-0 h-0.5" : "top-0 left-0 bottom-0 w-1"}`} />
+                                        <div className={`absolute z-20 bg-cyan-400 pointer-events-none ${isListMode ? "left-0 right-0 top-0 h-0.5" : "top-0 left-0 bottom-0 w-1"}`} />
                                     )}
                                     {/* Insertion line indicator — after */}
                                     {dt?.mode === "after" && (
-                                        <div className={`absolute z-20 bg-cyan-400 pointer-events-none ${mainListMode ? "left-0 right-0 bottom-0 h-0.5" : "top-0 right-0 bottom-0 w-1"}`} />
+                                        <div className={`absolute z-20 bg-cyan-400 pointer-events-none ${isListMode ? "left-0 right-0 bottom-0 h-0.5" : "top-0 right-0 bottom-0 w-1"}`} />
                                     )}
-                                    {mainListMode ? (
+                                    {isListMode ? (
                                         <>
                                             {isFolderSelectMode && item.is_folder && (
                                                 <div className={`w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center border-2 transition-all ${selectedFolderNames.includes(item.name || "") ? selectedFolderNames[0] === item.name ? "bg-emerald-400 border-emerald-400" : "bg-emerald-600 border-emerald-600" : "border-zinc-600"}`}>
@@ -4861,7 +4862,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 </div>
                             );
                         })}
-                        {isNoteGridView && !mainListMode && !fitAllMode && displayItems.length > 0 && Array.from({ length: (gridCols - (displayItems.length % gridCols)) % gridCols }).map((_, i) => (
+                        {isNoteGridView && !isListMode && !fitAllMode && displayItems.length > 0 && Array.from({ length: (gridCols - (displayItems.length % gridCols)) % gridCols }).map((_, i) => (
                             <button
                                 key={`filler-${i}`}
                                 onClick={(e) => { e.stopPropagation(); openNewNote(); }}
@@ -4881,7 +4882,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                             </div>
                         )}
                         {/* Stats footer — desktop list mode only */}
-                        {mainListMode && !isEmptyView && (() => {
+                        {isListMode && !isEmptyView && (() => {
                             const realItems = displayItems.filter((i: any) => !i._header);
                             const fCount = realItems.filter((i: any) => i.is_folder).length;
                             const nCount = realItems.filter((i: any) => !i.is_folder).length;
