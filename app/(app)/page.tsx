@@ -549,17 +549,28 @@ export default function NotesMaster() {
     }, []);
     const enterFolder = useCallback((frame: { id: string; name: string; color: string }) => {
         setFolderStack((prev) => {
-            // Build full parent chain so URL always reflects the complete path
-            const buildPath = (name: string): { id: string; name: string; color: string }[] => {
+            // Build path from a known row id — avoids name collisions across parent folders
+            const buildPathFromId = (id: string): { id: string; name: string; color: string }[] | null => {
+                if (!id || id.startsWith("virtual-")) return null;
+                const row = dbData.find((r: any) => r.is_folder && String(r.id) === id);
+                if (!row) return null;
+                const f = { id: String(row.id), name: row.folder_name, color: row.folder_color || palette12[0] };
+                if (!row.parent_folder_name) return [f];
+                const parentRow = dbData.find((r: any) => r.is_folder && r.folder_name === row.parent_folder_name);
+                if (!parentRow) return [f];
+                const parentPath = buildPathFromId(String(parentRow.id));
+                return parentPath ? [...parentPath, f] : [f];
+            };
+            // Fallback: name-based path for virtual folders
+            const buildPathByName = (name: string): { id: string; name: string; color: string }[] => {
                 const row = dbData.find((r: any) => r.is_folder && r.folder_name === name);
                 const parent = row?.parent_folder_name;
                 const color = row?.folder_color || palette12[0];
                 const f = { id: row?.id || `virtual-${name}`, name, color };
                 if (!parent) return [f];
-                return [...buildPath(parent), f];
+                return [...buildPathByName(parent), f];
             };
-            // If we're already in a parent that matches, just append; otherwise rebuild from root
-            const fullPath = buildPath(frame.name);
+            const fullPath = buildPathFromId(frame.id) ?? buildPathByName(frame.name);
             const alreadyCorrect = prev.length > 0 && fullPath.slice(0, -1).map(f => f.name).join("/") === prev.map(f => f.name).join("/");
             return alreadyCorrect ? [...prev, frame] : fullPath;
         });
