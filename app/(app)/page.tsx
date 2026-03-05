@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { usePageMeta } from "@/lib/usePageMeta";
+import { RichTextEditor } from "@/components/RichTextEditor";
 
 // Icons
 import MagnifyingGlassIcon from "@heroicons/react/24/outline/MagnifyingGlassIcon";
@@ -139,11 +140,10 @@ function meaningfulInitial(text: string, fallback = "N"): string {
     return (first ?? fallback).toUpperCase();
 }
 
-/** Auto-detect HTML content — requires ≥3 opening tags or a DOCTYPE */
+/** Auto-detect full HTML documents — only DOCTYPE or <html> tag, not TipTap fragment HTML */
 function detectHtml(text: string): boolean {
     const t = text.trim();
-    if (/<!DOCTYPE\s+html/i.test(t)) return true;
-    return (t.match(/<[a-z][a-z0-9]*[\s/>]/gi) || []).length >= 3;
+    return /<!DOCTYPE\s+html/i.test(t) || /^\s*<html[\s>]/i.test(t);
 }
 
 /** Auto-detect Markdown — strong signals only; plain `-` lists or `*` bullets do NOT qualify */
@@ -3622,6 +3622,32 @@ const fireIntegrations = (trigger: string, note: any) => {
                             rgba(255,255,255,0.055) 8px
                         );
                 }
+                .rich-editor { display: flex; flex-direction: column; }
+                .rich-editor .tiptap { flex: 1; min-height: 100%; outline: none; padding: 1rem 2rem; color: #e4e4e7; line-height: 1.7; font-family: ui-sans-serif, system-ui, sans-serif; font-size: 14px; }
+                .rich-editor .tiptap p { margin: 0.5em 0; }
+                .rich-editor .tiptap p.is-editor-empty:first-child::before { content: attr(data-placeholder); color: #52525b; pointer-events: none; float: left; height: 0; }
+                .rich-editor .tiptap h1,.rich-editor .tiptap h2,.rich-editor .tiptap h3 { font-weight: 900; text-transform: uppercase; letter-spacing: -0.02em; color: #fff; margin: 1em 0 0.4em; }
+                .rich-editor .tiptap h1 { font-size: 1.4rem; border-bottom: 2px solid rgba(255,255,255,0.12); padding-bottom: 0.3em; }
+                .rich-editor .tiptap h2 { font-size: 1.1rem; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 0.2em; }
+                .rich-editor .tiptap h3 { font-size: 0.95rem; }
+                .rich-editor .tiptap ul,.rich-editor .tiptap ol { padding-left: 1.5em; margin: 0.5em 0; }
+                .rich-editor .tiptap li { margin: 0.2em 0; }
+                .rich-editor .tiptap ul li { list-style-type: disc; }
+                .rich-editor .tiptap ol li { list-style-type: decimal; }
+                .rich-editor .tiptap li::marker { color: #71717a; }
+                .rich-editor .tiptap strong { font-weight: 900; color: #fff; }
+                .rich-editor .tiptap em { font-style: italic; color: #d4d4d8; }
+                .rich-editor .tiptap code { font-family: ui-monospace, monospace; font-size: 0.85em; background: rgba(255,255,255,0.08); padding: 0.15em 0.4em; border-radius: 3px; color: #67e8f9; }
+                .rich-editor .tiptap pre { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); padding: 1em; margin: 0.75em 0; overflow-x: auto; border-radius: 4px; }
+                .rich-editor .tiptap pre code { background: none; padding: 0; color: #a5f3fc; }
+                .rich-editor .tiptap blockquote { border-left: 3px solid rgba(255,255,255,0.2); padding-left: 1em; margin: 0.75em 0; color: #71717a; font-style: italic; }
+                .rich-editor .tiptap a { color: #38bdf8; text-decoration: underline; cursor: pointer; }
+                .rich-editor .tiptap img { max-width: 100%; height: auto; border-radius: 6px; margin: 0.75em 0; display: block; border: 1px solid rgba(255,255,255,0.08); cursor: pointer; }
+                .rich-editor .tiptap hr { border: none; border-top: 1px solid rgba(255,255,255,0.1); margin: 1.5em 0; }
+                .rich-editor .tiptap ul[data-type="taskList"] { list-style: none; padding-left: 0.5em; }
+                .rich-editor .tiptap ul[data-type="taskList"] li { display: flex; align-items: flex-start; gap: 0.5em; }
+                .rich-editor .tiptap ul[data-type="taskList"] li > label { flex-shrink: 0; margin-top: 0.2em; }
+                .rich-editor .tiptap ul[data-type="taskList"] li input[type="checkbox"] { accent-color: #38bdf8; cursor: pointer; }
                 .md-preview { color: #e4e4e7; line-height: 1.6; font-family: ui-sans-serif, system-ui, sans-serif; font-size: 9px; text-align: left; }
                 .md-preview h1,.md-preview h2,.md-preview h3,.md-preview h4,.md-preview h5,.md-preview h6 { font-weight: 900; text-transform: uppercase; letter-spacing: -0.02em; color: #fff; margin: 1em 0 0.4em; line-height: 1.2; text-align: left; }
                 .md-preview h1 { font-size: 1.3rem; border-bottom: 2px solid rgba(255,255,255,0.12); padding-bottom: 0.3em; }
@@ -4243,127 +4269,26 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 sandbox="allow-scripts"
                                 title="HTML Preview"
                             />
-                        ) : markdownMode ? (
-                            <div
-                                className="flex-1 overflow-y-auto p-4 sm:p-8 ios-editor-scroll"
-                                onClick={(e) => {
-                                    const btn = (e.target as HTMLElement).closest(".copy-code-btn");
-                                    if (btn) {
-                                        e.stopPropagation();
-                                        const code = btn.nextElementSibling?.querySelector("code");
-                                        if (code) {
-                                            navigator.clipboard.writeText(code.textContent ?? "").catch(() => {});
-                                            btn.textContent = "Copied!";
-                                            btn.classList.add("copied");
-                                            setTimeout(() => { btn.textContent = "Copy"; btn.classList.remove("copied"); }, 1500);
-                                        }
-                                        return;
-                                    }
-                                    // Image click → show size picker, stay in rich text
-                                    const img = (e.target as HTMLElement).closest("img");
-                                    if (img) {
-                                        e.stopPropagation();
-                                        const rect = img.getBoundingClientRect();
-                                        setImgPopover({ src: img.getAttribute("src") ?? "", alt: img.getAttribute("alt") ?? "", x: rect.left + rect.width / 2, y: rect.bottom + 8 });
-                                        return;
-                                    }
-                                    setImgPopover(null);
-                                    // Don't switch to raw textarea if content has embedded base64 images
-                                    if (!content.includes("data:image")) toggleMarkdownMode();
-                                }}
-                                title="Click to edit"
-                            >
-                                {content.trim() ? (
-                                    <div
-                                        className="md-preview w-full"
-                                        dangerouslySetInnerHTML={{ __html: marked.parse(content, { renderer: mdRenderer }) as string }}
-                                    />
-                                ) : (
-                                    <div className="flex items-center justify-center h-full">
-                                        <p className="text-zinc-600 text-sm font-bold uppercase tracking-wide">No content — click to edit</p>
-                                    </div>
-                                )}
-                                {/* Image size picker popover */}
-                                {imgPopover && (
-                                    <div
-                                        className="fixed z-50 flex items-center gap-1 px-2 py-1.5 rounded-lg shadow-xl border border-white/10"
-                                        style={{ left: imgPopover.x, top: imgPopover.y, transform: "translateX(-50%)", background: "rgba(20,20,20,0.95)", backdropFilter: "blur(12px)" }}
-                                    >
-                                        {[["S", "25%"], ["M", "50%"], ["L", "75%"], ["Full", "100%"]].map(([label, w]) => (
-                                            <button key={w} type="button"
-                                                className="px-2 py-0.5 rounded text-[11px] font-black hover:bg-white/10 transition text-white/70 hover:text-white"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    setContent(prev => resizeImageInContent(prev, imgPopover.src, w));
-                                                    setImgPopover(null);
-                                                }}
-                                            >{label}</button>
-                                        ))}
-                                        <button type="button" className="ml-1 px-1.5 py-0.5 rounded text-[11px] font-black text-red-400/70 hover:text-red-400 hover:bg-white/10 transition"
-                                            onClick={(e) => { e.stopPropagation(); setImgPopover(null); }}>✕</button>
-                                    </div>
-                                )}
-                            </div>
                         ) : (
-                        <>
-                        <div className="hidden sm:block w-10 bg-black/60 border-r border-white/10 text-white/60 text-[9px] font-black select-none overflow-hidden" aria-hidden="true">
-                            <div style={{ transform: `translateY(-${editorScrollTop}px)`, paddingTop: `${editorPaddingTop}px` }}>
-                                {content.split("\n").map((_, i) => (
-                                    <div key={i} className={`text-center transition-colors ${activeLine === i ? "text-white" : "text-white/60"}`} style={{ height: `${editorLineHeight}px`, lineHeight: `${editorLineHeight}px` }}>
-                                        {i + 1}
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                        <div className="relative flex-1">
-                            <textarea
-                                ref={editorTextRef}
-                                value={content}
-                                onChange={(e) => {
-                                    setContent(e.target.value);
-                                    handleCursorUpdate(e);
+                            <RichTextEditor
+                                key={currentNoteId ?? "new"}
+                                noteId={currentNoteId}
+                                content={content}
+                                onChange={(html) => setContent(html)}
+                                onBlur={() => void saveNote({ silent: false })}
+                                onUploadImage={async (file) => {
+                                    const token = await getAuthToken();
+                                    const fd = new FormData();
+                                    fd.append("file", file, `image.${file.type.split("/")[1] ?? "png"}`);
+                                    if (currentNoteId) fd.append("noteId", currentNoteId);
+                                    const r1 = await fetch("/api/stickies/gdrive", { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd });
+                                    if (r1.ok) { const d = await r1.json(); if (d.url) return d.url as string; }
+                                    const r2 = await fetch("/api/stickies/upload", { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd });
+                                    const d2 = await r2.json();
+                                    return (d2.url as string) ?? "";
                                 }}
-                                onKeyUp={handleCursorUpdate}
-                                onClick={(e) => {
-                                    closeEditorTools();
-                                    handleCursorUpdate(e);
-                                }}
-                                onScroll={handleEditorScroll}
-                                onFocus={(e) => {
-                                    closeEditorTools();
-                                    handleCursorUpdate(e);
-                                }}
-                                onBlur={() => {
-                                    void saveNote({ silent: false });
-                                }}
-                                onPaste={handleEditorPaste}
-                                className="note-textarea ios-editor-scroll relative z-10 w-full h-full bg-black pt-2 px-3 pb-3 outline-none resize-none font-mono leading-5 overflow-x-hidden overscroll-none touch-pan-y"
-                                style={{ caretColor: activeAccentColor, paddingRight: "80px" }}
-                                placeholder="START TYPING..."
+                                accentColor={activeAccentColor}
                             />
-                            {/* Floating copy button */}
-                            {content && (
-                                <button
-                                    type="button"
-                                    aria-label="Copy content"
-                                    onClick={() => {
-                                        secureCopy(content);
-                                        setCopiedContent(true);
-                                        setTimeout(() => setCopiedContent(false), 2000);
-                                    }}
-                                    className="absolute top-2 right-2 z-20 flex items-center justify-center w-7 h-7 rounded-md transition-all"
-                                    style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.12)" }}
-                                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.15)"; }}
-                                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.08)"; }}
-                                >
-                                    {copiedContent
-                                        ? <CheckIcon className="w-3.5 h-3.5 text-emerald-400" />
-                                        : <DocumentDuplicateIcon className="w-3.5 h-3.5 text-zinc-400" />
-                                    }
-                                </button>
-                            )}
-                        </div>
-                        </>
                         )}
                     </div>
 
