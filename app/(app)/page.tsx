@@ -4096,7 +4096,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     >
                                         {/* Delete backing — revealed on swipe */}
                                         <div className="absolute inset-y-0 right-0 flex items-center justify-center transition-all"
-                                            style={{ width: Math.max(SNAP_W, rowOffset), background: isFullDelete ? "#ef4444" : "#991b1b" }}>
+                                            style={{ width: rowOffset, background: isFullDelete ? "#ef4444" : "#991b1b" }}>
                                             <TrashIcon className="w-5 h-5 text-white" />
                                         </div>
                                         {/* Sliding content */}
