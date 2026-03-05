@@ -168,6 +168,21 @@ function previewText(raw: string): string {
         .trim();
 }
 
+/** Resize an image in markdown content by src. Replaces or wraps with HTML img tag. */
+function resizeImageInContent(md: string, src: string, width: string): string {
+    const escapedSrc = src.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    // Replace existing <img> tag with this src
+    md = md.replace(new RegExp(`<img[^>]*src=["']${escapedSrc}["'][^>]*>`, "g"), (match) => {
+        const alt = match.match(/alt=["']([^"']*)["']/)?.[1] ?? "";
+        return width === "100%" ? `![${alt}](${src})` : `<img src="${src}" alt="${alt}" style="width:${width};max-width:100%">`;
+    });
+    // Replace markdown image syntax ![alt](src)
+    md = md.replace(new RegExp(`!\\[([^\\]]*)\\]\\(${escapedSrc}\\)`, "g"), (_match, alt) => {
+        return width === "100%" ? `![${alt}](${src})` : `<img src="${src}" alt="${alt}" style="width:${width};max-width:100%">`;
+    });
+    return md;
+}
+
 function looksLikeUrl(text: string): boolean {
     const t = text.trim();
     return /^https?:\/\/\S+$/.test(t);
@@ -710,6 +725,7 @@ export default function NotesMaster() {
     const colScrollRef = useRef<HTMLDivElement | null>(null);
     const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set());
     const [glowCard, setGlowCard] = useState<{ id: string; x: number; y: number } | null>(null);
+    const [imgPopover, setImgPopover] = useState<{ src: string; alt: string; x: number; y: number } | null>(null);
     const [now, setNow] = useState(() => new Date());
     const [showCmdK, setShowCmdK] = useState(false);
     const [cmdKQuery, setCmdKQuery] = useState("");
@@ -4243,6 +4259,15 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         }
                                         return;
                                     }
+                                    // Image click → show size picker, stay in rich text
+                                    const img = (e.target as HTMLElement).closest("img");
+                                    if (img) {
+                                        e.stopPropagation();
+                                        const rect = img.getBoundingClientRect();
+                                        setImgPopover({ src: img.getAttribute("src") ?? "", alt: img.getAttribute("alt") ?? "", x: rect.left + rect.width / 2, y: rect.bottom + 8 });
+                                        return;
+                                    }
+                                    setImgPopover(null);
                                     // Don't switch to raw textarea if content has embedded base64 images
                                     if (!content.includes("data:image")) toggleMarkdownMode();
                                 }}
@@ -4256,6 +4281,26 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 ) : (
                                     <div className="flex items-center justify-center h-full">
                                         <p className="text-zinc-600 text-sm font-bold uppercase tracking-wide">No content — click to edit</p>
+                                    </div>
+                                )}
+                                {/* Image size picker popover */}
+                                {imgPopover && (
+                                    <div
+                                        className="fixed z-50 flex items-center gap-1 px-2 py-1.5 rounded-lg shadow-xl border border-white/10"
+                                        style={{ left: imgPopover.x, top: imgPopover.y, transform: "translateX(-50%)", background: "rgba(20,20,20,0.95)", backdropFilter: "blur(12px)" }}
+                                    >
+                                        {[["S", "25%"], ["M", "50%"], ["L", "75%"], ["Full", "100%"]].map(([label, w]) => (
+                                            <button key={w} type="button"
+                                                className="px-2 py-0.5 rounded text-[11px] font-black hover:bg-white/10 transition text-white/70 hover:text-white"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setContent(prev => resizeImageInContent(prev, imgPopover.src, w));
+                                                    setImgPopover(null);
+                                                }}
+                                            >{label}</button>
+                                        ))}
+                                        <button type="button" className="ml-1 px-1.5 py-0.5 rounded text-[11px] font-black text-red-400/70 hover:text-red-400 hover:bg-white/10 transition"
+                                            onClick={(e) => { e.stopPropagation(); setImgPopover(null); }}>✕</button>
                                     </div>
                                 )}
                             </div>
