@@ -50,13 +50,14 @@ function assert(label: string, condition: boolean, detail = "") {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-/** Create a 1×1 red PNG as a Buffer (minimal valid PNG, 67 bytes). */
-function tiny1x1Png(): Buffer {
-    return Buffer.from(
+/** Create a 1×1 red PNG as a Uint8Array (minimal valid PNG, 67 bytes). */
+function tiny1x1Png(): Uint8Array {
+    const buf = Buffer.from(
         "89504e470d0a1a0a0000000d49484452000000010000000108020000009001" +
         "2e00000000c4944415478016360f8cfc00000000200016e21bc330000000049454e44ae426082",
         "hex"
     );
+    return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
 }
 
 async function createTestUser(email: string): Promise<string> {
