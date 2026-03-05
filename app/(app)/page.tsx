@@ -1931,10 +1931,13 @@ const fireIntegrations = (trigger: string, note: any) => {
         const imageItems = items.filter((i) => i.type.startsWith("image/"));
         const htmlData = e.clipboardData.getData("text/html");
 
-        // Rich HTML paste (Notion, Google Docs, etc.) — only if NOT explicitly in plain text mode
+        // Rich HTML paste (Notion, Google Docs, etc.)
+        // Always convert if HTML contains images (images can't be plain text).
+        // Skip for non-image rich text if note is explicitly in plain text mode.
         const nid = editingNote?.id ? String(editingNote.id) : null;
         const isPlainTextMode = nid ? markdownModeNotes.has(nid) : false;
-        if (!isPlainTextMode && htmlData && htmlData.includes("<") && (htmlData.includes("<img") || htmlData.includes("<h") || htmlData.includes("<strong") || htmlData.includes("<li") || htmlData.includes("<p"))) {
+        const htmlHasImages = htmlData.includes("<img");
+        if (htmlData && htmlData.includes("<") && (htmlHasImages || htmlData.includes("<h") || htmlData.includes("<strong") || htmlData.includes("<li") || htmlData.includes("<p")) && (!isPlainTextMode || htmlHasImages)) {
             e.preventDefault();
             const textarea = e.currentTarget;
             const start = textarea.selectionStart ?? content.length;
