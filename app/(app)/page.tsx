@@ -1889,7 +1889,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         setTitle(isStandup ? dateStr : "");
         setContent("");
         setImages([]);
-        setTargetFolder(activeFolder || "General");
+        setTargetFolder(activeFolder || (editMode ? "Work" : "General"));
         setNoteColor(pickUniqueColor());
         shouldFocusTitleOnOpenRef.current = !isStandup;
         closeEditorTools();
@@ -1897,7 +1897,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         setEditorScrollTop(0);
         setEditorOpen(true);
         playSound("create");
-    }, [activeFolder, closeEditorTools, pickUniqueColor]);
+    }, [activeFolder, editMode, closeEditorTools, pickUniqueColor]);
 
     const showToast = (msg: string, color = "#34C759") => {
         setToastColor(color);
