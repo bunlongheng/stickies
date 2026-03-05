@@ -3882,7 +3882,7 @@ const fireIntegrations = (trigger: string, note: any) => {
             <div className={`flex-1 min-h-0 overflow-hidden flex ${editMode ? "flex-row" : "flex-col"}`}>
 
                 {/* RIGHT PANEL: editor — only shown in edit mode or when a note is open (mobile nav) */}
-                <div className={`flex-1 flex flex-col overflow-hidden ${editMode ? "flex" : editorOpen ? "flex" : "hidden"}`}>
+                <div className={`flex-1 flex flex-col overflow-hidden ${editMode ? "order-last flex" : editorOpen ? "flex" : "hidden"}`}>
                 {editorOpen ? (
                 <section className="flex-1 min-h-0 flex flex-col overflow-hidden overscroll-none" onClick={(e) => e.stopPropagation()}>
                     {pendingShare && (
@@ -4343,7 +4343,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                 </div>{/* ── end right panel ── */}
 
                 {/* LEFT PANEL: slim notes list */}
-                <div className={`bg-black flex flex-col overflow-hidden ${editMode ? "w-[240px] min-w-[180px] max-w-[300px] flex-shrink-0 border-r border-white/10" : editorOpen ? "hidden" : "flex-1"}`}>
+                <div className={`bg-black flex flex-col overflow-hidden ${editMode ? "order-first w-[240px] min-w-[180px] max-w-[300px] flex-shrink-0 border-r border-white/10" : editorOpen ? "hidden" : "flex-1"}`}>
                 <>
                     <div className="safe-top-bar shrink-0 bg-black sticky top-0 z-40" />
                     <header className="ios-mobile-header relative h-auto min-h-[4rem] px-4 flex items-center gap-2 sticky top-0 bg-zinc-900 z-40 shrink-0">
