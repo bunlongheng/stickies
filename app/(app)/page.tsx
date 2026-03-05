@@ -873,6 +873,9 @@ export default function NotesMaster() {
             }
             if (Array.isArray(integrationsResult)) {
                 integrationsRef.current = integrationsResult;
+                // Sync lightMode from persisted Hue config on initial load
+                const hueInt = integrationsResult.find((ig: any) => ig.type === "hue");
+                if (hueInt?.config?.mode) setLightMode(hueInt.config.mode as any);
             }
         } finally {
             setIsDataLoaded(true);
@@ -5778,7 +5781,9 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                     title={MODES.find(m => m.key === key)?.desc}
                                                     className={`flex-1 py-2 rounded text-[10px] font-black uppercase tracking-wide transition ${lightMode === key ? "bg-white text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"}`}
                                                     onClick={async () => {
+                                                        const prev = lightMode;
                                                         setLightMode(key);
+                                                        playSound("click");
                                                         const updatedConfig = { ...hueInt.config, mode: key };
                                                         integrationsRef.current = integrationsRef.current.map(ig =>
                                                             ig.type === "hue" ? { ...ig, config: updatedConfig } : ig
@@ -5789,7 +5794,13 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                                 headers: { "Authorization": `Bearer ${await getAuthToken()}`, "Content-Type": "application/json" },
                                                                 body: JSON.stringify({ config: updatedConfig }),
                                                             });
-                                                        } catch { /* ignore */ }
+                                                            showToast(`💡 Lights: ${label}`, "#FFD60A");
+                                                        } catch {
+                                                            setLightMode(prev);
+                                                            integrationsRef.current = integrationsRef.current.map(ig =>
+                                                                ig.type === "hue" ? { ...ig, config: { ...updatedConfig, mode: prev } } : ig
+                                                            );
+                                                        }
                                                     }}
                                                 >{label}</button>
                                             ))}
