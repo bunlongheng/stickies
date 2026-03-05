@@ -351,35 +351,6 @@ export async function POST(req: Request) {
 
     if (auth.type === "apikey") {
         try { await getPusher().trigger("stickies", "note-created", data); } catch {}
-
-        // Fire Hue + log automation run
-        const sb2 = getSupabase();
-        const { data: automation } = await sb2
-            .from("automations")
-            .select("id, name")
-            .eq("trigger_type", "note_created")
-            .eq("action_type", "hue_flash")
-            .eq("active", true)
-            .single();
-
-        const hueRes = await fetch(`${process.env.PROD_BASE_URL ?? "https://bheng.vercel.app"}/api/hue/trigger`, {
-            method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ color: folder_color }),
-        }).catch(() => null);
-
-        const result = hueRes?.ok ? "success" : "error";
-
-        if (automation) {
-            await sb2.from("automation_logs").insert({
-                automation_id: automation.id,
-                automation_name: automation.name,
-                triggered_at: new Date().toISOString(),
-                result,
-                detail: `Note "${data.title}" posted to ${data.folder_name}`,
-                via: "api",
-                trigger_payload: { note_id: data.id, title: data.title, folder_name: data.folder_name },
-            }).catch(() => {});
-        }
     }
 
     return NextResponse.json({ note: data }, { status: 201 });
