@@ -3006,7 +3006,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         [animateFolderFabBack],
     );
 
-    const isFolderGridView = !activeFolder && !search.trim();
+    const isFolderGridView = !search.trim() && ((!activeFolder) || (kanbanMode && currentLevelFolders.length > 0));
     const isNoteGridView = Boolean(activeFolder) && !search.trim();
     const fitAllMode = (isFolderGridView || isNoteGridView) && displayItems.length > 12;
     const fitCols = fitAllMode ? Math.ceil(Math.sqrt(displayItems.length)) : 0;
