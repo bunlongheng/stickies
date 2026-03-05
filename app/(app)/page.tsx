@@ -1849,13 +1849,16 @@ const fireIntegrations = (trigger: string, note: any) => {
     }, [dbData]);
 
     const openNewNote = useCallback(() => {
+        const isStandup = (activeFolder || "").toLowerCase() === "standup";
+        const today = new Date();
+        const dateStr = `${today.getMonth() + 1}/${today.getDate()}/${String(today.getFullYear()).slice(-2)}`;
         setEditingNote(null);
-        setTitle("");
+        setTitle(isStandup ? dateStr : "");
         setContent("");
         setImages([]);
         setTargetFolder(activeFolder || "General");
         setNoteColor(pickUniqueColor());
-        shouldFocusTitleOnOpenRef.current = true;
+        shouldFocusTitleOnOpenRef.current = !isStandup;
         closeEditorTools();
         setActiveLine(0);
         setEditorScrollTop(0);
