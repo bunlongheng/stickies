@@ -740,8 +740,6 @@ export default function NotesMaster() {
         url: `${origin}/`,
         basePath: "/icons/stickies",
         themeColor: lastNote?.color || lastNote?.folder_color || "#007AFF",
-        manifest: "/stickies.webmanifest",
-        faviconLetter: lastNote ? ([...(lastNote.title || "S")][0] || "S").toUpperCase() : "S",
     });
 
     const setFolderFabOffsetWithRef = useCallback((next: { x: number; y: number }) => {
