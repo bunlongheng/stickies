@@ -3685,7 +3685,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                 .list-snake-path {
                     stroke-dasharray: 24 76;
                     stroke-dashoffset: 0;
-                    animation: snakeAround 1.5s linear infinite;
+                    animation: snakeAround 1.5s linear 1 forwards;
                 }
                 @keyframes folderFabPulse {
                     0% {
@@ -4722,11 +4722,13 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         const b = parseInt(hex.substring(4, 6), 16);
                                         return (
                                             <>
-                                                {/* Background glow — behind text/icon */}
-                                                <div className="absolute inset-0 pointer-events-none z-[-1]" style={{ background: `radial-gradient(circle at ${glowCard.x}% ${glowCard.y}%, rgba(${r},${g},${b},0.4) 0%, rgba(${r},${g},${b},0.2) 50%, rgba(${r},${g},${b},0.03) 100%)`, transition: "background 0.05s" }} />
-                                                {/* Snake border — 1px stroke crawling around the row in 10s */}
+                                                {/* Background glow — list mode only (looks glossy/buggy on thumbnails) */}
+                                                {mainListMode && (
+                                                    <div className="absolute inset-0 pointer-events-none z-[-1]" style={{ background: `radial-gradient(circle at ${glowCard.x}% ${glowCard.y}%, rgba(${r},${g},${b},0.4) 0%, rgba(${r},${g},${b},0.2) 50%, rgba(${r},${g},${b},0.03) 100%)`, transition: "background 0.05s" }} />
+                                                )}
+                                                {/* Snake border — 1 round */}
                                                 <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 2 }}>
-                                                    <rect className="list-snake-path" x="0" y="0" width="100%" height="100%" fill="none" stroke={c} strokeWidth="2" pathLength="100" />
+                                                    <rect className="list-snake-path" x="0" y="0" width="100%" height="100%" fill="none" stroke={c} strokeWidth="2" pathLength="100" style={{ animationIterationCount: 1, animationFillMode: "forwards" }} />
                                                 </svg>
                                             </>
                                         );
