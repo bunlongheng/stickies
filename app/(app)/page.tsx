@@ -4711,7 +4711,9 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     }}
                                     style={mainListMode
                                         ? { position: "relative", isolation: "isolate", "--row-color": item.color || item.folder_color || "#ffffff" } as React.CSSProperties
-                                        : { position: "relative", isolation: "isolate", backgroundColor: item.color || item.folder_color || "#888888", boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.35), inset 0 -2px 8px rgba(0,0,0,0.25)" }}
+                                        : item.is_folder
+                                        ? { position: "relative", isolation: "isolate", backgroundColor: item.color || item.folder_color || "#888888" }
+                                        : { position: "relative", isolation: "isolate", backgroundColor: "transparent", outline: `2px solid ${item.color || item.folder_color || "#888888"}`, outlineOffset: "-2px" }}
                                     className={`${mainListMode
                                         ? `group list-row-hover flex items-center gap-3 px-4 py-1 border-b border-white/5 cursor-pointer select-none transition-colors active:bg-white/10 overflow-hidden ${isDragging ? "opacity-30" : dt?.mode === "into" ? "bg-cyan-950/60 ring-1 ring-inset ring-cyan-400" : ""} ${isSelectMode && !item.is_folder && selectedIds.has(String(item.id)) ? "bg-blue-950/50" : ""} ${isFolderSelectMode && item.is_folder && selectedFolderNames.includes(item.name || "") ? "bg-emerald-950/50" : ""}`
                                         : `relative min-w-0 cursor-pointer transition-all group overflow-hidden ${isDragging ? "opacity-30 scale-95" : dt?.mode === "into" ? "ring-4 ring-cyan-400 ring-inset z-10" : ""} ${isSelectMode && !item.is_folder && selectedIds.has(String(item.id)) ? "ring-2 ring-inset ring-blue-500" : ""} ${isFolderSelectMode && item.is_folder && selectedFolderNames.includes(item.name || "") ? "ring-2 ring-inset ring-emerald-500" : ""}`}`}>
@@ -4887,8 +4889,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                     </>
                                                 ) : (
                                                     <>
-                                                        <div className={`${fitAllMode ? "text-2xl sm:text-3xl" : "text-3xl sm:text-4xl"} font-black text-white uppercase leading-none`}>{[...(item.title || "N")][0]}</div>
-                                                        <div className="text-[7px] sm:text-[8px] font-semibold text-white leading-tight mt-0.5 line-clamp-2 w-full">{item.title}</div>
+                                                        <div className={`${fitAllMode ? "text-2xl sm:text-3xl" : "text-3xl sm:text-4xl"} font-black uppercase leading-none`} style={{ color: item.color || item.folder_color || "#888888" }}>{[...(item.title || "N")][0]}</div>
+                                                        <div className="text-[7px] sm:text-[8px] font-semibold leading-tight mt-0.5 line-clamp-2 w-full" style={{ color: item.color || item.folder_color || "#888" }}>{item.title}</div>
                                                     </>
                                                 )}
                                             </div>
