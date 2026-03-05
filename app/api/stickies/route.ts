@@ -17,6 +17,40 @@ function getSupabase() {
     );
 }
 
+// ── Folder path resolver ─────────────────────────────────────────────────────
+// "work/team" → finds "team" whose parent is "work", returns { folder_name, folder_id }
+// Plain "CLAUDE" → returns { folder_name: "CLAUDE", folder_id: null }
+async function resolveFolderPath(raw: string, table: string): Promise<{ folder_name: string; folder_id: string | null }> {
+    const parts = raw.split("/").map((p) => p.trim()).filter(Boolean);
+    if (parts.length <= 1) return { folder_name: raw.trim() || "CLAUDE", folder_id: null };
+
+    const sb = getSupabase();
+    const { data: folders } = await sb.from(table).select("id, folder_name, parent_folder_name").eq("is_folder", true);
+    const all = folders ?? [];
+
+    let parentName: string | null = null;
+    let resolved: { id: string; folder_name: string } | null = null;
+
+    for (const segment of parts) {
+        const match = all.find((f) =>
+            f.folder_name.toLowerCase() === segment.toLowerCase() &&
+            (parentName === null
+                ? !f.parent_folder_name
+                : f.parent_folder_name?.toLowerCase() === parentName.toLowerCase())
+        );
+        if (!match) {
+            // Folder segment not found — fall back to last segment as folder_name
+            return { folder_name: parts[parts.length - 1], folder_id: null };
+        }
+        resolved = { id: String(match.id), folder_name: match.folder_name };
+        parentName = match.folder_name;
+    }
+
+    return resolved
+        ? { folder_name: resolved.folder_name, folder_id: resolved.id }
+        : { folder_name: parts[parts.length - 1], folder_id: null };
+}
+
 function getPusher() {
     return new Pusher({
         appId: process.env.PUSHER_APP_ID!,
@@ -316,11 +350,10 @@ export async function POST(req: Request) {
     if (error) { console.error("[stickies POST]", error); return NextResponse.json({ error: "Database error" }, { status: 500 }); }
     try { await getPusher().trigger("stickies", "note-created", data); } catch {}
 
-    const YELLOW = "#FFCC00";
-    if (folder_color === YELLOW && process.env.HUE_LIGHT_ID) {
-        fetch(`${process.env.PROD_BASE_URL ?? "https://bheng.vercel.app"}/api/hue/flash`, {
+    if (auth.type === "apikey") {
+        fetch(`${process.env.PROD_BASE_URL ?? "https://bheng.vercel.app"}/api/hue/trigger`, {
             method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ light_id: process.env.HUE_LIGHT_ID, color: YELLOW }),
+            body: JSON.stringify({ color: folder_color }),
         }).catch(() => {});
     }
 
