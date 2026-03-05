@@ -1,6 +1,17 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import crypto from "crypto";
+import Pusher from "pusher";
+
+function getPusher() {
+    return new Pusher({
+        appId: process.env.PUSHER_APP_ID!,
+        key: process.env.PUSHER_KEY!,
+        secret: process.env.PUSHER_SECRET!,
+        cluster: process.env.PUSHER_CLUSTER!,
+        useTLS: true,
+    });
+}
 
 function getSupabase() {
     return createClient(
@@ -72,6 +83,8 @@ export async function POST(req: Request) {
     if (!title) return NextResponse.json({ error: "title required" }, { status: 400 });
     if (!content) return NextResponse.json({ error: "content required" }, { status: 400 });
 
+    const color = url.searchParams.get("color")?.trim() || "#B0B0B8";
+
     const sb = getSupabase();
     const now = new Date().toISOString();
 
@@ -80,10 +93,13 @@ export async function POST(req: Request) {
 
     const { data, error } = await sb.from("notes").insert([{
         title, content, folder_name, is_folder: false,
-        folder_color: "#B0B0B8",
+        folder_color: color,
         order: nextOrder, created_at: now, updated_at: now,
     }]).select().single();
 
     if (error) return NextResponse.json({ error: "Database error" }, { status: 500 });
+
+    try { await getPusher().trigger("stickies", "note-created", data); } catch {}
+
     return NextResponse.json({ note: data }, { status: 201 });
 }
