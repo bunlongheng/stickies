@@ -9,7 +9,7 @@ import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
 import Placeholder from '@tiptap/extension-placeholder';
 import { marked } from 'marked';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 /** Convert markdown or raw content to HTML for TipTap. */
 function toHtml(content: string): string {
@@ -130,7 +130,23 @@ interface Props {
 }
 
 export function RichTextEditor({ noteId, content, onChange, onBlur, onUploadImage, accentColor }: Props) {
+    const [uploading, setUploading] = useState(false);
+
     const uploadAndCompress = async (file: File) => onUploadImage(await compressImage(file));
+
+    // Shared helper: compress + upload files, then insert image nodes at current selection
+    const insertImages = (view: { state: import('@tiptap/pm/state').EditorState; dispatch: (tr: import('@tiptap/pm/state').Transaction) => void }, files: File[]) => {
+        setUploading(true);
+        Promise.all(files.map(f => uploadAndCompress(f))).then(urls => {
+            const { state, dispatch } = view;
+            let tr = state.tr;
+            urls.forEach(url => {
+                const node = state.schema.nodes.image?.create({ src: url, alt: 'image' });
+                if (node) tr = tr.replaceSelectionWith(node);
+            });
+            dispatch(tr);
+        }).catch(console.error).finally(() => setUploading(false));
+    };
 
     const editor = useEditor({
         immediatelyRender: false,
@@ -152,15 +168,14 @@ export function RichTextEditor({ noteId, content, onChange, onBlur, onUploadImag
                 if (imageItems.length === 0) return false;
                 event.preventDefault();
                 const files = imageItems.map(i => i.getAsFile()).filter(Boolean) as File[];
-                Promise.all(files.map(f => uploadAndCompress(f))).then(urls => {
-                    const { state, dispatch } = view;
-                    let tr = state.tr;
-                    urls.forEach(url => {
-                        const node = state.schema.nodes.image?.create({ src: url, alt: 'image' });
-                        if (node) tr = tr.replaceSelectionWith(node);
-                    });
-                    dispatch(tr);
-                }).catch(console.error);
+                insertImages(view, files);
+                return true;
+            },
+            handleDrop(view, event) {
+                const files = Array.from((event as DragEvent).dataTransfer?.files ?? []).filter(f => f.type.startsWith('image/'));
+                if (files.length === 0) return false;
+                event.preventDefault();
+                insertImages(view, files);
                 return true;
             },
             attributes: { class: 'rich-editor-content', spellcheck: 'true' },
@@ -178,10 +193,22 @@ export function RichTextEditor({ noteId, content, onChange, onBlur, onUploadImag
     }, [noteId]);
 
     return (
-        <EditorContent
-            editor={editor}
-            className="rich-editor flex-1 overflow-y-auto ios-editor-scroll"
-            style={{ caretColor: accentColor }}
-        />
+        <div className="rich-editor flex-1 overflow-y-auto ios-editor-scroll relative">
+            {uploading && (
+                <div className="absolute top-3 right-3 z-50 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-bold text-white/80"
+                    style={{ background: 'rgba(20,20,20,0.9)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.1)' }}>
+                    <svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
+                        <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeOpacity="0.25" />
+                        <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+                    </svg>
+                    Uploading…
+                </div>
+            )}
+            <EditorContent
+                editor={editor}
+                className="h-full"
+                style={{ caretColor: accentColor }}
+            />
+        </div>
     );
 }
