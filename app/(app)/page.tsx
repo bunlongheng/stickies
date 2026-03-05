@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { createClient } from "@supabase/supabase-js";
+import { createClient as createBrowserClient } from "@/lib/supabase/client";
 import { usePageMeta } from "@/lib/usePageMeta";
 import dynamic from "next/dynamic";
 const RichTextEditor = dynamic(() => import("@/components/RichTextEditor").then(m => m.RichTextEditor), { ssr: false });
@@ -65,7 +66,8 @@ async function getAuthToken(): Promise<string> {
     if (process.env.NODE_ENV === 'development') {
         return process.env.NEXT_PUBLIC_STICKIES_API_KEY ?? "";
     }
-    const { data: { session } } = await getSupabase().auth.getSession();
+    // Use the SSR-aware browser client — reads session from cookies (set by @supabase/ssr)
+    const { data: { session } } = await createBrowserClient().auth.getSession();
     return session?.access_token ?? "";
 }
 const notesApi = {
