@@ -4443,7 +4443,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                             <div className="flex gap-0 h-full" style={{ minWidth: `${currentLevelFolders.length * 220}px` }}>
                                 {currentLevelFolders.map((folder, fi) => {
                                     const subFolders = dbData.filter((n) => n.is_folder && n.parent_folder_name === folder.name);
-                                    const folderNotes = dbData.filter((n) => !n.is_folder && n.folder_name === folder.name);
+                                    const folderNotes = dbData.filter((n) => !n.is_folder && (String(n.folder_id) === String(folder.id) || (!n.folder_id && n.folder_name === folder.name)));
                                     const totalCount = subFolders.length + folderNotes.length;
                                     const isOver = colDragOver === folder.name;
                                     const accent = folder.color || "#a855f7";
@@ -4472,6 +4472,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 return (
                                                     <div className="relative flex items-center gap-2 px-3 py-2.5 flex-shrink-0 overflow-hidden cursor-pointer select-none"
                                                         style={{ background: accent, isolation: "isolate" }}
+                                                        onClick={() => enterFolder({ id: String(folder.id), name: folder.name, color: accent })}
                                                         onMouseEnter={(e) => { playSound("hover"); const rect = e.currentTarget.getBoundingClientRect(); setGlowCard({ id: headerId, x: ((e.clientX - rect.left) / rect.width) * 100, y: ((e.clientY - rect.top) / rect.height) * 100 }); }}
                                                         onMouseMove={(e) => { if (glowCard?.id !== headerId) return; const rect = e.currentTarget.getBoundingClientRect(); setGlowCard(g => g ? { ...g, x: ((e.clientX - rect.left) / rect.width) * 100, y: ((e.clientY - rect.top) / rect.height) * 100 } : g); }}
                                                         onMouseLeave={() => setGlowCard(null)}>
