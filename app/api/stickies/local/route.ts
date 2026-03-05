@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
-import { headers } from "next/headers";
+import crypto from "crypto";
 
 function getSupabase() {
     return createClient(
@@ -9,19 +9,36 @@ function getSupabase() {
     );
 }
 
-function isLocal(req: Request): boolean {
-    const host = req.headers.get("host") ?? "";
-    return host.startsWith("localhost") || host.startsWith("127.0.0.1");
+// Two valid tokens:
+//   1. STICKIES_API_KEY                        — AI / server-to-server
+//   2. STICKIES_API_KEY + STICKIES_LOCAL_SALT  — FE (salt is env-only, never exposed)
+function authorize(req: Request): boolean {
+    const auth = req.headers.get("authorization") ?? "";
+    const bearer = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+    if (!bearer) return false;
+
+    const apiKey  = process.env.STICKIES_API_KEY ?? "";
+    const salt    = process.env.STICKIES_LOCAL_SALT ?? "";
+    const feToken = apiKey + salt;
+
+    const safe = (a: string, b: string): boolean => {
+        if (!a || !b) return false;
+        try { return a.length === b.length && crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b)); }
+        catch { return false; }
+    };
+
+    return safe(bearer, apiKey) || safe(bearer, feToken);
 }
 
 // POST /api/stickies/local
-// No auth required — localhost only.
+// Auth: Bearer <STICKIES_API_KEY>
+//    or Bearer <STICKIES_API_KEY><STICKIES_LOCAL_SALT>  (FE)
 // Content-Type: text/markdown  →  first # H1 = title, rest = content
 // Content-Type: application/json → { title, content, folder? }
 // ?folder=CLAUDE  (default: CLAUDE)
 export async function POST(req: Request) {
-    if (!isLocal(req)) {
-        return NextResponse.json({ error: "Local only" }, { status: 403 });
+    if (!authorize(req)) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const url = new URL(req.url);
