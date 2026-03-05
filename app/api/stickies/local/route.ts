@@ -3,6 +3,10 @@ import { NextResponse } from "next/server";
 import crypto from "crypto";
 import Pusher from "pusher";
 
+// Module-level flash queue — serializes Hue + Pusher so each cycle
+// completes before the next one starts (important for rapid-fire posts).
+let flashQueue: Promise<void> = Promise.resolve();
+
 function getPusher() {
     return new Pusher({
         appId: process.env.PUSHER_APP_ID!,
@@ -99,13 +103,19 @@ export async function POST(req: Request) {
 
     if (error) return NextResponse.json({ error: "Database error" }, { status: 500 });
 
-    try { await getPusher().trigger("stickies", "note-created", data); } catch {}
+    // Enqueue flash: Hue + Pusher run sequentially per-request so rapid-fire
+    // posts don't overlap. Hue starts first (~300ms head-start) so the light
+    // and screen flash arrive at roughly the same time.
+    flashQueue = flashQueue.then(async () => {
+        const hueReady = fetch("http://localhost:3000/api/hue/trigger", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ color }),
+        }).catch(() => {});
 
-    // Hue — local bridge only reachable from same network
-    fetch("http://localhost:3000/api/hue/trigger", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ color }),
-    }).catch(() => {});
+        await new Promise(r => setTimeout(r, 300));
+        try { await getPusher().trigger("stickies", "note-created", data); } catch {}
+        await hueReady;
+    });
 
     return NextResponse.json({ note: data }, { status: 201 });
 }
