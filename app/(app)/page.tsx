@@ -4326,17 +4326,17 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 </div>
                                 <div className="ml-auto flex items-center gap-1">
                                     {/* view modes */}
-                                    <HeaderIconBtn icon={ListBulletIcon} label="List" onClick={() => { setMainListMode(true); setDrillMode(false); setKanbanMode(false); }} style={mainListMode && !drillMode && !kanbanMode ? { color: "#a855f7" } : undefined} />
-                                    <HeaderIconBtn icon={Squares2X2Icon} label="Grid" onClick={() => { setMainListMode(false); setDrillMode(false); setKanbanMode(false); }} style={!mainListMode && !drillMode && !kanbanMode ? { color: "#a855f7" } : undefined} />
+                                    <HeaderIconBtn icon={ListBulletIcon} label="List" onClick={() => { setMainListMode(true); setDrillMode(false); setKanbanMode(false); }} style={mainListMode && !drillMode && !kanbanMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
+                                    <HeaderIconBtn icon={Squares2X2Icon} label="Grid" onClick={() => { setMainListMode(false); setDrillMode(false); setKanbanMode(false); }} style={!mainListMode && !drillMode && !kanbanMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
                                     <div className="hidden sm:contents">
-                                        <HeaderIconBtn icon={ViewColumnsIcon} label="Kanban" onClick={() => { setKanbanMode((v) => !v); setDrillMode(false); setMainListMode(false); }} style={kanbanMode ? { color: "#a855f7" } : undefined} />
-                                        <HeaderIconBtn icon={ArrowRightIcon} label="Drill" onClick={() => { setDrillMode((v) => { if (v) setColPath([]); return !v; }); setKanbanMode(false); setMainListMode(false); }} style={drillMode ? { color: "#a855f7" } : undefined} />
+                                        <HeaderIconBtn icon={ViewColumnsIcon} label="Kanban" onClick={() => { setKanbanMode((v) => !v); setDrillMode(false); setMainListMode(false); }} style={kanbanMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
+                                        <HeaderIconBtn icon={ArrowRightIcon} label="Drill" onClick={() => { setDrillMode((v) => { if (v) setColPath([]); return !v; }); setKanbanMode(false); setMainListMode(false); }} style={drillMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
                                     </div>
                                     {/* divider */}
                                     <div className="w-px h-4 bg-white/10 mx-1" />
                                     {/* actions */}
                                     <div className="relative">
-                                        <HeaderIconBtn icon={PlusIcon} label="New" onClick={() => setShowAddMenu(v => !v)} style={showAddMenu ? { color: "#a855f7" } : undefined} />
+                                        <HeaderIconBtn icon={PlusIcon} label="New" onClick={() => setShowAddMenu(v => !v)} style={showAddMenu ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
                                         {showAddMenu && (
                                             <div onMouseDown={(e) => e.stopPropagation()} className="absolute right-0 top-full mt-1 z-[200] flex flex-col overflow-hidden rounded-lg" style={{ background: "#1a1a1a", border: "1px solid rgba(255,255,255,0.12)", boxShadow: "0 8px 24px rgba(0,0,0,0.6)", minWidth: 130 }}>
                                                 <button onClick={() => { setShowAddMenu(false); openNewNote(); }} className="flex items-center gap-2.5 px-3 py-2.5 text-left text-[13px] text-zinc-300 hover:bg-white/8 transition-colors">
@@ -4367,17 +4367,17 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 ) : (
                                     <>
                                         {/* view modes */}
-                                        <HeaderIconBtn icon={ListBulletIcon} label="List" onClick={() => { setMainListMode(true); setDrillMode(false); setKanbanMode(false); }} style={mainListMode && !drillMode && !kanbanMode ? { color: "#a855f7" } : undefined} />
-                                        <HeaderIconBtn icon={Squares2X2Icon} label="Grid" onClick={() => { setMainListMode(false); setDrillMode(false); setKanbanMode(false); }} style={!mainListMode && !drillMode && !kanbanMode ? { color: "#a855f7" } : undefined} />
+                                        <HeaderIconBtn icon={ListBulletIcon} label="List" onClick={() => { setMainListMode(true); setDrillMode(false); setKanbanMode(false); }} style={mainListMode && !drillMode && !kanbanMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
+                                        <HeaderIconBtn icon={Squares2X2Icon} label="Grid" onClick={() => { setMainListMode(false); setDrillMode(false); setKanbanMode(false); }} style={!mainListMode && !drillMode && !kanbanMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
                                         <div className="hidden sm:contents">
-                                            <HeaderIconBtn icon={ViewColumnsIcon} label="Kanban" onClick={() => { setKanbanMode((v) => !v); setDrillMode(false); setMainListMode(false); }} style={kanbanMode ? { color: "#a855f7" } : undefined} />
-                                            <HeaderIconBtn icon={ArrowRightIcon} label="Drill" onClick={() => { setDrillMode((v) => { if (v) setColPath([]); return !v; }); setKanbanMode(false); setMainListMode(false); }} style={drillMode ? { color: "#a855f7" } : undefined} />
+                                            <HeaderIconBtn icon={ViewColumnsIcon} label="Kanban" onClick={() => { setKanbanMode((v) => !v); setDrillMode(false); setMainListMode(false); }} style={kanbanMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
+                                            <HeaderIconBtn icon={ArrowRightIcon} label="Drill" onClick={() => { setDrillMode((v) => { if (v) setColPath([]); return !v; }); setKanbanMode(false); setMainListMode(false); }} style={drillMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
                                         </div>
                                         {/* divider */}
                                         <div className="w-px h-4 bg-white/10 mx-1" />
                                         {/* actions */}
                                         <div className="relative">
-                                            <HeaderIconBtn icon={PlusIcon} label="New" onClick={() => setShowAddMenu(v => !v)} style={showAddMenu ? { color: "#a855f7" } : undefined} />
+                                            <HeaderIconBtn icon={PlusIcon} label="New" onClick={() => setShowAddMenu(v => !v)} style={showAddMenu ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
                                             {showAddMenu && (
                                                 <div onMouseDown={(e) => e.stopPropagation()} className="absolute right-0 top-full mt-1 z-[200] flex flex-col overflow-hidden rounded-lg" style={{ background: "#1a1a1a", border: "1px solid rgba(255,255,255,0.12)", boxShadow: "0 8px 24px rgba(0,0,0,0.6)", minWidth: 130 }}>
                                                     <button onClick={() => { setShowAddMenu(false); openNewNote(); }} className="flex items-center gap-2.5 px-3 py-2.5 text-left text-[13px] text-zinc-300 hover:bg-white/8 transition-colors">
@@ -4711,7 +4711,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     }}
                                     style={mainListMode
                                         ? { position: "relative", isolation: "isolate", "--row-color": item.color || item.folder_color || "#ffffff" } as React.CSSProperties
-                                        : { position: "relative", isolation: "isolate", backgroundColor: item.color || item.folder_color || "#888888" }}
+                                        : { position: "relative", isolation: "isolate", backgroundColor: item.color || item.folder_color || "#888888", boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.35), inset 0 -2px 8px rgba(0,0,0,0.25)" }}
                                     className={`${mainListMode
                                         ? `group list-row-hover flex items-center gap-3 px-4 py-1 border-b border-white/5 cursor-pointer select-none transition-colors active:bg-white/10 overflow-hidden ${isDragging ? "opacity-30" : dt?.mode === "into" ? "bg-cyan-950/60 ring-1 ring-inset ring-cyan-400" : ""} ${isSelectMode && !item.is_folder && selectedIds.has(String(item.id)) ? "bg-blue-950/50" : ""} ${isFolderSelectMode && item.is_folder && selectedFolderNames.includes(item.name || "") ? "bg-emerald-950/50" : ""}`
                                         : `relative min-w-0 cursor-pointer transition-all group overflow-hidden ${isDragging ? "opacity-30 scale-95" : dt?.mode === "into" ? "ring-4 ring-cyan-400 ring-inset z-10" : ""} ${isSelectMode && !item.is_folder && selectedIds.has(String(item.id)) ? "ring-2 ring-inset ring-blue-500" : ""} ${isFolderSelectMode && item.is_folder && selectedFolderNames.includes(item.name || "") ? "ring-2 ring-inset ring-emerald-500" : ""}`}`}>
@@ -6279,7 +6279,7 @@ const MobileEditorIconBtn = ({ icon: Icon, label, onClick, active = false }: any
 );
 
 const HeaderIconBtn = ({ icon: Icon, label, onClick, style }: any) => (
-    <button type="button" onClick={onClick} className="p-3 text-zinc-300 hover:text-white hover:bg-white/10 transition" title={label} aria-label={label} style={style}>
+    <button type="button" onClick={onClick} className="p-3 text-zinc-500 hover:text-white hover:bg-white/10 transition" title={label} aria-label={label} style={style}>
         <Icon className="w-[26px] h-[26px]" />
     </button>
 );
