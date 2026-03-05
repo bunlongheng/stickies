@@ -38,6 +38,7 @@ import ShareIcon from "@heroicons/react/24/outline/ShareIcon";
 import CursorArrowRaysIcon from "@heroicons/react/24/outline/CursorArrowRaysIcon";
 import RectangleStackIcon from "@heroicons/react/24/outline/RectangleStackIcon";
 import Squares2X2Icon from "@heroicons/react/24/outline/Squares2X2Icon";
+import ViewColumnsIcon from "@heroicons/react/24/outline/ViewColumnsIcon";
 import HeartIcon from "@heroicons/react/24/outline/HeartIcon";
 import HeartSolidIcon from "@heroicons/react/24/solid/HeartIcon";
 import ArrowTopRightOnSquareIcon from "@heroicons/react/24/outline/ArrowTopRightOnSquareIcon";
@@ -204,6 +205,8 @@ const looksLikeMarkdown = (text: string) =>
 const looksLikeHtml = (text: string) =>
     /^\s*<!DOCTYPE\s+html/i.test(text) || /^\s*<html[\s>]/i.test(text);
 const MAIN_LIST_MODE_KEY = "stickies:main-list-mode:v1";
+const DRILL_MODE_KEY = "stickies:drill-mode:v1";
+const KANBAN_MODE_KEY = "stickies:kanban-mode:v1";
 const LIST_MODE_KEY = "stickies:list-mode-notes:v1";
 const GRAPH_MODE_KEY = "stickies:graph-mode-notes:v1";
 const MARKDOWN_MODE_KEY = "stickies:markdown-mode-notes:v1";
@@ -453,7 +456,7 @@ function playSound(type: SoundType) {
             osc.start(now + delay); osc.stop(now + delay + dur + 0.02);
         };
         if (type === "hover") {
-            tone(1200, 0, 0.035, 0.055, "sine");
+            tone(1200, 0, 0.028, 0.055, "sine");
         } else if (type === "click") {
             const osc = ctx.createOscillator();
             const g = ctx.createGain();
@@ -461,16 +464,16 @@ function playSound(type: SoundType) {
             osc.type = "triangle";
             osc.frequency.setValueAtTime(800, now);
             osc.frequency.exponentialRampToValueAtTime(400, now + 0.055);
-            g.gain.setValueAtTime(0.12, now);
+            g.gain.setValueAtTime(0.096, now);
             g.gain.exponentialRampToValueAtTime(0.001, now + 0.065);
             osc.start(now); osc.stop(now + 0.08);
         } else if (type === "navigate") {
-            tone(440, 0,    0.08, 0.10); // A4
-            tone(660, 0.07, 0.07, 0.12); // E5
+            tone(440, 0,    0.064, 0.10); // A4
+            tone(660, 0.07, 0.056, 0.12); // E5
         } else if (type === "toast") {
-            tone(784, 0,    0.10, 0.14); // G5
-            tone(988, 0.09, 0.09, 0.16); // B5
-            tone(1175, 0.18, 0.07, 0.18); // D6
+            tone(784, 0,    0.08, 0.14); // G5
+            tone(988, 0.09, 0.072, 0.16); // B5
+            tone(1175, 0.18, 0.056, 0.18); // D6
         } else if (type === "toast-error") {
             const osc = ctx.createOscillator();
             const g = ctx.createGain();
@@ -478,20 +481,20 @@ function playSound(type: SoundType) {
             osc.type = "sine";
             osc.frequency.setValueAtTime(440, now);
             osc.frequency.exponentialRampToValueAtTime(260, now + 0.20);
-            g.gain.setValueAtTime(0.10, now);
+            g.gain.setValueAtTime(0.08, now);
             g.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
             osc.start(now); osc.stop(now + 0.24);
         } else if (type === "create") {
-            tone(523, 0,    0.14, 0.18); // C5
-            tone(659, 0.09, 0.12, 0.18); // E5
+            tone(523, 0,    0.112, 0.18); // C5
+            tone(659, 0.09, 0.096, 0.18); // E5
         } else if (type === "add") {
-            tone(659, 0, 0.13, 0.16);   // E5 pop
+            tone(659, 0, 0.104, 0.16);   // E5 pop
         } else if (type === "check") {
-            tone(659, 0,    0.12, 0.13); // E5
-            tone(784, 0.07, 0.10, 0.15); // G5
+            tone(659, 0,    0.096, 0.13); // E5
+            tone(784, 0.07, 0.08, 0.15); // G5
         } else if (type === "uncheck") {
-            tone(784, 0,    0.08, 0.12); // G5
-            tone(523, 0.07, 0.07, 0.14); // C5
+            tone(784, 0,    0.064, 0.12); // G5
+            tone(523, 0.07, 0.056, 0.14); // C5
         } else if (type === "delete") {
             const osc = ctx.createOscillator();
             const g = ctx.createGain();
@@ -499,7 +502,7 @@ function playSound(type: SoundType) {
             osc.type = "sine";
             osc.frequency.setValueAtTime(380, now);
             osc.frequency.exponentialRampToValueAtTime(160, now + 0.22);
-            g.gain.setValueAtTime(0.13, now);
+            g.gain.setValueAtTime(0.104, now);
             g.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
             osc.start(now); osc.stop(now + 0.26);
         } else if (type === "move") {
@@ -510,7 +513,7 @@ function playSound(type: SoundType) {
             osc.frequency.setValueAtTime(440, now);
             osc.frequency.exponentialRampToValueAtTime(720, now + 0.13);
             g.gain.setValueAtTime(0, now);
-            g.gain.linearRampToValueAtTime(0.10, now + 0.02);
+            g.gain.linearRampToValueAtTime(0.08, now + 0.02);
             g.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
             osc.start(now); osc.stop(now + 0.20);
         }
@@ -676,6 +679,14 @@ export default function NotesMaster() {
     const [aiMode, setAiMode] = useState<{ active: boolean; message: string }>({ active: false, message: "" });
     const [botColor, setBotColor] = useState({ primary: "#7c3aed", secondary: "#a78bfa", light: "#c4b5fd" });
     const [mainListMode, setMainListMode] = useState(true);
+    const [drillMode, setDrillMode] = useState(false);
+    const [kanbanMode, setKanbanMode] = useState(false);
+    const [showAddMenu, setShowAddMenu] = useState(false);
+    const [colPath, setColPath] = useState<string[]>([]);
+    const colDragNoteRef = useRef<string | null>(null);
+    const colDragOverRef = useRef<string | null>(null);
+    const [colDragOver, setColDragOver] = useState<string | null>(null);
+    const colScrollRef = useRef<HTMLDivElement | null>(null);
     const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set());
     const [glowCard, setGlowCard] = useState<{ id: string; x: number; y: number } | null>(null);
     const [now, setNow] = useState(() => new Date());
@@ -963,6 +974,12 @@ export default function NotesMaster() {
             const rawMainList = localStorage.getItem(MAIN_LIST_MODE_KEY);
             if (rawMainList) setMainListMode(rawMainList === "true");
         } catch { /* ignore */ }
+        try {
+            const rawDrill = localStorage.getItem(DRILL_MODE_KEY);
+            if (rawDrill) setDrillMode(rawDrill === "true");
+            const rawKanban = localStorage.getItem(KANBAN_MODE_KEY);
+            if (rawKanban) setKanbanMode(rawKanban === "true");
+        } catch { /* ignore */ }
         if (!shouldWaitForInitialTarget) setIsUrlChecking(false);
         setHydratedViewState(true);
     }, []);
@@ -1032,6 +1049,21 @@ export default function NotesMaster() {
     useEffect(() => {
         try { localStorage.setItem(MAIN_LIST_MODE_KEY, String(mainListMode)); } catch { /* ignore */ }
     }, [mainListMode]);
+
+    useEffect(() => {
+        if (!showAddMenu) return;
+        const close = () => setShowAddMenu(false);
+        document.addEventListener("mousedown", close);
+        return () => document.removeEventListener("mousedown", close);
+    }, [showAddMenu]);
+
+    useEffect(() => {
+        try { localStorage.setItem(DRILL_MODE_KEY, String(drillMode)); } catch { /* ignore */ }
+    }, [drillMode]);
+
+    useEffect(() => {
+        try { localStorage.setItem(KANBAN_MODE_KEY, String(kanbanMode)); } catch { /* ignore */ }
+    }, [kanbanMode]);
 
     // Load pinned note IDs from localStorage
     useEffect(() => {
@@ -1454,7 +1486,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                     icon: folderIcons[folderName] || "",
                 };
             })
-            .sort((a, b) => b.latestUpdatedAt.localeCompare(a.latestUpdatedAt));
+            .sort((a, b) => a.order - b.order);
 
         const knownFolderNames = new Set(foldersFromRows.map((f) => f.name));
         const missingFolders = Array.from(noteCountByFolder.keys())
@@ -1482,21 +1514,11 @@ const fireIntegrations = (trigger: string, note: any) => {
 
     // Folders visible at the current navigation level (root or sub-folder)
     const currentLevelFolders = useMemo(() => {
-        const activeFolderId = folderStack.at(-1)?.id ?? null;
-        const useUuidFilter = activeFolderId !== null && !activeFolderId.startsWith("virtual-");
         return folders
             .filter((f) => {
                 const row = dbData.find((r) => r.is_folder && String(r.id) === String(f.id));
                 if (folderStack.length === 0) {
-                    // Root view: folders with no parent
-                    if (useUuidFilter || row?.parent_folder_id) {
-                        return (row?.parent_folder_id ?? null) === null;
-                    }
                     return (row?.parent_folder_name ?? null) === null;
-                }
-                // Inside a folder: match by parent_folder_id (UUID) for precision
-                if (useUuidFilter) {
-                    return String(row?.parent_folder_id ?? null) === activeFolderId;
                 }
                 return (row?.parent_folder_name ?? null) === activeFolder;
             })
@@ -1514,15 +1536,20 @@ const fireIntegrations = (trigger: string, note: any) => {
                 const t = (n.title || "").toLowerCase();
                 const f = (n.folder_name || "").toLowerCase();
                 const c = (n.content || "").toLowerCase();
-                if (t === q) return 0;
-                if (t.startsWith(q)) return 1;
-                if (t.includes(q)) return 2;
-                if (c.includes(q)) return 3;
-                if (f.includes(q)) return 4;
-                return 5;
+                const pinned = pinnedIds.has(String(n.id));
+                // priority: folder match > title match > pinned/bookmark > content
+                if (f === q)           return 0;
+                if (f.startsWith(q))   return 1;
+                if (f.includes(q))     return 2;
+                if (t === q)           return 3;
+                if (t.startsWith(q))   return 4;
+                if (t.includes(q))     return pinned ? 5 : 6;
+                if (pinned && c.includes(q)) return 7;
+                if (c.includes(q))     return 8;
+                return 9;
             };
             return dbData
-                .filter((n) => !n.is_folder && score(n) < 5)
+                .filter((n) => !n.is_folder && score(n) < 9)
                 .sort((a, b) => { const sd = score(a) - score(b); return sd !== 0 ? sd : byUpdated(a, b); });
         }
         if (activeFolder) {
@@ -1906,11 +1933,29 @@ const fireIntegrations = (trigger: string, note: any) => {
             return;
         }
 
-        // Direct image file paste → attachment strip
+        // Direct image file paste → embed as base64 inline in content
         if (imageItems.length > 0) {
             e.preventDefault();
             const files = imageItems.map((i) => i.getAsFile()).filter(Boolean) as File[];
-            void addImages(files);
+            showToast("Embedding image…", "#32ADE6");
+            try {
+                const textarea = e.currentTarget;
+                const start = textarea.selectionStart ?? content.length;
+                const end = textarea.selectionEnd ?? content.length;
+                const b64s = await Promise.all(files.map(file => new Promise<string>((resolve) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result as string);
+                    reader.readAsDataURL(file);
+                })));
+                const md = b64s.map((src, i) => `![image-${i + 1}](${src})`).join("\n");
+                const newContent = content.slice(0, start) + md + content.slice(end);
+                setContent(newContent);
+                const nid = editingNote?.id ? String(editingNote.id) : null;
+                if (nid) setMarkdownModeNotes(prev => { const next = new Set(prev); next.delete(nid); return next; });
+                showToast("Image pasted ✓", "#34C759");
+            } catch {
+                showToast("Image paste failed", "#FF3B30");
+            }
         }
     }
 
@@ -4276,25 +4321,30 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-white/35 w-6 h-6 pointer-events-none" />
                                     <input value={search} onChange={(e) => setSearch(e.target.value)} onFocus={() => setSearchFocused(true)} onBlur={() => setSearchFocused(false)} autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false} inputMode="search" className="w-full bg-transparent border-0 outline-none focus:outline-none focus:ring-0 shadow-none appearance-none pl-12 pr-3 py-3 text-xs font-black tracking-tight" placeholder="search" />
                                 </div>
-                                {!searchFocused && !search.trim() && (
-                                    <div className="hidden sm:flex items-center gap-3 flex-shrink-0 select-none pointer-events-none">
-                                        <div className="flex items-center gap-2 tabular-nums text-[11px] font-semibold">
-                                            <span style={{ color: "#38bdf8" }}>{dbStats.folderCount} folders</span>
-                                            <span className="text-zinc-700">·</span>
-                                            <span style={{ color: "#fb923c" }}>{dbStats.noteCount} notes</span>
-                                            <span className="text-zinc-700">·</span>
-                                            <span style={{ color: "#34d399" }}>{dbStats.size}</span>
-                                        </div>
-                                        <div className="flex items-center gap-1 text-[11px] font-black text-white/70">
-                                            <span>{now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
-                                            <span className="text-zinc-600 font-thin italic">/</span>
-                                            <span className="text-zinc-500 uppercase tracking-wide text-[9px] font-medium">{now.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}</span>
-                                        </div>
-                                    </div>
-                                )}
                                 <div className="ml-auto flex items-center gap-1">
-                                    <HeaderIconBtn icon={PlusIcon} label="New folder" onClick={openCreateFolder} />
-                                    <HeaderIconBtn icon={mainListMode ? Squares2X2Icon : ListBulletIcon} label={mainListMode ? "Grid view" : "List view"} onClick={() => setMainListMode((v) => !v)} />
+                                    {/* view modes */}
+                                    <HeaderIconBtn icon={ListBulletIcon} label="List" onClick={() => { setMainListMode(true); setDrillMode(false); setKanbanMode(false); }} style={mainListMode && !drillMode && !kanbanMode ? { color: "#a855f7" } : undefined} />
+                                    <HeaderIconBtn icon={Squares2X2Icon} label="Grid" onClick={() => { setMainListMode(false); setDrillMode(false); setKanbanMode(false); }} style={!mainListMode && !drillMode && !kanbanMode ? { color: "#a855f7" } : undefined} />
+                                    <HeaderIconBtn icon={ViewColumnsIcon} label="Kanban" onClick={() => { setKanbanMode((v) => !v); setDrillMode(false); setMainListMode(false); }} style={kanbanMode ? { color: "#a855f7" } : undefined} />
+                                    <HeaderIconBtn icon={ArrowRightIcon} label="Drill" onClick={() => { setDrillMode((v) => { if (v) setColPath([]); return !v; }); setKanbanMode(false); setMainListMode(false); }} style={drillMode ? { color: "#a855f7" } : undefined} />
+                                    {/* divider */}
+                                    <div className="w-px h-4 bg-white/10 mx-1" />
+                                    {/* actions */}
+                                    <div className="relative">
+                                        <HeaderIconBtn icon={PlusIcon} label="New" onClick={() => setShowAddMenu(v => !v)} style={showAddMenu ? { color: "#a855f7" } : undefined} />
+                                        {showAddMenu && (
+                                            <div className="absolute right-0 top-full mt-1 z-[200] flex flex-col overflow-hidden rounded-lg" style={{ background: "#1a1a1a", border: "1px solid rgba(255,255,255,0.12)", boxShadow: "0 8px 24px rgba(0,0,0,0.6)", minWidth: 130 }}>
+                                                <button onClick={() => { setShowAddMenu(false); openNewNote(); }} className="flex items-center gap-2.5 px-3 py-2.5 text-left text-[13px] text-zinc-300 hover:bg-white/8 transition-colors">
+                                                    <PlusIcon className="w-3.5 h-3.5 text-zinc-500 flex-shrink-0" />
+                                                    New file
+                                                </button>
+                                                <button onClick={() => { setShowAddMenu(false); openCreateFolder(); }} className="flex items-center gap-2.5 px-3 py-2.5 text-left text-[13px] text-zinc-300 hover:bg-white/8 transition-colors">
+                                                    <PlusIcon className="w-3.5 h-3.5 text-zinc-500 flex-shrink-0" />
+                                                    New folder
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
                                     <HeaderIconBtn icon={Cog6ToothIcon} label="Settings" onClick={() => setShowFolderActions(true)} />
                                 </div>
                             </>
@@ -4311,7 +4361,14 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     </div>
                                 ) : (
                                     <>
-                                        <HeaderIconBtn icon={mainListMode ? Squares2X2Icon : ListBulletIcon} label={mainListMode ? "Grid view" : "List view"} onClick={() => setMainListMode((v) => !v)} />
+                                        {/* view modes */}
+                                        <HeaderIconBtn icon={ListBulletIcon} label="List" onClick={() => { setMainListMode(true); setDrillMode(false); setKanbanMode(false); }} style={mainListMode && !drillMode && !kanbanMode ? { color: "#a855f7" } : undefined} />
+                                        <HeaderIconBtn icon={Squares2X2Icon} label="Grid" onClick={() => { setMainListMode(false); setDrillMode(false); setKanbanMode(false); }} style={!mainListMode && !drillMode && !kanbanMode ? { color: "#a855f7" } : undefined} />
+                                        <HeaderIconBtn icon={ViewColumnsIcon} label="Kanban" onClick={() => { setKanbanMode((v) => !v); setDrillMode(false); setMainListMode(false); }} style={kanbanMode ? { color: "#a855f7" } : undefined} />
+                                        <HeaderIconBtn icon={ArrowRightIcon} label="Drill" onClick={() => { setDrillMode((v) => { if (v) setColPath([]); return !v; }); setKanbanMode(false); setMainListMode(false); }} style={drillMode ? { color: "#a855f7" } : undefined} />
+                                        {/* divider */}
+                                        <div className="w-px h-4 bg-white/10 mx-1" />
+                                        {/* actions */}
                                         <HeaderIconBtn icon={Cog6ToothIcon} label="Settings" onClick={() => { setShowFolderActions(true); setShowFolderColorPicker(false); setShowFolderIconPicker(false); setShowFolderMovePicker(false); }} />
                                     </>
                                 )}
@@ -4320,12 +4377,217 @@ const fireIntegrations = (trigger: string, note: any) => {
                     </header>
 
                     <main ref={mainScrollRef}
-                        className={`ios-mobile-main relative flex-1 overflow-x-hidden overflow-y-auto touch-pan-y overscroll-none bg-black ${(!showGlobalGraph) ? "pb-24 sm:pb-32" : ""} ${!mainListMode ? "p-1.5 sm:p-2" : ""}`}
-                        style={mainListMode
-                            ? { display: "block" }
-                            : { display: "grid", gridTemplateColumns: `repeat(${gridCols}, 1fr)`, gap: "6px", alignContent: "start", alignItems: "start" }}
+                        className={`ios-mobile-main relative flex-1 ${(drillMode || kanbanMode) && isFolderGridView ? "overflow-x-auto overflow-y-hidden" : "overflow-x-hidden overflow-y-auto"} touch-pan-y overscroll-none bg-black ${(!showGlobalGraph) && !((drillMode || kanbanMode) && isFolderGridView) ? "pb-24 sm:pb-32" : ""} ${!mainListMode && !((drillMode || kanbanMode) && isFolderGridView) ? "p-1.5 sm:p-2" : ""}`}
+                        style={(drillMode || kanbanMode) && isFolderGridView
+                            ? { display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }
+                            : mainListMode
+                                ? { display: "block" }
+                                : { display: "grid", gridTemplateColumns: `repeat(${gridCols}, 1fr)`, gap: "6px", alignContent: "start", alignItems: "start" }}
                     >
-                        {displayItems.map((item, idx) => {
+                        {kanbanMode && isFolderGridView && (
+                            <div className="flex gap-0 h-full" style={{ minWidth: `${currentLevelFolders.length * 220}px` }}>
+                                {currentLevelFolders.map((folder, fi) => {
+                                    const subFolders = dbData.filter((n) => n.is_folder && n.parent_folder_name === folder.name);
+                                    const folderNotes = dbData.filter((n) => !n.is_folder && n.folder_name === folder.name);
+                                    const totalCount = subFolders.length + folderNotes.length;
+                                    const isOver = colDragOver === folder.name;
+                                    const accent = folder.color || "#a855f7";
+                                    return (
+                                        <div key={folder.id || folder.name}
+                                            className="flex flex-col flex-shrink-0 h-full"
+                                            style={{ width: 220, borderRight: fi < currentLevelFolders.length - 1 ? `1px solid ${accent}20` : "none", background: isOver ? `${accent}1F` : `${accent}14`, transition: "background 0.15s" }}
+                                            onDragOver={(e) => { e.preventDefault(); setColDragOver(folder.name); }}
+                                            onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setColDragOver(null); }}
+                                            onDrop={async (e) => {
+                                                e.preventDefault(); setColDragOver(null);
+                                                const noteId = colDragNoteRef.current; if (!noteId) return;
+                                                colDragNoteRef.current = null;
+                                                const note = dbData.find((n) => String(n.id) === noteId);
+                                                if (!note || note.folder_name === folder.name) return;
+                                                await notesApi.update(noteId, { folder_name: folder.name });
+                                                showToast(`Moved to ${folder.name}`, accent);
+                                            }}>
+                                            {/* header */}
+                                            {(() => {
+                                                const headerId = `kanban-hdr-${folder.id || folder.name}`;
+                                                const hex = accent.replace("#", "").padEnd(6, "0");
+                                                const hr = parseInt(hex.substring(0, 2), 16);
+                                                const hg = parseInt(hex.substring(2, 4), 16);
+                                                const hb = parseInt(hex.substring(4, 6), 16);
+                                                return (
+                                                    <div className="relative flex items-center gap-2 px-3 py-2.5 flex-shrink-0 overflow-hidden cursor-pointer select-none"
+                                                        style={{ background: accent, isolation: "isolate" }}
+                                                        onMouseEnter={(e) => { playSound("hover"); const rect = e.currentTarget.getBoundingClientRect(); setGlowCard({ id: headerId, x: ((e.clientX - rect.left) / rect.width) * 100, y: ((e.clientY - rect.top) / rect.height) * 100 }); }}
+                                                        onMouseMove={(e) => { if (glowCard?.id !== headerId) return; const rect = e.currentTarget.getBoundingClientRect(); setGlowCard(g => g ? { ...g, x: ((e.clientX - rect.left) / rect.width) * 100, y: ((e.clientY - rect.top) / rect.height) * 100 } : g); }}
+                                                        onMouseLeave={() => setGlowCard(null)}>
+                                                        <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage: "radial-gradient(circle, rgba(255,255,255,0.18) 1px, transparent 1px)", backgroundSize: "10px 10px" }} />
+                                                        <div className="absolute inset-0 pointer-events-none" style={{ background: "linear-gradient(135deg, rgba(255,255,255,0.15) 0%, transparent 60%)" }} />
+                                                        {glowCard?.id === headerId && (<>
+                                                            <div className="absolute inset-0 pointer-events-none z-[-1]" style={{ background: `radial-gradient(circle at ${glowCard.x}% ${glowCard.y}%, rgba(${hr},${hg},${hb},0.6) 0%, rgba(${hr},${hg},${hb},0.3) 50%, rgba(${hr},${hg},${hb},0.05) 100%)`, transition: "background 0.05s" }} />
+                                                            <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 2 }}>
+                                                                <rect className="list-snake-path" x="1" y="1" width="calc(100% - 2px)" height="calc(100% - 2px)" rx="6" fill="none" stroke="rgba(255,255,255,0.8)" strokeWidth="2" pathLength="100" style={{ animationIterationCount: 1, animationTimingFunction: "ease-out", animationFillMode: "forwards" }} />
+                                                            </svg>
+                                                        </>)}
+                                                        <span className="relative text-[11px] font-bold tracking-widest uppercase truncate flex-1 text-white drop-shadow-sm">{folder.name}</span>
+                                                        <span className="relative text-[10px] font-bold tabular-nums flex-shrink-0 text-white/70">{totalCount}</span>
+                                                    </div>
+                                                );
+                                            })()}
+                                            {/* items */}
+                                            <div className="flex-1 overflow-y-auto flex flex-col gap-1.5 px-2 py-2" style={{ scrollbarWidth: "none" }}>
+                                                {subFolders.map((sub) => {
+                                                    const subColor = folders.find(f => f.name === sub.folder_name)?.color || sub.folder_color || "#a855f7";
+                                                    return (
+                                                        <div key={sub.id}
+                                                            onClick={() => enterFolder({ id: String(sub.id), name: sub.folder_name, color: subColor })}
+                                                            className="flex items-center gap-2 px-3 py-2 cursor-pointer rounded-md transition-all hover:brightness-125 active:scale-[0.98]"
+                                                            style={{ background: `${subColor}15`, border: `1px solid ${subColor}30` }}>
+                                                            <div className="text-[12px] font-semibold truncate flex-1" style={{ color: subColor }}>{sub.folder_name}</div>
+                                                            <ChevronRightIcon className="w-3 h-3 flex-shrink-0" style={{ color: subColor, opacity: 0.5 }} />
+                                                        </div>
+                                                    );
+                                                })}
+                                                {folderNotes.map((note) => {
+                                                    const noteCardId = `kanban-note-${note.id}`;
+                                                    const nhex = accent.replace("#", "").padEnd(6, "0");
+                                                    const nr = parseInt(nhex.substring(0, 2), 16);
+                                                    const ng = parseInt(nhex.substring(2, 4), 16);
+                                                    const nb = parseInt(nhex.substring(4, 6), 16);
+                                                    return (
+                                                        <div key={note.id} draggable
+                                                            onDragStart={() => { colDragNoteRef.current = String(note.id); }}
+                                                            onDragEnd={() => { colDragNoteRef.current = null; setColDragOver(null); }}
+                                                            onClick={() => {
+                                                                setEditingNote(note);
+                                                                setTitle(note.title || "");
+                                                                setContent(note.content || "");
+                                                                setImages((note as any).images ?? []);
+                                                                setTargetFolder(note.folder_name || "General");
+                                                                setNoteColor(note.folder_color || palette12[0]);
+                                                                setActiveLine(0);
+                                                                setEditorScrollTop(0);
+                                                                setEditorOpen(true);
+                                                            }}
+                                                            onMouseEnter={(e) => { playSound("hover"); const rect = e.currentTarget.getBoundingClientRect(); setGlowCard({ id: noteCardId, x: ((e.clientX - rect.left) / rect.width) * 100, y: ((e.clientY - rect.top) / rect.height) * 100 }); }}
+                                                            onMouseMove={(e) => { if (glowCard?.id !== noteCardId) return; const rect = e.currentTarget.getBoundingClientRect(); setGlowCard(g => g ? { ...g, x: ((e.clientX - rect.left) / rect.width) * 100, y: ((e.clientY - rect.top) / rect.height) * 100 } : g); }}
+                                                            onMouseLeave={() => setGlowCard(null)}
+                                                            className="relative cursor-pointer rounded-md transition-all active:scale-[0.98] overflow-hidden"
+                                                            style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.09)", isolation: "isolate", height: 52, display: "flex", flexDirection: "column", justifyContent: "center", gap: 3, padding: "0 12px" }}>
+                                                            {glowCard?.id === noteCardId && (<>
+                                                                <div className="absolute inset-0 pointer-events-none z-[-1]" style={{ background: `radial-gradient(circle at ${glowCard.x}% ${glowCard.y}%, rgba(${nr},${ng},${nb},0.4) 0%, rgba(${nr},${ng},${nb},0.2) 50%, rgba(${nr},${ng},${nb},0.03) 100%)`, transition: "background 0.05s" }} />
+                                                                <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 2 }}>
+                                                                    <rect className="list-snake-path" x="1" y="1" width="calc(100% - 2px)" height="calc(100% - 2px)" rx="6" fill="none" stroke={accent} strokeWidth="2" pathLength="100" style={{ animationIterationCount: 1, animationTimingFunction: "ease-out", animationFillMode: "forwards" }} />
+                                                                </svg>
+                                                            </>)}
+                                                            <div className="relative text-[12px] font-semibold text-white/85 leading-none" style={{ overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>{(note.title || "Untitled").slice(0, 28)}</div>
+                                                            <div className="relative text-[11px] text-white/35 leading-none" style={{ overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>{(note.content ? note.content.replace(/<[^>]+>/g, "").trim() : "—").slice(0, 32)}</div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                        {drillMode && isFolderGridView && (() => {
+                            // Miller columns (macOS Finder column view)
+                            const getSubfolders = (parentName: string | null) =>
+                                dbData.filter(r => r.is_folder && (parentName === null ? !r.parent_folder_name : r.parent_folder_name === parentName))
+                                      .sort((a, b) => (a.order ?? 999) - (b.order ?? 999) || String(a.folder_name || "").localeCompare(String(b.folder_name || "")));
+                            const getFolderNotes = (folderName: string) =>
+                                dbData.filter(r => !r.is_folder && r.folder_name === folderName)
+                                      .sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")));
+                            const getFolderMeta = (name: string) => folders.find(f => f.name === name);
+
+                            // Build column list: col 0 = root, then one per selection in colPath
+                            type ColSpec = { items: any[]; parentName: string | null };
+                            const cols: ColSpec[] = [{ items: getSubfolders(null), parentName: null }];
+                            for (let i = 0; i < colPath.length; i++) {
+                                const sel = colPath[i];
+                                const subs = getSubfolders(sel);
+                                const notes = getFolderNotes(sel);
+                                cols.push({ items: [...subs, ...notes], parentName: sel });
+                            }
+
+                            return (
+                                <div ref={colScrollRef} className="flex h-full overflow-x-auto overflow-y-hidden" style={{ scrollbarWidth: "thin", scrollbarColor: "rgba(255,255,255,0.1) transparent" }}>
+                                    {cols.map((col, colIdx) => {
+                                        const selectedInCol = colPath[colIdx] ?? null;
+                                        return (
+                                            <div key={colIdx} className="flex-shrink-0 overflow-y-auto overflow-x-hidden flex flex-col" style={{ width: 200, borderRight: "1px solid rgba(255,255,255,0.07)", scrollbarWidth: "none" }}>
+                                                {col.items.length === 0 && (
+                                                    <div className="px-4 py-3 text-[11px] text-zinc-700">Empty</div>
+                                                )}
+                                                {col.items.map((item) => {
+                                                    const isFolder = !!item.is_folder;
+                                                    const folderName = isFolder ? String(item.folder_name || item.name || "") : null;
+                                                    const meta = isFolder ? getFolderMeta(folderName!) : null;
+                                                    const label = isFolder ? folderName! : String(item.title || "Untitled");
+                                                    const isSelected = isFolder && folderName === selectedInCol;
+                                                    const isDragTarget = colDragOver === (isFolder ? folderName : null);
+                                                    const hasChildren = isFolder && (getSubfolders(folderName!).length > 0 || getFolderNotes(folderName!).length > 0);
+                                                    return (
+                                                        <div
+                                                            key={String(item.id || label)}
+                                                            draggable={!isFolder}
+                                                            onDragStart={() => { if (!isFolder) colDragNoteRef.current = String(item.id); }}
+                                                            onDragEnd={() => { colDragNoteRef.current = null; setColDragOver(null); }}
+                                                            onDragOver={isFolder ? (e) => { e.preventDefault(); setColDragOver(folderName); } : undefined}
+                                                            onDragLeave={isFolder ? (e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setColDragOver(null); } : undefined}
+                                                            onDrop={isFolder ? async (e) => {
+                                                                e.preventDefault();
+                                                                setColDragOver(null);
+                                                                const noteId = colDragNoteRef.current;
+                                                                if (!noteId) return;
+                                                                colDragNoteRef.current = null;
+                                                                const note = dbData.find(n => String(n.id) === noteId);
+                                                                if (!note || note.folder_name === folderName) return;
+                                                                setDbData(prev => prev.map(n => String(n.id) === noteId ? { ...n, folder_name: folderName } : n));
+                                                                await notesApi.update(noteId, { folder_name: folderName! });
+                                                            } : undefined}
+                                                            onClick={() => {
+                                                                if (isFolder) {
+                                                                    setColPath(prev => {
+                                                                        const next = [...prev.slice(0, colIdx), folderName!];
+                                                                        // Auto-scroll right after render
+                                                                        setTimeout(() => colScrollRef.current?.scrollTo({ left: 99999, behavior: "smooth" }), 50);
+                                                                        return next;
+                                                                    });
+                                                                } else {
+                                                                    setEditingNote(item);
+                                                                }
+                                                            }}
+                                                            className="flex items-center gap-2 px-3 flex-shrink-0 cursor-pointer select-none transition-colors"
+                                                            style={{
+                                                                height: 30,
+                                                                background: isSelected
+                                                                    ? (meta?.color ? meta.color + "33" : "rgba(168,85,247,0.2)")
+                                                                    : isDragTarget ? "rgba(255,255,255,0.08)" : "transparent",
+                                                                borderLeft: isSelected ? `2px solid ${meta?.color || "#a855f7"}` : "2px solid transparent",
+                                                            }}
+                                                        >
+                                                            {isFolder ? (
+                                                                <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: meta?.color || "#a855f7" }} />
+                                                            ) : (
+                                                                <div className="w-3 h-3 flex-shrink-0 flex items-center justify-center text-[9px] text-zinc-600">◻</div>
+                                                            )}
+                                                            <span className={`flex-1 text-[13px] truncate ${isSelected ? "text-white font-medium" : "text-zinc-400"}`}>{label}</span>
+                                                            {isFolder && hasChildren && (
+                                                                <ChevronRightIcon className={`w-3 h-3 flex-shrink-0 ${isSelected ? "text-white/60" : "text-zinc-700"}`} />
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        );
+                                    })}
+                                    {/* spacer so last col isn't flush against edge */}
+                                    <div className="flex-shrink-0 w-8" />
+                                </div>
+                            );
+                        })()}
+                        {!((drillMode || kanbanMode) && isFolderGridView) && displayItems.map((item, idx) => {
                             // Section header sentinel
                             if (item._header) {
                                 return (
@@ -4469,9 +4731,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 <div className={`w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center border-2 transition-all ${selectedIds.has(String(item.id)) ? "bg-blue-500 border-blue-500" : "border-zinc-600"}`}>
                                                     {selectedIds.has(String(item.id)) && <CheckIcon className="w-3 h-3 text-white" />}
                                                 </div>
-                                            )}
-                                            {!isSelectMode && canDrag && (
-                                                <Bars3Icon className="w-4 h-4 text-zinc-700 flex-shrink-0 cursor-grab active:cursor-grabbing" />
                                             )}
                                             {(() => {
                                                 const c = item.color || item.folder_color || palette12[0];
@@ -4650,6 +4909,21 @@ const fireIntegrations = (trigger: string, note: any) => {
                             );
                         })()}
                     </main>
+
+                    {/* STATS BOTTOM RIGHT */}
+                    {!activeFolder && !search.trim() && (
+                        <div className="fixed bottom-4 right-4 z-[120] hidden sm:flex items-center gap-1.5 select-none pointer-events-none tabular-nums" style={{ fontSize: 9, opacity: 0.55 }}>
+                            <span style={{ color: "#38bdf8" }}>{dbStats.folderCount} folders</span>
+                            <span className="text-zinc-600">·</span>
+                            <span style={{ color: "#fb923c" }}>{dbStats.noteCount} notes</span>
+                            <span className="text-zinc-600">·</span>
+                            <span style={{ color: "#34d399" }}>{dbStats.size}</span>
+                            <span className="text-zinc-600">·</span>
+                            <span className="text-white/50 font-bold">{now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                            <span className="text-zinc-700">/</span>
+                            <span className="text-zinc-600 uppercase tracking-wide">{now.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}</span>
+                        </div>
+                    )}
 
                     {/* FOLDER MERGE ACTION BAR */}
                     {isFolderSelectMode && (
@@ -6002,8 +6276,8 @@ const MobileEditorIconBtn = ({ icon: Icon, label, onClick, active = false }: any
     </button>
 );
 
-const HeaderIconBtn = ({ icon: Icon, label, onClick }: any) => (
-    <button type="button" onClick={onClick} className="p-3 text-zinc-300 hover:text-white hover:bg-white/10 transition" title={label} aria-label={label}>
+const HeaderIconBtn = ({ icon: Icon, label, onClick, style }: any) => (
+    <button type="button" onClick={onClick} className="p-3 text-zinc-300 hover:text-white hover:bg-white/10 transition" title={label} aria-label={label} style={style}>
         <Icon className="w-[26px] h-[26px]" />
     </button>
 );
