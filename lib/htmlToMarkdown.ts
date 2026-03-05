@@ -2,7 +2,8 @@
  * htmlToMarkdown.ts — browser-side utility
  *
  * Converts rich HTML (e.g. pasted from Notion) into Markdown.
- * Images are uploaded to Supabase storage and embedded as short public URLs.
+ * Images are uploaded to Google Drive and embedded as short public URLs.
+ * Falls back to Supabase storage if Google Drive is not configured.
  */
 
 import TurndownService from "turndown";
@@ -34,14 +35,25 @@ async function uploadImageSrc(src: string, noteId: string, index: number, authTo
     form.append("noteId", noteId);
 
     try {
-        const res = await fetch("/api/stickies/upload", {
+        // Try Google Drive first, fall back to Supabase
+        const res = await fetch("/api/stickies/gdrive", {
             method: "POST",
             headers: { Authorization: `Bearer ${authToken}` },
             body: form,
         });
-        if (!res.ok) return src;
-        const data = await res.json();
-        return (data.url as string) ?? src;
+        if (res.ok) {
+            const data = await res.json();
+            if (data.url) return data.url as string;
+        }
+        // Fallback: Supabase storage
+        const res2 = await fetch("/api/stickies/upload", {
+            method: "POST",
+            headers: { Authorization: `Bearer ${authToken}` },
+            body: form,
+        });
+        if (!res2.ok) return src;
+        const data2 = await res2.json();
+        return (data2.url as string) ?? src;
     } catch {
         return src;
     }

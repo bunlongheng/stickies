@@ -1969,7 +1969,7 @@ const fireIntegrations = (trigger: string, note: any) => {
             return;
         }
 
-        // Direct image file paste → upload to Supabase storage, embed as short URL
+        // Direct image file paste → upload to Google Drive (fallback: Supabase), embed as short URL
         if (imageItems.length > 0) {
             e.preventDefault();
             const files = imageItems.map((i) => i.getAsFile()).filter(Boolean) as File[];
@@ -1983,6 +1983,17 @@ const fireIntegrations = (trigger: string, note: any) => {
                     const fd = new FormData();
                     fd.append("file", file, `image-${i + 1}.${file.type.split("/")[1] ?? "png"}`);
                     if (nid) fd.append("noteId", nid);
+                    // Try Google Drive first
+                    const gdriveRes = await fetch("/api/stickies/gdrive", {
+                        method: "POST",
+                        headers: { Authorization: `Bearer ${token}` },
+                        body: fd,
+                    });
+                    if (gdriveRes.ok) {
+                        const gdata = await gdriveRes.json();
+                        if (gdata.url) return gdata.url as string;
+                    }
+                    // Fallback: Supabase
                     const res = await fetch("/api/stickies/upload", {
                         method: "POST",
                         headers: { Authorization: `Bearer ${token}` },
