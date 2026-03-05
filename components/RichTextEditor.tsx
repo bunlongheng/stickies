@@ -28,6 +28,7 @@ interface Props {
 
 export function RichTextEditor({ noteId, content, onChange, onBlur, onUploadImage, accentColor }: Props) {
     const editor = useEditor({
+        immediatelyRender: false,
         extensions: [
             StarterKit,
             TipTapImage.configure({ inline: false, allowBase64: false }),
@@ -67,7 +68,7 @@ export function RichTextEditor({ noteId, content, onChange, onBlur, onUploadImag
         const newHtml = toHtml(content);
         const current = editor.getHTML();
         if (current !== newHtml) {
-            editor.commands.setContent(newHtml, false);
+            editor.commands.setContent(newHtml, { emitUpdate: false });
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [noteId]);
