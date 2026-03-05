@@ -2373,7 +2373,7 @@ const fireIntegrations = (trigger: string, note: any) => {
     }, []);
 
     const openNoteFromCmdK = useCallback((note: any, cmdClick = false) => {
-        if (cmdClick && looksLikeUrl(note.content || "")) {
+        if (cmdClick && looksLikeUrl(note.content || "") && (note.folder_name || "").toUpperCase() === "BOOKMARKS") {
             window.open(note.content.trim(), "_blank", "noopener,noreferrer");
             return;
         }
@@ -4712,6 +4712,9 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         if (item.is_folder) {
                                             playSound("navigate");
                                             enterFolder({ id: String(item.id), name: item.name, color: item.color || palette12[0] });
+                                        } else if (!item.is_folder && looksLikeUrl(item.content || "") && (item.folder_name || "").toUpperCase() === "BOOKMARKS") {
+                                            playSound("click");
+                                            window.open(item.content.trim(), "_blank", "noopener,noreferrer");
                                         } else {
                                             playSound("click");
                                             setEditingNote(item);
