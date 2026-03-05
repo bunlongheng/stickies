@@ -4341,7 +4341,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                     <PlusIcon className="w-3.5 h-3.5 text-zinc-500 flex-shrink-0" />
                                                     New file
                                                 </button>
-                                                <button onClick={() => { setShowAddMenu(false); openCreateFolder(); }} className="flex items-center gap-2.5 px-3 py-2.5 text-left text-[13px] text-zinc-300 hover:bg-white/8 transition-colors">
+                                                <button onClick={(e) => { e.stopPropagation(); setShowAddMenu(false); openCreateFolder(); }} className="flex items-center gap-2.5 px-3 py-2.5 text-left text-[13px] text-zinc-300 hover:bg-white/8 transition-colors">
                                                     <PlusIcon className="w-3.5 h-3.5 text-zinc-500 flex-shrink-0" />
                                                     New folder
                                                 </button>
@@ -4380,7 +4380,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                         <PlusIcon className="w-3.5 h-3.5 text-zinc-500 flex-shrink-0" />
                                                         New file
                                                     </button>
-                                                    <button onClick={() => { setShowAddMenu(false); openCreateFolder(); }} className="flex items-center gap-2.5 px-3 py-2.5 text-left text-[13px] text-zinc-300 hover:bg-white/8 transition-colors">
+                                                    <button onClick={(e) => { e.stopPropagation(); setShowAddMenu(false); openCreateFolder(); }} className="flex items-center gap-2.5 px-3 py-2.5 text-left text-[13px] text-zinc-300 hover:bg-white/8 transition-colors">
                                                         <PlusIcon className="w-3.5 h-3.5 text-zinc-500 flex-shrink-0" />
                                                         New folder
                                                     </button>
@@ -4712,7 +4712,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         ? `group list-row-hover flex items-center gap-3 px-4 py-1 border-b border-white/5 cursor-pointer select-none transition-colors active:bg-white/10 overflow-hidden ${isDragging ? "opacity-30" : dt?.mode === "into" ? "bg-cyan-950/60 ring-1 ring-inset ring-cyan-400" : ""} ${isSelectMode && !item.is_folder && selectedIds.has(String(item.id)) ? "bg-blue-950/50" : ""} ${isFolderSelectMode && item.is_folder && selectedFolderNames.includes(item.name || "") ? "bg-emerald-950/50" : ""}`
                                         : `relative min-w-0 cursor-pointer transition-all group overflow-hidden ${isDragging ? "opacity-30 scale-95" : dt?.mode === "into" ? "ring-4 ring-cyan-400 ring-inset z-10" : ""} ${isSelectMode && !item.is_folder && selectedIds.has(String(item.id)) ? "ring-2 ring-inset ring-blue-500" : ""} ${isFolderSelectMode && item.is_folder && selectedFolderNames.includes(item.name || "") ? "ring-2 ring-inset ring-emerald-500" : ""}`}`}>
                                     {/* HeroCard — cursor spotlight + snake border */}
-                                    {glowCard?.id === tileId && (() => {
+                                    {mainListMode && glowCard?.id === tileId && (() => {
                                         const c = item.color || item.folder_color || "#888888";
                                         const hex = c.replace("#", "").padEnd(6, "0");
                                         const r = parseInt(hex.substring(0, 2), 16);
@@ -4720,10 +4720,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         const b = parseInt(hex.substring(4, 6), 16);
                                         return (
                                             <>
-                                                {/* Background glow — list mode only (looks glossy/buggy on thumbnails) */}
-                                                {mainListMode && (
-                                                    <div className="absolute inset-0 pointer-events-none z-[-1]" style={{ background: `radial-gradient(circle at ${glowCard.x}% ${glowCard.y}%, rgba(${r},${g},${b},0.4) 0%, rgba(${r},${g},${b},0.2) 50%, rgba(${r},${g},${b},0.03) 100%)`, transition: "background 0.05s" }} />
-                                                )}
+                                                {/* Background glow */}
+                                                <div className="absolute inset-0 pointer-events-none z-[-1]" style={{ background: `radial-gradient(circle at ${glowCard.x}% ${glowCard.y}%, rgba(${r},${g},${b},0.4) 0%, rgba(${r},${g},${b},0.2) 50%, rgba(${r},${g},${b},0.03) 100%)`, transition: "background 0.05s" }} />
                                                 {/* Snake border — 1 round */}
                                                 <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 2 }}>
                                                     <rect className="list-snake-path" x="0" y="0" width="100%" height="100%" fill="none" stroke={c} strokeWidth="2" pathLength="100" style={{ animationIterationCount: 1, animationFillMode: "forwards" }} />
