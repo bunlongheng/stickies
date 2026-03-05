@@ -4986,26 +4986,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                         </div>
                     )}
 
-                    {!showGlobalGraph && !showFolderActions && !isSelectMode && activeFolder ? (
-                        <div className="fixed right-5 bottom-5 sm:right-8 sm:bottom-8 z-[10000] w-16 h-16">
-                            {showEmptyFolderPulse && (
-                                <div className="absolute inset-0 pointer-events-none" style={{ "--pulse-color": activeFolderColor } as React.CSSProperties}>
-                                    <span className="folder-fab-pulse-ring" />
-                                    <span className="folder-fab-pulse-ring" style={{ animationDelay: "320ms" }} />
-                                    <span className="folder-fab-pulse-ring" style={{ animationDelay: "640ms" }} />
-                                </div>
-                            )}
-                            <button
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    openNewNote();
-                                }}
-                                aria-label="Add note"
-                                className="fab-float relative z-10 w-20 h-20 rounded-full bg-white text-black border border-black/20 shadow-[0_10px_24px_rgba(0,0,0,0.45)] flex items-center justify-center hover:border-2 hover:border-black/50 transition-all">
-                                <PlusIcon className="w-10 h-10" />
-                            </button>
-                        </div>
-                    ) : null}
                 </>
             )}
 
