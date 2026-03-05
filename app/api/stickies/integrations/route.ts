@@ -37,3 +37,33 @@ export async function GET(req: Request) {
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json(data ?? []);
 }
+
+export async function POST(req: Request) {
+    if (!authorize(req)) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    let body: Record<string, unknown>;
+    try { body = await req.json(); } catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }); }
+
+    const { type, name, trigger, condition, config } = body as any;
+    if (!type?.trim()) return NextResponse.json({ error: "type required" }, { status: 400 });
+
+    const now = new Date().toISOString();
+    const { data, error } = await getSupabase()
+        .from("integrations")
+        .insert([{
+            type: type.trim(),
+            name: name?.trim() ?? type.trim(),
+            trigger: trigger ?? null,
+            condition: condition ?? {},
+            config: config ?? {},
+            active: true,
+            created_at: now,
+            updated_at: now,
+        }])
+        .select("id,trigger,condition,type,config,name")
+        .single();
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json(data, { status: 201 });
+}

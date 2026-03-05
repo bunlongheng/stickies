@@ -26,7 +26,9 @@ function authorize(req: Request): boolean {
     return false;
 }
 
-export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+type Params = { params: Promise<{ id: string }> };
+
+export async function PATCH(req: Request, { params }: Params) {
     if (!authorize(req)) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -34,8 +36,18 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const body = await req.json();
     const { error } = await getSupabase()
         .from("integrations")
-        .update(body)
+        .update({ ...body, updated_at: new Date().toISOString() })
         .eq("id", id);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ ok: true });
+}
+
+export async function DELETE(_req: Request, { params }: Params) {
+    if (!authorize(_req)) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const { id } = await params;
+    const { error } = await getSupabase().from("integrations").delete().eq("id", id);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ ok: true });
 }
