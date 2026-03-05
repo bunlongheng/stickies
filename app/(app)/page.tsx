@@ -4712,9 +4712,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         if (item.is_folder) {
                                             playSound("navigate");
                                             enterFolder({ id: String(item.id), name: item.name, color: item.color || palette12[0] });
-                                        } else if (!item.is_folder && looksLikeUrl(item.content || "")) {
-                                            playSound("click");
-                                            window.open(item.content.trim(), "_blank", "noopener,noreferrer");
                                         } else {
                                             playSound("click");
                                             setEditingNote(item);
