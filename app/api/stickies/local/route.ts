@@ -101,5 +101,11 @@ export async function POST(req: Request) {
 
     try { await getPusher().trigger("stickies", "note-created", data); } catch {}
 
+    // Hue — local bridge only reachable from same network
+    fetch("http://localhost:3000/api/hue/trigger", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ color }),
+    }).catch(() => {});
+
     return NextResponse.json({ note: data }, { status: 201 });
 }
