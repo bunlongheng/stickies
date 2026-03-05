@@ -85,7 +85,7 @@ async function authenticate(req: Request): Promise<AuthResult | null> {
     // Supabase JWT → check if owner email, else regular user
     const { data: { user } } = await getSupabase().auth.getUser(bearer);
     if (user) {
-        const ownerUserId = process.env.OWNER_USER_ID;
+        const ownerUserId = process.env.OWNER_USER_ID?.trim();
         if (ownerUserId && user.id === ownerUserId) return { type: "apikey" };
         return { type: "user", userId: user.id };
     }
