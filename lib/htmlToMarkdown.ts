@@ -2,41 +2,65 @@
  * htmlToMarkdown.ts — browser-side utility
  *
  * Converts rich HTML (e.g. pasted from Notion) into Markdown.
- * Inline images are fetched and embedded as base64 data URIs —
- * no external storage required.
+ * Images are uploaded to Supabase storage and embedded as short public URLs.
  */
 
 import TurndownService from "turndown";
 
-/** Fetch an image via server-side proxy and return as base64 data URI. */
-async function toBase64(src: string): Promise<string> {
-    if (src.startsWith("data:")) return src; // already base64
-    if (!src.startsWith("http")) return src;
+/** Upload an image src (remote URL or data URI) to storage, return public URL. */
+async function uploadImageSrc(src: string, noteId: string, index: number, authToken: string): Promise<string> {
+    let blob: Blob | null = null;
+
+    if (src.startsWith("data:")) {
+        try { blob = await (await fetch(src)).blob(); } catch { return src; }
+    } else if (src.startsWith("http")) {
+        try {
+            const proxied = await fetch(`/api/stickies/img-proxy?url=${encodeURIComponent(src)}`);
+            if (proxied.ok) {
+                const dataUri = await proxied.text();
+                if (dataUri.startsWith("data:")) {
+                    blob = await (await fetch(dataUri)).blob();
+                }
+            }
+        } catch { return src; }
+    }
+
+    if (!blob) return src;
+
+    const ext = blob.type.split("/")[1]?.replace("jpeg", "jpg") || "png";
+    const filename = `image-${index + 1}.${ext}`;
+    const form = new FormData();
+    form.append("file", blob, filename);
+    form.append("noteId", noteId);
 
     try {
-        const res = await fetch(`/api/stickies/img-proxy?url=${encodeURIComponent(src)}`);
+        const res = await fetch("/api/stickies/upload", {
+            method: "POST",
+            headers: { Authorization: `Bearer ${authToken}` },
+            body: form,
+        });
         if (!res.ok) return src;
-        const dataUri = await res.text();
-        return dataUri.startsWith("data:") ? dataUri : src;
+        const data = await res.json();
+        return (data.url as string) ?? src;
     } catch {
         return src;
     }
 }
 
-/** Convert rich HTML to Markdown, embedding images as base64. */
-export async function htmlToMarkdown(html: string, _noteTitle: string): Promise<string> {
+/** Convert rich HTML to Markdown, uploading images to storage. */
+export async function htmlToMarkdown(html: string, noteId: string, authToken: string): Promise<string> {
     const parser = new DOMParser();
     const doc = parser.parseFromString(html, "text/html");
 
-    // Remove Notion-specific junk elements
     doc.querySelectorAll("[data-token-index], .notion-selectable-halo, meta, style").forEach(el => el.remove());
 
-    // Embed all images as base64
     const imgs = Array.from(doc.querySelectorAll("img"));
     if (imgs.length > 0) {
-        const b64s = await Promise.all(imgs.map(img => toBase64(img.getAttribute("src") ?? "")));
+        const urls = await Promise.all(imgs.map((img, i) =>
+            uploadImageSrc(img.getAttribute("src") ?? "", noteId, i, authToken)
+        ));
         imgs.forEach((img, i) => {
-            img.setAttribute("src", b64s[i]);
+            img.setAttribute("src", urls[i]);
             if (!img.getAttribute("alt")) img.setAttribute("alt", `image-${i + 1}`);
         });
     }
@@ -48,7 +72,6 @@ export async function htmlToMarkdown(html: string, _noteTitle: string): Promise<
         hr: "---",
     });
 
-    // Preserve inline images
     td.addRule("images", {
         filter: "img",
         replacement: (_content, node) => {
@@ -60,16 +83,11 @@ export async function htmlToMarkdown(html: string, _noteTitle: string): Promise<
         },
     });
 
-    // Notion checkboxes → GFM task list items
     td.addRule("notionCheckbox", {
         filter: (node) => node.nodeName === "INPUT" && (node as HTMLInputElement).type === "checkbox",
-        replacement: (_content, node) => {
-            const checked = (node as HTMLInputElement).checked;
-            return checked ? "[x] " : "[ ] ";
-        },
+        replacement: (_content, node) => ((node as HTMLInputElement).checked ? "[x] " : "[ ] "),
     });
 
-    // Strikethrough
     td.addRule("strikethrough", {
         filter: ["del", "s"],
         replacement: (content) => `~~${content}~~`,

@@ -1942,8 +1942,8 @@ const fireIntegrations = (trigger: string, note: any) => {
             showToast("Converting rich text…", "#32ADE6");
             try {
                 const { htmlToMarkdown } = await import("@/lib/htmlToMarkdown");
-                const noteTitle = title || editingNote?.title || "note";
-                const md = await htmlToMarkdown(htmlData, noteTitle);
+                const token = await getAuthToken();
+                const md = await htmlToMarkdown(htmlData, nid ?? "paste", token);
                 const newContent = content.slice(0, start) + md + content.slice(end);
                 setContent(newContent);
                 if (nid) setMarkdownModeNotes(prev => { const next = new Set(prev); next.delete(nid); return next; });
@@ -1955,24 +1955,32 @@ const fireIntegrations = (trigger: string, note: any) => {
             return;
         }
 
-        // Direct image file paste → embed as base64 inline in content
+        // Direct image file paste → upload to Supabase storage, embed as short URL
         if (imageItems.length > 0) {
             e.preventDefault();
             const files = imageItems.map((i) => i.getAsFile()).filter(Boolean) as File[];
-            showToast("Embedding image…", "#32ADE6");
+            showToast("Uploading image…", "#32ADE6");
             try {
                 const textarea = e.currentTarget;
                 const start = textarea.selectionStart ?? content.length;
                 const end = textarea.selectionEnd ?? content.length;
-                const b64s = await Promise.all(files.map(file => new Promise<string>((resolve) => {
-                    const reader = new FileReader();
-                    reader.onload = () => resolve(reader.result as string);
-                    reader.readAsDataURL(file);
-                })));
-                const md = b64s.map((src, i) => `![image-${i + 1}](${src})`).join("\n");
+                const token = await getAuthToken();
+                const urls = await Promise.all(files.map(async (file, i) => {
+                    const fd = new FormData();
+                    fd.append("file", file, `image-${i + 1}.${file.type.split("/")[1] ?? "png"}`);
+                    if (nid) fd.append("noteId", nid);
+                    const res = await fetch("/api/stickies/upload", {
+                        method: "POST",
+                        headers: { Authorization: `Bearer ${token}` },
+                        body: fd,
+                    });
+                    if (!res.ok) throw new Error("Upload failed");
+                    const data = await res.json();
+                    return data.url as string;
+                }));
+                const md = urls.map((src, i) => `![image-${i + 1}](${src})`).join("\n");
                 const newContent = content.slice(0, start) + md + content.slice(end);
                 setContent(newContent);
-                const nid = editingNote?.id ? String(editingNote.id) : null;
                 if (nid) setMarkdownModeNotes(prev => { const next = new Set(prev); next.delete(nid); return next; });
                 showToast("Image pasted ✓", "#34C759");
             } catch {
@@ -4210,7 +4218,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         }
                                         return;
                                     }
-                                    toggleMarkdownMode();
+                                    // Don't switch to raw textarea if content has embedded base64 images
+                                    if (!content.includes("data:image")) toggleMarkdownMode();
                                 }}
                                 title="Click to edit"
                             >
