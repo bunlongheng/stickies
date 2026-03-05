@@ -641,6 +641,7 @@ export default function NotesMaster() {
     const [showAddTask, setShowAddTask] = useState(false);
     const [newTaskText, setNewTaskText] = useState("");
     const [confirmDeleteTask, setConfirmDeleteTask] = useState<number | null>(null);
+    const [activeTaskIdx, setActiveTaskIdx] = useState<number | null>(null);
     const [editingTaskIdx, setEditingTaskIdx] = useState<number | null>(null);
     const [swipedTaskIdx, setSwipedTaskIdx] = useState<number | null>(null);
     const [draggingTaskIdx, setDraggingTaskIdx] = useState<number | null>(null);
@@ -4063,6 +4064,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     return (
                                     <div key={origIdx} className="group task-card-row task-row-enter w-full relative overflow-hidden"
                                         style={{ animationDelay: `${sortedIdx * 0.055}s` }}
+                                        onClick={() => setActiveTaskIdx(i => i === origIdx ? null : origIdx)}
                                         onTouchStart={(e) => {
                                             taskRowSwipeStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
                                             setDraggingTaskIdx(origIdx);
@@ -4120,7 +4122,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                     onChange={(e) => setEditingTaskText(e.target.value)}
                                                     onKeyDown={(e) => { if (e.key === "Enter") renameTask(origIdx, editingTaskText); if (e.key === "Escape") setEditingTaskIdx(null); }}
                                                     onBlur={() => renameTask(origIdx, editingTaskText || task.text)}
-                                                    className="relative flex-1 bg-transparent text-white text-[12px] sm:text-sm font-bold outline-none border-b border-white/40 pb-0.5"
+                                                    className="relative flex-1 bg-transparent text-[12px] sm:text-sm font-bold outline-none border-b border-white/40 pb-0.5"
+                                                    style={{ color: "#ffffff" }}
                                                     autoComplete="off"
                                                 />
                                             ) : (
@@ -4130,13 +4133,13 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 >{task.text}</span>
                                             )}
                                             <span className="relative flex items-center gap-1 flex-shrink-0">
-                                                {task.done && (isConfirming ? (
+                                                {task.done && activeTaskIdx === origIdx && (isConfirming ? (
                                                     <>
                                                         <button type="button" onClick={(e) => { e.stopPropagation(); setConfirmDeleteTask(null); }} className="p-1 text-zinc-400 hover:text-white transition" title="Cancel"><span className="text-[13px] font-black">✕</span></button>
                                                         <button type="button" onClick={(e) => { e.stopPropagation(); deleteTask(origIdx, task.text, c); }} className="p-1 text-red-400 hover:text-red-300 transition" title="Confirm delete"><CheckCircleIcon className="w-5 h-5" /></button>
                                                     </>
                                                 ) : (
-                                                    <button type="button" onClick={(e) => { e.stopPropagation(); setConfirmDeleteTask(origIdx); }} className="p-1 text-zinc-500 opacity-0 group-hover:opacity-100 hover:text-red-400 transition" title="Delete"><TrashIcon className="w-4 h-4" /></button>
+                                                    <button type="button" onClick={(e) => { e.stopPropagation(); setConfirmDeleteTask(origIdx); }} className="p-1 text-zinc-500 hover:text-red-400 transition" title="Delete"><TrashIcon className="w-4 h-4" /></button>
                                                 ))}
                                             </span>
                                         </div>
@@ -4153,7 +4156,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             value={newTaskText}
                                             onChange={(e) => setNewTaskText(e.target.value)}
                                             onKeyDown={(e) => { if (e.key === "Enter") confirmAddTask(); if (e.key === "Escape") setShowAddTask(false); }}
-                                            className="flex-1 bg-transparent text-white text-[12px] sm:text-sm font-bold outline-none border-none shadow-none placeholder:text-zinc-400"
+                                            className="flex-1 bg-transparent text-[12px] sm:text-sm font-bold outline-none border-none shadow-none placeholder:text-zinc-400"
+                                            style={{ color: "#ffffff" }}
                                             placeholder="Type a task..."
                                             autoComplete="off"
                                         />
