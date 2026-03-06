@@ -740,6 +740,11 @@ export default function NotesMaster() {
     const [cmdKQuery, setCmdKQuery] = useState("");
     const [cmdKCursor, setCmdKCursor] = useState(0);
     const cmdKInputRef = useRef<HTMLInputElement | null>(null);
+    const [showCmdB, setShowCmdB] = useState(false);
+    const [cmdBQuery, setCmdBQuery] = useState("");
+    const [cmdBCursor, setCmdBCursor] = useState(0);
+    const cmdBInputRef = useRef<HTMLInputElement | null>(null);
+    const [bookmarksData, setBookmarksData] = useState<any[]>([]);
     const [images, setImages] = useState<Array<{ url: string; name: string; type: string }>>([]);
     const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
     const [uploadingImages, setUploadingImages] = useState(false);
@@ -1128,17 +1133,32 @@ export default function NotesMaster() {
         } catch { /* ignore */ }
     }, []);
 
-    // Cmd+K global shortcut
+    // Cmd+K / Cmd+J global shortcut
     useEffect(() => {
         const handler = (e: KeyboardEvent) => {
-            if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+            if ((e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "j")) {
                 e.preventDefault();
                 setShowCmdK(v => { if (!v) { setCmdKQuery(""); setCmdKCursor(0); } return !v; });
+            }
+            if ((e.metaKey || e.ctrlKey) && e.key === "b") {
+                e.preventDefault();
+                setShowCmdB(v => { if (!v) { setCmdBQuery(""); setCmdBCursor(0); } return !v; });
             }
         };
         window.addEventListener("keydown", handler);
         return () => window.removeEventListener("keydown", handler);
     }, []);
+
+    // Fetch bookmarks from DB
+    useEffect(() => {
+        if (!showCmdB || bookmarksData.length > 0) return;
+        getAuthToken().then(token => {
+            fetch("/api/stickies/bookmarks", { headers: { Authorization: `Bearer ${token}` } })
+                .then(r => r.json())
+                .then(data => { if (Array.isArray(data)) setBookmarksData(data); })
+                .catch(() => {});
+        });
+    }, [showCmdB]);
 
     // Live clock — tick every minute
     useEffect(() => {
@@ -1697,6 +1717,16 @@ const fireIntegrations = (trigger: string, note: any) => {
             });
         return [...matchingFolders, ...matchedNotes];
     }, [dbData, cmdKQuery, pinnedIds, folders]);
+
+    const cmdBResults = useMemo(() => {
+        if (!cmdBQuery.trim()) return bookmarksData.slice(0, 12);
+        const q = cmdBQuery.toLowerCase();
+        return bookmarksData.filter(b =>
+            (b.title || "").toLowerCase().includes(q) ||
+            (b.folder || "").toLowerCase().includes(q) ||
+            (b.url || "").toLowerCase().includes(q)
+        ).slice(0, 20);
+    }, [bookmarksData, cmdBQuery]);
 
     const dbStats = useMemo(() => {
         const folderCount = dbData.filter(r => r.is_folder).length;
@@ -5963,6 +5993,73 @@ const fireIntegrations = (trigger: string, note: any) => {
                             <span className="flex items-center gap-1.5 text-[10px] text-zinc-600"><kbd className="border border-zinc-700 px-1 font-mono">↑↓</kbd> navigate</span>
                             <span className="flex items-center gap-1.5 text-[10px] text-zinc-600"><kbd className="border border-zinc-700 px-1 font-mono">↵</kbd> open</span>
                             <span className="flex items-center gap-1.5 text-[10px] text-zinc-600"><kbd className="border border-zinc-700 px-1 font-mono">esc</kbd> close</span>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* CMD+B BOOKMARK LAUNCHER */}
+            {showCmdB && (
+                <div className="fixed inset-0 z-[99990] flex items-center justify-center px-4 bg-black/60 backdrop-blur-sm"
+                    onClick={() => setShowCmdB(false)}>
+                    <div className="w-full max-w-lg bg-zinc-900 border border-white/15 shadow-2xl overflow-hidden"
+                        onClick={(e) => e.stopPropagation()}
+                        onKeyDown={(e) => {
+                            if (e.key === "Escape") { setShowCmdB(false); return; }
+                            if (e.key === "ArrowDown") { e.preventDefault(); setCmdBCursor(v => Math.min(v + 1, cmdBResults.length - 1)); }
+                            if (e.key === "ArrowUp") { e.preventDefault(); setCmdBCursor(v => Math.max(v - 1, 0)); }
+                            if (e.key === "Enter" && cmdBResults[cmdBCursor]) {
+                                window.open(cmdBResults[cmdBCursor].url, "_blank", "noopener,noreferrer");
+                                setShowCmdB(false);
+                            }
+                        }}>
+                        {/* Input */}
+                        <div className="flex items-center gap-3 px-4 py-3.5 border-b border-white/10">
+                            <BookmarkIcon className="w-4 h-4 text-zinc-500 flex-shrink-0" />
+                            <input
+                                ref={cmdBInputRef}
+                                autoFocus
+                                value={cmdBQuery}
+                                onChange={(e) => { setCmdBQuery(e.target.value); setCmdBCursor(0); }}
+                                placeholder="Search bookmarks…"
+                                className="flex-1 bg-transparent text-sm text-white outline-none placeholder-zinc-600 font-medium"
+                            />
+                            <kbd className="text-[10px] text-zinc-600 border border-zinc-700 px-1.5 py-0.5 font-mono">esc</kbd>
+                        </div>
+                        {/* Results */}
+                        <div className="max-h-[360px] overflow-y-auto">
+                            {cmdBResults.length === 0 ? (
+                                <div className="px-4 py-10 text-center text-zinc-600 text-sm">
+                                    {bookmarksData.length === 0 ? "Loading…" : "No bookmarks found"}
+                                </div>
+                            ) : (
+                                <>
+                                    <div className="px-4 pt-3 pb-1 text-[9px] font-black tracking-[0.2em] text-zinc-600 uppercase">Bookmarks</div>
+                                    {cmdBResults.map((bm: any, i: number) => (
+                                        <button key={bm.id} type="button"
+                                            onMouseEnter={() => setCmdBCursor(i)}
+                                            onClick={() => { window.open(bm.url, "_blank", "noopener,noreferrer"); setShowCmdB(false); }}
+                                            className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition ${i === cmdBCursor ? "bg-white/10" : "hover:bg-white/5"}`}>
+                                            <div className="w-7 h-7 flex-shrink-0 flex items-center justify-center text-sm font-black text-white bg-blue-600">
+                                                {[...(bm.title || "B")][0]?.toUpperCase()}
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                {bm.folder && <div className="text-[10px] text-zinc-500 font-bold uppercase tracking-wide truncate">{bm.folder}</div>}
+                                                <div className="text-sm font-semibold text-white truncate">{bm.title || "Untitled"}</div>
+                                                <div className="text-[10px] text-zinc-600 truncate">{bm.url}</div>
+                                            </div>
+                                            {i === cmdBCursor && <kbd className="text-[9px] text-zinc-600 border border-zinc-700 px-1 py-0.5 font-mono flex-shrink-0">↵</kbd>}
+                                        </button>
+                                    ))}
+                                </>
+                            )}
+                        </div>
+                        {/* Footer */}
+                        <div className="border-t border-white/10 px-4 py-2 flex items-center gap-3">
+                            <span className="flex items-center gap-1.5 text-[10px] text-zinc-600"><kbd className="border border-zinc-700 px-1 font-mono">↑↓</kbd> navigate</span>
+                            <span className="flex items-center gap-1.5 text-[10px] text-zinc-600"><kbd className="border border-zinc-700 px-1 font-mono">↵</kbd> open</span>
+                            <span className="flex items-center gap-1.5 text-[10px] text-zinc-600"><kbd className="border border-zinc-700 px-1 font-mono">esc</kbd> close</span>
+                            <span className="ml-auto text-[10px] text-zinc-700">{bookmarksData.length} bookmarks</span>
                         </div>
                     </div>
                 </div>
