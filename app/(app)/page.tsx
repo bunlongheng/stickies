@@ -67,8 +67,16 @@ async function getAuthToken(): Promise<string> {
         return process.env.NEXT_PUBLIC_STICKIES_API_KEY ?? "";
     }
     // Use the SSR-aware browser client — reads session from cookies (set by @supabase/ssr)
-    const { data: { session } } = await createBrowserClient().auth.getSession();
-    return session?.access_token ?? "";
+    const sb = createBrowserClient();
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) return "";
+    // Proactively refresh if the token expires within 60 seconds
+    const expiresAt = (session as any).expires_at as number | undefined;
+    if (expiresAt !== undefined && expiresAt - Math.floor(Date.now() / 1000) < 60) {
+        const { data } = await sb.auth.refreshSession();
+        return data.session?.access_token ?? "";
+    }
+    return session.access_token;
 }
 const notesApi = {
     update: async (id: string, fields: Record<string, unknown>) => {
