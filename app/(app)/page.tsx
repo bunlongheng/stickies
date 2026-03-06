@@ -158,6 +158,28 @@ function detectHtml(text: string): boolean {
     return /<!DOCTYPE\s+html/i.test(t) || /^\s*<html[\s>]/i.test(t);
 }
 
+function detectJson(text: string): { ok: boolean; parsed?: any } {
+    const t = text.trim();
+    if (!t.startsWith("{") && !t.startsWith("[")) return { ok: false };
+    try { return { ok: true, parsed: JSON.parse(t) }; } catch { return { ok: false }; }
+}
+
+function syntaxHighlightJson(obj: any): string {
+    const json = JSON.stringify(obj, null, 2);
+    return json.replace(
+        /("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g,
+        (match) => {
+            if (/^"/.test(match)) {
+                if (/:$/.test(match)) return `<span style="color:#60a5fa">${match}</span>`; // key
+                return `<span style="color:#86efac">${match}</span>`; // string
+            }
+            if (/true|false/.test(match)) return `<span style="color:#f59e0b">${match}</span>`;
+            if (/null/.test(match)) return `<span style="color:#f87171">${match}</span>`;
+            return `<span style="color:#c084fc">${match}</span>`; // number
+        }
+    );
+}
+
 /** Auto-detect Markdown — strong signals only; plain `-` lists or `*` bullets do NOT qualify */
 function detectMarkdown(text: string): boolean {
     const t = text.trim();
@@ -2519,6 +2541,8 @@ const fireIntegrations = (trigger: string, note: any) => {
     // Markdown & HTML are auto-detected but can be overridden to Text by the user
     const markdownMode = !listMode && !graphMode && !mindmapMode && !stackMode && detectMarkdown(content) && !markdownModeNotes.has(currentNoteId ?? "");
     const htmlMode = !listMode && !graphMode && !mindmapMode && !stackMode && !markdownMode && detectHtml(content) && !htmlModeNotes.has(currentNoteId ?? "");
+    const jsonDetect = !listMode && !graphMode && !mindmapMode && !stackMode && !markdownMode && !htmlMode ? detectJson(content) : { ok: false };
+    const jsonMode = jsonDetect.ok;
     // Unified active mode label for the dropdown
     const noteViewMode = stackMode ? "Stack" : mindmapMode ? "Mindmap" : graphMode ? "Graph" : listMode ? "Checklist" : markdownMode ? "Markdown" : htmlMode ? "HTML" : "Text";
     // Rich note = has images, file attachments, headings, code blocks, blockquotes, or tables → hide mode toggle
@@ -4368,6 +4392,13 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 sandbox="allow-scripts"
                                 title="HTML Preview"
                             />
+                        ) : jsonMode ? (
+                            <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+                                <pre
+                                    className="text-xs leading-relaxed font-mono whitespace-pre-wrap break-all"
+                                    dangerouslySetInnerHTML={{ __html: syntaxHighlightJson(jsonDetect.parsed) }}
+                                />
+                            </div>
                         ) : (
                             <div className="relative flex-1 min-h-0 flex flex-col">
                                 <RichTextEditor
