@@ -158,6 +158,20 @@ function detectHtml(text: string): boolean {
     return /<!DOCTYPE\s+html/i.test(t) || /^\s*<html[\s>]/i.test(t);
 }
 
+function htmlToPlainLines(html: string): string {
+    if (!/<[a-z][^>]*>/i.test(html)) return html;
+    return html
+        .replace(/<br\s*\/?>/gi, "\n")
+        .replace(/<\/li>/gi, "\n")
+        .replace(/<li[^>]*>/gi, "")
+        .replace(/<\/?(p|div|tr|dt|dd|h[1-6])[^>]*>/gi, "\n")
+        .replace(/<[^>]+>/g, "")
+        .replace(/&nbsp;/g, " ")
+        .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
+}
+
 function detectJson(text: string): { ok: boolean; parsed?: any } {
     const t = text.trim();
     if (!t.startsWith("{") && !t.startsWith("[")) return { ok: false };
@@ -1407,11 +1421,15 @@ const fireIntegrations = (trigger: string, note: any) => {
         };
     }, []);
 
-    // Auto-checklist for TEAM folder notes
+    // Auto-checklist for TEAM folder notes — convert HTML content to plain lines
     useEffect(() => {
         if (!editingNote?.id) return;
         const folder = (editingNote.folder_name || "").toUpperCase();
         if (folder === "TEAM") {
+            const raw = editingNote.content || "";
+            if (/<[a-z][^>]*>/i.test(raw)) {
+                setContent(htmlToPlainLines(raw));
+            }
             setListModeNotes((prev) => new Set([...prev, String(editingNote.id)]));
         }
     }, [editingNote?.id]);
@@ -2684,7 +2702,13 @@ const fireIntegrations = (trigger: string, note: any) => {
         setListModeNotes((prev) => {
             const next = new Set(prev);
             const newVal = !next.has(currentNoteId);
-            if (newVal) next.add(currentNoteId); else next.delete(currentNoteId);
+            if (newVal) {
+                next.add(currentNoteId);
+                // Convert HTML to plain lines when enabling checklist mode
+                setContent(c => /<[a-z][^>]*>/i.test(c) ? htmlToPlainLines(c) : c);
+            } else {
+                next.delete(currentNoteId);
+            }
             localWriteRef.current.set(currentNoteId, Date.now());
             void notesApi.update(currentNoteId, { list_mode: newVal });
             return next;
