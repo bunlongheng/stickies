@@ -749,6 +749,8 @@ export default function NotesMaster() {
     const [search, setSearch] = useState("");
     const [toast, setToast] = useState("");
     const [toastColor, setToastColor] = useState("#34C759");
+    const [undoDeleteTask, setUndoDeleteTask] = useState<{ text: string; lineIdx: number } | null>(null);
+    useEffect(() => { if (!undoDeleteTask) return; const t = setTimeout(() => setUndoDeleteTask(null), 5000); return () => clearTimeout(t); }, [undoDeleteTask]);
     const [flashColor, setFlashColor] = useState("#ffffff");
     const [flashNote, setFlashNote] = useState<any | null>(null);
 
@@ -2817,74 +2819,49 @@ const fireIntegrations = (trigger: string, note: any) => {
     const parsedTasks = useMemo(() => {
         if (!listMode && !graphMode && !stackMode) return [];
         const isSeparator = (s: string) => /^[-–—=*#~_.]{2,}$/.test(s) || /^[-–—]{2,}.*[-–—]{2,}$/.test(s);
-        return content.split("\n").filter((l) => {
-            const t = l.trim();
-            return t.length > 0 && !isSeparator(t);
-        }).map((line) => {
+        const result: { done: boolean; text: string; lineIdx: number }[] = [];
+        content.split("\n").forEach((line, lineIdx) => {
             const trimmed = line.trim();
-            // Strip leading bullet/number first so [x] is always at the front
+            if (trimmed.length === 0 || isSeparator(trimmed)) return;
             const noBullet = trimmed.replace(/^\s*[-*•+_]\s*/, "").replace(/^\s*\d+\.\s*/, "").trim();
             const done = /^\[x\]/i.test(noBullet) || /^\[x\]/i.test(trimmed);
             const text = noBullet.replace(/^\[x\]\s*/i, "").replace(/^\[\s*\]\s*/, "").trim();
-            return { done, text };
-        }).filter(task => task.text.length > 0);
+            if (text.length === 0) return;
+            result.push({ done, text, lineIdx });
+        });
+        return result;
     }, [content, listMode, graphMode, stackMode]);
 
-    const toggleTask = useCallback((taskIndex: number) => {
+    const toggleTask = useCallback((lineIdx: number) => {
         const lines = content.split("\n");
-        let nonEmptyIdx = -1;
-        for (let i = 0; i < lines.length; i++) {
-            if (lines[i].trim().length > 0) {
-                nonEmptyIdx++;
-                if (nonEmptyIdx === taskIndex) {
-                    const trimmed = lines[i].trim();
-                    const wasDone = /^\[x\]/i.test(trimmed);
-                    if (wasDone) {
-                        lines[i] = lines[i].replace(/^\s*\[x\]\s*/i, "");
-                    } else {
-                        lines[i] = `[x] ${lines[i]}`;
-                    }
-                    playSound(wasDone ? "uncheck" : "check");
-                    break;
-                }
-            }
-        }
+        const line = lines[lineIdx];
+        if (line === undefined) return;
+        const trimmed = line.trim();
+        const noBullet = trimmed.replace(/^\s*[-*•+_]\s*/, "").replace(/^\s*\d+\.\s*/, "").trim();
+        const wasDone = /^\[x\]/i.test(noBullet) || /^\[x\]/i.test(trimmed);
+        lines[lineIdx] = wasDone ? line.replace(/^\s*\[x\]\s*/i, "") : `[x] ${line}`;
+        playSound(wasDone ? "uncheck" : "check");
         setContent(lines.join("\n"));
     }, [content]);
 
-    const deleteTask = useCallback((taskIndex: number, label?: string, color?: string) => {
+    const deleteTask = useCallback((lineIdx: number, label?: string, color?: string) => {
         const lines = content.split("\n");
-        let nonEmptyIdx = -1;
-        for (let i = 0; i < lines.length; i++) {
-            if (lines[i].trim().length > 0) {
-                nonEmptyIdx++;
-                if (nonEmptyIdx === taskIndex) {
-                    lines.splice(i, 1);
-                    break;
-                }
-            }
-        }
+        const deletedText = lines[lineIdx];
+        lines.splice(lineIdx, 1);
         setContent(lines.join("\n"));
         setConfirmDeleteTask(null);
         playSound("delete");
+        if (deletedText !== undefined) setUndoDeleteTask({ text: deletedText, lineIdx });
         if (label) showToast(`"${label.length > 10 ? label.slice(0, 10) + "…" : label}" deleted`, color || "#FF3B30");
     }, [content]);
 
-    const renameTask = useCallback((taskIndex: number, newText: string) => {
+    const renameTask = useCallback((lineIdx: number, newText: string) => {
         const trimmed = newText.trim();
         if (!trimmed) return;
         const lines = content.split("\n");
-        let nonEmptyIdx = -1;
-        for (let i = 0; i < lines.length; i++) {
-            if (lines[i].trim().length > 0) {
-                nonEmptyIdx++;
-                if (nonEmptyIdx === taskIndex) {
-                    const isDone = /^\s*\[x\]\s*/i.test(lines[i]);
-                    lines[i] = isDone ? `[x] ${trimmed}` : trimmed;
-                    break;
-                }
-            }
-        }
+        if (lines[lineIdx] === undefined) return;
+        const isDone = /^\s*\[x\]\s*/i.test(lines[lineIdx]);
+        lines[lineIdx] = isDone ? `[x] ${trimmed}` : trimmed;
         setContent(lines.join("\n"));
         setEditingTaskIdx(null);
     }, [content]);
@@ -4109,6 +4086,25 @@ const fireIntegrations = (trigger: string, note: any) => {
                     </div>
                 </div>
             )}
+            {undoDeleteTask && (
+                <div className="fixed left-1/2 -translate-x-1/2 z-[100003] flex items-center gap-2 px-3 py-1.5 rounded-full bg-zinc-800 border border-white/20 shadow-xl"
+                    style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 80px)" }}>
+                    <span className="text-[11px] font-bold text-zinc-300">Deleted</span>
+                    <button type="button"
+                        onClick={() => {
+                            if (!undoDeleteTask) return;
+                            const lines = content.split("\n");
+                            lines.splice(undoDeleteTask.lineIdx, 0, undoDeleteTask.text);
+                            setContent(lines.join("\n"));
+                            setUndoDeleteTask(null);
+                            showToast("Restored");
+                        }}
+                        className="text-[11px] font-black text-emerald-400 hover:text-emerald-300 uppercase tracking-wide transition">
+                        Undo
+                    </button>
+                    <button type="button" onClick={() => setUndoDeleteTask(null)} className="text-zinc-500 hover:text-white text-xs leading-none">✕</button>
+                </div>
+            )}
 
             {/* ── two-panel layout ── */}
             <div className={`flex-1 min-h-0 overflow-hidden flex ${editMode ? "flex-row" : "flex-col"}`}>
@@ -4453,7 +4449,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             setDraggingTaskIdx(null);
                                             if (dragOffset >= DELETE_W) {
                                                 setSwipedTaskIdx(null);
-                                                deleteTask(origIdx, task.text, c);
+                                                deleteTask(task.lineIdx, task.text, c);
                                             } else if (dragOffset >= SNAP_W / 2) {
                                                 setSwipedTaskIdx(origIdx);
                                             } else {
@@ -4476,7 +4472,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             }}>
                                             <span className="task-card-pattern absolute inset-0 pointer-events-none" />
                                             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[52px] font-black leading-none pointer-events-none select-none" style={{ color: "rgba(255,255,255,0.07)", fontFamily: "monospace" }}>{String(origIdx + 1).padStart(2, "0")}</span>
-                                            <button type="button" onClick={() => toggleTask(origIdx)} className="relative flex-shrink-0 w-5 h-5 rounded-sm border-2 flex items-center justify-center transition-all" style={{ borderColor: task.done ? c : `${c}80`, backgroundColor: task.done ? c : "transparent" }}>
+                                            <button type="button" onClick={() => toggleTask(task.lineIdx)} className="relative flex-shrink-0 w-5 h-5 rounded-sm border-2 flex items-center justify-center transition-all" style={{ borderColor: task.done ? c : `${c}80`, backgroundColor: task.done ? c : "transparent" }}>
                                                 {task.done && (
                                                     <svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="#000" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
                                                 )}
@@ -4487,8 +4483,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                     type="text"
                                                     value={editingTaskText}
                                                     onChange={(e) => setEditingTaskText(e.target.value)}
-                                                    onKeyDown={(e) => { if (e.key === "Enter") renameTask(origIdx, editingTaskText); if (e.key === "Escape") setEditingTaskIdx(null); }}
-                                                    onBlur={() => renameTask(origIdx, editingTaskText || task.text)}
+                                                    onKeyDown={(e) => { if (e.key === "Enter") renameTask(task.lineIdx, editingTaskText); if (e.key === "Escape") setEditingTaskIdx(null); }}
+                                                    onBlur={() => renameTask(task.lineIdx, editingTaskText || task.text)}
                                                     className="relative flex-1 bg-transparent text-[12px] sm:text-sm font-bold outline-none border-b border-white/40 pb-0.5"
                                                     style={{ color: "#ffffff" }}
                                                     autoComplete="off"
@@ -4500,14 +4496,9 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 >{task.text}</span>
                                             )}
                                             <span className="relative flex items-center gap-1 flex-shrink-0">
-                                                {task.done && activeTaskIdx === origIdx && (isConfirming ? (
-                                                    <>
-                                                        <button type="button" onClick={(e) => { e.stopPropagation(); setConfirmDeleteTask(null); }} className="p-1 text-zinc-400 hover:text-white transition" title="Cancel"><span className="text-[13px] font-black">✕</span></button>
-                                                        <button type="button" onClick={(e) => { e.stopPropagation(); deleteTask(origIdx, task.text, c); }} className="p-1 text-red-400 hover:text-red-300 transition" title="Confirm delete"><CheckCircleIcon className="w-5 h-5" /></button>
-                                                    </>
-                                                ) : (
-                                                    <button type="button" onClick={(e) => { e.stopPropagation(); setConfirmDeleteTask(origIdx); }} className="p-1 text-zinc-500 hover:text-red-400 transition" title="Delete"><TrashIcon className="w-4 h-4" /></button>
-                                                ))}
+                                                {task.done && activeTaskIdx === origIdx && (
+                                                    <button type="button" onClick={(e) => { e.stopPropagation(); deleteTask(task.lineIdx, task.text, c); }} className="p-1 text-zinc-500 hover:text-red-400 transition" title="Delete"><TrashIcon className="w-4 h-4" /></button>
+                                                )}
                                             </span>
                                         </div>
                                     </div>
