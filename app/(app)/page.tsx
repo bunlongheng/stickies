@@ -1583,8 +1583,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                 icon: folderIcons[folderName] || "",
             }));
 
-        const HIDDEN_FOLDERS = new Set(["BOOKMARKS"]);
-        const all = [...foldersFromRows, ...missingFolders].filter(f => !HIDDEN_FOLDERS.has(f.name));
+        const all = [...foldersFromRows, ...missingFolders].filter(f => f.name.toUpperCase() !== "BOOKMARKS");
         const SYSTEM_BOTTOM = ["PAGES", "CLAUDE"];
         if (pendingFolderOrder) {
             const idx = new Map(pendingFolderOrder.map((name, i) => [name, i]));
@@ -1611,6 +1610,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         const byUpdated = (a: any, b: any) =>
             String(b.updated_at || "").localeCompare(String(a.updated_at || "")) ||
             String(a.title || a.name || "").localeCompare(String(b.title || b.name || ""));
+        const isBookmark = (n: any) => (n.folder_name || "").toUpperCase() === "BOOKMARKS";
 
         if (search.trim()) {
             const q = search.toLowerCase();
@@ -1631,10 +1631,9 @@ const fireIntegrations = (trigger: string, note: any) => {
                 return 9;
             };
             return dbData
-                .filter((n) => !n.is_folder && score(n) < 9)
+                .filter((n) => !n.is_folder && !isBookmark(n) && score(n) < 9)
                 .sort((a, b) => { const sd = score(a) - score(b); return sd !== 0 ? sd : byUpdated(a, b); });
         }
-        const isBookmark = (n: any) => (n.folder_name || "").toUpperCase() === "BOOKMARKS";
         if (editMode) {
             // Edit mode: all notes, no folders (hide BOOKMARKS)
             return dbData.filter((n) => !n.is_folder && !isBookmark(n)).sort(byUpdated);
