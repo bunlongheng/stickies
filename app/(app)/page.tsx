@@ -2822,10 +2822,12 @@ const fireIntegrations = (trigger: string, note: any) => {
             return t.length > 0 && !isSeparator(t);
         }).map((line) => {
             const trimmed = line.trim();
-            const done = /^\[x\]/i.test(trimmed);
-            const text = trimmed.replace(/^\[x\]\s*/i, "").replace(/^\s*[-*•+_]\s*/, "").replace(/^\s*\d+\.\s*/, "").trim();
+            // Strip leading bullet/number first so [x] is always at the front
+            const noBullet = trimmed.replace(/^\s*[-*•+_]\s*/, "").replace(/^\s*\d+\.\s*/, "").trim();
+            const done = /^\[x\]/i.test(noBullet) || /^\[x\]/i.test(trimmed);
+            const text = noBullet.replace(/^\[x\]\s*/i, "").replace(/^\[\s*\]\s*/, "").trim();
             return { done, text };
-        });
+        }).filter(task => task.text.length > 0);
     }, [content, listMode, graphMode, stackMode]);
 
     const toggleTask = useCallback((taskIndex: number) => {
