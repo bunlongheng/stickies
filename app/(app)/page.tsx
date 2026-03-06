@@ -4727,7 +4727,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         ? { position: "relative", isolation: "isolate", backgroundColor: item.color || item.folder_color || "#888888" }
                                         : { position: "relative", isolation: "isolate", backgroundColor: `${item.color || item.folder_color || "#888888"}55`, border: `1.5px solid ${item.color || item.folder_color || "#888888"}88` }}
                                     className={`${isListMode
-                                        ? `group list-row-hover flex items-center gap-3 px-4 py-1 border-b border-white/5 cursor-pointer select-none transition-colors active:bg-white/10 overflow-hidden ${isDragging ? "opacity-30" : dt?.mode === "into" ? "bg-cyan-950/60 ring-1 ring-inset ring-cyan-400" : ""} ${isSelectMode && !item.is_folder && selectedIds.has(String(item.id)) ? "bg-blue-950/50" : ""} ${isFolderSelectMode && item.is_folder && selectedFolderNames.includes(item.name || "") ? "bg-emerald-950/50" : ""}`
+                                        ? `group list-row-hover flex items-center gap-3 px-4 py-2 sm:py-1 border-b border-white/5 cursor-pointer select-none transition-colors active:bg-white/10 overflow-hidden ${isDragging ? "opacity-30" : dt?.mode === "into" ? "bg-cyan-950/60 ring-1 ring-inset ring-cyan-400" : ""} ${isSelectMode && !item.is_folder && selectedIds.has(String(item.id)) ? "bg-blue-950/50" : ""} ${isFolderSelectMode && item.is_folder && selectedFolderNames.includes(item.name || "") ? "bg-emerald-950/50" : ""}`
                                         : `relative min-w-0 cursor-pointer transition-all group overflow-hidden ${isDragging ? "opacity-30 scale-95" : dt?.mode === "into" ? "ring-4 ring-cyan-400 ring-inset z-10" : ""} ${isSelectMode && !item.is_folder && selectedIds.has(String(item.id)) ? "ring-2 ring-inset ring-blue-500" : ""} ${isFolderSelectMode && item.is_folder && selectedFolderNames.includes(item.name || "") ? "ring-2 ring-inset ring-emerald-500" : ""}`}`}>
                                     {/* HeroCard — cursor spotlight + snake border */}
                                     {isListMode && glowCard?.id === tileId && (() => {
@@ -4771,7 +4771,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             {item.is_folder && (() => {
                                                 const c = item.color || item.folder_color || palette12[0];
                                                 return (
-                                                    <div className="flex-shrink-0 w-[36px] h-[36px] flex items-center justify-center text-sm font-black"
+                                                    <div className="flex-shrink-0 w-[45px] h-[45px] sm:w-[36px] sm:h-[36px] flex items-center justify-center text-base sm:text-sm font-black"
                                                         style={{ backgroundColor: c, color: "#fff", boxShadow: (item.name === "PAGES" || item.name === "CLAUDE") ? "inset 0 0 0 1px rgba(255,255,255,0.85)" : undefined }}>
                                                         {item.icon || meaningfulInitial(item.name, "F")}
                                                     </div>
@@ -4782,13 +4782,13 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 const c = fc?.color || '#52525b';
                                                 const icon = fc ? (folderIcons[fc.name] || fc.name.charAt(0).toUpperCase()) : item.folder_name.charAt(0).toUpperCase();
                                                 return (
-                                                    <span className="flex-shrink-0 w-9 h-9 flex items-center justify-center text-sm font-black text-white leading-none" style={{ backgroundColor: c }} title={item.folder_name}>{icon}</span>
+                                                    <span className="flex-shrink-0 w-[45px] h-[45px] sm:w-9 sm:h-9 flex items-center justify-center text-base sm:text-sm font-black text-white leading-none" style={{ backgroundColor: c }} title={item.folder_name}>{icon}</span>
                                                 );
                                             })()}
                                             {!item.is_folder && activeFolder && (() => {
                                                 const c = item.folder_color || item.color || '#52525b';
                                                 return (
-                                                    <span className="flex-shrink-0 w-9 h-9 flex items-center justify-center text-sm font-black text-white leading-none" style={{ backgroundColor: c }}>{[...(item.title || "N")][0].toUpperCase()}</span>
+                                                    <span className="flex-shrink-0 w-[45px] h-[45px] sm:w-9 sm:h-9 flex items-center justify-center text-base sm:text-sm font-black text-white leading-none" style={{ backgroundColor: c }}>{[...(item.title || "N")][0].toUpperCase()}</span>
                                                 );
                                             })()}
                                             <div className="flex-1 min-w-0">
