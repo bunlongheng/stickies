@@ -234,9 +234,10 @@ interface Props {
     onUploadImage: (file: File) => Promise<string>;
     onDelete?: () => void;
     accentColor: string;
+    editMode?: boolean;
 }
 
-export function RichTextEditor({ noteId, content, onChange, onBlur, onUploadImage, onDelete, accentColor }: Props) {
+export function RichTextEditor({ noteId, content, onChange, onBlur, onUploadImage, onDelete, accentColor, editMode }: Props) {
     const [uploading, setUploading] = useState(false);
     const [dragPos, setDragPos] = useState<{ x: number; y: number } | null>(null);
 
@@ -399,8 +400,8 @@ export function RichTextEditor({ noteId, content, onChange, onBlur, onUploadImag
 
     return (
         <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-            {/* ── Formatting toolbar ── */}
-            {tb && (
+            {/* ── Formatting toolbar — only in pencil/edit mode ── */}
+            {tb && editMode && (
                 <div style={{
                     display: 'flex', alignItems: 'center', gap: 2,
                     padding: '5px 8px',
