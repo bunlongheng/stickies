@@ -4382,7 +4382,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     dangerouslySetInnerHTML={{ __html: marked.parse(content, { async: false }) as string }} />
                                 <div className="absolute bottom-4 right-4 flex gap-2 items-center z-10">
                                     <span className="h-7 px-2 bg-zinc-800/90 border border-white/10 text-[10px] font-black uppercase tracking-wide text-violet-400 flex items-center">MD</span>
-                                    <button type="button" onClick={() => copyToClipboard(content.replace(/<[^>]+>/g, "")).then(() => toast("Copied!"))}
+                                    <button type="button" onClick={() => secureCopy(content.replace(/<[^>]+>/g, "")).then(() => toast("Copied!"))}
                                         className="h-7 px-2.5 bg-zinc-800/90 border border-white/10 text-zinc-400 hover:text-white hover:bg-zinc-700/90 text-[10px] font-black uppercase tracking-wide transition backdrop-blur-sm flex items-center gap-1.5">
                                         <ClipboardIcon className="w-3 h-3" /> Copy
                                     </button>
@@ -4402,7 +4402,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 />
                                 <div className="absolute bottom-4 right-4 flex gap-2 items-center z-10">
                                     <span className="h-7 px-2 bg-zinc-800/90 border border-white/10 text-[10px] font-black uppercase tracking-wide text-orange-400 flex items-center">HTML</span>
-                                    <button type="button" onClick={() => copyToClipboard(content).then(() => toast("Copied!"))}
+                                    <button type="button" onClick={() => secureCopy(content).then(() => toast("Copied!"))}
                                         className="h-7 px-2.5 bg-zinc-800/90 border border-white/10 text-zinc-400 hover:text-white hover:bg-zinc-700/90 text-[10px] font-black uppercase tracking-wide transition backdrop-blur-sm flex items-center gap-1.5">
                                         <ClipboardIcon className="w-3 h-3" /> Copy
                                     </button>
@@ -4416,7 +4416,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 </div>
                                 <div className="absolute bottom-4 right-4 flex gap-2 items-center z-10">
                                     <span className="h-7 px-2 bg-zinc-800/90 border border-white/10 text-[10px] font-black uppercase tracking-wide text-yellow-400 flex items-center">JSON</span>
-                                    <button type="button" onClick={() => copyToClipboard(JSON.stringify(jsonDetect.parsed, null, 2)).then(() => toast("Copied!"))}
+                                    <button type="button" onClick={() => secureCopy(JSON.stringify(jsonDetect.parsed, null, 2)).then(() => toast("Copied!"))}
                                         className="h-7 px-2.5 bg-zinc-800/90 border border-white/10 text-zinc-400 hover:text-white hover:bg-zinc-700/90 text-[10px] font-black uppercase tracking-wide transition backdrop-blur-sm flex items-center gap-1.5">
                                         <ClipboardIcon className="w-3 h-3" /> Copy
                                     </button>
@@ -4452,7 +4452,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         title="Copy content"
                                         onClick={() => {
                                             const plain = content.replace(/<[^>]+>/g, "");
-                                            copyToClipboard(plain).then(() => toast("Copied!"));
+                                            secureCopy(plain).then(() => toast("Copied!"));
                                         }}
                                         className="h-7 px-2.5 bg-zinc-800/90 border border-white/10 text-zinc-400 hover:text-white hover:bg-zinc-700/90 text-[10px] font-black uppercase tracking-wide transition backdrop-blur-sm flex items-center gap-1.5">
                                         <ClipboardIcon className="w-3 h-3" /> Copy
