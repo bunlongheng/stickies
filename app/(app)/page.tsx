@@ -4050,7 +4050,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         return <NextIcon className="w-[26px] h-[26px] sm:w-7 sm:h-7" />;
                                     })()}
                                 </button>
-                                {noteViewMode !== "Text" && <span className="text-[8px] font-black uppercase tracking-widest text-zinc-500 select-none flex-shrink-0 px-0.5">{noteViewMode}</span>}
                             </>
                         )}
                         <button type="button"
