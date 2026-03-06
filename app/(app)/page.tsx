@@ -6091,6 +6091,21 @@ const fireIntegrations = (trigger: string, note: any) => {
                             <span className="flex items-center gap-1.5 text-[10px] text-zinc-600"><kbd className="border border-zinc-700 px-1 font-mono">↵</kbd> open</span>
                             <span className="flex items-center gap-1.5 text-[10px] text-zinc-600"><kbd className="border border-zinc-700 px-1 font-mono">esc</kbd> close</span>
                             <span className="ml-auto text-[10px] text-zinc-700">{bookmarksData.length} bookmarks</span>
+                            <button type="button"
+                                onClick={async () => {
+                                    const token = await getAuthToken();
+                                    const r = await fetch("/api/stickies/bookmarks/sync", { method: "POST", headers: { Authorization: `Bearer ${token}` } });
+                                    const d = await r.json();
+                                    if (d.ok) {
+                                        setBookmarksData([]);
+                                        toast(`Synced ${d.synced} bookmarks`);
+                                    } else {
+                                        toast(d.error || "Sync failed");
+                                    }
+                                }}
+                                className="text-[10px] font-black uppercase tracking-wide text-zinc-500 hover:text-white transition px-2 py-1 border border-zinc-700 hover:border-zinc-500">
+                                ↻ Sync
+                            </button>
                         </div>
                     </div>
                 </div>
