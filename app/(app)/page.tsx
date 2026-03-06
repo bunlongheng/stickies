@@ -1298,9 +1298,6 @@ const fireIntegrations = (trigger: string, note: any) => {
             setNoteColor(note.folder_color || palette12[0]);
             setActiveLine(0);
             setEditorScrollTop(0);
-            if (note.id && looksLikeHtml(note.content || "")) {
-                setHtmlModeNotes((prev) => new Set([...prev, String(note.id)]));
-            }
             if (note.id && note.list_mode) {
                 setListModeNotes((prev) => new Set([...prev, String(note.id)]));
             }
@@ -1329,9 +1326,6 @@ const fireIntegrations = (trigger: string, note: any) => {
         setNoteColor(topNote.folder_color || palette12[0]);
         setActiveLine(0);
         setEditorScrollTop(0);
-        if (topNote.id && looksLikeHtml(topNote.content || "")) {
-            setHtmlModeNotes((prev) => new Set([...prev, String(topNote.id)]));
-        }
         if (topNote.id && topNote.list_mode) {
             setListModeNotes((prev) => new Set([...prev, String(topNote.id)]));
         }
@@ -2506,7 +2500,6 @@ const fireIntegrations = (trigger: string, note: any) => {
         setShowSwitcher(false);
         setActiveLine(0);
         setEditorScrollTop(0);
-        if (note.id && looksLikeHtml(note.content || "")) setHtmlModeNotes((p: Set<string>) => new Set([...p, String(note.id)]));
         if (note.id && note.list_mode) setListModeNotes((p: Set<string>) => new Set([...p, String(note.id)]));
         if (note.id && note.mindmap_mode) setMindmapModeNotes((p: Set<string>) => new Set([...p, String(note.id)]));
         setEditorOpen(true);
@@ -4787,9 +4780,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             if (item.id && looksLikeMarkdown(item.content || "")) {
                                                 setMarkdownModeNotes((prev) => new Set([...prev, String(item.id)]));
                                             }
-                                            if (item.id && looksLikeHtml(item.content || "")) {
-                                                setHtmlModeNotes((prev) => new Set([...prev, String(item.id)]));
-                                            }
                                             if (item.id && item.list_mode) {
                                                 setListModeNotes((prev) => new Set([...prev, String(item.id)]));
                                             }
@@ -4982,7 +4972,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                             : <div style={{ fontSize: "3rem", lineHeight: 1 }} className="font-black text-white">{meaningfulInitial(item.name, "F")}</div>
                                                         }
                                                         <div className="mt-0.5 text-[9px] font-medium text-white tracking-tight line-clamp-1 w-full text-center">
-                                                            {item.name} <span className="opacity-70">({item.count})</span>
+                                                            {item.name} <span className="opacity-70">({(item.subfolderCount || 0) + (item.count || 0)})</span>
                                                         </div>
                                                     </>
                                                 ) : (
