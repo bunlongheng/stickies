@@ -4377,27 +4377,50 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 )}
                             </div>
                         ) : markdownMode ? (
-                            <div
-                                className="flex-1 overflow-y-auto p-4 sm:p-6 prose prose-sm prose-invert max-w-none"
-                                dangerouslySetInnerHTML={{ __html: marked.parse(content, { async: false }) as string }}
-                            />
+                            <div className="relative flex-1 overflow-y-auto">
+                                <div className="p-4 sm:p-6 prose prose-sm prose-invert max-w-none"
+                                    dangerouslySetInnerHTML={{ __html: marked.parse(content, { async: false }) as string }} />
+                                <div className="absolute bottom-4 right-4 flex gap-2 items-center z-10">
+                                    <span className="h-7 px-2 bg-zinc-800/90 border border-white/10 text-[10px] font-black uppercase tracking-wide text-violet-400 flex items-center">MD</span>
+                                    <button type="button" onClick={() => copyToClipboard(content.replace(/<[^>]+>/g, "")).then(() => toast("Copied!"))}
+                                        className="h-7 px-2.5 bg-zinc-800/90 border border-white/10 text-zinc-400 hover:text-white hover:bg-zinc-700/90 text-[10px] font-black uppercase tracking-wide transition backdrop-blur-sm flex items-center gap-1.5">
+                                        <ClipboardIcon className="w-3 h-3" /> Copy
+                                    </button>
+                                </div>
+                            </div>
                         ) : htmlMode ? (
-                            <iframe
-                                srcDoc={
-                                    /^\s*<!DOCTYPE\s+html/i.test(content) || /^\s*<html[\s>]/i.test(content)
-                                        ? content
-                                        : `<!DOCTYPE html><html><head><meta charset="utf-8"><style>*{box-sizing:border-box}body{background:#000;color:#d1d5db;font-family:system-ui,-apple-system,sans-serif;padding:1.5rem 2rem;margin:0;line-height:1.7;font-size:14px}p{margin:0 0 1em}em,i{color:#a78bfa}strong,b{color:#fff}h1,h2,h3{color:#fff;margin:1em 0 0.5em}a{color:#60a5fa}</style></head><body>${content}</body></html>`
-                                }
-                                className="flex-1 w-full border-0"
-                                sandbox="allow-scripts"
-                                title="HTML Preview"
-                            />
-                        ) : jsonMode ? (
-                            <div className="flex-1 overflow-y-auto p-4 sm:p-6">
-                                <pre
-                                    className="text-xs leading-relaxed font-mono whitespace-pre-wrap break-all"
-                                    dangerouslySetInnerHTML={{ __html: syntaxHighlightJson(jsonDetect.parsed) }}
+                            <div className="relative flex-1 flex flex-col">
+                                <iframe
+                                    srcDoc={
+                                        /^\s*<!DOCTYPE\s+html/i.test(content) || /^\s*<html[\s>]/i.test(content)
+                                            ? content
+                                            : `<!DOCTYPE html><html><head><meta charset="utf-8"><style>*{box-sizing:border-box}body{background:#000;color:#d1d5db;font-family:system-ui,-apple-system,sans-serif;padding:1.5rem 2rem;margin:0;line-height:1.7;font-size:14px}p{margin:0 0 1em}em,i{color:#a78bfa}strong,b{color:#fff}h1,h2,h3{color:#fff;margin:1em 0 0.5em}a{color:#60a5fa}</style></head><body>${content}</body></html>`
+                                    }
+                                    className="flex-1 w-full border-0"
+                                    sandbox="allow-scripts"
+                                    title="HTML Preview"
                                 />
+                                <div className="absolute bottom-4 right-4 flex gap-2 items-center z-10">
+                                    <span className="h-7 px-2 bg-zinc-800/90 border border-white/10 text-[10px] font-black uppercase tracking-wide text-orange-400 flex items-center">HTML</span>
+                                    <button type="button" onClick={() => copyToClipboard(content).then(() => toast("Copied!"))}
+                                        className="h-7 px-2.5 bg-zinc-800/90 border border-white/10 text-zinc-400 hover:text-white hover:bg-zinc-700/90 text-[10px] font-black uppercase tracking-wide transition backdrop-blur-sm flex items-center gap-1.5">
+                                        <ClipboardIcon className="w-3 h-3" /> Copy
+                                    </button>
+                                </div>
+                            </div>
+                        ) : jsonMode ? (
+                            <div className="relative flex-1 overflow-y-auto">
+                                <div className="p-4 sm:p-6">
+                                    <pre className="text-xs leading-relaxed font-mono whitespace-pre-wrap break-all"
+                                        dangerouslySetInnerHTML={{ __html: syntaxHighlightJson(jsonDetect.parsed) }} />
+                                </div>
+                                <div className="absolute bottom-4 right-4 flex gap-2 items-center z-10">
+                                    <span className="h-7 px-2 bg-zinc-800/90 border border-white/10 text-[10px] font-black uppercase tracking-wide text-yellow-400 flex items-center">JSON</span>
+                                    <button type="button" onClick={() => copyToClipboard(JSON.stringify(jsonDetect.parsed, null, 2)).then(() => toast("Copied!"))}
+                                        className="h-7 px-2.5 bg-zinc-800/90 border border-white/10 text-zinc-400 hover:text-white hover:bg-zinc-700/90 text-[10px] font-black uppercase tracking-wide transition backdrop-blur-sm flex items-center gap-1.5">
+                                        <ClipboardIcon className="w-3 h-3" /> Copy
+                                    </button>
+                                </div>
                             </div>
                         ) : (
                             <div className="relative flex-1 min-h-0 flex flex-col">
@@ -4422,23 +4445,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     editMode={editMode}
                                     onDelete={() => void deleteCurrentNote(editingNote, title)}
                                 />
-                                {/* Floating copy + .txt buttons */}
-                                <div className="absolute bottom-4 right-4 flex gap-2 z-10">
-                                    <button
-                                        type="button"
-                                        title="Download as .txt"
-                                        onClick={() => {
-                                            const plain = content.replace(/<[^>]+>/g, "");
-                                            const blob = new Blob([plain], { type: "text/plain" });
-                                            const a = document.createElement("a");
-                                            a.href = URL.createObjectURL(blob);
-                                            a.download = `${(title || "note").replace(/[^a-z0-9]/gi, "_")}.txt`;
-                                            a.click();
-                                            URL.revokeObjectURL(a.href);
-                                        }}
-                                        className="h-8 px-2.5 bg-zinc-800/90 border border-white/10 text-zinc-400 hover:text-white hover:bg-zinc-700/90 text-[10px] font-black uppercase tracking-wide transition backdrop-blur-sm flex items-center gap-1.5">
-                                        <ArrowDownTrayIcon className="w-3 h-3" /> .txt
-                                    </button>
+                                {/* Floating copy button + mode pill */}
+                                <div className="absolute bottom-4 right-4 flex gap-2 z-10 items-center">
                                     <button
                                         type="button"
                                         title="Copy content"
@@ -4446,7 +4454,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             const plain = content.replace(/<[^>]+>/g, "");
                                             copyToClipboard(plain).then(() => toast("Copied!"));
                                         }}
-                                        className="h-8 px-2.5 bg-zinc-800/90 border border-white/10 text-zinc-400 hover:text-white hover:bg-zinc-700/90 text-[10px] font-black uppercase tracking-wide transition backdrop-blur-sm flex items-center gap-1.5">
+                                        className="h-7 px-2.5 bg-zinc-800/90 border border-white/10 text-zinc-400 hover:text-white hover:bg-zinc-700/90 text-[10px] font-black uppercase tracking-wide transition backdrop-blur-sm flex items-center gap-1.5">
                                         <ClipboardIcon className="w-3 h-3" /> Copy
                                     </button>
                                 </div>
