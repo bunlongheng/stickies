@@ -1583,7 +1583,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                 icon: folderIcons[folderName] || "",
             }));
 
-        const all = [...foldersFromRows, ...missingFolders];
+        const HIDDEN_FOLDERS = new Set(["BOOKMARKS"]);
+        const all = [...foldersFromRows, ...missingFolders].filter(f => !HIDDEN_FOLDERS.has(f.name));
         const SYSTEM_BOTTOM = ["PAGES", "CLAUDE"];
         if (pendingFolderOrder) {
             const idx = new Map(pendingFolderOrder.map((name, i) => [name, i]));
@@ -1633,16 +1634,17 @@ const fireIntegrations = (trigger: string, note: any) => {
                 .filter((n) => !n.is_folder && score(n) < 9)
                 .sort((a, b) => { const sd = score(a) - score(b); return sd !== 0 ? sd : byUpdated(a, b); });
         }
+        const isBookmark = (n: any) => (n.folder_name || "").toUpperCase() === "BOOKMARKS";
         if (editMode) {
-            // Edit mode: all notes, no folders
-            return dbData.filter((n) => !n.is_folder).sort(byUpdated);
+            // Edit mode: all notes, no folders (hide BOOKMARKS)
+            return dbData.filter((n) => !n.is_folder && !isBookmark(n)).sort(byUpdated);
         }
         if (activeFolder) {
             // Inside a folder: notes in that folder
             // Always allow folder_name match as fallback — folder_id may be unset or mismatched
             const activeFolderId = folderStack.at(-1)?.id ?? null;
             const useUuid = activeFolderId && !activeFolderId.startsWith("virtual-");
-            return dbData.filter((n) => !n.is_folder && (
+            return dbData.filter((n) => !n.is_folder && !isBookmark(n) && (
                 (useUuid && String(n.folder_id) === activeFolderId) ||
                 n.folder_name === activeFolder
             )).sort(byUpdated);
