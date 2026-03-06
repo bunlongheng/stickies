@@ -5,6 +5,7 @@ import { createClient } from "@supabase/supabase-js";
 import { createClient as createBrowserClient } from "@/lib/supabase/client";
 import { usePageMeta } from "@/lib/usePageMeta";
 import dynamic from "next/dynamic";
+import { marked } from "marked";
 const RichTextEditor = dynamic(() => import("@/components/RichTextEditor").then(m => m.RichTextEditor), { ssr: false });
 
 // Icons
@@ -4311,6 +4312,11 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     </button>
                                 )}
                             </div>
+                        ) : markdownMode ? (
+                            <div
+                                className="flex-1 overflow-y-auto p-4 sm:p-6 prose prose-sm prose-invert max-w-none"
+                                dangerouslySetInnerHTML={{ __html: marked.parse(content, { async: false }) as string }}
+                            />
                         ) : htmlMode ? (
                             <iframe
                                 srcDoc={
@@ -4341,6 +4347,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     return (d2.url as string) ?? "";
                                 }}
                                 accentColor={activeAccentColor}
+                                editMode={editMode}
                                 onDelete={() => void deleteCurrentNote(editingNote, title)}
                             />
                         )}
@@ -4777,6 +4784,12 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 const icon = fc ? (folderIcons[fc.name] || fc.name.charAt(0).toUpperCase()) : item.folder_name.charAt(0).toUpperCase();
                                                 return (
                                                     <span className="flex-shrink-0 w-9 h-9 flex items-center justify-center text-sm font-black text-white leading-none" style={{ backgroundColor: c }} title={item.folder_name}>{icon}</span>
+                                                );
+                                            })()}
+                                            {!item.is_folder && activeFolder && (() => {
+                                                const c = item.folder_color || item.color || '#52525b';
+                                                return (
+                                                    <span className="flex-shrink-0 w-9 h-9 flex items-center justify-center text-sm font-black text-white leading-none" style={{ backgroundColor: c }}>{[...(item.title || "N")][0].toUpperCase()}</span>
                                                 );
                                             })()}
                                             <div className="flex-1 min-w-0">
