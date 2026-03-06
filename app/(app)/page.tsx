@@ -1407,6 +1407,15 @@ const fireIntegrations = (trigger: string, note: any) => {
         };
     }, []);
 
+    // Auto-checklist for TEAM folder notes
+    useEffect(() => {
+        if (!editingNote?.id) return;
+        const folder = (editingNote.folder_name || "").toUpperCase();
+        if (folder === "TEAM") {
+            setListModeNotes((prev) => new Set([...prev, String(editingNote.id)]));
+        }
+    }, [editingNote?.id]);
+
     useEffect(() => {
         if (!pendingRestoreNoteId || !isDataLoaded) return;
         const note = dbData.find((n) => !n.is_folder && String(n.id) === String(pendingRestoreNoteId));
