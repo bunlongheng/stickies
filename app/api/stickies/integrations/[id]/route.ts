@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { authorizeOwner } from "@/app/api/stickies/_auth";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
@@ -29,7 +30,7 @@ function authorize(req: Request): boolean {
 type Params = { params: Promise<{ id: string }> };
 
 export async function PATCH(req: Request, { params }: Params) {
-    if (!authorize(req)) {
+    if (!await authorizeOwner(req)) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const { id } = await params;

@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { authorizeOwner } from "@/app/api/stickies/_auth";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
@@ -21,7 +22,7 @@ function authorize(req: Request): boolean {
 // ?automation_id=<uuid>  → logs for one automation
 // ?limit=<n>             → max results (default 20, max 100)
 export async function GET(req: Request) {
-    if (!authorize(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!await authorizeOwner(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const { searchParams } = new URL(req.url);
     const automationId = searchParams.get("automation_id");
