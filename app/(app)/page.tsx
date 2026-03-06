@@ -31,6 +31,7 @@ import CodeBracketIcon from "@heroicons/react/24/outline/CodeBracketIcon";
 import FaceSmileIcon from "@heroicons/react/24/outline/FaceSmileIcon";
 import CubeTransparentIcon from "@heroicons/react/24/outline/CubeTransparentIcon";
 import ArrowDownTrayIcon from "@heroicons/react/24/outline/ArrowDownTrayIcon";
+import ClipboardIcon from "@heroicons/react/24/outline/ClipboardIcon";
 import DevicePhoneMobileIcon from "@heroicons/react/24/outline/DevicePhoneMobileIcon";
 import CalendarDaysIcon from "@heroicons/react/24/outline/CalendarDaysIcon";
 import PuzzlePieceIcon from "@heroicons/react/24/outline/PuzzlePieceIcon";
@@ -4375,27 +4376,57 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 title="HTML Preview"
                             />
                         ) : (
-                            <RichTextEditor
-                                key={currentNoteId ?? "new"}
-                                noteId={currentNoteId}
-                                content={content}
-                                onChange={(html) => setContent(html)}
-                                onBlur={() => void saveNote({ silent: false })}
-                                onUploadImage={async (file) => {
-                                    const token = await getAuthToken();
-                                    const fd = new FormData();
-                                    fd.append("file", file, `image.${file.type.split("/")[1] ?? "png"}`);
-                                    if (currentNoteId) fd.append("noteId", currentNoteId);
-                                    const r1 = await fetch("/api/stickies/gdrive", { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd });
-                                    if (r1.ok) { const d = await r1.json(); if (d.url) return d.url as string; }
-                                    const r2 = await fetch("/api/stickies/upload", { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd });
-                                    const d2 = await r2.json();
-                                    return (d2.url as string) ?? "";
-                                }}
-                                accentColor={activeAccentColor}
-                                editMode={editMode}
-                                onDelete={() => void deleteCurrentNote(editingNote, title)}
-                            />
+                            <div className="relative flex-1 min-h-0 flex flex-col">
+                                <RichTextEditor
+                                    key={currentNoteId ?? "new"}
+                                    noteId={currentNoteId}
+                                    content={content}
+                                    onChange={(html) => setContent(html)}
+                                    onBlur={() => void saveNote({ silent: false })}
+                                    onUploadImage={async (file) => {
+                                        const token = await getAuthToken();
+                                        const fd = new FormData();
+                                        fd.append("file", file, `image.${file.type.split("/")[1] ?? "png"}`);
+                                        if (currentNoteId) fd.append("noteId", currentNoteId);
+                                        const r1 = await fetch("/api/stickies/gdrive", { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd });
+                                        if (r1.ok) { const d = await r1.json(); if (d.url) return d.url as string; }
+                                        const r2 = await fetch("/api/stickies/upload", { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd });
+                                        const d2 = await r2.json();
+                                        return (d2.url as string) ?? "";
+                                    }}
+                                    accentColor={activeAccentColor}
+                                    editMode={editMode}
+                                    onDelete={() => void deleteCurrentNote(editingNote, title)}
+                                />
+                                {/* Floating copy + .txt buttons */}
+                                <div className="absolute bottom-4 right-4 flex gap-2 z-10">
+                                    <button
+                                        type="button"
+                                        title="Download as .txt"
+                                        onClick={() => {
+                                            const plain = content.replace(/<[^>]+>/g, "");
+                                            const blob = new Blob([plain], { type: "text/plain" });
+                                            const a = document.createElement("a");
+                                            a.href = URL.createObjectURL(blob);
+                                            a.download = `${(title || "note").replace(/[^a-z0-9]/gi, "_")}.txt`;
+                                            a.click();
+                                            URL.revokeObjectURL(a.href);
+                                        }}
+                                        className="h-8 px-2.5 bg-zinc-800/90 border border-white/10 text-zinc-400 hover:text-white hover:bg-zinc-700/90 text-[10px] font-black uppercase tracking-wide transition backdrop-blur-sm flex items-center gap-1.5">
+                                        <ArrowDownTrayIcon className="w-3 h-3" /> .txt
+                                    </button>
+                                    <button
+                                        type="button"
+                                        title="Copy content"
+                                        onClick={() => {
+                                            const plain = content.replace(/<[^>]+>/g, "");
+                                            copyToClipboard(plain).then(() => toast("Copied!"));
+                                        }}
+                                        className="h-8 px-2.5 bg-zinc-800/90 border border-white/10 text-zinc-400 hover:text-white hover:bg-zinc-700/90 text-[10px] font-black uppercase tracking-wide transition backdrop-blur-sm flex items-center gap-1.5">
+                                        <ClipboardIcon className="w-3 h-3" /> Copy
+                                    </button>
+                                </div>
+                            </div>
                         )}
                     </div>
 
