@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { authorizeOwner } from "@/app/api/stickies/_auth";
 import { NextResponse } from "next/server";
 import Pusher from "pusher";
 import webpush from "web-push";
@@ -33,7 +34,7 @@ function getSupabase() {
 }
 
 export async function POST(req: Request) {
-    if (!authorize(req)) {
+    if (!await authorizeOwner(req)) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const { url, title, senderSocketId, senderEndpoint } = await req.json();

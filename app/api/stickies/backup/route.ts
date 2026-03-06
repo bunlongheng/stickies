@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { authorizeOwner } from "@/app/api/stickies/_auth";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
@@ -23,7 +24,7 @@ function authorize(req: Request): boolean {
 // GET /api/stickies/backup         — download as .sql
 // GET /api/stickies/backup?format=json — download as .json
 export async function GET(req: Request) {
-    if (!authorize(req)) {
+    if (!await authorizeOwner(req)) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -87,7 +88,7 @@ export async function GET(req: Request) {
 
 // POST /api/stickies/backup — trigger GitHub Actions workflow now
 export async function POST(req: Request) {
-    if (!authorize(req)) {
+    if (!await authorizeOwner(req)) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 

@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { authorizeOwner } from "@/app/api/stickies/_auth";
 import { NextResponse } from "next/server";
 import Pusher from "pusher";
 
@@ -27,7 +28,7 @@ function authorize(req: Request): boolean {
 // Optional body: { message?, duration? }
 // duration (seconds) — if provided, auto-fires ai-mode-end after that delay (max 30s)
 export async function POST(req: Request) {
-    if (!authorize(req)) {
+    if (!await authorizeOwner(req)) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const body = await req.json().catch(() => ({}));
@@ -44,7 +45,7 @@ export async function POST(req: Request) {
 
 // DELETE /api/stickies/ai-mode — broadcast AI cleanup end
 export async function DELETE(req: Request) {
-    if (!authorize(req)) {
+    if (!await authorizeOwner(req)) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     await getPusher().trigger("stickies", "ai-mode-end", { endedAt: new Date().toISOString() });

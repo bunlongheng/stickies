@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import crypto from "crypto";
+import { authorizeOwner } from "@/app/api/stickies/_auth";
 import Pusher from "pusher";
 
 // Module-level flash queue — serializes Hue + Pusher so each cycle
@@ -52,7 +53,7 @@ function authorize(req: Request): boolean {
 // Content-Type: application/json → { title, content, folder? }
 // ?folder=CLAUDE  (default: CLAUDE)
 export async function POST(req: Request) {
-    if (!authorize(req)) {
+    if (!await authorizeOwner(req)) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 

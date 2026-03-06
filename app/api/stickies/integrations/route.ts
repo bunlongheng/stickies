@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { authorizeOwner } from "@/app/api/stickies/_auth";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
@@ -27,7 +28,7 @@ function authorize(req: Request): boolean {
 }
 
 export async function GET(req: Request) {
-    if (!authorize(req)) {
+    if (!await authorizeOwner(req)) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const { data, error } = await getSupabase()
@@ -39,7 +40,7 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-    if (!authorize(req)) {
+    if (!await authorizeOwner(req)) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     let body: Record<string, unknown>;

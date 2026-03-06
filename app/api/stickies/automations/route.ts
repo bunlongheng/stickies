@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { authorizeOwner } from "@/app/api/stickies/_auth";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
@@ -19,7 +20,7 @@ function authorize(req: Request): boolean {
 
 // GET /api/stickies/automations — list all automations with last_fired
 export async function GET(req: Request) {
-    if (!authorize(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!await authorizeOwner(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const supabase = getSupabase();
     const { data, error } = await supabase
@@ -54,7 +55,7 @@ export async function GET(req: Request) {
 
 // POST /api/stickies/automations — create a new automation
 export async function POST(req: Request) {
-    if (!authorize(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!await authorizeOwner(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     let body: Record<string, unknown>;
     try { body = await req.json(); } catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }); }
