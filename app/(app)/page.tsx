@@ -5,7 +5,6 @@ import { createClient } from "@supabase/supabase-js";
 import { createClient as createBrowserClient } from "@/lib/supabase/client";
 import { usePageMeta } from "@/lib/usePageMeta";
 import dynamic from "next/dynamic";
-import { marked } from "marked";
 const RichTextEditor = dynamic(() => import("@/components/RichTextEditor").then(m => m.RichTextEditor), { ssr: false });
 
 // Icons
