@@ -1433,6 +1433,13 @@ const fireIntegrations = (trigger: string, note: any) => {
         }
     }, [hydratedViewState, activeFolder, folderStack, editorOpen, editingNote?.id]);
 
+    // Auto-escape if navigated into a BOOKMARKS subtree (stale URL / localStorage)
+    useEffect(() => {
+        if (folderStack.some(f => f.name.toUpperCase() === "BOOKMARKS")) {
+            setFolderStack([]);
+        }
+    }, [folderStack]);
+
     useEffect(() => {
         if (!hydratedViewState || isUrlChecking) return;
         try {
