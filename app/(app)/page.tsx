@@ -4073,7 +4073,32 @@ const fireIntegrations = (trigger: string, note: any) => {
                             </>
                         )}
                     </div>
-                    <div className="flex-1 flex overflow-hidden bg-black font-mono">
+                    <div className="relative flex-1 flex overflow-hidden bg-black font-mono">
+                        {/* ── Unified pill bar — always visible top-right ── */}
+                        <div className="absolute top-3 right-3 z-[99999] flex gap-2 items-center pointer-events-auto">
+                            {markdownMode && (
+                                <span className="h-7 px-2 bg-zinc-800/90 border border-white/10 text-[10px] font-black uppercase tracking-wide text-violet-400 flex items-center backdrop-blur-sm">MD</span>
+                            )}
+                            {htmlMode && (
+                                <span className="h-7 px-2 bg-zinc-800/90 border border-white/10 text-[10px] font-black uppercase tracking-wide text-orange-400 flex items-center backdrop-blur-sm">HTML</span>
+                            )}
+                            {jsonMode && (
+                                <span className="h-7 px-2 bg-zinc-800/90 border border-white/10 text-[10px] font-black uppercase tracking-wide text-yellow-400 flex items-center backdrop-blur-sm">JSON</span>
+                            )}
+                            {(stackMode || mindmapMode || graphMode || listMode) && (
+                                <span className="h-7 px-2 bg-zinc-800/90 border border-white/10 text-[10px] font-black uppercase tracking-wide text-zinc-300 flex items-center backdrop-blur-sm">{noteViewMode}</span>
+                            )}
+                            <button type="button"
+                                onClick={() => {
+                                    let toCopy = content;
+                                    if (jsonMode) toCopy = JSON.stringify(jsonDetect.parsed, null, 2);
+                                    else toCopy = content.replace(/<[^>]+>/g, "");
+                                    void secureCopy(toCopy).then(() => showToast("Copied!"));
+                                }}
+                                className="h-7 px-2.5 bg-zinc-800/90 border border-white/10 text-zinc-400 hover:text-white hover:bg-zinc-700/90 text-[10px] font-black uppercase tracking-wide transition backdrop-blur-sm flex items-center gap-1.5">
+                                <ClipboardIcon className="w-3 h-3" /> Copy
+                            </button>
+                        </div>
                         {mindmapMode ? (
                             <MindmapView title={title} content={content} onToggle={toggleMindmapNode} />
                         ) : graphMode ? (
@@ -4376,19 +4401,12 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 )}
                             </div>
                         ) : markdownMode ? (
-                            <div className="relative flex-1 overflow-y-auto">
+                            <div className="flex-1 overflow-y-auto">
                                 <div className="p-4 sm:p-6 prose prose-sm prose-invert max-w-none"
                                     dangerouslySetInnerHTML={{ __html: marked.parse(content, { async: false }) as string }} />
-                                <div className="absolute top-3 right-3 flex gap-2 items-center z-10">
-                                    <span className="h-7 px-2 bg-zinc-800/90 border border-white/10 text-[10px] font-black uppercase tracking-wide text-violet-400 flex items-center">MD</span>
-                                    <button type="button" onClick={() => secureCopy(content.replace(/<[^>]+>/g, "")).then(() => toast("Copied!"))}
-                                        className="h-7 px-2.5 bg-zinc-800/90 border border-white/10 text-zinc-400 hover:text-white hover:bg-zinc-700/90 text-[10px] font-black uppercase tracking-wide transition backdrop-blur-sm flex items-center gap-1.5">
-                                        <ClipboardIcon className="w-3 h-3" /> Copy
-                                    </button>
-                                </div>
                             </div>
                         ) : htmlMode ? (
-                            <div className="relative flex-1 flex flex-col">
+                            <div className="flex-1 flex flex-col">
                                 <iframe
                                     srcDoc={
                                         /^\s*<!DOCTYPE\s+html/i.test(content) || /^\s*<html[\s>]/i.test(content)
@@ -4399,26 +4417,12 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     sandbox="allow-scripts"
                                     title="HTML Preview"
                                 />
-                                <div className="absolute top-3 right-3 flex gap-2 items-center z-10">
-                                    <span className="h-7 px-2 bg-zinc-800/90 border border-white/10 text-[10px] font-black uppercase tracking-wide text-orange-400 flex items-center">HTML</span>
-                                    <button type="button" onClick={() => secureCopy(content).then(() => toast("Copied!"))}
-                                        className="h-7 px-2.5 bg-zinc-800/90 border border-white/10 text-zinc-400 hover:text-white hover:bg-zinc-700/90 text-[10px] font-black uppercase tracking-wide transition backdrop-blur-sm flex items-center gap-1.5">
-                                        <ClipboardIcon className="w-3 h-3" /> Copy
-                                    </button>
-                                </div>
                             </div>
                         ) : jsonMode ? (
-                            <div className="relative flex-1 overflow-y-auto">
+                            <div className="flex-1 overflow-y-auto">
                                 <div className="p-4 sm:p-6">
                                     <pre className="text-xs leading-relaxed font-mono whitespace-pre-wrap break-all"
                                         dangerouslySetInnerHTML={{ __html: syntaxHighlightJson(jsonDetect.parsed) }} />
-                                </div>
-                                <div className="absolute top-3 right-3 flex gap-2 items-center z-10">
-                                    <span className="h-7 px-2 bg-zinc-800/90 border border-white/10 text-[10px] font-black uppercase tracking-wide text-yellow-400 flex items-center">JSON</span>
-                                    <button type="button" onClick={() => secureCopy(JSON.stringify(jsonDetect.parsed, null, 2)).then(() => toast("Copied!"))}
-                                        className="h-7 px-2.5 bg-zinc-800/90 border border-white/10 text-zinc-400 hover:text-white hover:bg-zinc-700/90 text-[10px] font-black uppercase tracking-wide transition backdrop-blur-sm flex items-center gap-1.5">
-                                        <ClipboardIcon className="w-3 h-3" /> Copy
-                                    </button>
                                 </div>
                             </div>
                         ) : (
@@ -4444,19 +4448,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     editMode={editMode}
                                     onDelete={() => void deleteCurrentNote(editingNote, title)}
                                 />
-                                {/* Floating copy button + mode pill */}
-                                <div className="absolute bottom-4 right-4 flex gap-2 z-10 items-center">
-                                    <button
-                                        type="button"
-                                        title="Copy content"
-                                        onClick={() => {
-                                            const plain = content.replace(/<[^>]+>/g, "");
-                                            secureCopy(plain).then(() => toast("Copied!"));
-                                        }}
-                                        className="h-7 px-2.5 bg-zinc-800/90 border border-white/10 text-zinc-400 hover:text-white hover:bg-zinc-700/90 text-[10px] font-black uppercase tracking-wide transition backdrop-blur-sm flex items-center gap-1.5">
-                                        <ClipboardIcon className="w-3 h-3" /> Copy
-                                    </button>
-                                </div>
                             </div>
                         )}
                     </div>
@@ -6126,9 +6117,9 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     const d = await r.json();
                                     if (d.ok) {
                                         setBookmarksData([]);
-                                        toast(`Synced ${d.synced} bookmarks`);
+                                        showToast(`Synced ${d.synced} bookmarks`);
                                     } else {
-                                        toast(d.error || "Sync failed");
+                                        showToast(d.error || "Sync failed");
                                     }
                                 }}
                                 className="text-[10px] font-black uppercase tracking-wide text-zinc-500 hover:text-white transition px-2 py-1 border border-zinc-700 hover:border-zinc-500">
