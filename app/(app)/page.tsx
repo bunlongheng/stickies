@@ -1639,12 +1639,13 @@ const fireIntegrations = (trigger: string, note: any) => {
         }
         if (activeFolder) {
             // Inside a folder: notes in that folder
+            // Always allow folder_name match as fallback — folder_id may be unset or mismatched
             const activeFolderId = folderStack.at(-1)?.id ?? null;
             const useUuid = activeFolderId && !activeFolderId.startsWith("virtual-");
-            return (useUuid
-                ? dbData.filter((n) => !n.is_folder && (String(n.folder_id) === activeFolderId || (!n.folder_id && n.folder_name === activeFolder)))
-                : dbData.filter((n) => !n.is_folder && n.folder_name === activeFolder)
-            ).sort(byUpdated);
+            return dbData.filter((n) => !n.is_folder && (
+                (useUuid && String(n.folder_id) === activeFolderId) ||
+                n.folder_name === activeFolder
+            )).sort(byUpdated);
         }
         // Root: show folders
         return currentLevelFolders;
