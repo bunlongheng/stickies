@@ -1646,14 +1646,14 @@ const fireIntegrations = (trigger: string, note: any) => {
             return dbData.filter((n) => !n.is_folder && !isBookmark(n)).sort(byUpdated);
         }
         if (activeFolder) {
-            // Inside a folder: notes in that folder
-            // Always allow folder_name match as fallback — folder_id may be unset or mismatched
+            // Inside a folder: subfolders first, then notes
             const activeFolderId = folderStack.at(-1)?.id ?? null;
             const useUuid = activeFolderId && !activeFolderId.startsWith("virtual-");
-            return dbData.filter((n) => !n.is_folder && !isBookmark(n) && (
+            const notes = dbData.filter((n) => !n.is_folder && !isBookmark(n) && (
                 (useUuid && String(n.folder_id) === activeFolderId) ||
                 n.folder_name === activeFolder
             )).sort(byUpdated);
+            return [...currentLevelFolders, ...notes];
         }
         // Root: show folders
         return currentLevelFolders;
