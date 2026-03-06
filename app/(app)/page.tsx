@@ -343,74 +343,174 @@ function MindmapView({ title, content, onToggle }: { title: string; content: str
     const roots = React.useMemo(() => parseMindmap(content), [content]);
     const { nodes, width, height, nodeW } = React.useMemo(() => layoutMindmap(title, roots), [title, roots]);
     const rootNode = nodes[0];
+
+    const containerRef = React.useRef<HTMLDivElement>(null);
+    const [scale, setScale] = React.useState(1);
+    const [pan, setPan] = React.useState({ x: 0, y: 0 });
+    const dragging = React.useRef(false);
+    const lastMouse = React.useRef({ x: 0, y: 0 });
+    const lastTouchDist = React.useRef<number | null>(null);
+
+    const clampScale = (s: number) => Math.max(0.1, Math.min(4, s));
+
+    const fitToScreen = React.useCallback(() => {
+        const el = containerRef.current;
+        if (!el) return;
+        const s = clampScale(Math.min(el.clientWidth / (width + 60), el.clientHeight / (height + 100)));
+        setScale(s);
+        setPan({ x: 0, y: 0 });
+    }, [width, height]);
+
+    React.useEffect(() => { setTimeout(fitToScreen, 0); }, [fitToScreen]);
+
+    // Non-passive wheel & touch listeners
+    React.useEffect(() => {
+        const el = containerRef.current;
+        if (!el) return;
+        const onWheel = (e: WheelEvent) => {
+            e.preventDefault();
+            setScale(s => clampScale(s * (e.deltaY < 0 ? 1.12 : 0.88)));
+        };
+        const onTouchMove = (e: TouchEvent) => {
+            if (e.touches.length === 2) {
+                e.preventDefault();
+                const dx = e.touches[0].clientX - e.touches[1].clientX;
+                const dy = e.touches[0].clientY - e.touches[1].clientY;
+                const dist = Math.hypot(dx, dy);
+                if (lastTouchDist.current !== null) {
+                    setScale(s => clampScale(s * (dist / lastTouchDist.current!)));
+                }
+                lastTouchDist.current = dist;
+            }
+        };
+        el.addEventListener("wheel", onWheel, { passive: false });
+        el.addEventListener("touchmove", onTouchMove, { passive: false });
+        return () => { el.removeEventListener("wheel", onWheel); el.removeEventListener("touchmove", onTouchMove); };
+    }, []);
+
+    const onMouseDown = (e: React.MouseEvent) => {
+        if ((e.target as HTMLElement).closest("button")) return;
+        dragging.current = true;
+        lastMouse.current = { x: e.clientX, y: e.clientY };
+        e.preventDefault();
+    };
+    const onMouseMove = (e: React.MouseEvent) => {
+        if (!dragging.current) return;
+        setPan(p => ({ x: p.x + e.clientX - lastMouse.current.x, y: p.y + e.clientY - lastMouse.current.y }));
+        lastMouse.current = { x: e.clientX, y: e.clientY };
+    };
+    const onMouseUp = () => { dragging.current = false; };
+
+    const onTouchStart = (e: React.TouchEvent) => {
+        if (e.touches.length === 1) lastMouse.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        if (e.touches.length === 2) {
+            const dx = e.touches[0].clientX - e.touches[1].clientX;
+            const dy = e.touches[0].clientY - e.touches[1].clientY;
+            lastTouchDist.current = Math.hypot(dx, dy);
+        }
+    };
+    const onTouchStartSingle = (e: React.TouchEvent) => {
+        if (e.touches.length === 1) {
+            const tx = e.touches[0].clientX, ty = e.touches[0].clientY;
+            setPan(p => ({ x: p.x + tx - lastMouse.current.x, y: p.y + ty - lastMouse.current.y }));
+            lastMouse.current = { x: tx, y: ty };
+        }
+    };
+    const onTouchEnd = () => { lastTouchDist.current = null; };
+
+    const ZOOM_PRESETS = [0.5, 0.75, 1, 1.5, 2];
+
     return (
-        <div className="flex-1 overflow-auto flex items-center justify-center" style={{ minHeight: 0, background: "#050507" }}>
-            <svg className="mindmap-svg" width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ display: "block", flexShrink: 0 }}>
-                {/* Edges: root → each child */}
-                {nodes.slice(1).map((node, i) => {
-                    const px = MM_ROOT_CX + MM_ROOT_W / 2;
-                    const py = rootNode.y;
-                    const cx = MM_NODES_LX;
-                    const cy = node.y;
-                    const mx = (px + cx) / 2;
-                    const muted = node.done;
-                    return <path key={`e${i}`} d={`M ${px} ${py} C ${mx} ${py}, ${mx} ${cy}, ${cx} ${cy}`}
-                        fill="none" stroke={muted ? "#3f3f46" : node.color} strokeWidth="1.5" strokeOpacity={muted ? 0.25 : 0.5}
-                        style={{ animation: "mindmapEdgeIn 0.3s ease both", animationDelay: `${i * 0.06 + 0.15}s` }} />;
-                })}
-                {/* Root node */}
-                <g transform={`translate(${rootNode.x}, ${rootNode.y})`}>
-                    <g style={{ animation: "mindmapRootIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) both" }}>
-                        <rect x={-MM_ROOT_W / 2} y={-MM_ROOT_H / 2} width={MM_ROOT_W} height={MM_ROOT_H} rx={MM_ROOT_H / 2}
-                            fill="rgba(255,255,255,0.08)" stroke="#ffffff" strokeWidth={2} />
-                        <text x={0} y={5} textAnchor="middle" fill="#ffffff" fontSize={10} fontWeight="800"
-                            fontFamily="system-ui,-apple-system,sans-serif">
-                            {rootNode.text.length > 12 ? rootNode.text.slice(0, 11) + "…" : rootNode.text}
-                        </text>
-                    </g>
-                </g>
-                {/* Child nodes — all left-aligned at MM_NODES_LX */}
-                {nodes.slice(1).map((node, i) => {
-                    const muted = node.done;
-                    const strokeColor = muted ? "#3f3f46" : node.color;
-                    const fillColor = muted ? "rgba(255,255,255,0.025)" : `${node.color}18`;
-                    const textColor = muted ? "#3f3f46" : node.color;
-                    const nodesCX = MM_NODES_LX + nodeW / 2;
-                    return (
-                        <g key={`n${i}`} transform={`translate(${nodesCX}, ${node.y})`}
-                            style={{ cursor: onToggle ? "pointer" : "default" }}
-                            onDoubleClick={() => onToggle?.(i)}>
-                            <g style={{ animation: "mindmapNodeIn 0.38s cubic-bezier(0.16, 1, 0.3, 1) both", animationDelay: `${i * 0.06 + 0.08}s` }}>
-                                {/* Big number — vertically centered, left of box */}
-                                <text x={-nodeW / 2 - 6} y={5} textAnchor="end" dominantBaseline="middle"
-                                    fill={muted ? "#27272a" : node.color} fontSize={36} fontWeight="900"
-                                    fontFamily="monospace" opacity={muted ? 0.35 : 0.22}>
-                                    {node.orderNum}
-                                </text>
-                                <rect x={-nodeW / 2} y={-MM_NODE_H / 2} width={nodeW} height={MM_NODE_H} rx={MM_NODE_H / 2}
-                                    fill={fillColor} stroke={strokeColor} strokeWidth={1.5} />
-                                {/* Text via foreignObject for word-wrap */}
-                                <foreignObject x={-nodeW / 2} y={-MM_NODE_H / 2} width={nodeW} height={MM_NODE_H}>
-                                    <div style={{
-                                        width: "100%", height: "100%",
-                                        display: "flex", alignItems: "center",
-                                        padding: "2px 8px",
-                                        fontFamily: "system-ui,-apple-system,sans-serif",
-                                        fontSize: "9px", fontWeight: 800,
-                                        color: textColor,
-                                        wordBreak: "break-word", overflowWrap: "break-word",
-                                        overflow: "hidden", lineHeight: "1.25",
-                                        textDecoration: muted ? "line-through" : "none",
-                                        boxSizing: "border-box",
-                                    }}>
-                                        {node.text}
-                                    </div>
-                                </foreignObject>
+        <div className="relative flex-1 overflow-hidden select-none" style={{ background: "#050507" }}>
+            <div ref={containerRef}
+                className="absolute inset-0 cursor-grab active:cursor-grabbing"
+                onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseUp}
+                onTouchStart={onTouchStart} onTouchMove={onTouchStartSingle} onTouchEnd={onTouchEnd}>
+                <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <div style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})`, transformOrigin: "center center", willChange: "transform" }}>
+                        <svg className="mindmap-svg" width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ display: "block" }}>
+                            {/* Edges: root → each child */}
+                            {nodes.slice(1).map((node, i) => {
+                                const px = MM_ROOT_CX + MM_ROOT_W / 2;
+                                const py = rootNode.y;
+                                const cx = MM_NODES_LX;
+                                const cy = node.y;
+                                const mx = (px + cx) / 2;
+                                const muted = node.done;
+                                return <path key={`e${i}`} d={`M ${px} ${py} C ${mx} ${py}, ${mx} ${cy}, ${cx} ${cy}`}
+                                    fill="none" stroke={muted ? "#3f3f46" : node.color} strokeWidth="1.5" strokeOpacity={muted ? 0.25 : 0.5}
+                                    style={{ animation: "mindmapEdgeIn 0.3s ease both", animationDelay: `${i * 0.06 + 0.15}s` }} />;
+                            })}
+                            {/* Root node */}
+                            <g transform={`translate(${rootNode.x}, ${rootNode.y})`}>
+                                <g style={{ animation: "mindmapRootIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) both" }}>
+                                    <rect x={-MM_ROOT_W / 2} y={-MM_ROOT_H / 2} width={MM_ROOT_W} height={MM_ROOT_H} rx={MM_ROOT_H / 2}
+                                        fill="rgba(255,255,255,0.08)" stroke="#ffffff" strokeWidth={2} />
+                                    <text x={0} y={5} textAnchor="middle" fill="#ffffff" fontSize={10} fontWeight="800"
+                                        fontFamily="system-ui,-apple-system,sans-serif">
+                                        {rootNode.text.length > 12 ? rootNode.text.slice(0, 11) + "…" : rootNode.text}
+                                    </text>
+                                </g>
                             </g>
-                        </g>
-                    );
-                })}
-            </svg>
+                            {/* Child nodes — all left-aligned at MM_NODES_LX */}
+                            {nodes.slice(1).map((node, i) => {
+                                const muted = node.done;
+                                const strokeColor = muted ? "#3f3f46" : node.color;
+                                const fillColor = muted ? "rgba(255,255,255,0.025)" : `${node.color}18`;
+                                const textColor = muted ? "#3f3f46" : node.color;
+                                const nodesCX = MM_NODES_LX + nodeW / 2;
+                                return (
+                                    <g key={`n${i}`} transform={`translate(${nodesCX}, ${node.y})`}
+                                        style={{ cursor: onToggle ? "pointer" : "default" }}
+                                        onDoubleClick={() => onToggle?.(i)}>
+                                        <g style={{ animation: "mindmapNodeIn 0.38s cubic-bezier(0.16, 1, 0.3, 1) both", animationDelay: `${i * 0.06 + 0.08}s` }}>
+                                            <text x={-nodeW / 2 - 6} y={5} textAnchor="end" dominantBaseline="middle"
+                                                fill={muted ? "#27272a" : node.color} fontSize={36} fontWeight="900"
+                                                fontFamily="monospace" opacity={muted ? 0.35 : 0.22}>
+                                                {node.orderNum}
+                                            </text>
+                                            <rect x={-nodeW / 2} y={-MM_NODE_H / 2} width={nodeW} height={MM_NODE_H} rx={MM_NODE_H / 2}
+                                                fill={fillColor} stroke={strokeColor} strokeWidth={1.5} />
+                                            <foreignObject x={-nodeW / 2} y={-MM_NODE_H / 2} width={nodeW} height={MM_NODE_H}>
+                                                <div style={{
+                                                    width: "100%", height: "100%",
+                                                    display: "flex", alignItems: "center",
+                                                    padding: "2px 8px",
+                                                    fontFamily: "system-ui,-apple-system,sans-serif",
+                                                    fontSize: "9px", fontWeight: 800,
+                                                    color: textColor,
+                                                    wordBreak: "break-word", overflowWrap: "break-word",
+                                                    overflow: "hidden", lineHeight: "1.25",
+                                                    textDecoration: muted ? "line-through" : "none",
+                                                    boxSizing: "border-box",
+                                                }}>
+                                                    {node.text}
+                                                </div>
+                                            </foreignObject>
+                                        </g>
+                                    </g>
+                                );
+                            })}
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            {/* Zoom control bar */}
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center bg-zinc-900/95 backdrop-blur-md border border-white/15 rounded-full shadow-xl z-50 px-1 h-9">
+                <button onClick={() => setScale(s => clampScale(+(s - 0.1).toFixed(2)))} className="w-8 h-8 flex items-center justify-center text-zinc-400 hover:text-white text-base transition">−</button>
+                <span className="w-11 text-center text-[11px] font-black text-zinc-200 tabular-nums">{Math.round(scale * 100)}%</span>
+                <button onClick={() => setScale(s => clampScale(+(s + 0.1).toFixed(2)))} className="w-8 h-8 flex items-center justify-center text-zinc-400 hover:text-white text-base transition">+</button>
+                <div className="w-px h-4 bg-white/15 mx-0.5" />
+                {ZOOM_PRESETS.map(z => (
+                    <button key={z} onClick={() => { setScale(z); setPan({ x: 0, y: 0 }); }}
+                        className={`px-2 h-8 text-[11px] font-bold transition ${Math.abs(scale - z) < 0.04 ? "text-white" : "text-zinc-500 hover:text-zinc-200"}`}>
+                        {z * 100}%
+                    </button>
+                ))}
+                <div className="w-px h-4 bg-white/15 mx-0.5" />
+                <button onClick={fitToScreen} className="px-3 h-7 text-[11px] font-black text-zinc-200 bg-white/10 hover:bg-white/20 rounded-full transition mx-0.5">Fit</button>
+            </div>
         </div>
     );
 }
