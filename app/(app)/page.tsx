@@ -2816,7 +2816,11 @@ const fireIntegrations = (trigger: string, note: any) => {
 
     const parsedTasks = useMemo(() => {
         if (!listMode && !graphMode && !stackMode) return [];
-        return content.split("\n").filter((l) => l.trim().length > 0).map((line) => {
+        const isSeparator = (s: string) => /^[-–—=*#~_.]{2,}$/.test(s) || /^[-–—]{2,}.*[-–—]{2,}$/.test(s);
+        return content.split("\n").filter((l) => {
+            const t = l.trim();
+            return t.length > 0 && !isSeparator(t);
+        }).map((line) => {
             const trimmed = line.trim();
             const done = /^\[x\]/i.test(trimmed);
             const text = trimmed.replace(/^\[x\]\s*/i, "").replace(/^\s*[-*•+_]\s*/, "").replace(/^\s*\d+\.\s*/, "").trim();
