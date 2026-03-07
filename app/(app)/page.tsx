@@ -6050,7 +6050,10 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         {folderItems.length > 0 && (
                                             <>
                                                 <div className="px-4 pt-3 pb-1 text-[9px] font-black tracking-[0.2em] text-zinc-600 uppercase">Notebooks</div>
-                                                {folderItems.map((folder: any, i: number) => (
+                                                {folderItems.map((folder: any, i: number) => {
+                                                    const dbRow = dbData.find((r: any) => r.is_folder && String(r.id) === String(folder.id));
+                                                    const parentName = dbRow?.parent_folder_name || null;
+                                                    return (
                                                     <button key={`f-${folder.id}`} type="button"
                                                         onMouseEnter={() => setCmdKCursor(i)}
                                                         onClick={() => {
@@ -6059,17 +6062,26 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                             enterFolder({ id: fr ? String(fr.id) : `virtual-${folder.name}`, name: folder.name, color: folder.color || palette12[0] });
                                                         }}
                                                         className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition ${i === cmdKCursor ? "bg-white/10" : "hover:bg-white/5"}`}>
-                                                        <div className="w-7 h-7 flex-shrink-0 flex items-center justify-center text-sm font-black text-white"
-                                                            style={{ backgroundColor: folder.color || "#3f3f46" }}>
-                                                            {folder.icon || [...(folder.name || "F")][0]?.toUpperCase()}
+                                                        <div className="w-7 h-7 flex-shrink-0 flex items-center justify-center text-sm font-black overflow-hidden"
+                                                            style={{ backgroundColor: folder.name === "CLAUDE" ? "#fff" : (folder.color || "#3f3f46"), color: "#fff" }}>
+                                                            {folder.name === "CLAUDE"
+                                                                ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-0.5" />
+                                                                : (folder.icon || [...(folder.name || "F")][0]?.toUpperCase())}
                                                         </div>
                                                         <div className="flex-1 min-w-0">
+                                                            {parentName && (
+                                                                <div className="flex items-center gap-1 text-[10px] text-zinc-500 font-bold uppercase tracking-wide truncate">
+                                                                    <span>{parentName}</span>
+                                                                    <span className="text-zinc-700">/</span>
+                                                                </div>
+                                                            )}
                                                             <div className="text-sm font-semibold text-white truncate">{folder.name}</div>
                                                             <div className="text-[10px] text-zinc-500">{folder.count ?? 0} note{(folder.count ?? 0) !== 1 ? "s" : ""}</div>
                                                         </div>
                                                         <ChevronRightIcon className="w-4 h-4 text-zinc-600 flex-shrink-0" />
                                                     </button>
-                                                ))}
+                                                    );
+                                                })}
                                             </>
                                         )}
                                         {noteItems.length > 0 && (
