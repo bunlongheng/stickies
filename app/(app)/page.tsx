@@ -133,7 +133,7 @@ const notesApi = {
     },
 };
 
-const palette12 = ["#FF3B30", "#FF6B4E", "#FF9500", "#FFCC00", "#D4E157", "#34C759", "#00C7BE", "#32ADE6", "#007AFF", "#5856D6", "#AF52DE", "#FF2D55", "#B0B0B8", "#555560", "#8B1A2E", "#6B7A1E", "#0D2B6B"];
+const palette12 = ["#FF3B30", "#FF6B4E", "#FF9500", "#FFCC00", "#D4E157", "#34C759", "#00C7BE", "#32ADE6", "#007AFF", "#5856D6", "#AF52DE", "#FF2D55", "#B0B0B8", "#555560", "#8B1A2E", "#6B7A1E", "#0D2B6B", "#FFFFFF"];
 
 const VIVID12 = palette12.slice(0, 12);
 
@@ -4792,7 +4792,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 const hb = parseInt(hex.substring(4, 6), 16);
                                                 return (
                                                     <div className="relative flex items-center gap-2 px-3 py-2.5 flex-shrink-0 overflow-hidden cursor-pointer select-none"
-                                                        style={{ background: accent, isolation: "isolate" }}
+                                                        style={{ background: folder.name === "CLAUDE" ? "#ffffff" : accent, isolation: "isolate" }}
                                                         onClick={() => enterFolder({ id: String(folder.id), name: folder.name, color: accent })}
                                                         onMouseEnter={(e) => { playSound("hover"); const rect = e.currentTarget.getBoundingClientRect(); setGlowCard({ id: headerId, x: ((e.clientX - rect.left) / rect.width) * 100, y: ((e.clientY - rect.top) / rect.height) * 100 }); }}
                                                         onMouseMove={(e) => { if (glowCard?.id !== headerId) return; const rect = e.currentTarget.getBoundingClientRect(); setGlowCard(g => g ? { ...g, x: ((e.clientX - rect.left) / rect.width) * 100, y: ((e.clientY - rect.top) / rect.height) * 100 } : g); }}
@@ -4805,8 +4805,9 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                                 <rect className="list-snake-path" x="1" y="1" width="calc(100% - 2px)" height="calc(100% - 2px)" rx="6" fill="none" stroke="rgba(255,255,255,0.8)" strokeWidth="2" pathLength="100" style={{ animationIterationCount: 1, animationTimingFunction: "ease-out", animationFillMode: "forwards" }} />
                                                             </svg>
                                                         </>)}
-                                                        <span className="relative text-[11px] font-bold tracking-widest uppercase truncate flex-1 text-white drop-shadow-sm">{folder.name}</span>
-                                                        <span className="relative text-[10px] font-bold tabular-nums flex-shrink-0 text-white/70">{totalCount}</span>
+                                                        {folder.name === "CLAUDE" && <img src="/claude-icon.png" alt="Claude" className="relative w-5 h-5 object-contain flex-shrink-0" />}
+                                                        <span className={`relative text-[11px] font-bold tracking-widest uppercase truncate flex-1 drop-shadow-sm ${folder.name === "CLAUDE" ? "text-black" : "text-white"}`}>{folder.name}</span>
+                                                        <span className={`relative text-[10px] font-bold tabular-nums flex-shrink-0 ${folder.name === "CLAUDE" ? "text-black/60" : "text-white/70"}`}>{totalCount}</span>
                                                     </div>
                                                 );
                                             })()}
@@ -5865,9 +5866,9 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             {palette12.map((c) => (
                                                 <button key={c} type="button"
                                                     onClick={() => { applySingleFolderColor(c); setShowFolderColorPicker(false); }}
-                                                    className="w-7 h-7 border border-white/20 hover:border-2 hover:border-white/80 transition-all relative"
-                                                    style={{ backgroundColor: c }}>
-                                                    {activeFolderColor === c && <CheckIcon className="w-4 h-4 text-white absolute inset-0 m-auto drop-shadow" />}
+                                                    className="w-7 h-7 transition-all relative"
+                                                    style={{ backgroundColor: c, border: activeFolderColor === c ? `2px solid ${c === "#FFFFFF" ? "#000" : c}` : `1px solid ${c === "#FFFFFF" ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.2)"}` }}>
+                                                    {activeFolderColor === c && <CheckIcon className="w-4 h-4 absolute inset-0 m-auto drop-shadow" style={{ color: c === "#FFFFFF" ? "#000" : "#fff" }} />}
                                                 </button>
                                             ))}
                                         </div>
