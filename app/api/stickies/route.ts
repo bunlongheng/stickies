@@ -7,7 +7,7 @@ const palette12 = [
     "#FF3B30", "#FF6B4E", "#FF9500", "#FFCC00",
     "#D4E157", "#34C759", "#00C7BE", "#32ADE6",
     "#007AFF", "#5856D6", "#AF52DE", "#FF2D55",
-    "#B0B0B8", "#555560", "#8B1A2E", "#6B7A1E", "#0D2B6B",
+    "#B0B0B8", "#555560", "#8B1A2E", "#6B7A1E", "#0D2B6B", "#FFFFFF",
 ];
 
 function getSupabase() {
