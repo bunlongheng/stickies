@@ -4164,8 +4164,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     <button type="button"
                                         onClick={() => { goToIndex(i); void backToRootFromEditor(); }}
                                         className="flex items-center gap-1.5 font-black tracking-tight text-zinc-400 hover:text-white transition flex-shrink-0 text-xs px-1">
-                                        <span className="w-6 h-6 flex-shrink-0 flex items-center justify-center text-sm font-black text-white leading-none" style={{ backgroundColor: frame.color }}>
-                                            {folderIcons[frame.name] || (frame.name || "F").charAt(0).toUpperCase()}
+                                        <span className="w-6 h-6 flex-shrink-0 flex items-center justify-center text-sm font-black text-white leading-none overflow-hidden" style={{ backgroundColor: frame.name === "CLAUDE" ? "#fff" : frame.color, boxShadow: frame.name === "CLAUDE" ? "inset 0 0 0 1px rgba(255,255,255,0.85)" : undefined }}>
+                                            {frame.name === "CLAUDE" ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-0.5" /> : (folderIcons[frame.name] || (frame.name || "F").charAt(0).toUpperCase())}
                                         </span>
                                         {frame.name}
                                     </button>
@@ -4652,8 +4652,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 onClick={() => { goToIndex(i); }}
                                                 className={`flex items-center gap-1.5 font-black tracking-tight truncate max-w-[150px] flex-shrink-0 px-1 transition text-xs ${i === folderStack.length - 1 ? "text-white" : "text-zinc-400 hover:text-white"}`}
                                                 title={frame.name}>
-                                                <span className="flex-shrink-0 w-6 h-6 flex items-center justify-center text-sm font-black text-white leading-none" style={{ backgroundColor: frame.color }}>
-                                                    {folderIcons[frame.name] || (frame.name || "F").charAt(0).toUpperCase()}
+                                                <span className="flex-shrink-0 w-6 h-6 flex items-center justify-center text-sm font-black text-white leading-none overflow-hidden" style={{ backgroundColor: frame.name === "CLAUDE" ? "#fff" : frame.color, boxShadow: frame.name === "CLAUDE" ? "inset 0 0 0 1px rgba(255,255,255,0.85)" : undefined }}>
+                                                    {frame.name === "CLAUDE" ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-0.5" /> : (folderIcons[frame.name] || (frame.name || "F").charAt(0).toUpperCase())}
                                                 </span>
                                                 {frame.name}
                                             </button>
@@ -4903,6 +4903,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     }}
                                     onMouseLeave={() => setGlowCard(null)}
                                     onTouchStart={() => {
+                                        if (!isListMode) return;
                                         longPressTimer.current = setTimeout(() => {
                                             longPressTimer.current = null;
                                             suppressOpenRef.current = true;
@@ -4967,12 +4968,12 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             return { position: "relative", isolation: "isolate", "--row-color": c } as React.CSSProperties;
                                         }
                                         return item.is_folder
-                                            ? { position: "relative", isolation: "isolate", backgroundColor: c }
+                                            ? { position: "relative", isolation: "isolate", backgroundColor: item.name === "CLAUDE" ? "#ffffff" : c }
                                             : { position: "relative", isolation: "isolate", backgroundColor: `${c}55`, border: `1.5px solid ${c}88` };
                                     })()}
                                     className={`${isListMode
                                         ? `group list-row-hover flex items-center gap-3 px-4 py-2 sm:py-1 border-b border-white/5 cursor-pointer select-none transition-colors active:bg-white/10 overflow-hidden ${isDragging ? "opacity-30" : dt?.mode === "into" ? "bg-cyan-950/60 ring-1 ring-inset ring-cyan-400" : ""} ${isSelectMode && !item.is_folder && selectedIds.has(String(item.id)) ? "bg-blue-950/50" : ""} ${isFolderSelectMode && item.is_folder && selectedFolderNames.includes(item.name || "") ? "bg-emerald-950/50" : ""}`
-                                        : `relative min-w-0 cursor-pointer transition-all group overflow-hidden ${isDragging ? "opacity-30 scale-95" : dt?.mode === "into" ? "ring-4 ring-cyan-400 ring-inset z-10" : ""} ${isSelectMode && !item.is_folder && selectedIds.has(String(item.id)) ? "ring-2 ring-inset ring-blue-500" : ""} ${isFolderSelectMode && item.is_folder && selectedFolderNames.includes(item.name || "") ? "ring-2 ring-inset ring-emerald-500" : ""}`}`}>
+                                        : `relative min-w-0 cursor-pointer transition-all group overflow-hidden ${isDragging ? "opacity-30 scale-95" : dt?.mode === "into" ? "ring-4 ring-cyan-400 ring-inset z-10" : ""}`}`}>
                                     {/* Cursor spotlight glow */}
                                     {isListMode && glowCard?.id === tileId && (() => {
                                         const c = item.color || item.folder_color || "#888888";
@@ -5083,22 +5084,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         <>
                                             {/* padding-bottom:100% forces height = width = perfect square in any grid context */}
                                             <div style={{ paddingBottom: "100%" }} />
-                                            {isFolderSelectMode && item.is_folder && (
-                                                <div className={`absolute inset-0 z-20 pointer-events-none transition-all ${selectedFolderNames.includes(item.name || "") ? "bg-emerald-500/20" : ""}`}>
-                                                    <div className={`absolute top-1 left-1 w-5 h-5 rounded-full flex items-center justify-center border-2 ${selectedFolderNames.includes(item.name || "") ? selectedFolderNames[0] === item.name ? "bg-emerald-400 border-emerald-400" : "bg-emerald-600 border-emerald-600" : "border-white/60 bg-black/30"}`}>
-                                                        {selectedFolderNames[0] === item.name && <span className="text-[8px] leading-none">★</span>}
-                                                        {selectedFolderNames.includes(item.name || "") && selectedFolderNames[0] !== item.name && <CheckIcon className="w-3 h-3 text-white" />}
-                                                    </div>
-                                                </div>
-                                            )}
-                                            {isSelectMode && !item.is_folder && (
-                                                <div className={`absolute inset-0 z-20 pointer-events-none transition-all ${selectedIds.has(String(item.id)) ? "bg-blue-500/25" : ""}`}>
-                                                    <div className={`absolute top-1 left-1 w-5 h-5 rounded-full flex items-center justify-center border-2 ${selectedIds.has(String(item.id)) ? "bg-blue-500 border-blue-500" : "border-white/60 bg-black/30"}`}>
-                                                        {selectedIds.has(String(item.id)) && <CheckIcon className="w-3 h-3 text-white" />}
-                                                    </div>
-                                                </div>
-                                            )}
-                                            {!isSelectMode && !item.is_folder && (
+                                            {!item.is_folder && (
                                                 <>
                                                     <button
                                                         type="button"
@@ -5136,11 +5122,13 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-1.5 overflow-hidden">
                                                 {item.is_folder ? (
                                                     <>
-                                                        {item.icon
-                                                            ? <div style={{ fontSize: "2.8rem", lineHeight: 1 }}>{item.icon}</div>
-                                                            : <div style={{ fontSize: "3rem", lineHeight: 1 }} className="font-black text-white">{meaningfulInitial(item.name, "F")}</div>
+                                                        {item.name === "CLAUDE"
+                                                            ? <img src="/claude-icon.png" alt="Claude" className="w-16 h-16 object-contain" />
+                                                            : item.icon
+                                                                ? <div style={{ fontSize: "2.8rem", lineHeight: 1 }}>{item.icon}</div>
+                                                                : <div style={{ fontSize: "3rem", lineHeight: 1 }} className="font-black text-white">{meaningfulInitial(item.name, "F")}</div>
                                                         }
-                                                        <div className="mt-0.5 text-[9px] font-medium text-white tracking-tight line-clamp-1 w-full text-center">
+                                                        <div className="mt-0.5 text-[9px] font-medium tracking-tight line-clamp-1 w-full text-center" style={{ color: item.name === "CLAUDE" ? "#000" : "#fff" }}>
                                                             {item.name} <span className="opacity-70">({(item.subfolderCount || 0) + (item.count || 0)})</span>
                                                         </div>
                                                     </>
@@ -5838,9 +5826,9 @@ const fireIntegrations = (trigger: string, note: any) => {
                         <div className="border-b border-white/10 px-6 py-4 flex items-center gap-3">
                             {activeFolder ? (
                                 <>
-                                    <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center text-sm font-black text-white leading-none"
-                                        style={{ backgroundColor: activeFolderColor }}>
-                                        {folderIcons[activeFolder] || [...(activeFolder || "F")][0].toUpperCase()}
+                                    <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center text-sm font-black text-white leading-none overflow-hidden"
+                                        style={{ backgroundColor: activeFolder === "CLAUDE" ? "#fff" : activeFolderColor, boxShadow: activeFolder === "CLAUDE" ? "inset 0 0 0 1px rgba(255,255,255,0.85)" : undefined }}>
+                                        {activeFolder === "CLAUDE" ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-1" /> : (folderIcons[activeFolder] || [...(activeFolder || "F")][0].toUpperCase())}
                                     </div>
                                     {isEditingFolderTitle ? (
                                         <input autoFocus
