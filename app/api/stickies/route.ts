@@ -299,7 +299,7 @@ export async function POST(req: Request) {
     const contentType = req.headers.get("content-type") ?? "";
     const isMarkdown = /text\/(plain|markdown|x-markdown)/i.test(contentType);
 
-    let title = "", content = "", folder_name: string | null = null, rawColor = "";
+    let title = "", content = "", folder_name: string | null = null, rawColor = "", parentFolderHint: string | null = null;
 
     if (isMarkdown) {
         const raw = await req.text();
@@ -326,6 +326,7 @@ export async function POST(req: Request) {
         const folderField = (typeof body.folder === "string" ? body.folder : "") || (typeof body.folder_name === "string" ? body.folder_name : "");
         folder_name = folderField.trim() || "CLAUDE";
         rawColor    = typeof body.color   === "string" ? body.color.trim().toUpperCase() : "";
+        parentFolderHint = typeof body.parent_folder === "string" ? body.parent_folder.trim() : null;
     }
 
     if (!title) return NextResponse.json({ error: "title required" }, { status: 400 });
@@ -334,6 +335,64 @@ export async function POST(req: Request) {
     if (!folder_name?.trim()) folder_name = "CLAUDE";
 
     const sb = getSupabase();
+
+    // Resolve folder via slash-path (e.g. "claude/skills") or simple name
+    let resolved_folder_id: string | null = null;
+    let resolved_folder_name: string = folder_name!;
+
+    const folderPathParts = folder_name!.split("/").map((p) => p.trim()).filter(Boolean);
+
+    if (folderPathParts.length > 1) {
+        // Walk path, find or create each segment
+        const { data: allFolderRows } = await sb.from(table).select("id, folder_name, parent_folder_name").eq("is_folder", true);
+        const allFolders: Array<{ id: string; folder_name: string; parent_folder_name: string | null }> = (allFolderRows ?? []) as any;
+
+        let parentName: string | null = null;
+        let parentId: string | null = null;
+        const nowTs = new Date().toISOString();
+
+        for (const segment of folderPathParts) {
+            const match = allFolders.find((f) =>
+                f.folder_name.toLowerCase() === segment.toLowerCase() &&
+                (parentName === null ? !f.parent_folder_name : f.parent_folder_name?.toLowerCase() === parentName.toLowerCase())
+            );
+            if (match) {
+                parentName = match.folder_name;
+                parentId = String(match.id);
+            } else {
+                // Create missing folder in chain
+                const { data: maxFolderRow } = await sb.from(table).select("order").eq("is_folder", true).order("order", { ascending: false }).limit(1).single();
+                const folderOrder = typeof maxFolderRow?.order === "number" ? maxFolderRow.order + 1 : 0;
+                const { data: newFolder } = await sb.from(table).insert([{
+                    is_folder: true, folder_name: segment, title: segment, content: "",
+                    folder_color: palette12[8], // #007AFF default
+                    parent_folder_name: parentName,
+                    order: folderOrder, created_at: nowTs, updated_at: nowTs, ...userField,
+                }]).select().single();
+                if (newFolder) {
+                    try { await getPusher().trigger("stickies", "note-created", newFolder); } catch {}
+                    allFolders.push({ id: String(newFolder.id), folder_name: segment, parent_folder_name: parentName });
+                    parentName = segment;
+                    parentId = String(newFolder.id);
+                } else {
+                    parentName = segment;
+                }
+            }
+        }
+        resolved_folder_name = folderPathParts[folderPathParts.length - 1];
+        resolved_folder_id = parentId;
+    } else {
+        // Simple folder name — look up existing folder row
+        const { data: folderRows } = await sb.from(table).select("id, folder_name, parent_folder_name").eq("is_folder", true).eq("folder_name", folder_name!);
+        if (folderRows && folderRows.length > 0) {
+            const match = parentFolderHint
+                ? folderRows.find((r: any) => r.parent_folder_name?.toLowerCase() === parentFolderHint!.toLowerCase())
+                : folderRows[0];
+            if (match) resolved_folder_id = String(match.id);
+        }
+        resolved_folder_name = folder_name!;
+    }
+
     let folder_color = rawColor;
     if (!/^#[0-9A-F]{6}$/.test(folder_color)) {
         const { data: colorRows } = await sb.from(table).select("folder_color").eq("is_folder", false);
@@ -342,22 +401,41 @@ export async function POST(req: Request) {
         folder_color = palette12.reduce((least, c) => (counts.get(c)! < counts.get(least)! ? c : least), palette12[0]);
     }
 
-    const { data: maxRow } = await sb.from(table).select("order").eq("is_folder", false).order("order", { ascending: false }).limit(1).single();
-    const nextOrder = typeof maxRow?.order === "number" ? maxRow.order + 1 : 0;
     const now = new Date().toISOString();
 
-    const { data, error } = await sb.from(table).insert([{
-        title, content, folder_name, folder_color, is_folder: false,
-        order: nextOrder, created_at: now, updated_at: now, ...userField,
-    }]).select().single();
+    // Upsert: check if note with same title already exists in this folder
+    const existingQuery = resolved_folder_id
+        ? sb.from(table).select("id").eq("is_folder", false).eq("folder_name", resolved_folder_name).eq("title", title).limit(1)
+        : sb.from(table).select("id").eq("is_folder", false).eq("folder_name", resolved_folder_name).eq("title", title).limit(1);
+    const { data: existingRows } = await existingQuery;
+    const existingNote = existingRows && existingRows.length > 0 ? existingRows[0] : null;
+
+    let data: any, error: any;
+
+    if (existingNote?.id) {
+        // Update existing note
+        ({ data, error } = await sb.from(table)
+            .update({ content, folder_color, updated_at: now })
+            .eq("id", existingNote.id)
+            .select().single());
+    } else {
+        // Insert new note
+        const { data: maxRow } = await sb.from(table).select("order").eq("is_folder", false).order("order", { ascending: false }).limit(1).single();
+        const nextOrder = typeof maxRow?.order === "number" ? maxRow.order + 1 : 0;
+        ({ data, error } = await sb.from(table).insert([{
+            title, content, folder_name: resolved_folder_name, folder_color, is_folder: false,
+            ...(resolved_folder_id ? { folder_id: resolved_folder_id } : {}),
+            order: nextOrder, created_at: now, updated_at: now, ...userField,
+        }]).select().single());
+    }
 
     if (error) { console.error("[stickies POST]", error); return NextResponse.json({ error: "Database error" }, { status: 500 }); }
 
     if (auth.type === "apikey") {
-        try { await getPusher().trigger("stickies", "note-created", data); } catch {}
+        try { await getPusher().trigger("stickies", existingNote?.id ? "note-updated" : "note-created", data); } catch {}
     }
 
-    return NextResponse.json({ note: data }, { status: 201 });
+    return NextResponse.json({ note: data, action: existingNote?.id ? "updated" : "created" }, { status: 201 });
 }
 
 // ── DELETE ──────────────────────────────────────────────────────────────────
