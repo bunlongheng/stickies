@@ -277,6 +277,7 @@ const looksLikeMarkdown = (text: string) =>
 const looksLikeHtml = (text: string) =>
     /^\s*<!DOCTYPE\s+html/i.test(text) || /^\s*<html[\s>]/i.test(text);
 const MAIN_LIST_MODE_KEY = "stickies:main-list-mode:v1";
+const NAV_MODE_KEY = "stickies:nav-mode:v1";
 const KANBAN_MODE_KEY = "stickies:kanban-mode:v1";
 const EDIT_MODE_KEY = "stickies:edit-mode:v1";
 const LIST_MODE_KEY = "stickies:list-mode-notes:v1";
@@ -866,6 +867,7 @@ export default function NotesMaster() {
     const [aiMode, setAiMode] = useState<{ active: boolean; message: string }>({ active: false, message: "" });
     const [botColor, setBotColor] = useState({ primary: "#7c3aed", secondary: "#a78bfa", light: "#c4b5fd" });
     const [mainListMode, setMainListMode] = useState(true);
+    const [navMode, setNavMode] = useState<"folders-and-files" | "files-only">("folders-and-files");
     const [kanbanMode, setKanbanMode] = useState(false);
     const [editMode, setEditMode] = useState(false);
     const [showAddMenu, setShowAddMenu] = useState(false);
@@ -1174,6 +1176,10 @@ export default function NotesMaster() {
             if (rawMainList) setMainListMode(rawMainList === "true");
         } catch { /* ignore */ }
         try {
+            const rawNavMode = localStorage.getItem(NAV_MODE_KEY);
+            if (rawNavMode === "files-only" || rawNavMode === "folders-and-files") setNavMode(rawNavMode);
+        } catch { /* ignore */ }
+        try {
             const rawKanban = localStorage.getItem(KANBAN_MODE_KEY);
             if (rawKanban) setKanbanMode(rawKanban === "true");
             const rawEdit = localStorage.getItem(EDIT_MODE_KEY);
@@ -1247,6 +1253,9 @@ export default function NotesMaster() {
 
     useEffect(() => {
         try { localStorage.setItem(MAIN_LIST_MODE_KEY, String(mainListMode)); } catch { /* ignore */ }
+    }, [mainListMode]);
+    useEffect(() => {
+        try { localStorage.setItem(NAV_MODE_KEY, navMode); } catch { /* ignore */ }
     }, [mainListMode]);
 
     useEffect(() => {
@@ -1599,12 +1608,6 @@ const fireIntegrations = (trigger: string, note: any) => {
         }
     }, [hydratedViewState, activeFolder, folderStack, editorOpen, editingNote?.id]);
 
-    // Auto-escape if navigated into a BOOKMARKS subtree (stale URL / localStorage)
-    useEffect(() => {
-        if (folderStack.some(f => f.name.toUpperCase() === "BOOKMARKS")) {
-            setFolderStack([]);
-        }
-    }, [folderStack]);
 
     useEffect(() => {
         if (!hydratedViewState || isUrlChecking) return;
@@ -1725,7 +1728,7 @@ const fireIntegrations = (trigger: string, note: any) => {
             }
         });
 
-        const foldersFromRows = Array.from(folderRowsById.values())
+        const foldersFromRowsRaw = Array.from(folderRowsById.values())
             .map((row) => {
                 const folderName = String(row.folder_name || "General");
                 const rowId = String(row.id);
@@ -1741,6 +1744,13 @@ const fireIntegrations = (trigger: string, note: any) => {
                 };
             })
             .sort((a, b) => a.order - b.order);
+        // Deduplicate by name — keep the first (lowest order) entry per folder name
+        const seenFolderNames = new Set<string>();
+        const foldersFromRows = foldersFromRowsRaw.filter((f) => {
+            if (seenFolderNames.has(f.name)) return false;
+            seenFolderNames.add(f.name);
+            return true;
+        });
 
         const knownFolderNames = new Set(foldersFromRows.map((f) => f.name));
         const missingFolders = Array.from(noteCountByFolder.keys())
@@ -1756,8 +1766,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                 icon: folderIcons[folderName] || "",
             }));
 
-        const all = [...foldersFromRows, ...missingFolders].filter(f => f.name.toUpperCase() !== "BOOKMARKS");
-        const SYSTEM_BOTTOM = ["PAGES", "CLAUDE"];
+        const all = [...foldersFromRows, ...missingFolders];
+        const SYSTEM_BOTTOM = ["CLAUDE"];
         if (pendingFolderOrder) {
             const idx = new Map(pendingFolderOrder.map((name, i) => [name, i]));
             const sorted = [...all].sort((a, b) => (idx.has(a.name) ? idx.get(a.name)! : all.length) - (idx.has(b.name) ? idx.get(b.name)! : all.length));
@@ -1783,8 +1793,6 @@ const fireIntegrations = (trigger: string, note: any) => {
         const byUpdated = (a: any, b: any) =>
             String(b.updated_at || "").localeCompare(String(a.updated_at || "")) ||
             String(a.title || a.name || "").localeCompare(String(b.title || b.name || ""));
-        const isBookmark = (n: any) => (n.folder_name || "").toUpperCase() === "BOOKMARKS";
-
         if (search.trim()) {
             const q = search.toLowerCase();
             const score = (n: any): number => {
@@ -1804,34 +1812,41 @@ const fireIntegrations = (trigger: string, note: any) => {
                 return 9;
             };
             return dbData
-                .filter((n) => !n.is_folder && !isBookmark(n) && score(n) < 9)
+                .filter((n) => !n.is_folder && score(n) < 9)
                 .sort((a, b) => { const sd = score(a) - score(b); return sd !== 0 ? sd : byUpdated(a, b); });
         }
         if (editMode) {
             // Edit mode: all notes, no folders (hide BOOKMARKS)
-            return dbData.filter((n) => !n.is_folder && !isBookmark(n)).sort(byUpdated);
+            return dbData.filter((n) => !n.is_folder).sort(byUpdated);
         }
         if (activeFolder) {
             // Inside a folder: subfolders first, then notes
             const activeFolderId = folderStack.at(-1)?.id ?? null;
             const useUuid = activeFolderId && !activeFolderId.startsWith("virtual-");
-            const notes = dbData.filter((n) => !n.is_folder && !isBookmark(n) && (
+            const notes = dbData.filter((n) => !n.is_folder && (
                 (useUuid && String(n.folder_id) === activeFolderId) ||
                 n.folder_name === activeFolder
             )).sort(byUpdated);
             return [...currentLevelFolders, ...notes];
         }
+        // Root: files-only mode → all notes sorted by newest first, then alpha by folder/title
+        if (navMode === "files-only") {
+            return dbData
+                .filter((n) => !n.is_folder)
+                .sort((a, b) =>
+                    String(b.created_at || "").localeCompare(String(a.created_at || "")) ||
+                    String(a.folder_name || "").localeCompare(String(b.folder_name || "")) ||
+                    String(a.title || "").localeCompare(String(b.title || ""))
+                );
+        }
         // Root: show folders
         return currentLevelFolders;
-    }, [dbData, editMode, activeFolder, folderStack, search, currentLevelFolders, pendingNoteOrder, pinnedIds]);
+    }, [dbData, editMode, activeFolder, folderStack, search, currentLevelFolders, pendingNoteOrder, pinnedIds, navMode]);
     const cmdKResults = useMemo(() => {
         const notes = dbData.filter((n: any) => !n.is_folder);
         const byDate = (a: any, b: any) => String(b.updated_at || "").localeCompare(String(a.updated_at || ""));
         if (!cmdKQuery.trim()) {
-            const pinned = notes.filter((n: any) => pinnedIds.has(String(n.id))).sort((a: any, b: any) => String(a.title || "").localeCompare(String(b.title || "")));
-            const recent = notes.filter((n: any) => !pinnedIds.has(String(n.id))).sort(byDate).slice(0, 8);
-            const folderItems = folders.slice(0, 5).map(f => ({ ...f, _isFolder: true }));
-            return [...folderItems, ...recent, ...pinned];
+            return notes.sort(byDate).slice(0, 5);
         }
         const q = cmdKQuery.toLowerCase();
         const matchingFolders = folders
@@ -1893,11 +1908,11 @@ const fireIntegrations = (trigger: string, note: any) => {
     const isEmptyView = isDataLoaded && !editorOpen && !search.trim() && displayItems.length === 0;
     const folderNames = useMemo(() => {
         const names = new Set<string>();
-        dbData.forEach((n) => {
-            if (n?.folder_name) names.add(String(n.folder_name));
-        });
-        if (activeFolder) names.add(activeFolder);
-        if (targetFolder) names.add(targetFolder);
+        // Only include folders that actually exist as is_folder rows — no ghost names
+        dbData.filter((n) => n.is_folder && n.folder_name && n.folder_name.toUpperCase() !== "BOOKMARKS")
+              .forEach((n) => names.add(String(n.folder_name)));
+        if (activeFolder && activeFolder.toUpperCase() !== "BOOKMARKS") names.add(activeFolder);
+        if (targetFolder && targetFolder.toUpperCase() !== "BOOKMARKS") names.add(targetFolder);
         if (names.size === 0) names.add("General");
         return Array.from(names).sort((a, b) => a.localeCompare(b));
     }, [dbData, activeFolder, targetFolder]);
@@ -1976,7 +1991,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                     const { note: data } = await notesApi.insert(payload);
                     if (data) {
                         setEditingNote(data);
-                        setDbData((prev) => prev.map((n) => (String(n.id) === optimisticId ? data : n)));
+                        setDbData((prev) => { const seen = new Set<string>(); return prev.map((n) => String(n.id) === optimisticId ? data : n).filter((n) => { const id = String(n.id); if (seen.has(id)) return false; seen.add(id); return true; }); });
                     }
                 }
                 localStorage.removeItem(ACTIVE_DRAFT_KEY);
@@ -2631,10 +2646,6 @@ const fireIntegrations = (trigger: string, note: any) => {
     }, []);
 
     const openNoteFromCmdK = useCallback((note: any, cmdClick = false) => {
-        if (cmdClick && looksLikeUrl(note.content || "") && (note.folder_name || "").toUpperCase() === "BOOKMARKS") {
-            window.open(note.content.trim(), "_blank", "noopener,noreferrer");
-            return;
-        }
         setShowCmdK(false);
         setCmdKQuery("");
         if (note.folder_name) {
@@ -3135,19 +3146,22 @@ const fireIntegrations = (trigger: string, note: any) => {
         };
 
         setDbData((prev) => [...prev, { id: optimisticId, ...payload, created_at: new Date().toISOString() }]);
+        enterFolder({ id: optimisticId, name: folderName, color });
         try {
             const { note: data } = await notesApi.insert(payload);
             if (data) {
-                setDbData((prev) => prev.map((row) => (String(row.id) === optimisticId ? data : row)));
+                setDbData((prev) => { const seen = new Set<string>(); return prev.map((row) => String(row.id) === optimisticId ? data : row).filter((row) => { const id = String(row.id); if (seen.has(id)) return false; seen.add(id); return true; }); });
+                setFolderStack((prev) => prev.map((f) => f.id === optimisticId ? { ...f, id: String(data.id) } : f));
             }
             playSound("create");
             showToast(`+ "${folderName}"`, color);
         } catch (err) {
             console.error("Create folder failed:", err);
             setDbData((prev) => prev.filter((row) => String(row.id) !== optimisticId));
+            goBack();
             showToast("Create Failed");
         }
-    }, [newFolderName, folderNames, pickRandomPaletteColor]);
+    }, [newFolderName, folderNames, pickRandomPaletteColor, enterFolder, goBack]);
 
     const handleFolderFabPointerDown = useCallback(
         (event: React.PointerEvent<HTMLDivElement>) => {
@@ -4220,9 +4234,10 @@ const fireIntegrations = (trigger: string, note: any) => {
                             {jsonMode && (
                                 <span className="h-7 px-2 bg-zinc-800/90 border border-white/10 text-[10px] font-black uppercase tracking-wide text-yellow-400 flex items-center backdrop-blur-sm">JSON</span>
                             )}
-                            {(stackMode || mindmapMode || graphMode || listMode) && (
+                            {(stackMode || mindmapMode || graphMode) && (
                                 <span className="h-7 px-2 bg-zinc-800/90 border border-white/10 text-[10px] font-black uppercase tracking-wide text-zinc-300 flex items-center backdrop-blur-sm">{noteViewMode}</span>
                             )}
+                            {!listMode && !graphMode && !mindmapMode && !stackMode && (
                             <button type="button"
                                 onClick={() => {
                                     let toCopy = content;
@@ -4233,6 +4248,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 className="h-7 px-2.5 bg-zinc-800/90 border border-white/10 text-zinc-400 hover:text-white hover:bg-zinc-700/90 text-[10px] font-black uppercase tracking-wide transition backdrop-blur-sm flex items-center gap-1.5">
                                 <ClipboardIcon className="w-3 h-3" /> Copy
                             </button>
+                            )}
                         </div>
                         {mindmapMode ? (
                             <MindmapView title={title} content={content} onToggle={toggleMindmapNode} />
@@ -4921,9 +4937,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         if (item.is_folder) {
                                             playSound("navigate");
                                             enterFolder({ id: String(item.id), name: item.name, color: item.color || palette12[0] });
-                                        } else if (!item.is_folder && looksLikeUrl(item.content || "") && (activeFolder?.toUpperCase() === "BOOKMARKS" || (!activeFolder && (item.folder_name || "").toUpperCase() === "BOOKMARKS"))) {
-                                            playSound("click");
-                                            window.open(item.content.trim(), "_blank", "noopener,noreferrer");
                                         } else {
                                             playSound("click");
                                             setEditingNote(item);
@@ -4948,31 +4961,26 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             setEditorOpen(true);
                                         }
                                     }}
-                                    style={isListMode
-                                        ? { position: "relative", isolation: "isolate", "--row-color": item.color || item.folder_color || "#ffffff" } as React.CSSProperties
-                                        : item.is_folder
-                                        ? { position: "relative", isolation: "isolate", backgroundColor: item.color || item.folder_color || "#888888" }
-                                        : { position: "relative", isolation: "isolate", backgroundColor: `${item.color || item.folder_color || "#888888"}55`, border: `1.5px solid ${item.color || item.folder_color || "#888888"}88` }}
+                                    style={(() => {
+                                        const c = item.color || item.folder_color || "#888888";
+                                        if (isListMode) {
+                                            return { position: "relative", isolation: "isolate", "--row-color": c } as React.CSSProperties;
+                                        }
+                                        return item.is_folder
+                                            ? { position: "relative", isolation: "isolate", backgroundColor: c }
+                                            : { position: "relative", isolation: "isolate", backgroundColor: `${c}55`, border: `1.5px solid ${c}88` };
+                                    })()}
                                     className={`${isListMode
                                         ? `group list-row-hover flex items-center gap-3 px-4 py-2 sm:py-1 border-b border-white/5 cursor-pointer select-none transition-colors active:bg-white/10 overflow-hidden ${isDragging ? "opacity-30" : dt?.mode === "into" ? "bg-cyan-950/60 ring-1 ring-inset ring-cyan-400" : ""} ${isSelectMode && !item.is_folder && selectedIds.has(String(item.id)) ? "bg-blue-950/50" : ""} ${isFolderSelectMode && item.is_folder && selectedFolderNames.includes(item.name || "") ? "bg-emerald-950/50" : ""}`
                                         : `relative min-w-0 cursor-pointer transition-all group overflow-hidden ${isDragging ? "opacity-30 scale-95" : dt?.mode === "into" ? "ring-4 ring-cyan-400 ring-inset z-10" : ""} ${isSelectMode && !item.is_folder && selectedIds.has(String(item.id)) ? "ring-2 ring-inset ring-blue-500" : ""} ${isFolderSelectMode && item.is_folder && selectedFolderNames.includes(item.name || "") ? "ring-2 ring-inset ring-emerald-500" : ""}`}`}>
-                                    {/* HeroCard — cursor spotlight + snake border */}
+                                    {/* Cursor spotlight glow */}
                                     {isListMode && glowCard?.id === tileId && (() => {
                                         const c = item.color || item.folder_color || "#888888";
                                         const hex = c.replace("#", "").padEnd(6, "0");
                                         const r = parseInt(hex.substring(0, 2), 16);
                                         const g = parseInt(hex.substring(2, 4), 16);
                                         const b = parseInt(hex.substring(4, 6), 16);
-                                        return (
-                                            <>
-                                                {/* Background glow */}
-                                                <div className="absolute inset-0 pointer-events-none z-[-1]" style={{ background: `radial-gradient(circle at ${glowCard.x}% ${glowCard.y}%, rgba(${r},${g},${b},0.4) 0%, rgba(${r},${g},${b},0.2) 50%, rgba(${r},${g},${b},0.03) 100%)`, transition: "background 0.05s" }} />
-                                                {/* Snake border — 1 round */}
-                                                <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 2 }}>
-                                                    <rect className="list-snake-path" x="0" y="0" width="100%" height="100%" fill="none" stroke={c} strokeWidth="2" pathLength="100" style={{ animationIterationCount: 1, animationFillMode: "forwards" }} />
-                                                </svg>
-                                            </>
-                                        );
+                                        return <div className="absolute inset-0 pointer-events-none z-[-1]" style={{ background: `radial-gradient(circle at ${glowCard.x}% ${glowCard.y}%, rgba(${r},${g},${b},0.4) 0%, rgba(${r},${g},${b},0.2) 50%, rgba(${r},${g},${b},0.03) 100%)`, transition: "background 0.05s" }} />;
                                     })()}
                                     {/* Insertion line indicator — before */}
                                     {dt?.mode === "before" && (
@@ -4998,9 +5006,11 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             {item.is_folder && (() => {
                                                 const c = item.color || item.folder_color || palette12[0];
                                                 return (
-                                                    <div className="flex-shrink-0 w-[45px] h-[45px] sm:w-[36px] sm:h-[36px] flex items-center justify-center text-base sm:text-sm font-black"
-                                                        style={{ backgroundColor: c, color: "#fff", boxShadow: (item.name === "PAGES" || item.name === "CLAUDE") ? "inset 0 0 0 1px rgba(255,255,255,0.85)" : undefined }}>
-                                                        {item.icon || meaningfulInitial(item.name, "F")}
+                                                    <div className="flex-shrink-0 w-[45px] h-[45px] sm:w-[36px] sm:h-[36px] flex items-center justify-center text-base sm:text-sm font-black overflow-hidden"
+                                                        style={{ backgroundColor: item.name === "CLAUDE" ? "#fff" : c, color: "#fff", boxShadow: item.name === "CLAUDE" ? "inset 0 0 0 1px rgba(255,255,255,0.85)" : undefined }}>
+                                                        {item.name === "CLAUDE"
+                                                            ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-1" />
+                                                            : (item.icon || meaningfulInitial(item.name, "F"))}
                                                     </div>
                                                 );
                                             })()}
@@ -5009,13 +5019,13 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 const c = fc?.color || '#52525b';
                                                 const icon = fc ? (folderIcons[fc.name] || fc.name.charAt(0).toUpperCase()) : item.folder_name.charAt(0).toUpperCase();
                                                 return (
-                                                    <span className="flex-shrink-0 w-[45px] h-[45px] sm:w-9 sm:h-9 flex items-center justify-center text-base sm:text-sm font-black text-white leading-none" style={{ backgroundColor: c }} title={item.folder_name}>{icon}</span>
+                                                    <span className="flex-shrink-0 w-[45px] h-[45px] sm:w-9 sm:h-9 flex items-center justify-center text-base sm:text-sm font-black leading-none" style={{ border: `2px solid ${c}`, color: c }} title={item.folder_name}>{icon}</span>
                                                 );
                                             })()}
                                             {!item.is_folder && activeFolder && (() => {
                                                 const c = item.folder_color || item.color || '#52525b';
                                                 return (
-                                                    <span className="flex-shrink-0 w-[45px] h-[45px] sm:w-9 sm:h-9 flex items-center justify-center text-base sm:text-sm font-black text-white leading-none" style={{ backgroundColor: c }}>{[...(item.title || "N")][0].toUpperCase()}</span>
+                                                    <span className="flex-shrink-0 w-[45px] h-[45px] sm:w-9 sm:h-9 flex items-center justify-center text-base sm:text-sm font-black leading-none" style={{ border: `2px solid ${c}`, color: c }}>{[...(item.title || "N")][0].toUpperCase()}</span>
                                                 );
                                             })()}
                                             <div className="flex-1 min-w-0">
@@ -5961,7 +5971,22 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 </div>
                             )}
                             {/* GLOBAL GRAPH */}
-                            {activeFolder && <div className="px-6 pt-4 pb-1 text-[9px] font-black uppercase tracking-[0.15em] text-zinc-600">App Settings</div>}
+                            <div className="px-6 pt-4 pb-1 text-[9px] font-black uppercase tracking-[0.15em] text-zinc-600">App Settings</div>
+                            {/* NAV MODE — global only */}
+                            {!activeFolder && (
+                            <div className="px-6 py-3 border-b border-white/[0.06]">
+                                <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-2">Nav Mode</p>
+                                <div className="flex gap-1.5">
+                                    {(["folders-and-files", "files-only"] as const).map((mode) => (
+                                        <button key={mode} type="button"
+                                            onClick={() => setNavMode(mode)}
+                                            className={`flex-1 py-2 rounded text-[10px] font-black uppercase tracking-wide transition ${navMode === mode ? "bg-white text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"}`}>
+                                            {mode === "folders-and-files" ? "Folders & Files" : "Files Only"}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                            )}
                             <button type="button" className="w-full flex items-center gap-4 px-6 py-4 text-left text-zinc-300 hover:bg-white/5 hover:text-white active:bg-white/10 transition"
                                 onClick={() => { setShowFolderActions(false); setShowGlobalGraph(true); }}>
                                 <CubeTransparentIcon className="w-5 h-5 flex-shrink-0" />
@@ -5975,78 +6000,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     <span className="text-xs font-black tracking-wide">Delete</span>
                                 </button>
                             )}
-                            {/* LIGHT MODE — shown when Hue is active */}
-                            {integrationsRef.current.some(ig => ig.type === "hue") && (() => {
-                                const hueInt = integrationsRef.current.find(ig => ig.type === "hue") as any;
-                                const MODES: { key: "off" | "flash" | "ambient"; label: string; desc: string }[] = [
-                                    { key: "off",     label: "Off",     desc: "Don't trigger lights" },
-                                    { key: "flash",   label: "Flash",   desc: "Change color, restore after 60s" },
-                                    { key: "ambient", label: "Ambient", desc: "Hold color until next note" },
-                                ];
-                                return (
-                                    <div className="px-6 py-4 border-t border-white/5">
-                                        <div className="flex items-center gap-3 mb-3">
-                                            <LightBulbIcon className="w-4 h-4 text-zinc-400 flex-shrink-0" />
-                                            <span className="text-xs font-black tracking-wide text-zinc-300 uppercase">Lights</span>
-                                        </div>
-                                        <div className="flex gap-1.5">
-                                            {MODES.map(({ key, label }) => (
-                                                <button
-                                                    key={key}
-                                                    type="button"
-                                                    title={MODES.find(m => m.key === key)?.desc}
-                                                    className={`flex-1 py-2 rounded text-[10px] font-black uppercase tracking-wide transition ${lightMode === key ? "bg-white text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"}`}
-                                                    onClick={async () => {
-                                                        const prev = lightMode;
-                                                        setLightMode(key);
-                                                        playSound("click");
-                                                        const updatedConfig = { ...hueInt.config, mode: key };
-                                                        integrationsRef.current = integrationsRef.current.map(ig =>
-                                                            ig.type === "hue" ? { ...ig, config: updatedConfig } : ig
-                                                        );
-                                                        try {
-                                                            await fetch(`/api/stickies/integrations/${hueInt.id}`, {
-                                                                method: "PATCH",
-                                                                headers: { "Authorization": `Bearer ${await getAuthToken()}`, "Content-Type": "application/json" },
-                                                                body: JSON.stringify({ config: updatedConfig }),
-                                                            });
-                                                            showToast(`💡 Lights: ${label}`, "#FFD60A");
-                                                        } catch {
-                                                            setLightMode(prev);
-                                                            integrationsRef.current = integrationsRef.current.map(ig =>
-                                                                ig.type === "hue" ? { ...ig, config: { ...updatedConfig, mode: prev } } : ig
-                                                            );
-                                                        }
-                                                    }}
-                                                >{label}</button>
-                                            ))}
-                                        </div>
-                                        <button
-                                            type="button"
-                                            className="mt-2 w-full py-2 rounded text-[10px] font-black uppercase tracking-wide bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200 transition disabled:opacity-40 disabled:cursor-not-allowed"
-                                            onClick={async (e) => {
-                                                const btn = e.currentTarget;
-                                                btn.disabled = true;
-                                                const RAINBOW = ["#FF3B30","#FF9500","#FFCC00","#34C759","#007AFF","#5856D6","#AF52DE"];
-                                                const NAMES   = ["Red","Orange","Yellow","Green","Blue","Indigo","Violet"];
-                                                showToast("💡 Testing lights…", "#FFD60A");
-                                                for (let i = 0; i < RAINBOW.length; i++) {
-                                                    await fetch("/api/hue/trigger", {
-                                                        method: "POST",
-                                                        headers: { "Content-Type": "application/json" },
-                                                        body: JSON.stringify({ color: RAINBOW[i] }),
-                                                    }).catch(() => {});
-                                                    showToast(`💡 ${NAMES[i]}`, RAINBOW[i]);
-                                                    if (i < RAINBOW.length - 1) await new Promise(r => setTimeout(r, 1200));
-                                                }
-                                                await fetch("/api/hue/trigger", { method: "DELETE" }).catch(() => {});
-                                                showToast("💡 Lights restored", "#FFD60A");
-                                                btn.disabled = false;
-                                            }}
-                                        >Test Rainbow</button>
-                                    </div>
-                                );
-                            })()}
                             {/* INTEGRATIONS */}
                             <button type="button" className="w-full flex items-center gap-4 px-6 py-4 text-left text-zinc-300 hover:bg-white/5 hover:text-white active:bg-white/10 transition"
                                 onClick={() => { setIntegrationsSnapshot([...integrationsRef.current]); setShowIntegrationsPanel(true); }}>
