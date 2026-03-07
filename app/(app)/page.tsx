@@ -4666,10 +4666,11 @@ const fireIntegrations = (trigger: string, note: any) => {
 
                         {!activeFolder ? (
                             <>
-                                <div className={`relative transition-all duration-200 ${searchFocused || search.trim() ? "flex-1" : "w-[220px]"}`}>
+                                <button type="button" onClick={() => { setShowCmdK(true); setCmdKQuery(""); setCmdKCursor(0); }}
+                                    className={`relative flex items-center transition-all duration-200 text-left ${searchFocused || search.trim() ? "flex-1" : "w-[220px]"} bg-transparent`}>
                                     <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-white/35 w-6 h-6 pointer-events-none" />
-                                    <input value={search} onChange={(e) => setSearch(e.target.value)} onFocus={() => setSearchFocused(true)} onBlur={() => setSearchFocused(false)} autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false} inputMode="search" className="w-full bg-transparent border-0 outline-none focus:outline-none focus:ring-0 shadow-none appearance-none pl-12 pr-3 py-3 text-xs font-black tracking-tight" placeholder="search" />
-                                </div>
+                                    <span className="w-full pl-12 pr-3 py-3 text-xs font-black tracking-tight text-white/30">search</span>
+                                </button>
                                 <div className="ml-auto flex items-center gap-1">
                                     {/* view modes — hidden in edit mode (moved to editor panel header) */}
                                     {!editMode && (
