@@ -83,6 +83,8 @@ export async function POST(req: Request) {
         const folderSearch = await drive.files.list({
             q: `name='${safeName}' and '${parentFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
             fields: "files(id)",
+            supportsAllDrives: true,
+            includeItemsFromAllDrives: true,
         });
 
         let subFolderId: string;
@@ -96,6 +98,7 @@ export async function POST(req: Request) {
                     parents: [parentFolderId],
                 },
                 fields: "id",
+                supportsAllDrives: true,
             });
             subFolderId = created.data.id!;
         }
@@ -116,15 +119,17 @@ export async function POST(req: Request) {
                 body: Readable.from(buffer),
             },
             fields: "id",
+            supportsAllDrives: true,
         });
 
         // Make it publicly readable
         await drive.permissions.create({
             fileId: uploaded.data.id!,
             requestBody: { role: "reader", type: "anyone" },
+            supportsAllDrives: true,
         });
 
-        const url = `https://drive.google.com/uc?export=view&id=${uploaded.data.id}`;
+        const url = `https://lh3.googleusercontent.com/d/${uploaded.data.id}`;
         return NextResponse.json({ url, driveId: uploaded.data.id });
     } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : "Upload failed";
