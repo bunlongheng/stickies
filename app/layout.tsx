@@ -13,6 +13,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="manifest" href="/stickies.webmanifest" />
         <link rel="icon" href="/icons/stickies/icon-192.png" sizes="192x192" type="image/png" />
         <link rel="apple-touch-icon" href="/icons/stickies/icon-192.png" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
