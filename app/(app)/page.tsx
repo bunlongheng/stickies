@@ -5306,7 +5306,15 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 </button>
                                 {showSwitcher && (() => {
                                     const q = folderSearchQuery.toLowerCase();
-                                    const filtered = folderNames.filter((n) => n.toLowerCase().includes(q));
+                                    const filtered = folderNames.filter((n) => {
+                                        if (!n.toLowerCase().includes(q)) return false;
+                                        // When no query, only show top-level folders (no parent)
+                                        if (!q) {
+                                            const row = dbData.find((r) => r.is_folder && r.folder_name === n);
+                                            return !row?.parent_folder_name;
+                                        }
+                                        return true;
+                                    });
                                     const selectFirst = () => {
                                         if (filtered.length === 0) return;
                                         moveToFolder(filtered[0]);
@@ -5921,7 +5929,14 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     </button>
                                     {showFolderMovePicker && (() => {
                                         const q = folderMoveQuery.toLowerCase();
-                                        const moveTargets = folderNames.filter((n) => n !== activeFolder && n.toLowerCase().includes(q));
+                                        const moveTargets = folderNames.filter((n) => {
+                                            if (n === activeFolder || !n.toLowerCase().includes(q)) return false;
+                                            if (!q) {
+                                                const row = dbData.find((r) => r.is_folder && r.folder_name === n);
+                                                return !row?.parent_folder_name;
+                                            }
+                                            return true;
+                                        });
                                         return (
                                             <div className="px-4 pb-4 flex flex-col gap-1.5">
                                                 <input
