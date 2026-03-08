@@ -4669,7 +4669,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 <button type="button" onClick={() => { setShowCmdK(true); setCmdKQuery(""); setCmdKCursor(0); }}
                                     className={`relative flex items-center transition-all duration-200 text-left ${searchFocused || search.trim() ? "flex-1" : "w-[220px]"} bg-transparent`}>
                                     <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-white/35 w-6 h-6 pointer-events-none" />
-                                    <span className="w-full pl-12 pr-3 py-3 text-xs font-black tracking-tight text-white/30">search</span>
+                                    <span className="w-full pl-12 pr-3 py-3 text-sm font-black tracking-tight text-white/30">search</span>
                                 </button>
                                 <div className="ml-auto flex items-center gap-1">
                                     {/* view modes — hidden in edit mode (moved to editor panel header) */}
@@ -5009,7 +5009,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             {item.is_folder && (() => {
                                                 const c = item.color || item.folder_color || palette12[0];
                                                 return (
-                                                    <div className="flex-shrink-0 w-[45px] h-[45px] sm:w-[36px] sm:h-[36px] flex items-center justify-center text-base sm:text-sm font-black overflow-hidden"
+                                                    <div className="flex-shrink-0 w-[54px] h-[54px] sm:w-[36px] sm:h-[36px] flex items-center justify-center text-base sm:text-sm font-black overflow-hidden"
                                                         style={{ backgroundColor: item.name === "CLAUDE" ? "#fff" : c, color: "#fff", boxShadow: item.name === "CLAUDE" ? "inset 0 0 0 1px rgba(255,255,255,0.85)" : undefined }}>
                                                         {item.name === "CLAUDE"
                                                             ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-1" />
@@ -5022,35 +5022,35 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 const c = fc?.color || '#52525b';
                                                 const icon = fc ? (folderIcons[fc.name] || fc.name.charAt(0).toUpperCase()) : item.folder_name.charAt(0).toUpperCase();
                                                 return (
-                                                    <span className="flex-shrink-0 w-[45px] h-[45px] sm:w-9 sm:h-9 flex items-center justify-center text-base sm:text-sm font-black leading-none" style={{ border: `2px solid ${c}`, color: c }} title={item.folder_name}>{icon}</span>
+                                                    <span className="flex-shrink-0 w-[54px] h-[54px] sm:w-9 sm:h-9 flex items-center justify-center text-base sm:text-sm font-black leading-none" style={{ border: `2px solid ${c}`, color: c }} title={item.folder_name}>{icon}</span>
                                                 );
                                             })()}
                                             {!item.is_folder && activeFolder && (() => {
                                                 const c = item.folder_color || item.color || '#52525b';
                                                 return (
-                                                    <span className="flex-shrink-0 w-[45px] h-[45px] sm:w-9 sm:h-9 flex items-center justify-center text-base sm:text-sm font-black leading-none" style={{ border: `2px solid ${c}`, color: c }}>{[...(item.title || "N")][0].toUpperCase()}</span>
+                                                    <span className="flex-shrink-0 w-[54px] h-[54px] sm:w-9 sm:h-9 flex items-center justify-center text-base sm:text-sm font-black leading-none" style={{ border: `2px solid ${c}`, color: c }}>{[...(item.title || "N")][0].toUpperCase()}</span>
                                                 );
                                             })()}
                                             <div className="flex-1 min-w-0">
-                                                <div className="text-base sm:text-[14.4px] font-semibold tracking-tight text-white truncate">
+                                                <div className="text-[19px] sm:text-[14.4px] font-semibold tracking-tight text-white truncate">
                                                     {item.is_folder ? item.name : item.title}
                                                 </div>
                                                 {item.is_folder ? (
-                                                    <div className="text-[13px] text-zinc-500 font-medium">
+                                                    <div className="text-[16px] sm:text-[13px] text-zinc-500 font-medium">
                                                         {item.subfolderCount > 0 && <span>{item.subfolderCount} folder{item.subfolderCount !== 1 ? "s" : ""}{item.count > 0 ? " · " : ""}</span>}
                                                         {item.count > 0 && <span>{item.count} note{item.count !== 1 ? "s" : ""}</span>}
                                                     </div>
                                                 ) : (
-                                                    <div className="text-[13px] text-zinc-500 truncate">
+                                                    <div className="text-[16px] sm:text-[13px] text-zinc-500 truncate">
                                                         <span className="truncate">{(() => { const s = previewText(item.content || "").split("\n").find((l: string) => l.trim()) || ""; return s.length > 60 ? s.slice(0, 60) + "..." : s; })()}</span>
                                                     </div>
                                                 )}
                                             </div>
                                             {item.is_folder && item.latestUpdatedAt && (
-                                                <span className="text-[13px] text-zinc-500 flex-shrink-0 font-medium">{timeAgo(item.latestUpdatedAt)}</span>
+                                                <span className="text-[16px] sm:text-[13px] text-zinc-500 flex-shrink-0 font-medium">{timeAgo(item.latestUpdatedAt)}</span>
                                             )}
                                             {!item.is_folder && item.updated_at && (
-                                                <span className="text-[13px] text-zinc-500 flex-shrink-0 font-medium">
+                                                <span className="text-[16px] sm:text-[13px] text-zinc-500 flex-shrink-0 font-medium">
                                                     {timeAgo(item.updated_at)}
                                                 </span>
                                             )}
