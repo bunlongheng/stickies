@@ -5301,7 +5301,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                     const nc = (item as any).color || (item as any).folder_color || "#22c55e";
                                                     return (
                                                         <div className="flex-shrink-0 w-[54px] h-[54px] sm:w-[36px] sm:h-[36px] relative overflow-hidden font-black"
-                                                            style={{ backgroundColor: `${nc}08`, border: `1.5px solid ${nc}40` }}>
+                                                            style={{ backgroundColor: `${nc}22`, border: `1.5px solid ${nc}40` }}>
                                                             <div style={{
                                                                 position: "absolute", bottom: 0, left: 0, right: 0,
                                                                 height: `${total > 0 ? Math.round((checked / total) * 100) : 0}%`,
@@ -5320,7 +5320,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                     <div className="flex-shrink-0 w-[54px] h-[54px] sm:w-[36px] sm:h-[36px] flex items-center justify-center font-black overflow-hidden"
                                                         style={{
                                                             fontSize: fs,
-                                                            backgroundColor: `${color}18`,
+                                                            backgroundColor: `${color}30`,
                                                             color,
                                                             border: `1.5px solid ${color}40`,
                                                         }}>
