@@ -4849,9 +4849,9 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 )}
                             </div>
                         ) : mermaidMode ? (
-                            <MermaidRenderer code={extractMermaid(content)} onChange={(c) => setContent(c)} showCode={mermaidShowCode} theme={appTheme === "light" ? "light" : "dark"} />
+                            <MermaidRenderer code={extractMermaid(content)} onChange={(c) => setContent(c)} showCode={mermaidShowCode} theme={appTheme === "light" ? "light" : appTheme === "monokai" ? "monokai" : "dark"} />
                         ) : markdownMode ? (
-                            <MarkdownWithMermaid content={content} theme={appTheme === "light" ? "light" : "dark"} />
+                            <MarkdownWithMermaid content={content} theme={appTheme === "light" ? "light" : appTheme === "monokai" ? "monokai" : "dark"} />
                         ) : htmlMode ? (
                             <div className="flex-1 flex flex-col">
                                 <iframe
