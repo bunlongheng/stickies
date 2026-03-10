@@ -5293,10 +5293,11 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                     const checked = lines.filter((l: string) => /^\[x\]/i.test(l.trim())).length;
                                                     const total = lines.length;
                                                     return (
-                                                        <div className="flex-shrink-0 w-[54px] h-[54px] sm:w-[36px] sm:h-[36px] flex flex-col items-center justify-center font-black overflow-hidden leading-none gap-px"
+                                                        <div className="flex-shrink-0 w-[54px] h-[54px] sm:w-[36px] sm:h-[36px] flex items-center justify-center font-black overflow-hidden leading-none"
                                                             style={{ backgroundColor: "#22c55e18", border: "1.5px solid #22c55e40", textShadow: checked > 0 ? "0 0 6px rgba(34,197,94,0.6)" : "none" }}>
-                                                            <span style={{ fontSize: 13, color: "#22c55e" }}>{checked}</span>
-                                                            <span style={{ fontSize: 8, color: "#3f3f46" }}>/{total}</span>
+                                                            <span style={{ fontSize: 12, color: "#22c55e" }}>{checked}</span>
+                                                            <span style={{ fontSize: 10, color: "#3f3f46", fontStyle: "italic", margin: "0 1px" }}>⁄</span>
+                                                            <span style={{ fontSize: 9, color: "#3f3f46" }}>{total}</span>
                                                         </div>
                                                     );
                                                 }
