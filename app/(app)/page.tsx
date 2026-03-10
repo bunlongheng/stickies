@@ -3921,6 +3921,14 @@ const fireIntegrations = (trigger: string, note: any) => {
     if (!mounted || isUrlChecking) return <div className="h-screen bg-black" />;
     const activeAccentColor = noteColor || editingNote?.folder_color || folders.find((f) => f.name === activeFolder)?.color || "#22d3ee";
     const noteBadgeInitial = meaningfulInitial(title.trim() || editingNote?.title || "", folderIcons[targetFolder] || (targetFolder || "N").charAt(0));
+    const noteBadgeLabel = TYPE_BADGE[noteType]?.label ?? noteBadgeInitial;
+    const noteBadgeFontSize = (() => {
+        const lbl = TYPE_BADGE[noteType]?.label;
+        if (!lbl) return "0.75rem";
+        if (lbl.length <= 2) return "8px";
+        if (lbl.length <= 3) return "6px";
+        return "5.5px";
+    })();
     const activeFolderColor = (activeFolder
         ? (folderColors[activeFolder]
             || folderStack.at(-1)?.color
@@ -4429,28 +4437,18 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 </React.Fragment>
                             ))}
                             {folderStack.length > 0 && <span className="text-zinc-700 text-[10px] flex-shrink-0">/</span>}
-                            <span className="w-6 h-6 flex-shrink-0 flex items-center justify-center text-sm font-black leading-none" style={{ border: `1.5px solid ${activeAccentColor}99`, color: activeAccentColor }}>
-                                {noteBadgeInitial}
+                            <span className="w-7 h-7 flex-shrink-0 flex items-center justify-center font-black leading-none tracking-tight" style={{ border: `1.5px solid ${(TYPE_BADGE[noteType]?.color ?? activeAccentColor)}99`, color: TYPE_BADGE[noteType]?.color ?? activeAccentColor, fontSize: noteBadgeFontSize }}>
+                                {noteBadgeLabel}
                             </span>
                             <input ref={titleInputRef} value={title} onChange={(e) => setTitle(e.target.value)} onFocus={() => { closeEditorTools(); setShowNoteActions(false); }} autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false} className="bg-transparent border-0 appearance-none shadow-none ring-0 outline-none focus:outline-none focus:ring-0 px-1 min-w-0 flex-1 font-black tracking-tight text-xs text-white placeholder:text-zinc-500" style={{ caretColor: activeAccentColor }} placeholder="NOTE TITLE" />
                         </div>
 
                         {/* Mobile: badge + title */}
-                        <span className="sm:hidden w-[26px] h-[26px] inline-flex items-center justify-center text-xs font-black leading-none flex-shrink-0" style={{ border: `1.5px solid ${activeAccentColor}99`, color: activeAccentColor }}>
-                            {noteBadgeInitial}
+                        <span className="sm:hidden w-[30px] h-[30px] inline-flex items-center justify-center font-black leading-none tracking-tight flex-shrink-0" style={{ border: `1.5px solid ${(TYPE_BADGE[noteType]?.color ?? activeAccentColor)}99`, color: TYPE_BADGE[noteType]?.color ?? activeAccentColor, fontSize: noteBadgeFontSize }}>
+                            {noteBadgeLabel}
                         </span>
                         <input ref={titleInputRef} value={title} onChange={(e) => setTitle(e.target.value)} onFocus={() => { closeEditorTools(); setShowNoteActions(false); }} autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false} className="sm:hidden bg-transparent border-0 appearance-none shadow-none ring-0 outline-none focus:outline-none focus:ring-0 px-2 flex-grow min-w-0 text-sm text-white placeholder:text-zinc-500" style={{ caretColor: activeAccentColor, border: "none" }} placeholder="NOTE TITLE" />
 
-                        {(() => {
-                            const badge = TYPE_BADGE[noteType];
-                            if (!badge) return null;
-                            return (
-                                <span className="flex-shrink-0 text-[9px] font-black tracking-wide px-1.5 py-0.5 leading-none"
-                                    style={{ color: badge.color, border: `1px solid ${badge.color}40`, background: `${badge.color}15` }}>
-                                    {badge.label}
-                                </span>
-                            );
-                        })()}
                         {(noteType === "text" || noteType === "voice" || !noteType) && (
                             <button type="button"
                                 onClick={() => { setShowVoiceRecorder(true); setShowNoteActions(false); closeEditorTools(); }}
@@ -4984,14 +4982,14 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         {/* view modes — hidden in edit mode (moved to editor panel header) */}
                                         {!editMode && (
                                             <>
-                                                <HeaderIconBtn icon={ListBulletIcon} label="List" onClick={() => { setMainListMode(true); setKanbanMode(false); setEditMode(false); }} style={mainListMode && !kanbanMode && !editMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
-                                                <HeaderIconBtn icon={Squares2X2Icon} label="Grid" onClick={() => { setMainListMode(false); setKanbanMode(false); setEditMode(false); }} style={!mainListMode && !kanbanMode && !editMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
                                                 <div className="hidden sm:contents">
+                                                    <HeaderIconBtn icon={ListBulletIcon} label="List" onClick={() => { setMainListMode(true); setKanbanMode(false); setEditMode(false); }} style={mainListMode && !kanbanMode && !editMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
+                                                    <HeaderIconBtn icon={Squares2X2Icon} label="Grid" onClick={() => { setMainListMode(false); setKanbanMode(false); setEditMode(false); }} style={!mainListMode && !kanbanMode && !editMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
                                                     <HeaderIconBtn icon={ViewColumnsIcon} label="Kanban" onClick={() => { setKanbanMode((v) => !v); setMainListMode(false); setEditMode(false); }} style={kanbanMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
                                                     <HeaderIconBtn icon={PencilSquareIcon} label="Edit" onClick={() => { setEditMode((v) => !v); setKanbanMode(false); }} style={editMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
+                                                    {/* divider */}
+                                                    <div className="w-px h-4 bg-white/10 mx-1" />
                                                 </div>
-                                                {/* divider */}
-                                                <div className="w-px h-4 bg-white/10 mx-1" />
                                             </>
                                         )}
                                         {/* actions */}

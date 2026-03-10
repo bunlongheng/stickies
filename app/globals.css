@@ -66,3 +66,65 @@ body {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 6px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.22); }
+
+/* ── Monokai editor ─────────────────────────────────────── */
+/* Applied when the RichTextEditor sits on #272822 background */
+[style*="272822"] .ProseMirror,
+[style*="272822"] .tiptap {
+  color: #f8f8f2 !important;
+  caret-color: #f8f8f2 !important;
+}
+[style*="272822"] .ProseMirror p,
+[style*="272822"] .tiptap p {
+  color: #f8f8f2;
+}
+[style*="272822"] .ProseMirror .is-editor-empty::before,
+[style*="272822"] .tiptap .is-editor-empty::before {
+  color: #75715e !important;
+}
+[style*="272822"] .ProseMirror strong { color: #f8f8f2; }
+[style*="272822"] .ProseMirror em { color: #e6db74; }
+[style*="272822"] .ProseMirror code { background: #3e3d32; color: #e6db74; }
+[style*="272822"] .ProseMirror pre { background: #1e1f1a; color: #f8f8f2; }
+[style*="272822"] .ProseMirror h1,
+[style*="272822"] .ProseMirror h2,
+[style*="272822"] .ProseMirror h3 { color: #66d9e8; }
+[style*="272822"] .ProseMirror a { color: #a6e22e; }
+[style*="272822"] .ProseMirror blockquote { border-left-color: #75715e; color: #75715e; }
+
+/* ── Themes ─────────────────────────────────────────────── */
+
+/* light: invert the whole UI, re-invert images/videos */
+[data-theme="light"] body {
+  filter: invert(1) hue-rotate(180deg);
+}
+[data-theme="light"] img,
+[data-theme="light"] video,
+[data-theme="light"] canvas,
+[data-theme="light"] [data-no-invert] {
+  filter: invert(1) hue-rotate(180deg);
+}
+[data-theme="light"] * {
+  scrollbar-color: rgba(0,0,0,0.18) transparent;
+}
+
+/* monokai: warm dark palette */
+[data-theme="monokai"] body {
+  background: #272822 !important;
+}
+[data-theme="monokai"] main,
+[data-theme="monokai"] .bg-black {
+  background: #272822 !important;
+}
+[data-theme="monokai"] .bg-zinc-900 { background: #1e1f1a !important; }
+[data-theme="monokai"] .bg-zinc-800 { background: #2d2e28 !important; }
+[data-theme="monokai"] .bg-zinc-700 { background: #3a3b35 !important; }
+[data-theme="monokai"] * {
+  scrollbar-color: rgba(253,151,31,0.3) transparent;
+}
+[data-theme="monokai"] ::-webkit-scrollbar-thumb {
+  background: rgba(253,151,31,0.25);
+}
+[data-theme="monokai"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(253,151,31,0.45);
+}

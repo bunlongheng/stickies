@@ -61,6 +61,20 @@ function getPusher() {
     });
 }
 
+// ── Hue trigger ──────────────────────────────────────────────────────────────
+// Fires on any non-browser API write (curl / AI / external).
+// Browser requests have a Mozilla User-Agent — skip those.
+function triggerHue(req: Request, color: string) {
+    const ua = req.headers.get("user-agent") ?? "";
+    if (/mozilla/i.test(ua)) return; // browser — skip
+    const base = (process.env.NEXT_PUBLIC_APP_BASE_URL ?? "http://localhost:4444").replace(/\/$/, "");
+    fetch(`${base}/api/hue/trigger`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ color }),
+    }).catch(() => {});
+}
+
 // ── Auth ────────────────────────────────────────────────────────────────────
 type AuthResult = { type: "apikey" } | { type: "user"; userId: string };
 
@@ -232,8 +246,9 @@ export async function POST(req: Request) {
                     const folder_name = "folder" in item
                         ? (String(item.folder ?? "").trim() || (() => { throw new Error("folder cannot be empty"); })())
                         : "CLAUDE";
+                    const batchType = (typeof item.type === "string" && VALID_TYPES.has(item.type)) ? item.type : detectType(content, title);
                     const { data, error } = await sb.from(table).insert([{
-                        is_folder: false, title, content, folder_name,
+                        is_folder: false, title, content, folder_name, type: batchType,
                         folder_color: pickColor(item.color as string),
                         order: nextOrder++, created_at: now, updated_at: now, ...userField,
                     }]).select().single();
@@ -299,7 +314,7 @@ export async function POST(req: Request) {
     const contentType = req.headers.get("content-type") ?? "";
     const isMarkdown = /text\/(plain|markdown|x-markdown)/i.test(contentType);
 
-    let title = "", content = "", folder_name: string | null = null, rawColor = "", parentFolderHint: string | null = null;
+    let title = "", content = "", folder_name: string | null = null, rawColor = "", parentFolderHint: string | null = null, explicitType: string | null = null;
 
     if (isMarkdown) {
         const raw = await req.text();
@@ -315,8 +330,10 @@ export async function POST(req: Request) {
         }
         const qFolder = url.searchParams.get("folder");
         const qColor  = url.searchParams.get("color");
+        const qType   = url.searchParams.get("type");
         folder_name = qFolder?.trim() || "CLAUDE";
         if (qColor?.trim()) rawColor = qColor.trim().toUpperCase();
+        if (qType && VALID_TYPES.has(qType)) explicitType = qType;
     } else {
         let body: Record<string, unknown>;
         try { body = bodyForFolderCheck ?? await req.json(); }
@@ -327,6 +344,8 @@ export async function POST(req: Request) {
         folder_name = folderField.trim() || "CLAUDE";
         rawColor    = typeof body.color   === "string" ? body.color.trim().toUpperCase() : "";
         parentFolderHint = typeof body.parent_folder === "string" ? body.parent_folder.trim() : null;
+        const bodyType = typeof body.type === "string" ? body.type.trim().toLowerCase() : null;
+        if (bodyType && VALID_TYPES.has(bodyType)) explicitType = bodyType;
     }
 
     if (!title) return NextResponse.json({ error: "title required" }, { status: 400 });
@@ -335,6 +354,18 @@ export async function POST(req: Request) {
     if (!folder_name?.trim()) folder_name = "CLAUDE";
 
     const sb = getSupabase();
+
+    // ── Non-browser API calls: enforce CLAUDE as parent for unknown simple folders ──
+    const isExternalCall = !/mozilla/i.test(req.headers.get("user-agent") ?? "");
+    if (isExternalCall && !folder_name!.includes("/")) {
+        // Check if this is a known root-level folder
+        const { data: rootFolders } = await sb.from(table).select("folder_name").eq("is_folder", true).is("parent_folder_name", null);
+        const rootNames = (rootFolders ?? []).map((f: any) => f.folder_name.toLowerCase());
+        if (!rootNames.includes(folder_name!.toLowerCase())) {
+            // Not a root folder — nest under CLAUDE
+            folder_name = `CLAUDE/${folder_name}`;
+        }
+    }
 
     // Resolve folder via slash-path (e.g. "claude/skills") or simple name
     let resolved_folder_id: string | null = null;
@@ -360,7 +391,11 @@ export async function POST(req: Request) {
                 parentName = match.folder_name;
                 parentId = String(match.id);
             } else {
-                // Create missing folder in chain
+                // Never auto-create root-level folders — require a parent
+                if (parentName === null) {
+                    return NextResponse.json({ error: `Root folder "${segment}" does not exist. Create it manually or use an existing folder.` }, { status: 400 });
+                }
+                // Create missing sub-folder in chain
                 const { data: maxFolderRow } = await sb.from(table).select("order").eq("is_folder", true).order("order", { ascending: false }).limit(1).single();
                 const folderOrder = typeof maxFolderRow?.order === "number" ? maxFolderRow.order + 1 : 0;
                 const { data: newFolder } = await sb.from(table).insert([{
@@ -412,10 +447,12 @@ export async function POST(req: Request) {
 
     let data: any, error: any;
 
+    const noteType = explicitType ?? detectType(content, title);
+
     if (existingNote?.id) {
         // Update existing note
         ({ data, error } = await sb.from(table)
-            .update({ content, folder_color, updated_at: now })
+            .update({ content, folder_color, type: noteType, updated_at: now })
             .eq("id", existingNote.id)
             .select().single());
     } else {
@@ -423,7 +460,7 @@ export async function POST(req: Request) {
         const { data: maxRow } = await sb.from(table).select("order").eq("is_folder", false).order("order", { ascending: false }).limit(1).single();
         const nextOrder = typeof maxRow?.order === "number" ? maxRow.order + 1 : 0;
         ({ data, error } = await sb.from(table).insert([{
-            title, content, folder_name: resolved_folder_name, folder_color, is_folder: false,
+            title, content, folder_name: resolved_folder_name, folder_color, is_folder: false, type: noteType,
             ...(resolved_folder_id ? { folder_id: resolved_folder_id } : {}),
             order: nextOrder, created_at: now, updated_at: now, ...userField,
         }]).select().single());
@@ -433,6 +470,7 @@ export async function POST(req: Request) {
 
     if (auth.type === "apikey") {
         try { await getPusher().trigger("stickies", existingNote?.id ? "note-updated" : "note-created", data); } catch {}
+        triggerHue(req, folder_color);
     }
 
     return NextResponse.json({ note: data, action: existingNote?.id ? "updated" : "created" }, { status: 201 });
@@ -465,6 +503,54 @@ export async function DELETE(req: Request) {
     if (error) { console.error("[stickies DELETE folder]", error); return NextResponse.json({ error: "Database error" }, { status: 500 }); }
     try { await getPusher().trigger("stickies", "note-deleted", { folder_name: folderName }); } catch {}
     return NextResponse.json({ ok: true, deleted_folder: folderName });
+}
+
+// ── Note type detection ──────────────────────────────────────────────────────
+const VALID_TYPES = new Set(["text","markdown","html","json","mermaid","javascript","typescript","python","css","sql","bash","voice"]);
+
+export function detectType(content: string, title?: string): string {
+    const t = content.trim();
+    if (!t) return "text";
+
+    // Voice note (JSON blob)
+    if (t.startsWith('{"_type":"voice"')) {
+        try { if (JSON.parse(t)?._type === "voice") return "voice"; } catch {}
+    }
+    // Fenced mermaid block
+    if (/^```(?:mermaid)?\s*\n[\s\S]*?```\s*$/im.test(t)) return "mermaid";
+    // Bare mermaid keyword
+    if (/^(flowchart|graph|sequenceDiagram|classDiagram|stateDiagram(-v2)?|erDiagram|gantt|pie|gitGraph|mindmap|timeline|xychart(-beta)?|quadrantChart|requirementDiagram|zenuml|sankey|block-beta)\b/im.test(t)) return "mermaid";
+    // JSON
+    if ((t.startsWith("{") || t.startsWith("[")) && (() => { try { JSON.parse(t); return true; } catch { return false; } })()) return "json";
+    // Code by title extension
+    if (title) {
+        const ext = title.split(".").pop()?.toLowerCase() ?? "";
+        if (ext === "js")   return "javascript";
+        if (ext === "ts")   return "typescript";
+        if (ext === "py")   return "python";
+        if (ext === "css")  return "css";
+        if (ext === "sql")  return "sql";
+        if (ext === "sh" || ext === "bash") return "bash";
+        if (ext === "md" || ext === "markdown") return "markdown";
+        if (ext === "html" || ext === "htm")    return "html";
+        if (ext === "json") return "json";
+        if (ext === "mermaid" || ext === "mmd") return "mermaid";
+    }
+    // HTML document
+    if (/^\s*<!DOCTYPE\s+html/i.test(t) || /^\s*<html[\s>]/i.test(t)) return "html";
+    // Markdown heuristic
+    if (/^#{1,6}\s|^[-*]\s|\*\*|^>\s|^```/m.test(t)) return "markdown";
+
+    return "text";
+}
+
+function htmlToPlainLines(html: string): string {
+    if (!/<[a-z][^>]*>/i.test(html)) return html;
+    return html
+        .replace(/<br\s*\/?>/gi, "\n").replace(/<\/li>/gi, "\n").replace(/<li[^>]*>/gi, "")
+        .replace(/<\/?(p|div|tr|dt|dd|h[1-6])[^>]*>/gi, "\n").replace(/<[^>]+>/g, "")
+        .replace(/&nbsp;/g, " ").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&")
+        .replace(/\n{3,}/g, "\n\n").trim();
 }
 
 // ── PATCH ───────────────────────────────────────────────────────────────────
@@ -510,6 +596,39 @@ export async function PATCH(req: Request) {
         const { error: delErr } = await scope(sb.from(table).delete().eq("is_folder", true).eq("folder_name", from.trim()));
         if (delErr) { console.error("[stickies PATCH merge_folder delete]", delErr); return NextResponse.json({ error: "Database error" }, { status: 500 }); }
         return NextResponse.json({ ok: true, merged: { from, to: to.trim(), moved: movedRows?.length ?? 0 } });
+    }
+
+    if (body.fix_html_content) {
+        const { data: allNotes, error: fetchErr } = await scope(
+            sb.from(table).select("id, content").eq("is_folder", false).eq("folder_name", "TEAM")
+        );
+        if (fetchErr) return NextResponse.json({ error: "Fetch failed" }, { status: 500 });
+        // Only strip HTML from TEAM notes — never touch intentional HTML notes in other folders
+        const toFix = (allNotes ?? []).filter((n: any) => /<[a-z][^>]*>/i.test(n.content || "") && !/<!DOCTYPE\s+html/i.test(n.content || ""));
+        if (toFix.length === 0) return NextResponse.json({ ok: true, fixed: 0 });
+        const results = await Promise.all(toFix.map((n: any) =>
+            scope(sb.from(table).update({ content: htmlToPlainLines(n.content), updated_at: now }).eq("id", n.id))
+        ));
+        const failed = results.filter((r: any) => r.error);
+        if (failed.length > 0) return NextResponse.json({ error: "Partial failure", fixed: toFix.length - failed.length }, { status: 500 });
+        return NextResponse.json({ ok: true, fixed: toFix.length });
+    }
+
+    if (body.fix_team_checklist) {
+        // One-time fix: set list_mode=true on all TEAM notes, strip HTML content
+        const { data: teamNotes, error: fetchErr } = await scope(
+            sb.from(table).select("id, content, list_mode").eq("is_folder", false).eq("folder_name", "TEAM")
+        );
+        if (fetchErr) return NextResponse.json({ error: "Fetch failed" }, { status: 500 });
+        const toFix = (teamNotes ?? []).filter((n: any) => !n.list_mode);
+        if (toFix.length === 0) return NextResponse.json({ ok: true, fixed: 0 });
+        const results = await Promise.all(toFix.map((n: any) => {
+            const cleanContent = /<[a-z][^>]*>/i.test(n.content || "") ? htmlToPlainLines(n.content) : n.content;
+            return scope(sb.from(table).update({ list_mode: true, content: cleanContent, updated_at: now }).eq("id", n.id));
+        }));
+        const failed = results.filter((r: any) => r.error);
+        if (failed.length > 0) return NextResponse.json({ error: "Partial failure", fixed: toFix.length - failed.length }, { status: 500 });
+        return NextResponse.json({ ok: true, fixed: toFix.length });
     }
 
     if (Array.isArray(body.updates)) {

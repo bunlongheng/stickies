@@ -108,7 +108,7 @@ export async function POST(req: Request) {
     // posts don't overlap. Hue starts first (~300ms head-start) so the light
     // and screen flash arrive at roughly the same time.
     flashQueue = flashQueue.then(async () => {
-        const hueReady = fetch("http://localhost:3000/api/hue/trigger", {
+        const hueReady = fetch("http://localhost:4444/api/hue/trigger", {
             method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ color }),
         }).catch(() => {});
