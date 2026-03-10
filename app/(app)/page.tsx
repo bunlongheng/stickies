@@ -214,6 +214,7 @@ const TYPE_BADGE: Record<string, { label: string; color: string }> = {
     json:       { label: "JSON", color: "#fbbf24" },
     mermaid:    { label: "M",    color: "#06b6d4" },
     voice:      { label: "🎙",   color: "#ef4444" },
+    checklist:  { label: "✓",   color: "#22c55e" },
 };
 
 /** Client-side fallback type detection — used only when DB type is null (legacy notes) */
@@ -1597,7 +1598,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                 if (note.content !== undefined) setContent(note.content);
                 if (note.title   !== undefined) setTitle(note.title);
                 if (note.list_mode !== undefined) {
-                    if (note.list_mode) setListModeNotes((s) => new Set([...s, String(note.id)]));
+                    const isChecklist = note.list_mode || note.type === "checklist";
+                    if (isChecklist) setListModeNotes((s) => new Set([...s, String(note.id)]));
                     else setListModeNotes((s) => { const n = new Set(s); n.delete(String(note.id)); return n; });
                 }
                 if (note.mindmap_mode !== undefined) {
@@ -1671,7 +1673,7 @@ const fireIntegrations = (trigger: string, note: any) => {
             setNoteColor(note.folder_color || palette12[0]);
             setActiveLine(0);
             setEditorScrollTop(0);
-            if (note.id && note.list_mode) {
+            if (note.id && (note.list_mode || note.type === "checklist")) {
                 setListModeNotes((prev) => new Set([...prev, String(note.id)]));
             }
             if (note.id && note.mindmap_mode) {
@@ -1699,7 +1701,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         setNoteColor(topNote.folder_color || palette12[0]);
         setActiveLine(0);
         setEditorScrollTop(0);
-        if (topNote.id && topNote.list_mode) {
+        if (topNote.id && (topNote.list_mode || topNote.type === "checklist")) {
             setListModeNotes((prev) => new Set([...prev, String(topNote.id)]));
         }
         setEditorOpen(true);
@@ -2894,7 +2896,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         setShowSwitcher(false);
         setActiveLine(0);
         setEditorScrollTop(0);
-        if (note.id && note.list_mode) setListModeNotes((p: Set<string>) => new Set([...p, String(note.id)]));
+        if (note.id && (note.list_mode || note.type === "checklist")) setListModeNotes((p: Set<string>) => new Set([...p, String(note.id)]));
         if (note.id && note.mindmap_mode) setMindmapModeNotes((p: Set<string>) => new Set([...p, String(note.id)]));
         setEditorOpen(true);
     }, [dbData, enterFolder, activeFolder, folders]);
@@ -2972,7 +2974,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                 next.delete(currentNoteId);
             }
             localWriteRef.current.set(currentNoteId, Date.now());
-            void notesApi.update(currentNoteId, { list_mode: newVal });
+            void notesApi.update(currentNoteId, { list_mode: newVal, type: newVal ? "checklist" : null });
             return next;
         });
     }, [currentNoteId, graphModeNotes]);
@@ -5216,7 +5218,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             if (item.id && looksLikeMarkdown(item.content || "")) {
                                                 setMarkdownModeNotes((prev) => new Set([...prev, String(item.id)]));
                                             }
-                                            if (item.id && item.list_mode) {
+                                            if (item.id && (item.list_mode || item.type === "checklist")) {
                                                 setListModeNotes((prev) => new Set([...prev, String(item.id)]));
                                             }
                                             if (item.id && item.mindmap_mode) {
