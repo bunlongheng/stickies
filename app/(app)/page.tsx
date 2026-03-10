@@ -5326,11 +5326,16 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                         const lines = c.split("\n").filter((l: string) => l.trim());
                                                         const checked = lines.filter((l: string) => /^\[x\]/i.test(l.trim())).length;
                                                         if (isChecklist && lines.length > 0) {
+                                                            const nc = (item as any).color || (item as any).folder_color || null;
                                                             return <div className="hidden sm:flex items-center gap-1.5 mt-0.5 overflow-hidden">
                                                                 {lines.slice(0, 3).map((l: string, i: number) => {
                                                                     const done = /^\[x\]/i.test(l.trim());
                                                                     const text = l.trim().replace(/^\[x\]\s*/i, "").replace(/^[-*]\s*/, "").trim();
-                                                                    return <span key={i} className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0 ${done ? "bg-white/5 text-zinc-600 line-through" : "bg-white/10 text-zinc-300"}`}>{text}</span>;
+                                                                    return <span key={i} className="text-[11px] font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0"
+                                                                        style={done
+                                                                            ? { background: "rgba(255,255,255,0.04)", color: "#52525b", textDecoration: "line-through" }
+                                                                            : { background: nc ? `${nc}20` : "rgba(255,255,255,0.08)", color: nc || "#d4d4d8" }
+                                                                        }>{text}</span>;
                                                                 })}
                                                                 {lines.length > 3 && <span className="text-[10px] text-zinc-600 flex-shrink-0">+{lines.length - 3}</span>}
                                                             </div>;
