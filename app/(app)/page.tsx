@@ -5284,7 +5284,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 const ext = /^[a-zA-Z0-9]{1,5}$/.test(rawExt) ? rawExt.toUpperCase() : null;
                                                 const label = ext || badge?.label || "TXT";
                                                 const color = badge?.color || "#71717a";
-                                                const fs = label.length <= 2 ? 13 : label.length <= 3 ? 10 : label.length <= 4 ? 8 : 7;
+                                                const fs = label.length <= 2 ? 10 : label.length <= 3 ? 8 : label.length <= 4 ? 7 : 6;
                                                 return (
                                                     <div className="flex-shrink-0 w-[54px] h-[54px] sm:w-[36px] sm:h-[36px] flex items-center justify-center font-black overflow-hidden"
                                                         style={{
