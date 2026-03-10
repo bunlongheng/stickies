@@ -5280,21 +5280,21 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             })()}
                                             {!item.is_folder && (() => {
                                                 const badge = TYPE_BADGE[(item as any).type];
-                                                const initial = meaningfulInitial(item.title || "", "N");
+                                                const ext = (item.title || "").includes(".")
+                                                    ? (item.title || "").split(".").pop()!.toUpperCase()
+                                                    : null;
+                                                const label = ext || badge?.label || "TXT";
+                                                const color = badge?.color || "#71717a";
+                                                const fs = label.length <= 2 ? 13 : label.length <= 3 ? 10 : label.length <= 4 ? 8 : 7;
                                                 return (
                                                     <div className="flex-shrink-0 w-[54px] h-[54px] sm:w-[36px] sm:h-[36px] flex items-center justify-center font-black overflow-hidden"
-                                                        style={badge ? {
-                                                            fontSize: badge.label.length <= 2 ? 13 : badge.label.length <= 3 ? 10 : 8,
-                                                            backgroundColor: `${badge.color}18`,
-                                                            color: badge.color,
-                                                            border: `1.5px solid ${badge.color}40`,
-                                                        } : {
-                                                            fontSize: 13,
-                                                            backgroundColor: "rgba(255,255,255,0.04)",
-                                                            color: "#71717a",
-                                                            border: "1.5px solid rgba(255,255,255,0.08)",
+                                                        style={{
+                                                            fontSize: fs,
+                                                            backgroundColor: `${color}18`,
+                                                            color,
+                                                            border: `1.5px solid ${color}40`,
                                                         }}>
-                                                        {badge ? badge.label : initial}
+                                                        {label}
                                                     </div>
                                                 );
                                             })()}
