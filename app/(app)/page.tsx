@@ -212,7 +212,7 @@ const TYPE_BADGE: Record<string, { label: string; color: string }> = {
     markdown:   { label: "MD",   color: "#a78bfa" },
     html:       { label: "HTML", color: "#f43f5e" },
     json:       { label: "JSON", color: "#fbbf24" },
-    mermaid:    { label: "MRM",  color: "#06b6d4" },
+    mermaid:    { label: "M",    color: "#06b6d4" },
     voice:      { label: "🎙",   color: "#ef4444" },
 };
 
@@ -4115,7 +4115,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                 }
                 @keyframes spin { to { transform: rotate(360deg); } }
                 .rich-editor { display: flex; flex-direction: column; }
-                .rich-editor .tiptap { flex: 1; min-height: 100%; outline: none; padding: 1rem 2rem; color: #e4e4e7; line-height: 1.7; font-family: ui-sans-serif, system-ui, sans-serif; font-size: 14px; }
+                .rich-editor .tiptap { flex: 1; min-height: 100%; outline: none; padding: 1rem 2rem; color: #e4e4e7; line-height: 1.7; font-family: ui-sans-serif, system-ui, sans-serif; font-size: 13px; }
                 .rich-editor .tiptap p { margin: 0.5em 0; }
                 .rich-editor .tiptap p.is-editor-empty:first-child::before { content: attr(data-placeholder); color: #52525b; pointer-events: none; float: left; height: 0; }
                 .rich-editor .tiptap h1,.rich-editor .tiptap h2,.rich-editor .tiptap h3 { font-weight: 900; text-transform: uppercase; letter-spacing: -0.02em; color: #fff; margin: 1em 0 0.4em; }
@@ -4230,6 +4230,14 @@ const fireIntegrations = (trigger: string, note: any) => {
                 .list-row-hover {
                     transition: background-color 0.15s ease;
                 }
+                @keyframes fabIn {
+                    from { opacity: 0; transform: scale(0.5) rotate(-90deg); }
+                    to   { opacity: 1; transform: scale(1)   rotate(0deg);   }
+                }
+                @keyframes fabMenuIn {
+                    from { opacity: 0; transform: translateY(8px) scale(0.95); }
+                    to   { opacity: 1; transform: translateY(0)   scale(1);    }
+                }
                 @keyframes islandToastInOut {
                     0% {
                         opacity: 0;
@@ -4328,6 +4336,9 @@ const fireIntegrations = (trigger: string, note: any) => {
                         select {
                             font-size: 16px !important;
                         }
+                        .code-viewer-wrap textarea {
+                            font-size: 13px !important;
+                        }
                     }
                 }
                 input, textarea, button, select, [contenteditable] {
@@ -4422,13 +4433,13 @@ const fireIntegrations = (trigger: string, note: any) => {
                         </button>
 
                         {/* Desktop: folder breadcrumbs + note title inline */}
-                        <div className="hidden sm:flex items-center gap-1 min-w-0 overflow-hidden flex-1">
+                        <div className="hidden sm:flex items-center gap-0.5 min-w-0 overflow-hidden flex-1">
                             {folderStack.map((frame, i) => (
                                 <React.Fragment key={frame.id + i}>
                                     {i > 0 && <span className="text-zinc-700 text-[10px] flex-shrink-0">/</span>}
                                     <button type="button"
                                         onClick={() => { goToIndex(i); void backToRootFromEditor(); }}
-                                        className="flex items-center gap-1.5 font-black tracking-tight text-zinc-400 hover:text-white transition flex-shrink-0 text-xs px-1">
+                                        className="flex items-center gap-1 font-black tracking-tight text-zinc-400 hover:text-white transition flex-shrink-0 text-xs px-0.5">
                                         <span className="w-6 h-6 flex-shrink-0 flex items-center justify-center text-sm font-black text-white leading-none overflow-hidden" style={{ backgroundColor: frame.name === "CLAUDE" ? "#fff" : frame.color, boxShadow: frame.name === "CLAUDE" ? "inset 0 0 0 1px rgba(255,255,255,0.85)" : undefined }}>
                                             {frame.name === "CLAUDE" ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-0.5" /> : (folderIcons[frame.name] || (frame.name || "F").charAt(0).toUpperCase())}
                                         </span>
@@ -4947,22 +4958,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     <span className="w-full pl-12 pr-3 py-3 text-sm font-black tracking-tight text-white/30">search</span>
                                 </button>
                                 <div className="ml-auto flex items-center gap-1">
-                                    {/* actions */}
-                                    <div className="relative">
-                                        <HeaderIconBtn icon={PlusIcon} label="New" onClick={() => setShowAddMenu(v => !v)} style={showAddMenu ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
-                                        {showAddMenu && (
-                                            <div onMouseDown={(e) => e.stopPropagation()} className="absolute right-0 top-full mt-1 z-[200] flex flex-col overflow-hidden rounded-lg" style={{ background: "#1a1a1a", border: "1px solid rgba(255,255,255,0.12)", boxShadow: "0 8px 24px rgba(0,0,0,0.6)", minWidth: 130 }}>
-                                                <button onClick={() => { setShowAddMenu(false); openNewNote(); }} className="flex items-center gap-2.5 px-3 py-2.5 text-left text-[13px] text-zinc-300 hover:bg-white/8 transition-colors">
-                                                    <PlusIcon className="w-3.5 h-3.5 text-zinc-500 flex-shrink-0" />
-                                                    New file
-                                                </button>
-                                                <button onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); setShowAddMenu(false); openCreateFolder(); }} className="flex items-center gap-2.5 px-3 py-2.5 text-left text-[13px] text-zinc-300 hover:bg-white/8 transition-colors">
-                                                    <PlusIcon className="w-3.5 h-3.5 text-zinc-500 flex-shrink-0" />
-                                                    New folder
-                                                </button>
-                                            </div>
-                                        )}
-                                    </div>
                                     <HeaderIconBtn icon={Cog6ToothIcon} label="Settings" onClick={() => { const hueInt = integrationsRef.current.find(ig => ig.type === "hue"); setLightMode((hueInt?.config?.mode as any) ?? "flash"); setShowFolderActions(true); }} />
                                 </div>
                             </>
@@ -4992,22 +4987,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 </div>
                                             </>
                                         )}
-                                        {/* actions */}
-                                        <div className="relative">
-                                            <HeaderIconBtn icon={PlusIcon} label="New" onClick={() => setShowAddMenu(v => !v)} style={showAddMenu ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
-                                            {showAddMenu && (
-                                                <div onMouseDown={(e) => e.stopPropagation()} className="absolute right-0 top-full mt-1 z-[200] flex flex-col overflow-hidden rounded-lg" style={{ background: "#1a1a1a", border: "1px solid rgba(255,255,255,0.12)", boxShadow: "0 8px 24px rgba(0,0,0,0.6)", minWidth: 130 }}>
-                                                    <button onClick={() => { setShowAddMenu(false); openNewNote(); }} className="flex items-center gap-2.5 px-3 py-2.5 text-left text-[13px] text-zinc-300 hover:bg-white/8 transition-colors">
-                                                        <PlusIcon className="w-3.5 h-3.5 text-zinc-500 flex-shrink-0" />
-                                                        New file
-                                                    </button>
-                                                    <button onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); setShowAddMenu(false); openCreateFolder(); }} className="flex items-center gap-2.5 px-3 py-2.5 text-left text-[13px] text-zinc-300 hover:bg-white/8 transition-colors">
-                                                        <PlusIcon className="w-3.5 h-3.5 text-zinc-500 flex-shrink-0" />
-                                                        New folder
-                                                    </button>
-                                                </div>
-                                            )}
-                                        </div>
                                         <HeaderIconBtn icon={Cog6ToothIcon} label="Settings" onClick={() => { const hueInt = integrationsRef.current.find(ig => ig.type === "hue"); setLightMode((hueInt?.config?.mode as any) ?? "flash"); setShowFolderActions(true); setShowFolderColorPicker(false); setShowFolderIconPicker(false); setShowFolderMovePicker(false); }} />
                                     </>
                                 )}
@@ -5256,7 +5235,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             : { position: "relative", isolation: "isolate", backgroundColor: `${c}55`, border: `1.5px solid ${c}88` };
                                     })()}
                                     className={`${isListMode
-                                        ? `group list-row-hover flex items-center gap-3 px-4 py-3 sm:py-2 border-b border-white/5 cursor-pointer select-none transition-colors active:bg-white/10 overflow-hidden ${isDragging ? "opacity-30" : dt?.mode === "into" ? "bg-cyan-950/60 ring-1 ring-inset ring-cyan-400" : ""} ${isSelectMode && !item.is_folder && selectedIds.has(String(item.id)) ? "bg-blue-950/50" : ""} ${isFolderSelectMode && item.is_folder && selectedFolderNames.includes(item.name || "") ? "bg-emerald-950/50" : ""}`
+                                        ? `group list-row-hover flex items-center gap-3 px-4 py-1 sm:py-1 border-b border-white/5 cursor-pointer select-none transition-colors active:bg-white/10 overflow-hidden ${isDragging ? "opacity-30" : dt?.mode === "into" ? "bg-cyan-950/60 ring-1 ring-inset ring-cyan-400" : ""} ${isSelectMode && !item.is_folder && selectedIds.has(String(item.id)) ? "bg-blue-950/50" : ""} ${isFolderSelectMode && item.is_folder && selectedFolderNames.includes(item.name || "") ? "bg-emerald-950/50" : ""}`
                                         : `relative min-w-0 cursor-pointer transition-all group overflow-hidden ${isDragging ? "opacity-30 scale-95" : dt?.mode === "into" ? "ring-4 ring-cyan-400 ring-inset z-10" : ""}`}`}>
                                     {/* Cursor spotlight glow */}
                                     {isListMode && glowCard?.id === tileId && (() => {
@@ -5300,11 +5279,11 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 );
                                             })()}
                                             <div className="flex-1 min-w-0">
-                                                <div className="text-[19px] sm:text-[14.4px] font-semibold tracking-tight text-white truncate">
+                                                <div className="text-[13px] sm:text-[14.4px] font-semibold tracking-tight text-white truncate">
                                                     {item.is_folder ? item.name : item.title}
                                                 </div>
                                                 {item.is_folder ? (
-                                                    <div className="text-[16px] sm:text-[13px] text-zinc-500 font-medium">
+                                                    <div className="text-[13px] sm:text-[13px] text-zinc-500 font-medium">
                                                         {item.subfolderCount > 0 && <span>{item.subfolderCount} folder{item.subfolderCount !== 1 ? "s" : ""}{item.count > 0 ? " · " : ""}</span>}
                                                         {item.count > 0 && <span>{item.count} note{item.count !== 1 ? "s" : ""}</span>}
                                                     </div>
@@ -5330,7 +5309,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 )}
                                             </div>
                                             {item.is_folder && item.latestUpdatedAt && (
-                                                <span className="text-[16px] sm:text-[13px] text-zinc-500 flex-shrink-0 font-medium">{timeAgo(item.latestUpdatedAt)}</span>
+                                                <span className="text-[13px] sm:text-[13px] text-zinc-500 flex-shrink-0 font-medium">{timeAgo(item.latestUpdatedAt)}</span>
                                             )}
                                             {!item.is_folder && item.updated_at && (() => {
                                                 const c = item.content || "";
@@ -5348,7 +5327,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                                 {badge.label}
                                                             </span>
                                                         )}
-                                                        <span className="text-[16px] sm:text-[13px] text-zinc-500 font-medium">{timeAgo(item.updated_at)}</span>
+                                                        <span className="text-[13px] sm:text-[13px] text-zinc-500 font-medium">{timeAgo(item.updated_at)}</span>
                                                     </div>
                                                 </div>;
                                             })()}
@@ -5466,6 +5445,32 @@ const fireIntegrations = (trigger: string, note: any) => {
                             );
                         })()}
                     </main>
+
+                    {/* FAB — floating + button bottom right */}
+                    {!isSelectMode && !isFolderSelectMode && (
+                        <div className="absolute bottom-5 right-4 z-[130]" style={{ filter: "drop-shadow(0 4px 16px rgba(0,0,0,0.5))" }}>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    if (activeFolder) {
+                                        // L2: inside a folder → create new file directly
+                                        openNewNote();
+                                    } else {
+                                        // L1: root → create new folder directly
+                                        openCreateFolder();
+                                    }
+                                }}
+                                className="w-12 h-12 rounded-full flex items-center justify-center text-black active:scale-90"
+                                style={{
+                                    background: activeFolder ? (activeFolderColor || "#ffffff") : "#ffffff",
+                                    boxShadow: `0 0 0 2px rgba(0,0,0,0.3), 0 6px 20px ${activeFolder ? (activeFolderColor || "#ffffff") : "#ffffff"}66`,
+                                    animation: "fabIn 0.35s cubic-bezier(0.16,1,0.3,1) both",
+                                    transition: "transform 0.2s cubic-bezier(0.16,1,0.3,1), box-shadow 0.2s",
+                                }}>
+                                <PlusIcon className="w-6 h-6" />
+                            </button>
+                        </div>
+                    )}
 
                     {/* STATS BOTTOM RIGHT */}
                     {!activeFolder && !search.trim() && (
