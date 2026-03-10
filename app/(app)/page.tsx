@@ -5279,17 +5279,17 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                     const lines = c.split("\n").filter((l: string) => l.trim());
                                                     const checked = lines.filter((l: string) => /^\[x\]/i.test(l.trim())).length;
                                                     const total = lines.length;
+                                                    const nc = (item as any).color || (item as any).folder_color || "#22c55e";
                                                     return (
                                                         <div className="flex-shrink-0 w-[54px] h-[54px] sm:w-[36px] sm:h-[36px] relative overflow-hidden font-black"
-                                                            style={{ backgroundColor: "#22c55e08", border: "1.5px solid #22c55e40" }}>
-                                                            {/* water fill from bottom */}
+                                                            style={{ backgroundColor: `${nc}08`, border: `1.5px solid ${nc}40` }}>
                                                             <div style={{
                                                                 position: "absolute", bottom: 0, left: 0, right: 0,
                                                                 height: `${total > 0 ? Math.round((checked / total) * 100) : 0}%`,
-                                                                background: "linear-gradient(to top, rgba(34,197,94,0.5), rgba(34,197,94,0.2))",
+                                                                background: `linear-gradient(to top, ${nc}80, ${nc}30)`,
                                                                 transition: "height 0.4s ease",
                                                             }} />
-                                                            <div className="absolute inset-0 flex items-center justify-center" style={{ fontSize: total >= 10 ? 10 : 13, color: "#22c55e" }}>
+                                                            <div className="absolute inset-0 flex items-center justify-center" style={{ fontSize: total >= 10 ? 10 : 13, color: nc }}>
                                                                 {total}
                                                             </div>
                                                         </div>
