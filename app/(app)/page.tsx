@@ -5,7 +5,12 @@ import { createClient } from "@supabase/supabase-js";
 import { createClient as createBrowserClient } from "@/lib/supabase/client";
 import { usePageMeta } from "@/lib/usePageMeta";
 import dynamic from "next/dynamic";
+import LZString from "lz-string";
 const RichTextEditor = dynamic(() => import("@/components/RichTextEditor").then(m => m.RichTextEditor), { ssr: false });
+const MermaidRenderer = dynamic(() => import("@/components/MermaidRenderer").then(m => m.MermaidRenderer), { ssr: false });
+const VoiceRecorder = dynamic(() => import("@/components/VoiceRecorder").then(m => m.VoiceRecorder), { ssr: false });
+const MarkdownWithMermaid = dynamic(() => import("@/components/MarkdownWithMermaid").then(m => m.MarkdownWithMermaid), { ssr: false });
+const CodeViewer = dynamic(() => import("@/components/CodeViewer").then(m => m.CodeViewer), { ssr: false });
 
 // Icons
 import MagnifyingGlassIcon from "@heroicons/react/24/outline/MagnifyingGlassIcon";
@@ -45,6 +50,7 @@ import Squares2X2Icon from "@heroicons/react/24/outline/Squares2X2Icon";
 import ViewColumnsIcon from "@heroicons/react/24/outline/ViewColumnsIcon";
 import HeartIcon from "@heroicons/react/24/outline/HeartIcon";
 import HeartSolidIcon from "@heroicons/react/24/solid/HeartIcon";
+import MicrophoneIcon from "@heroicons/react/24/outline/MicrophoneIcon";
 import ArrowTopRightOnSquareIcon from "@heroicons/react/24/outline/ArrowTopRightOnSquareIcon";
 import PencilSquareIcon from "@heroicons/react/24/outline/PencilSquareIcon";
 import { marked, Renderer } from "marked";
@@ -184,14 +190,72 @@ function syntaxHighlightJson(obj: any): string {
         /("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g,
         (match) => {
             if (/^"/.test(match)) {
-                if (/:$/.test(match)) return `<span style="color:#60a5fa">${match}</span>`; // key
-                return `<span style="color:#86efac">${match}</span>`; // string
+                if (/:$/.test(match)) return `<span style="color:#66d9e8;font-weight:600">${match}</span>`; // key — monokai cyan
+                return `<span style="color:#e6db74">${match}</span>`; // string — monokai yellow
             }
-            if (/true|false/.test(match)) return `<span style="color:#f59e0b">${match}</span>`;
-            if (/null/.test(match)) return `<span style="color:#f87171">${match}</span>`;
-            return `<span style="color:#c084fc">${match}</span>`; // number
+            if (/true|false/.test(match)) return `<span style="color:#ae81ff">${match}</span>`; // bool — monokai purple
+            if (/null/.test(match)) return `<span style="color:#f92672">${match}</span>`; // null — monokai pink
+            return `<span style="color:#ae81ff">${match}</span>`; // number — monokai purple
         }
     );
+}
+
+const MERMAID_KEYWORDS = /^(flowchart|graph|sequenceDiagram|classDiagram|stateDiagram(-v2)?|erDiagram|gantt|pie|gitGraph|mindmap|timeline|xychart(-beta)?|quadrantChart|requirementDiagram|zenuml|sankey|block-beta)\b/im;
+
+const TYPE_BADGE: Record<string, { label: string; color: string }> = {
+    javascript: { label: "JS",   color: "#f97316" },
+    typescript: { label: "TS",   color: "#3b82f6" },
+    python:     { label: "PY",   color: "#eab308" },
+    css:        { label: "CSS",  color: "#8b5cf6" },
+    sql:        { label: "SQL",  color: "#14b8a6" },
+    bash:       { label: "SH",   color: "#22c55e" },
+    markdown:   { label: "MD",   color: "#a78bfa" },
+    html:       { label: "HTML", color: "#f43f5e" },
+    json:       { label: "JSON", color: "#fbbf24" },
+    mermaid:    { label: "MRM",  color: "#06b6d4" },
+    voice:      { label: "🎙",   color: "#ef4444" },
+};
+
+/** Client-side fallback type detection — used only when DB type is null (legacy notes) */
+function detectNoteType(content: string): string {
+    const t = content.trim();
+    if (!t) return "text";
+    if (t.startsWith('{"_type":"voice"')) {
+        try { if (JSON.parse(t)?._type === "voice") return "voice"; } catch {}
+    }
+    if (MERMAID_KEYWORDS.test(extractMermaid(t))) return "mermaid";
+    if ((t.startsWith("{") || t.startsWith("[")) && detectJson(t).ok) return "json";
+    if (/^\s*<!DOCTYPE\s+html/i.test(t) || /^\s*<html[\s>]/i.test(t)) return "html";
+    if (/^#{1,6}\s|^\*\*|^>\s/m.test(t) && !/<[a-z][^>]*>/i.test(t)) return "markdown";
+    return "text";
+}
+
+/** Extract raw mermaid code — strips ```mermaid fences and leading/trailing whitespace */
+function extractMermaid(text: string): string {
+    const t = text.trim();
+    // Strip ```mermaid ... ``` fences
+    const fenced = t.match(/^```(?:mermaid)?\s*\n?([\s\S]*?)```\s*$/im);
+    if (fenced) return fenced[1].trim();
+    return t;
+}
+
+function detectMermaid(text: string): boolean {
+    return MERMAID_KEYWORDS.test(extractMermaid(text));
+}
+
+function mermaidSubType(text: string): string {
+    const t = extractMermaid(text);
+    const m = t.match(/^(flowchart|graph|sequenceDiagram|classDiagram|stateDiagram|erDiagram|gantt|pie|gitGraph|mindmap|timeline|xychart|quadrantChart|requirementDiagram|zenuml|sankey|block-beta)\b/im);
+    if (!m) return "Mermaid";
+    const map: Record<string, string> = {
+        flowchart: "Flow", graph: "Flow", sequencediagram: "Sequence",
+        classdiagram: "Class", statediagram: "State", erdiagram: "ER",
+        gantt: "Gantt", pie: "Pie", gitgraph: "Git", mindmap: "Mindmap",
+        timeline: "Timeline", xychart: "XY Chart", quadrantchart: "Quadrant",
+        requirementdiagram: "Requirement", zenuml: "ZenUML",
+        sankey: "Sankey", "block-beta": "Block",
+    };
+    return map[m[1].toLowerCase()] ?? m[1];
 }
 
 /** Auto-detect Markdown — strong signals only; plain `-` lists or `*` bullets do NOT qualify */
@@ -209,6 +273,14 @@ function detectMarkdown(text: string): boolean {
 /** Detect plain URL content — single line, no whitespace, http(s) scheme */
 /** Strip base64 images and HTML tags for safe single-line preview text */
 function previewText(raw: string): string {
+    const t = raw.trim();
+    // Voice notes: show summary or transcript
+    if (t.startsWith('{"_type":"voice"')) {
+        try {
+            const v = JSON.parse(t);
+            if (v._type === "voice") return v.summary || v.transcript || "🎙 Voice note";
+        } catch {}
+    }
     return raw
         .replace(/!\[[^\]]*\]\(data:[^)]+\)/g, "[image]") // base64 images → placeholder
         .replace(/<[^>]+>/g, "")                           // HTML tags
@@ -279,6 +351,7 @@ const looksLikeHtml = (text: string) =>
 const MAIN_LIST_MODE_KEY = "stickies:main-list-mode:v1";
 const NAV_MODE_KEY = "stickies:nav-mode:v1";
 const KANBAN_MODE_KEY = "stickies:kanban-mode:v1";
+const APP_THEME_KEY = "stickies:app-theme:v1";
 const EDIT_MODE_KEY = "stickies:edit-mode:v1";
 const LIST_MODE_KEY = "stickies:list-mode-notes:v1";
 const GRAPH_MODE_KEY = "stickies:graph-mode-notes:v1";
@@ -352,6 +425,88 @@ function layoutMindmap(title: string, roots: MindNode[]): { nodes: PlacedNode[];
     });
 
     return { nodes: placed, width: svgW, height: svgH, nodeW };
+}
+
+// ── Voice Note Player ─────────────────────────────────────────────────────────
+function VoiceNotePlayer({ data, onConvertToText }: {
+    data: { audioUrl: string; transcript: string; summary: string; duration: number; recordedAt: string };
+    onConvertToText: () => void;
+}) {
+    const [playing, setPlaying] = useState(false);
+    const [currentTime, setCurrentTime] = useState(0);
+    const audioRef = useRef<HTMLAudioElement>(null);
+
+    const fmt = (s: number) => `${Math.floor(s / 60).toString().padStart(2, "0")}:${Math.floor(s % 60).toString().padStart(2, "0")}`;
+
+    const toggle = () => {
+        const a = audioRef.current;
+        if (!a) return;
+        if (playing) { a.pause(); setPlaying(false); }
+        else { void a.play(); setPlaying(true); }
+    };
+
+    return (
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 flex flex-col gap-5">
+            <audio ref={audioRef} src={data.audioUrl}
+                onTimeUpdate={(e) => setCurrentTime((e.target as HTMLAudioElement).currentTime)}
+                onEnded={() => setPlaying(false)} />
+
+            {/* Player card */}
+            <div className="flex items-center gap-4 p-4 bg-zinc-900 border border-red-900/30"
+                style={{ boxShadow: "0 0 24px rgba(239,68,68,0.06)" }}>
+                <button onClick={toggle}
+                    className="w-12 h-12 flex-shrink-0 flex items-center justify-center bg-red-500 hover:bg-red-400 transition"
+                    style={{ boxShadow: "0 0 16px rgba(239,68,68,0.4)" }}>
+                    {playing
+                        ? <span className="flex gap-1"><span className="w-1 h-4 bg-white block" /><span className="w-1 h-4 bg-white block" /></span>
+                        : <span className="w-0 h-0 border-t-[8px] border-b-[8px] border-l-[14px] border-t-transparent border-b-transparent border-l-white ml-1" />}
+                </button>
+                <div className="flex-1 min-w-0">
+                    {/* Progress bar */}
+                    <div className="h-1 bg-zinc-800 rounded-full overflow-hidden mb-2">
+                        <div className="h-full bg-red-500 transition-all"
+                            style={{ width: data.duration > 0 ? `${(currentTime / data.duration) * 100}%` : "0%" }} />
+                    </div>
+                    <div className="flex justify-between text-[10px] font-mono text-zinc-500">
+                        <span>{fmt(currentTime)}</span>
+                        <span>{fmt(data.duration)}</span>
+                    </div>
+                </div>
+                <div className="text-[10px] font-black text-red-500 uppercase tracking-widest flex-shrink-0 flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-red-500" />VOICE
+                </div>
+            </div>
+
+            {/* Summary */}
+            {data.summary && (
+                <div className="p-4 bg-zinc-900/60 border-l-2 border-red-500/50">
+                    <div className="text-[9px] font-black uppercase tracking-widest text-red-500/70 mb-2">AI Summary</div>
+                    <p className="text-sm text-zinc-300 leading-relaxed">{data.summary}</p>
+                </div>
+            )}
+
+            {/* Transcript */}
+            {data.transcript && (
+                <div className="p-4 bg-zinc-900/40 border border-zinc-800">
+                    <div className="text-[9px] font-black uppercase tracking-widest text-zinc-500 mb-2">Transcript</div>
+                    <p className="text-sm text-zinc-400 leading-relaxed whitespace-pre-wrap">{data.transcript}</p>
+                </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex gap-2 mt-auto pt-2">
+                <button onClick={onConvertToText}
+                    className="px-4 py-2 text-[10px] font-black uppercase tracking-widest border border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500 transition">
+                    Convert to Text
+                </button>
+                {data.recordedAt && (
+                    <span className="px-3 py-2 text-[10px] text-zinc-600 font-mono">
+                        {new Date(data.recordedAt).toLocaleString()}
+                    </span>
+                )}
+            </div>
+        </div>
+    );
 }
 
 function MindmapView({ title, content, onToggle }: { title: string; content: string; onToggle?: (nodeIdx: number) => void }) {
@@ -743,6 +898,7 @@ export default function NotesMaster() {
         setFolderStack((prev) => prev.slice(0, -1));
         setIsSelectMode(false);
         setSelectedIds(new Set());
+        setTypeFilter(null);
     }, []);
     const goToIndex = useCallback((i: number) => {
         setFolderStack((prev) => prev.slice(0, i + 1));
@@ -832,6 +988,8 @@ export default function NotesMaster() {
     const [swipedTaskIdx, setSwipedTaskIdx] = useState<number | null>(null);
     const [draggingTaskIdx, setDraggingTaskIdx] = useState<number | null>(null);
     const [dragOffset, setDragOffset] = useState(0);
+    const [reorderDragOrigIdx, setReorderDragOrigIdx] = useState<number | null>(null);
+    const [reorderOverOrigIdx, setReorderOverOrigIdx] = useState<number | null>(null);
     const taskRowSwipeStart = useRef<{ x: number; y: number } | null>(null);
     const listPullStartY = useRef<number>(0);
     const listPullTriggered = useRef<boolean>(false);
@@ -869,6 +1027,11 @@ export default function NotesMaster() {
     const [mainListMode, setMainListMode] = useState(true);
     const [navMode, setNavMode] = useState<"folders-and-files" | "files-only">("folders-and-files");
     const [kanbanMode, setKanbanMode] = useState(false);
+    const [appTheme, setAppTheme] = useState<"dark" | "light" | "monokai">("dark");
+    const [mermaidShowCode, setMermaidShowCode] = useState(false);
+    const [codeEditMode, setCodeEditMode] = useState(false);
+    const [typeFilter, setTypeFilter] = useState<string | null>(null);
+    const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
     const [editMode, setEditMode] = useState(false);
     const [showAddMenu, setShowAddMenu] = useState(false);
     const colDragNoteRef = useRef<string | null>(null);
@@ -1062,10 +1225,30 @@ export default function NotesMaster() {
         try {
             const params = new URLSearchParams(window.location.search);
             const sharedDataParam = params.get("data");
+            const codeParam = params.get("code");
             const folderParam = params.get("folder");
             const noteParam = params.get("note");
             const noteIdParam = params.get("noteId");
-            if (sharedDataParam) {
+            if (codeParam) {
+                restoredFromUrl = true;
+                try {
+                    const decoded = atob(codeParam);
+                    setEditingNote(null);
+                    setTitle("Diagram");
+                    setContent(decoded);
+                    setTargetFolder(activeFolder || "General");
+                    setNoteColor(palette12[0]);
+                    setShowColorPicker(false);
+                    setShowSwitcher(false);
+                    setActiveLine(0);
+                    setEditorScrollTop(0);
+                    shouldFocusTitleOnOpenRef.current = true;
+                    setEditorOpen(true);
+                    window.history.replaceState({}, "", window.location.pathname);
+                } catch (decodeErr) {
+                    console.error("Failed to decode code param:", decodeErr);
+                }
+            } else if (sharedDataParam) {
                 restoredFromUrl = true;
                 setIsUrlChecking(true);
                 try {
@@ -1185,6 +1368,25 @@ export default function NotesMaster() {
             const rawEdit = localStorage.getItem(EDIT_MODE_KEY);
             if (rawEdit) setEditMode(rawEdit === "true");
         } catch { /* ignore */ }
+        try {
+            const rawTheme = localStorage.getItem(APP_THEME_KEY);
+            if (rawTheme === "light" || rawTheme === "dark" || rawTheme === "monokai") setAppTheme(rawTheme);
+        } catch { /* ignore */ }
+
+        // URL params override localStorage (read last so they win)
+        try {
+            const urlParams = new URLSearchParams(window.location.search);
+            const themeParam = urlParams.get("theme");
+            if (themeParam === "light" || themeParam === "dark" || themeParam === "monokai") setAppTheme(themeParam);
+            const viewParam = urlParams.get("view");
+            if (viewParam === "list") { setMainListMode(true); setKanbanMode(false); }
+            else if (viewParam === "thumb") { setMainListMode(false); setKanbanMode(false); }
+            else if (viewParam === "kanban") { setMainListMode(false); setKanbanMode(true); }
+            const navParam = urlParams.get("nav");
+            if (navParam === "folders" || navParam === "folders-and-files") setNavMode("folders-and-files");
+            else if (navParam === "files" || navParam === "files-only") setNavMode("files-only");
+        } catch { /* ignore */ }
+
         if (!shouldWaitForInitialTarget) setIsUrlChecking(false);
         setHydratedViewState(true);
     }, []);
@@ -1270,8 +1472,19 @@ export default function NotesMaster() {
     }, [kanbanMode]);
 
     useEffect(() => {
+        try { localStorage.setItem(APP_THEME_KEY, appTheme); } catch { /* ignore */ }
+        document.documentElement.setAttribute("data-theme", appTheme);
+    }, [appTheme]);
+
+    useEffect(() => {
         try { localStorage.setItem(EDIT_MODE_KEY, String(editMode)); } catch { /* ignore */ }
     }, [editMode]);
+
+    // Always open mermaid notes in code view first; reset code edit mode on note switch
+    useEffect(() => {
+        if (editorOpen && mermaidMode) setMermaidShowCode(true);
+        setCodeEditMode(false);
+    }, [editorOpen, editingNote?.id]);
 
     // Load pinned note IDs from localStorage
     useEffect(() => {
@@ -1842,6 +2055,24 @@ const fireIntegrations = (trigger: string, note: any) => {
         // Root: show folders
         return currentLevelFolders;
     }, [dbData, editMode, activeFolder, folderStack, search, currentLevelFolders, pendingNoteOrder, pinnedIds, navMode]);
+
+    // Available type chips for the filter row (only types present in current view, notes only)
+    const availableTypeChips = useMemo(() => {
+        const counts: Record<string, number> = {};
+        for (const item of displayItems) {
+            if (item.is_folder || item._header) continue;
+            const t = (item as any).type;
+            if (t && t !== "text") counts[t] = (counts[t] ?? 0) + 1;
+        }
+        return Object.entries(counts).sort((a, b) => b[1] - a[1]);
+    }, [displayItems]);
+
+    // Filtered display items (type filter applied)
+    const filteredDisplayItems = useMemo(() => {
+        if (!typeFilter) return displayItems;
+        return displayItems.filter((item: any) => item.is_folder || item._header || item.type === typeFilter);
+    }, [displayItems, typeFilter]);
+
     const cmdKResults = useMemo(() => {
         const notes = dbData.filter((n: any) => !n.is_folder);
         const byDate = (a: any, b: any) => String(b.updated_at || "").localeCompare(String(a.updated_at || ""));
@@ -1959,6 +2190,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                 folder_name: folderName,
                 folder_color: noteColor || folders.find((f) => f.name === folderName)?.color || editingNote?.folder_color || palette12[0],
                 is_folder: false,
+                type: (editingNote as any)?.type ?? detectNoteType(content),
                 updated_at: new Date().toISOString(),
                 ...(folderId ? { folder_id: folderId } : {}),
             };
@@ -2678,14 +2910,31 @@ const fireIntegrations = (trigger: string, note: any) => {
     const graphMode = currentNoteId ? graphModeNotes.has(currentNoteId) : false;
     const mindmapMode = currentNoteId ? mindmapModeNotes.has(currentNoteId) : false;
     const stackMode = currentNoteId ? stackModeNotes.has(currentNoteId) : false;
-    // Markdown & HTML are auto-detected but can be overridden to Text by the user
-    const markdownMode = !listMode && !graphMode && !mindmapMode && !stackMode && detectMarkdown(content) && !markdownModeNotes.has(currentNoteId ?? "");
-    const htmlMode = !listMode && !graphMode && !mindmapMode && !stackMode && !markdownMode && detectHtml(content) && !htmlModeNotes.has(currentNoteId ?? "");
-    const jsonDetect = !listMode && !graphMode && !mindmapMode && !stackMode && !markdownMode && !htmlMode ? detectJson(content) : { ok: false };
-    const jsonMode = jsonDetect.ok;
-    // Unified active mode label for the dropdown
-    const noteViewMode = stackMode ? "Stack" : mindmapMode ? "Mindmap" : graphMode ? "Graph" : listMode ? "Checklist" : markdownMode ? "Markdown" : htmlMode ? "HTML" : "Text";
-    // Rich note = has images, file attachments, headings, code blocks, blockquotes, or tables → hide mode toggle
+
+    // ── Type resolution: DB `type` is source of truth; fall back to client detection ──
+    const dbType: string | null = (editingNote as any)?.type ?? null;
+    const noteType: string = dbType ?? detectNoteType(content);
+
+    // Derived booleans — clean, no detection chains
+    const baseMode = !listMode && !graphMode && !mindmapMode && !stackMode;
+    const mermaidMode  = baseMode && noteType === "mermaid";
+    const markdownMode = baseMode && noteType === "markdown";
+    const htmlMode     = baseMode && noteType === "html";
+    const jsonMode     = baseMode && noteType === "json" && !mermaidMode;
+    const codeMode     = baseMode && ["javascript","typescript","python","css","sql","bash"].includes(noteType);
+    const voiceNote    = baseMode && noteType === "voice"
+        ? (() => { try { return JSON.parse(content) as { _type: "voice"; audioUrl: string; transcript: string; summary: string; duration: number; recordedAt: string }; } catch { return null; } })()
+        : null;
+    // jsonDetect kept for JSON syntax highlight fallback
+    const jsonDetect = jsonMode ? detectJson(content) : { ok: false, parsed: null };
+
+    // Checklist toggle allowed only for text/markdown notes
+    const canToggleChecklist = (noteType === "text" || noteType === "markdown") &&
+        content.replace(/<[^>]+>/g, "").split("\n").filter((l: string) => l.trim()).length < 12;
+
+    // Unified active mode label
+    const noteViewMode = stackMode ? "Stack" : mindmapMode ? "Mindmap" : graphMode ? "Graph" : listMode ? "Checklist" : mermaidMode ? "Mermaid" : voiceNote ? "Voice" : codeMode ? noteType : markdownMode ? "Markdown" : htmlMode ? "HTML" : "Text";
+    // Rich note = TipTap HTML with embedded assets/headings — hide mode toggle
     const isRichNote = !listMode && !graphMode && !mindmapMode && !stackMode &&
         /(<img[\s>]|data-file-attachment|<h[1-6][\s>]|<pre[\s>]|<blockquote[\s>]|<table[\s>])/i.test(content);
 
@@ -2852,6 +3101,14 @@ const fireIntegrations = (trigger: string, note: any) => {
         const wasDone = /^\[x\]/i.test(noBullet) || /^\[x\]/i.test(trimmed);
         lines[lineIdx] = wasDone ? line.replace(/^\s*\[x\]\s*/i, "") : `[x] ${line}`;
         playSound(wasDone ? "uncheck" : "check");
+        setContent(lines.join("\n"));
+    }, [content]);
+
+    const reorderTask = useCallback((fromLineIdx: number, toLineIdx: number) => {
+        if (fromLineIdx === toLineIdx) return;
+        const lines = content.split("\n");
+        const [moved] = lines.splice(fromLineIdx, 1);
+        lines.splice(toLineIdx > fromLineIdx ? toLineIdx - 1 : toLineIdx, 0, moved);
         setContent(lines.join("\n"));
     }, [content]);
 
@@ -4145,7 +4402,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                             </div>
                         </div>
                     )}
-                    <div className="safe-top-bar shrink-0" style={{ backgroundColor: activeAccentColor }} />
+                    <div className="safe-top-bar shrink-0 bg-black" />
                     <div className="relative h-auto min-h-[3.5rem] sm:min-h-[4rem] px-2 sm:px-4 bg-zinc-900 border-b border-white/10 flex items-center gap-1 sm:gap-2 shrink-0">
                         {/* Back button — hidden on desktop or in edit mode (left panel always visible) */}
                         <button
@@ -4184,72 +4441,75 @@ const fireIntegrations = (trigger: string, note: any) => {
                         </span>
                         <input ref={titleInputRef} value={title} onChange={(e) => setTitle(e.target.value)} onFocus={() => { closeEditorTools(); setShowNoteActions(false); }} autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false} className="sm:hidden bg-transparent border-0 appearance-none shadow-none ring-0 outline-none focus:outline-none focus:ring-0 px-2 flex-grow min-w-0 text-sm text-white placeholder:text-zinc-500" style={{ caretColor: activeAccentColor, border: "none" }} placeholder="NOTE TITLE" />
 
-                        {!isRichNote && (
-                            <>
-                                <button type="button"
-                                    onClick={cycleNoteMode}
-                                    title={`Switch to next mode`}
-                                    className="p-2 sm:p-3 text-white hover:text-white active:text-white transition flex-shrink-0">
-                                    {(() => {
-                                        const modeIcons = { Text: Bars3Icon, Checklist: ListBulletIcon, Graph: CubeTransparentIcon, Mindmap: ShareIcon, Stack: RectangleStackIcon };
-                                        const allModes = ["Text", "Checklist", "Graph", "Mindmap", "Stack"] as const;
-                                        const cur = stackMode ? "Stack" : mindmapMode ? "Mindmap" : graphMode ? "Graph" : listMode ? "Checklist" : "Text";
-                                        const next = allModes[(allModes.indexOf(cur) + 1) % allModes.length];
-                                        const NextIcon = modeIcons[next];
-                                        return <NextIcon className="w-[26px] h-[26px] sm:w-7 sm:h-7" />;
-                                    })()}
-                                </button>
-                            </>
+                        {(() => {
+                            const badge = TYPE_BADGE[noteType];
+                            if (!badge) return null;
+                            return (
+                                <span className="flex-shrink-0 text-[9px] font-black tracking-wide px-1.5 py-0.5 leading-none"
+                                    style={{ color: badge.color, border: `1px solid ${badge.color}40`, background: `${badge.color}15` }}>
+                                    {badge.label}
+                                </span>
+                            );
+                        })()}
+                        {(noteType === "text" || noteType === "voice" || !noteType) && (
+                            <button type="button"
+                                onClick={() => { setShowVoiceRecorder(true); setShowNoteActions(false); closeEditorTools(); }}
+                                className="p-2 sm:p-3 transition flex-shrink-0"
+                                style={voiceNote ? { color: "#ef4444" } : { color: "#71717a" }}
+                                title="Voice note">
+                                <MicrophoneIcon className="w-6 h-6 sm:w-6 sm:h-6" />
+                            </button>
                         )}
-                        <button type="button"
-                            onClick={() => { setSharePickerOpen(true); setShowNoteActions(false); closeEditorTools(); }}
-                            className="p-2 sm:p-3 text-zinc-300 hover:text-white active:text-white transition flex-shrink-0">
-                            <PaperAirplaneIcon className="w-6 h-6 sm:w-6 sm:h-6" />
-                        </button>
                         <button type="button"
                             onClick={() => { setShowNoteActions(true); closeEditorTools(); }}
                             className="p-2 sm:p-3 text-zinc-300 hover:text-white active:text-white transition flex-shrink-0">
                             <Cog6ToothIcon className="w-[29px] h-[29px] sm:w-7 sm:h-7" />
                         </button>
-                        {/* Nav mode buttons — shown on the right in edit mode */}
-                        {editMode && (
-                            <>
-                                <div className="w-px h-4 bg-white/10 mx-1 flex-shrink-0" />
-                                <HeaderIconBtn icon={ListBulletIcon} label="List" onClick={() => { setMainListMode(true); setKanbanMode(false); setEditMode(false); }} style={mainListMode && !kanbanMode && !editMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
-                                <HeaderIconBtn icon={Squares2X2Icon} label="Grid" onClick={() => { setMainListMode(false); setKanbanMode(false); setEditMode(false); }} style={!mainListMode && !kanbanMode && !editMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
-                                <HeaderIconBtn icon={ViewColumnsIcon} label="Kanban" onClick={() => { setKanbanMode((v) => !v); setMainListMode(false); setEditMode(false); }} style={kanbanMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
-                                <HeaderIconBtn icon={PencilSquareIcon} label="Edit" onClick={() => { setEditMode((v) => !v); setKanbanMode(false); }} style={{ color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" }} />
-                            </>
-                        )}
                     </div>
                     <div className="relative flex-1 flex overflow-hidden bg-black font-mono">
                         {/* ── Unified pill bar — always visible top-right ── */}
-                        <div className="absolute top-3 right-3 z-[99999] flex gap-2 items-center pointer-events-auto">
-                            {markdownMode && (
-                                <span className="h-7 px-2 bg-zinc-800/90 border border-white/10 text-[10px] font-black uppercase tracking-wide text-violet-400 flex items-center backdrop-blur-sm">MD</span>
-                            )}
-                            {htmlMode && (
-                                <span className="h-7 px-2 bg-zinc-800/90 border border-white/10 text-[10px] font-black uppercase tracking-wide text-orange-400 flex items-center backdrop-blur-sm">HTML</span>
-                            )}
-                            {jsonMode && (
-                                <span className="h-7 px-2 bg-zinc-800/90 border border-white/10 text-[10px] font-black uppercase tracking-wide text-yellow-400 flex items-center backdrop-blur-sm">JSON</span>
-                            )}
-                            {(stackMode || mindmapMode || graphMode) && (
-                                <span className="h-7 px-2 bg-zinc-800/90 border border-white/10 text-[10px] font-black uppercase tracking-wide text-zinc-300 flex items-center backdrop-blur-sm">{noteViewMode}</span>
-                            )}
+                        {!showNoteActions && (
+                        <div className="absolute top-3 right-3 z-[2147483647] flex gap-2 items-center pointer-events-auto">
                             {!listMode && !graphMode && !mindmapMode && !stackMode && (
-                            <button type="button"
-                                onClick={() => {
-                                    let toCopy = content;
-                                    if (jsonMode) toCopy = JSON.stringify(jsonDetect.parsed, null, 2);
-                                    else toCopy = content.replace(/<[^>]+>/g, "");
-                                    void secureCopy(toCopy).then(() => showToast("Copied!"));
-                                }}
-                                className="h-7 px-2.5 bg-zinc-800/90 border border-white/10 text-zinc-400 hover:text-white hover:bg-zinc-700/90 text-[10px] font-black uppercase tracking-wide transition backdrop-blur-sm flex items-center gap-1.5">
-                                <ClipboardIcon className="w-3 h-3" /> Copy
-                            </button>
+                                <button type="button"
+                                    onClick={() => {
+                                        let toCopy = content;
+                                        if (jsonMode) toCopy = JSON.stringify(jsonDetect.parsed, null, 2);
+                                        else toCopy = content.replace(/<[^>]+>/g, "");
+                                        void secureCopy(toCopy).then(() => showToast("Copied!"));
+                                    }}
+                                    className="h-7 w-7 flex items-center justify-center bg-zinc-800/90 border border-white/10 text-zinc-400 hover:text-white hover:bg-zinc-700/90 transition backdrop-blur-sm">
+                                    <ClipboardIcon className="w-3.5 h-3.5" />
+                                </button>
+                            )}
+                            {mermaidMode && (
+                                <>
+                                <div className="flex items-center overflow-hidden shadow-lg" style={{ background: "#0a0a0a", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 0 }}>
+                                    <button
+                                        onClick={() => setMermaidShowCode(false)}
+                                        className="relative h-8 px-4 text-[10px] font-black uppercase tracking-widest transition-all"
+                                        style={!mermaidShowCode ? { background: "#22c55e", color: "#000", boxShadow: "0 0 12px rgba(34,197,94,0.5)" } : { background: "transparent", color: "#52525b" }}
+                                    >Render</button>
+                                    <div className="w-px h-5 bg-white/8 flex-shrink-0" />
+                                    <button
+                                        onClick={() => setMermaidShowCode(true)}
+                                        className="relative h-8 px-4 text-[10px] font-black uppercase tracking-widest transition-all"
+                                        style={mermaidShowCode ? { background: "#22c55e", color: "#000", boxShadow: "0 0 12px rgba(34,197,94,0.5)" } : { background: "transparent", color: "#52525b" }}
+                                    >Code</button>
+                                </div>
+                                <button
+                                    onClick={() => {
+                                        const encoded = LZString.compressToEncodedURIComponent(extractMermaid(content));
+                                        window.open(`https://mermaid-bheng.vercel.app/?data=${encoded}`, "_blank");
+                                    }}
+                                    className="h-8 px-3 text-[10px] font-black uppercase tracking-widest transition-all flex items-center"
+                                    style={{ background: "#8b5cf6", color: "#fff", boxShadow: "0 0 12px rgba(139,92,246,0.4)" }}
+                                    title="Open in Mermaid editor"
+                                >✦ Magic</button>
+                                </>
                             )}
                         </div>
+                        )}
                         {mindmapMode ? (
                             <MindmapView title={title} content={content} onToggle={toggleMindmapNode} />
                         ) : graphMode ? (
@@ -4428,10 +4688,13 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 <div className="space-y-0">
                                 {parsedTasks.length === 0 && !showAddTask ? (
                                     <div className="text-zinc-500 text-center pt-12 text-sm font-bold">NO TASKS — TAP + TO ADD ONE</div>
-                                ) : parsedTasks
-                                    .map((task, origIdx) => ({ task, origIdx }))
-                                    .sort((a, b) => Number(a.task.done) - Number(b.task.done))
-                                    .map(({ task, origIdx }, sortedIdx) => {
+                                ) : (() => {
+                                    const sorted = parsedTasks
+                                        .map((task, origIdx) => ({ task, origIdx }))
+                                        .sort((a, b) => Number(a.task.done) - Number(b.task.done));
+                                    const undone = sorted.filter(t => !t.task.done);
+                                    const done = sorted.filter(t => t.task.done);
+                                    const renderRow = ({ task, origIdx }: { task: any; origIdx: number }, sortedIdx: number) => {
                                     const c = taskColor(origIdx, parsedTasks.length);
                                     const isConfirming = confirmDeleteTask === origIdx;
                                     const SNAP_W = 80;
@@ -4441,8 +4704,14 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     const rowOffset = isDragging ? dragOffset : isSwipedOpen ? SNAP_W : 0;
                                     const isFullDelete = isDragging && dragOffset >= DELETE_W;
                                     return (
-                                    <div key={origIdx} className="group task-card-row task-row-enter w-full relative overflow-hidden"
-                                        style={{ animationDelay: `${sortedIdx * 0.055}s` }}
+                                    <div key={origIdx}
+                                        className={`group task-card-row w-full relative overflow-hidden transition-opacity ${task.done ? "hover:ring-1 hover:ring-red-500/60 hover:brightness-125" : ""} ${reorderDragOrigIdx === origIdx ? "opacity-40" : ""} ${!task.done && reorderOverOrigIdx === origIdx ? "ring-2 ring-white/40" : ""}`}
+                                        draggable={!task.done}
+                                        onDragStart={() => { setReorderDragOrigIdx(origIdx); }}
+                                        onDragOver={(e) => { if (task.done) return; e.preventDefault(); setReorderOverOrigIdx(origIdx); }}
+                                        onDragLeave={() => setReorderOverOrigIdx(null)}
+                                        onDrop={(e) => { e.preventDefault(); if (reorderDragOrigIdx === null || reorderDragOrigIdx === origIdx) return; const from = parsedTasks[reorderDragOrigIdx].lineIdx; const to = parsedTasks[origIdx].lineIdx; reorderTask(from, to); setReorderDragOrigIdx(null); setReorderOverOrigIdx(null); }}
+                                        onDragEnd={() => { setReorderDragOrigIdx(null); setReorderOverOrigIdx(null); }}
                                         onClick={() => setActiveTaskIdx(i => i === origIdx ? null : origIdx)}
                                         onTouchStart={(e) => {
                                             taskRowSwipeStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
@@ -4481,14 +4750,13 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         {/* Sliding content */}
                                         <div className="flex items-center gap-3 px-4 py-4 relative overflow-hidden"
                                             style={{
-                                                borderLeft: `4px solid ${c}`,
-                                                background: task.done ? `${c}20` : `${c}50`,
+                                                background: task.done ? "rgba(255,255,255,0.04)" : `${c}50`,
                                                 transform: `translateX(-${rowOffset}px)`,
                                                 transition: isDragging ? "none" : "transform 0.25s cubic-bezier(0.25,1,0.5,1)",
                                             }}>
                                             <span className="task-card-pattern absolute inset-0 pointer-events-none" />
-                                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[52px] font-black leading-none pointer-events-none select-none" style={{ color: "rgba(255,255,255,0.07)", fontFamily: "monospace" }}>{String(origIdx + 1).padStart(2, "0")}</span>
-                                            <button type="button" onClick={() => toggleTask(task.lineIdx)} className="relative flex-shrink-0 w-5 h-5 rounded-sm border-2 flex items-center justify-center transition-all" style={{ borderColor: task.done ? c : `${c}80`, backgroundColor: task.done ? c : "transparent" }}>
+                                            {!task.done && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[52px] font-black leading-none pointer-events-none select-none" style={{ color: "rgba(255,255,255,0.07)", fontFamily: "monospace" }}>{String(sortedIdx + 1).padStart(2, "0")}</span>}
+                                            <button type="button" onClick={() => toggleTask(task.lineIdx)} className="relative flex-shrink-0 w-5 h-5 rounded-sm border-2 flex items-center justify-center transition-all" style={{ borderColor: task.done ? "rgba(255,255,255,0.25)" : c, backgroundColor: task.done ? "rgba(255,255,255,0.15)" : "transparent" }}>
                                                 {task.done && (
                                                     <svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="#000" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
                                                 )}
@@ -4511,34 +4779,38 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                     onClick={() => { if (!task.done) { setEditingTaskIdx(origIdx); setEditingTaskText(task.text); setTimeout(() => editTaskInputRef.current?.focus(), 30); } }}
                                                 >{task.text}</span>
                                             )}
-                                            <span className="relative flex items-center gap-1 flex-shrink-0">
-                                                {task.done && activeTaskIdx === origIdx && (
-                                                    <button type="button" onClick={(e) => { e.stopPropagation(); deleteTask(task.lineIdx, task.text, c); }} className="p-1 text-zinc-500 hover:text-red-400 transition" title="Delete"><TrashIcon className="w-4 h-4" /></button>
-                                                )}
-                                            </span>
+                                            {task.done && (
+                                                <button type="button" onClick={(e) => { e.stopPropagation(); deleteTask(task.lineIdx, task.text, c); }} className="relative z-10 flex-shrink-0 p-1 text-transparent group-hover:text-zinc-500 hover:!text-red-400 transition" title="Delete"><TrashIcon className="w-4 h-4" /></button>
+                                            )}
                                         </div>
                                     </div>
                                     );
-                                })}
-                                {showAddTask && (
-                                    <div className="relative overflow-hidden flex items-center gap-3 px-4 py-4" style={{ borderLeft: `4px solid ${taskColor(parsedTasks.length, parsedTasks.length + 1)}`, background: `${taskColor(parsedTasks.length, parsedTasks.length + 1)}50` }}>
+                                    };
+                                    return (<>
+                                        {undone.map((t, i) => renderRow(t, i))}
+                                        {showAddTask && (
+                                    <div className="relative overflow-hidden flex items-center gap-3 px-4 py-4" style={{ background: `${taskColor(parsedTasks.length, parsedTasks.length + 1)}50` }}>
                                         <span className="task-card-pattern absolute inset-0 pointer-events-none" />
-                                        <span className="text-[11px] font-black w-6 text-right flex-shrink-0" style={{ color: taskColor(parsedTasks.length, parsedTasks.length + 1) }}>{String(parsedTasks.length + 1).padStart(2, "0")}</span>
+                                        <span className="relative z-10 text-[11px] font-black w-6 text-right flex-shrink-0" style={{ color: taskColor(parsedTasks.length, parsedTasks.length + 1) }}>{String(parsedTasks.length + 1).padStart(2, "0")}</span>
                                         <input
                                             ref={addTaskInputRef}
                                             type="text"
                                             value={newTaskText}
                                             onChange={(e) => setNewTaskText(e.target.value)}
-                                            onKeyDown={(e) => { if (e.key === "Enter") confirmAddTask(); if (e.key === "Escape") setShowAddTask(false); }}
-                                            className="flex-1 bg-transparent text-[12px] sm:text-sm font-bold outline-none border-none shadow-none placeholder:text-zinc-400"
-                                            style={{ color: "#ffffff" }}
+                                            onKeyDown={(e) => { if (e.key === "Enter") confirmAddTask(); if (e.key === "Escape") { newTaskText.trim() ? confirmAddTask() : setShowAddTask(false); } }}
+                                            onBlur={() => { if (newTaskText.trim()) confirmAddTask(); else setShowAddTask(false); }}
+                                            className="flex-1 bg-transparent text-white text-[12px] sm:text-sm font-bold outline-none border-none shadow-none placeholder:text-zinc-400 caret-white relative z-10"
+                                            style={{ color: "#fff", WebkitTextFillColor: "#fff" }}
                                             placeholder="Type a task..."
                                             autoComplete="off"
                                         />
-                                        <button type="button" onClick={confirmAddTask} className="text-emerald-400 text-[11px] font-black hover:text-emerald-300 transition">ADD</button>
-                                        <button type="button" onClick={() => setShowAddTask(false)} className="text-zinc-500 text-[11px] font-black hover:text-zinc-300 transition">ESC</button>
+                                        <button type="button" onClick={confirmAddTask} className="relative z-10 text-emerald-400 text-[11px] font-black hover:text-emerald-300 transition">ADD</button>
+                                        <button type="button" onClick={() => setShowAddTask(false)} className="relative z-10 text-zinc-500 text-[11px] font-black hover:text-zinc-300 transition">ESC</button>
                                     </div>
                                 )}
+                                        {done.map((t, i) => renderRow(t, undone.length + i))}
+                                    </>);
+                                })()}
                                 </div>
                                 {!showAddTask && (
                                     <button type="button" onClick={openAddTask} aria-label="Add task" className="fab-float absolute bottom-4 right-4 w-12 h-12 rounded-full bg-white text-black shadow-[0_8px_20px_rgba(0,0,0,0.4)] flex items-center justify-center hover:scale-110 transition-transform">
@@ -4546,11 +4818,10 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     </button>
                                 )}
                             </div>
+                        ) : mermaidMode ? (
+                            <MermaidRenderer code={extractMermaid(content)} onChange={(c) => setContent(c)} showCode={mermaidShowCode} theme={appTheme === "light" ? "light" : "dark"} />
                         ) : markdownMode ? (
-                            <div className="flex-1 overflow-y-auto">
-                                <div className="p-4 sm:p-6 prose prose-sm prose-invert max-w-none"
-                                    dangerouslySetInnerHTML={{ __html: marked.parse(content, { async: false }) as string }} />
-                            </div>
+                            <MarkdownWithMermaid content={content} theme={appTheme === "light" ? "light" : "dark"} />
                         ) : htmlMode ? (
                             <div className="flex-1 flex flex-col">
                                 <iframe
@@ -4564,15 +4835,21 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     title="HTML Preview"
                                 />
                             </div>
+                        ) : voiceNote ? (
+                            <VoiceNotePlayer data={voiceNote} onConvertToText={() => { setContent(voiceNote.transcript); void saveNote({ silent: false }); }} />
+                        ) : codeMode ? (
+                            <CodeViewer
+                                code={content}
+                                language={noteType}
+                                editing={codeEditMode}
+                                onChange={setContent}
+                                onBlur={() => { setCodeEditMode(false); void saveNote({ silent: false }); }}
+                                onClick={() => setCodeEditMode(true)}
+                            />
                         ) : jsonMode ? (
-                            <div className="flex-1 overflow-y-auto">
-                                <div className="p-4 sm:p-6">
-                                    <pre className="text-xs leading-relaxed font-mono whitespace-pre-wrap break-all"
-                                        dangerouslySetInnerHTML={{ __html: syntaxHighlightJson(jsonDetect.parsed) }} />
-                                </div>
-                            </div>
+                            <CodeViewer code={jsonDetect.ok ? JSON.stringify(jsonDetect.parsed, null, 2) : content} language="json" editing={false} />
                         ) : (
-                            <div className="relative flex-1 min-h-0 flex flex-col">
+                            <div className="relative flex-1 min-h-0 flex flex-col" style={{ background: "#272822" }}>
                                 <RichTextEditor
                                     key={currentNoteId ?? "new"}
                                     noteId={currentNoteId}
@@ -4672,19 +4949,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     <span className="w-full pl-12 pr-3 py-3 text-sm font-black tracking-tight text-white/30">search</span>
                                 </button>
                                 <div className="ml-auto flex items-center gap-1">
-                                    {/* view modes — hidden in edit mode (moved to editor panel header) */}
-                                    {!editMode && (
-                                        <>
-                                            <HeaderIconBtn icon={ListBulletIcon} label="List" onClick={() => { setMainListMode(true); setKanbanMode(false); setEditMode(false); }} style={mainListMode && !kanbanMode && !editMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
-                                            <HeaderIconBtn icon={Squares2X2Icon} label="Grid" onClick={() => { setMainListMode(false); setKanbanMode(false); setEditMode(false); }} style={!mainListMode && !kanbanMode && !editMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
-                                            <div className="hidden sm:contents">
-                                                <HeaderIconBtn icon={ViewColumnsIcon} label="Kanban" onClick={() => { setKanbanMode((v) => !v); setMainListMode(false); setEditMode(false); }} style={kanbanMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
-                                                <HeaderIconBtn icon={PencilSquareIcon} label="Edit" onClick={() => { setEditMode((v) => !v); setKanbanMode(false); }} style={editMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
-                                            </div>
-                                            {/* divider */}
-                                            <div className="w-px h-4 bg-white/10 mx-1" />
-                                        </>
-                                    )}
                                     {/* actions */}
                                     <div className="relative">
                                         <HeaderIconBtn icon={PlusIcon} label="New" onClick={() => setShowAddMenu(v => !v)} style={showAddMenu ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
@@ -4754,6 +5018,26 @@ const fireIntegrations = (trigger: string, note: any) => {
                     </header>
 
                     <main ref={mainScrollRef}
+                        onDoubleClick={(e) => { if ((e.target as HTMLElement) === e.currentTarget) openNewNote(); }}
+                        onDragOver={(e) => { if (Array.from(e.dataTransfer.items).some(i => i.kind === "file")) e.preventDefault(); }}
+                        onDrop={(e) => {
+                            const file = Array.from(e.dataTransfer.files).find(f => f.name.endsWith(".mermaid") || f.name.endsWith(".mmd"));
+                            if (!file) return;
+                            e.preventDefault();
+                            const reader = new FileReader();
+                            reader.onload = (ev) => {
+                                const text = (ev.target?.result as string) ?? "";
+                                setEditingNote(null);
+                                setTitle(file.name.replace(/\.(mermaid|mmd)$/i, ""));
+                                setContent(text);
+                                setTargetFolder(activeFolder || "General");
+                                setNoteColor(palette12[0]);
+                                setMermaidShowCode(true);
+                                shouldFocusTitleOnOpenRef.current = false;
+                                setEditorOpen(true);
+                            };
+                            reader.readAsText(file);
+                        }}
                         className={`ios-mobile-main relative flex-1 ${kanbanMode && isFolderGridView ? "overflow-x-auto overflow-y-hidden touch-pan-x" : "overflow-x-hidden overflow-y-auto touch-pan-y"} overscroll-none bg-black ${(!showGlobalGraph) && !(kanbanMode && isFolderGridView) ? "pb-24 sm:pb-32" : ""} ${!isListMode && !(kanbanMode && isFolderGridView) ? "p-1.5 sm:p-2" : ""}`}
                         style={kanbanMode && isFolderGridView
                             ? { display: "flex", flexDirection: "column", height: "100%", overflowX: "auto", overflowY: "hidden" }
@@ -4869,7 +5153,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 })}
                             </div>
                         )}
-                        {!(kanbanMode && isFolderGridView) && displayItems.map((item, idx) => {
+                        {!(kanbanMode && isFolderGridView) && filteredDisplayItems.map((item, idx) => {
                             // Section header sentinel
                             if (item._header) {
                                 return (
@@ -4974,7 +5258,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             : { position: "relative", isolation: "isolate", backgroundColor: `${c}55`, border: `1.5px solid ${c}88` };
                                     })()}
                                     className={`${isListMode
-                                        ? `group list-row-hover flex items-center gap-3 px-4 py-2 sm:py-1 border-b border-white/5 cursor-pointer select-none transition-colors active:bg-white/10 overflow-hidden ${isDragging ? "opacity-30" : dt?.mode === "into" ? "bg-cyan-950/60 ring-1 ring-inset ring-cyan-400" : ""} ${isSelectMode && !item.is_folder && selectedIds.has(String(item.id)) ? "bg-blue-950/50" : ""} ${isFolderSelectMode && item.is_folder && selectedFolderNames.includes(item.name || "") ? "bg-emerald-950/50" : ""}`
+                                        ? `group list-row-hover flex items-center gap-3 px-4 py-3 sm:py-2 border-b border-white/5 cursor-pointer select-none transition-colors active:bg-white/10 overflow-hidden ${isDragging ? "opacity-30" : dt?.mode === "into" ? "bg-cyan-950/60 ring-1 ring-inset ring-cyan-400" : ""} ${isSelectMode && !item.is_folder && selectedIds.has(String(item.id)) ? "bg-blue-950/50" : ""} ${isFolderSelectMode && item.is_folder && selectedFolderNames.includes(item.name || "") ? "bg-emerald-950/50" : ""}`
                                         : `relative min-w-0 cursor-pointer transition-all group overflow-hidden ${isDragging ? "opacity-30 scale-95" : dt?.mode === "into" ? "ring-4 ring-cyan-400 ring-inset z-10" : ""}`}`}>
                                     {/* Cursor spotlight glow */}
                                     {isListMode && glowCard?.id === tileId && (() => {
@@ -5017,20 +5301,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                     </div>
                                                 );
                                             })()}
-                                            {!item.is_folder && !activeFolder && item.folder_name && (() => {
-                                                const fc = folders.find(f => f.name === item.folder_name);
-                                                const c = fc?.color || '#52525b';
-                                                const icon = fc ? (folderIcons[fc.name] || fc.name.charAt(0).toUpperCase()) : item.folder_name.charAt(0).toUpperCase();
-                                                return (
-                                                    <span className="flex-shrink-0 w-[54px] h-[54px] sm:w-9 sm:h-9 flex items-center justify-center text-base sm:text-sm font-black leading-none" style={{ border: `2px solid ${c}`, color: c }} title={item.folder_name}>{icon}</span>
-                                                );
-                                            })()}
-                                            {!item.is_folder && activeFolder && (() => {
-                                                const c = item.folder_color || item.color || '#52525b';
-                                                return (
-                                                    <span className="flex-shrink-0 w-[54px] h-[54px] sm:w-9 sm:h-9 flex items-center justify-center text-base sm:text-sm font-black leading-none" style={{ border: `2px solid ${c}`, color: c }}>{[...(item.title || "N")][0].toUpperCase()}</span>
-                                                );
-                                            })()}
                                             <div className="flex-1 min-w-0">
                                                 <div className="text-[19px] sm:text-[14.4px] font-semibold tracking-tight text-white truncate">
                                                     {item.is_folder ? item.name : item.title}
@@ -5041,20 +5311,50 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                         {item.count > 0 && <span>{item.count} note{item.count !== 1 ? "s" : ""}</span>}
                                                     </div>
                                                 ) : (
-                                                    <div className="text-[16px] sm:text-[13px] text-zinc-500 truncate">
-                                                        <span className="truncate">{(() => { const s = previewText(item.content || "").split("\n").find((l: string) => l.trim()) || ""; return s.length > 60 ? s.slice(0, 60) + "..." : s; })()}</span>
-                                                    </div>
+                                                    (() => {
+                                                        const c = item.content || "";
+                                                        const isListModeNote = listModeNotes.has(String(item.id));
+                                                        const isChecklist = isListModeNote || /^\[[ x]\]/im.test(c);
+                                                        const lines = c.split("\n").filter((l: string) => l.trim());
+                                                        const checked = lines.filter((l: string) => /^\[x\]/i.test(l.trim())).length;
+                                                        if (isChecklist && lines.length > 0) {
+                                                            return <div className="hidden sm:flex items-center gap-1.5 mt-0.5 overflow-hidden">
+                                                                {lines.slice(0, 3).map((l: string, i: number) => {
+                                                                    const done = /^\[x\]/i.test(l.trim());
+                                                                    const text = l.trim().replace(/^\[x\]\s*/i, "").replace(/^[-*]\s*/, "").trim();
+                                                                    return <span key={i} className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0 ${done ? "bg-white/5 text-zinc-600 line-through" : "bg-white/10 text-zinc-300"}`}>{text}</span>;
+                                                                })}
+                                                                {lines.length > 3 && <span className="text-[10px] text-zinc-600 flex-shrink-0">+{lines.length - 3}</span>}
+                                                            </div>;
+                                                        }
+                                                        return null;
+                                                    })()
                                                 )}
                                             </div>
                                             {item.is_folder && item.latestUpdatedAt && (
                                                 <span className="text-[16px] sm:text-[13px] text-zinc-500 flex-shrink-0 font-medium">{timeAgo(item.latestUpdatedAt)}</span>
                                             )}
-                                            {!item.is_folder && item.updated_at && (
-                                                <span className="text-[16px] sm:text-[13px] text-zinc-500 flex-shrink-0 font-medium">
-                                                    {timeAgo(item.updated_at)}
-                                                </span>
-                                            )}
-                                            {!item.is_folder && looksLikeUrl(item.content || "") && !isSelectMode && (
+                                            {!item.is_folder && item.updated_at && (() => {
+                                                const c = item.content || "";
+                                                const isListModeNote = listModeNotes.has(String(item.id));
+                                                const isChecklist = isListModeNote || /^\[[ x]\]/im.test(c);
+                                                const lines = c.split("\n").filter((l: string) => l.trim());
+                                                const checked = lines.filter((l: string) => /^\[x\]/i.test(l.trim())).length;
+                                                const badge = TYPE_BADGE[(item as any).type];
+                                                return <div className="flex flex-col items-end flex-shrink-0 gap-0.5">
+                                                    {isChecklist && lines.length > 0 && <span className="text-[11px] font-black text-emerald-500">{checked}/{lines.length}</span>}
+                                                    <div className="flex items-center gap-1.5">
+                                                        {badge && (
+                                                            <span className="text-[9px] font-black tracking-wide px-1 py-px leading-none"
+                                                                style={{ color: badge.color, border: `1px solid ${badge.color}40`, background: `${badge.color}15` }}>
+                                                                {badge.label}
+                                                            </span>
+                                                        )}
+                                                        <span className="text-[16px] sm:text-[13px] text-zinc-500 font-medium">{timeAgo(item.updated_at)}</span>
+                                                    </div>
+                                                </div>;
+                                            })()}
+                                            {!item.is_folder && looksLikeUrl(item.content || "") && !isSelectMode && (item.folder_name || activeFolder) !== "TEAM" && (
                                                 <button
                                                     type="button"
                                                     onClick={(e) => {
@@ -5146,19 +5446,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 </div>
                             );
                         })}
-                        {isNoteGridView && !isListMode && !fitAllMode && displayItems.length > 0 && Array.from({ length: (gridCols - (displayItems.length % gridCols)) % gridCols }).map((_, i) => (
-                            <button
-                                key={`filler-${i}`}
-                                onClick={(e) => { e.stopPropagation(); openNewNote(); }}
-                                className="relative min-w-0 border-2 border-dashed border-zinc-800 hover:border-zinc-600 transition-colors group"
-                            >
-                                <div style={{ paddingBottom: "100%" }} />
-                                <div className="absolute inset-0 flex items-center justify-center">
-                                    <PlusIcon className="w-6 h-6 text-zinc-700 group-hover:text-zinc-400 transition-colors" />
-                                </div>
-                            </button>
-                        ))}
-                        {isEmptyView && (
+{isEmptyView && (
                             <div className="absolute inset-0 z-20 pointer-events-none flex items-center justify-center px-6 sm:px-10">
                                 <div key={quoteIndex} className="empty-quote-anim max-w-[760px] text-center">
                                     <p className="text-white/85 text-base sm:text-xl font-semibold leading-relaxed tracking-tight">{EMPTY_QUOTES[quoteIndex]}</p>
@@ -5167,7 +5455,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                         )}
                         {/* Stats footer — desktop list mode only */}
                         {isListMode && !isEmptyView && (() => {
-                            const realItems = displayItems.filter((i: any) => !i._header);
+                            const realItems = filteredDisplayItems.filter((i: any) => !i._header);
                             const fCount = realItems.filter((i: any) => i.is_folder).length;
                             const nCount = realItems.filter((i: any) => !i.is_folder).length;
                             const totalChars = realItems.filter((i: any) => !i.is_folder).reduce((acc: number, i: any) => acc + (i.content || "").length, 0);
@@ -5247,6 +5535,21 @@ const fireIntegrations = (trigger: string, note: any) => {
 
             </div>{/* ── end two-panel wrapper ── */}
 
+            {showVoiceRecorder && (
+                <VoiceRecorder
+                    noteId={currentNoteId}
+                    getToken={getAuthToken}
+                    onComplete={(voiceData) => {
+                        const json = JSON.stringify(voiceData);
+                        if (!title.trim()) setTitle("Voice Note");
+                        setContent(json);
+                        setShowVoiceRecorder(false);
+                        // autosave fires after 2s via useEffect → isDraftDirty
+                    }}
+                    onCancel={() => setShowVoiceRecorder(false)}
+                />
+            )}
+
             {showNoteActions && (
                 <div className="fixed inset-0 z-[510] bg-black/30 backdrop-blur-[2px] flex items-center justify-center p-4 lg:bg-transparent lg:backdrop-blur-none lg:items-stretch lg:justify-end lg:p-0" onClick={() => { setShowNoteActions(false); closeEditorTools(); }}>
                     <div
@@ -5262,6 +5565,15 @@ const fireIntegrations = (trigger: string, note: any) => {
 
 
                         <div className="flex flex-col divide-y divide-white/10 overflow-y-auto max-h-[70vh] lg:max-h-none lg:flex-1">
+                            {/* SEND */}
+                            <button
+                                type="button"
+                                className="w-full flex items-center gap-4 px-6 py-4 text-left text-zinc-300 hover:bg-white/5 hover:text-white active:bg-white/10 transition"
+                                onClick={() => { setSharePickerOpen(true); setShowNoteActions(false); closeEditorTools(); }}
+                            >
+                                <PaperAirplaneIcon className="w-5 h-5 flex-shrink-0" />
+                                <span className="text-xs font-black tracking-wide flex-1">Send</span>
+                            </button>
                             {/* COLOR */}
                             <div>
                                 <button
@@ -5436,7 +5748,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         ) : (
                                             <RectangleStackIcon className="w-4 h-4" />
                                         );
-                                        const autoLocked = (markdownMode || htmlMode) && mode !== "Text";
+                                        const autoLocked = (markdownMode || htmlMode) && mode !== "Text"
+                                            || (mode === "Checklist" && !canToggleChecklist);
                                         return (
                                             <button key={mode} type="button"
                                                 disabled={autoLocked}
@@ -5515,6 +5828,13 @@ const fireIntegrations = (trigger: string, note: any) => {
             {showFolderActions && (
                 <div className="fixed inset-0 z-[510] flex items-center justify-center p-4 lg:items-stretch lg:justify-end lg:p-0" onClick={() => { setShowFolderActions(false); setShowIntegrationsPanel(false); setConfiguringIntegration(null); setShowAutomationsPanel(false); setSelectedAutomation(null); setShowFolderColorPicker(false); setShowFolderIconPicker(false); setShowFolderMovePicker(false); }}>
                     <div className="note-actions-panel bg-zinc-900 border border-white/15 w-full max-w-sm flex flex-col overflow-hidden lg:max-w-[300px] lg:w-[300px] lg:h-full lg:border-l lg:border-r-0 lg:border-t-0 lg:border-b-0 lg:rounded-none relative" onClick={(e) => e.stopPropagation()}>
+
+                        {/* Depth level watermark */}
+                        <div className="absolute inset-0 flex items-end justify-end pointer-events-none z-0 overflow-hidden pb-16 pr-4">
+                            <span className="text-[160px] font-black text-white/[0.04] select-none leading-none tracking-tighter">
+                                L{Math.min(folderStack.length + 1, 3)}
+                            </span>
+                        </div>
 
                         {/* INTEGRATIONS PAGE — slides in from right over settings */}
                         <div className={`absolute inset-0 z-10 flex flex-col bg-zinc-900 transition-transform duration-300 ease-in-out ${showIntegrationsPanel ? "translate-x-0" : "translate-x-full"}`}>
@@ -5975,28 +6295,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     })()}
                                 </div>
                             )}
-                            {/* GLOBAL GRAPH */}
-                            <div className="px-6 pt-4 pb-1 text-[9px] font-black uppercase tracking-[0.15em] text-zinc-600">App Settings</div>
-                            {/* NAV MODE — global only */}
-                            {!activeFolder && (
-                            <div className="px-6 py-3 border-b border-white/[0.06]">
-                                <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-2">Nav Mode</p>
-                                <div className="flex gap-1.5">
-                                    {(["folders-and-files", "files-only"] as const).map((mode) => (
-                                        <button key={mode} type="button"
-                                            onClick={() => setNavMode(mode)}
-                                            className={`flex-1 py-2 rounded text-[10px] font-black uppercase tracking-wide transition ${navMode === mode ? "bg-white text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"}`}>
-                                            {mode === "folders-and-files" ? "Folders & Files" : "Files Only"}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                            )}
-                            <button type="button" className="w-full flex items-center gap-4 px-6 py-4 text-left text-zinc-300 hover:bg-white/5 hover:text-white active:bg-white/10 transition"
-                                onClick={() => { setShowFolderActions(false); setShowGlobalGraph(true); }}>
-                                <CubeTransparentIcon className="w-5 h-5 flex-shrink-0" />
-                                <span className="text-xs font-black tracking-wide flex-1">Graph</span>
-                            </button>
                             {/* DELETE FOLDER */}
                             {activeFolder && canDeleteActiveFolder && (
                                 <button type="button" className="w-full flex items-center gap-4 px-6 py-4 text-left text-red-400 hover:bg-red-500/10 active:bg-red-500/20 transition"
@@ -6005,24 +6303,64 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     <span className="text-xs font-black tracking-wide">Delete</span>
                                 </button>
                             )}
-                            {/* INTEGRATIONS */}
-                            <button type="button" className="w-full flex items-center gap-4 px-6 py-4 text-left text-zinc-300 hover:bg-white/5 hover:text-white active:bg-white/10 transition"
-                                onClick={() => { setIntegrationsSnapshot([...integrationsRef.current]); setShowIntegrationsPanel(true); }}>
-                                <PuzzlePieceIcon className="w-5 h-5 flex-shrink-0" />
-                                <span className="text-xs font-black tracking-wide flex-1">Integrations</span>
-                                <div className="flex items-center gap-2">
-                                    {integrationsRef.current.length > 0 && (
-                                        <span className="text-[10px] font-black text-emerald-400">{integrationsRef.current.length} active</span>
-                                    )}
-                                    <ArrowRightIcon className="w-4 h-4 text-zinc-600 flex-shrink-0" />
+                            {/* L1 only: App Settings, Graph, Integrations, Sign Out */}
+                            {folderStack.length === 0 && (<>
+                                {/* NAV MODE */}
+                                <div className="px-6 py-3 border-b border-white/[0.06]">
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-2">Navigation</p>
+                                    <div className="flex gap-1.5">
+                                        {(["folders-and-files", "files-only"] as const).map((mode) => (
+                                            <button key={mode} type="button"
+                                                onClick={() => setNavMode(mode)}
+                                                className={`flex-1 py-2 rounded text-[10px] font-black uppercase tracking-wide transition ${navMode === mode ? "bg-white text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"}`}>
+                                                {mode === "folders-and-files" ? "Folders" : "Files"}
+                                            </button>
+                                        ))}
+                                    </div>
                                 </div>
-                            </button>
-                            {/* SIGN OUT */}
-                            <button type="button" className="w-full flex items-center gap-4 px-6 py-4 text-left text-zinc-300 hover:bg-white/5 hover:text-white active:bg-white/10 transition"
-                                onClick={async () => { setShowFolderActions(false); await fetch("/api/stickies/logout", { method: "POST" }); window.location.href = "/sign-in"; }}>
-                                <ArrowRightOnRectangleIcon className="w-5 h-5 flex-shrink-0" />
-                                <span className="text-xs font-black tracking-wide flex-1">Sign Out</span>
-                            </button>
+                                {/* VIEW MODE */}
+                                <div className="px-6 py-3 border-b border-white/[0.06]">
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-2">View Mode</p>
+                                    <div className="grid grid-cols-4 gap-1.5">
+                                        <button type="button" onClick={() => { setMainListMode(true); setKanbanMode(false); }}
+                                            className={`py-2 rounded flex flex-col items-center gap-1 transition ${mainListMode && !kanbanMode ? "bg-white text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"}`}>
+                                            <ListBulletIcon className="w-4 h-4" />
+                                            <span className="text-[9px] font-black uppercase tracking-wide">List</span>
+                                        </button>
+                                        <button type="button" onClick={() => { setMainListMode(false); setKanbanMode(false); }}
+                                            className={`py-2 rounded flex flex-col items-center gap-1 transition ${!mainListMode && !kanbanMode ? "bg-white text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"}`}>
+                                            <Squares2X2Icon className="w-4 h-4" />
+                                            <span className="text-[9px] font-black uppercase tracking-wide">Thumb</span>
+                                        </button>
+                                        <button type="button" onClick={() => { setKanbanMode(true); setMainListMode(false); }}
+                                            className={`py-2 rounded flex flex-col items-center gap-1 transition ${kanbanMode ? "bg-white text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"}`}>
+                                            <ViewColumnsIcon className="w-4 h-4" />
+                                            <span className="text-[9px] font-black uppercase tracking-wide">Kanban</span>
+                                        </button>
+                                        <button type="button" onClick={() => { setShowFolderActions(false); setShowGlobalGraph(true); }}
+                                            className="py-2 rounded flex flex-col items-center gap-1 transition bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200">
+                                            <CubeTransparentIcon className="w-4 h-4" />
+                                            <span className="text-[9px] font-black uppercase tracking-wide">Graph</span>
+                                        </button>
+                                    </div>
+                                </div>
+                                <button type="button" className="w-full flex items-center gap-4 px-6 py-4 text-left text-zinc-300 hover:bg-white/5 hover:text-white active:bg-white/10 transition"
+                                    onClick={() => { setIntegrationsSnapshot([...integrationsRef.current]); setShowIntegrationsPanel(true); }}>
+                                    <PuzzlePieceIcon className="w-5 h-5 flex-shrink-0" />
+                                    <span className="text-xs font-black tracking-wide flex-1">Integrations</span>
+                                    <div className="flex items-center gap-2">
+                                        {integrationsRef.current.length > 0 && (
+                                            <span className="text-[10px] font-black text-emerald-400">{integrationsRef.current.length} active</span>
+                                        )}
+                                        <ArrowRightIcon className="w-4 h-4 text-zinc-600 flex-shrink-0" />
+                                    </div>
+                                </button>
+                                <button type="button" className="w-full flex items-center gap-4 px-6 py-4 text-left text-zinc-300 hover:bg-white/5 hover:text-white active:bg-white/10 transition"
+                                    onClick={async () => { setShowFolderActions(false); await fetch("/api/stickies/logout", { method: "POST" }); window.location.href = "/sign-in"; }}>
+                                    <ArrowRightOnRectangleIcon className="w-5 h-5 flex-shrink-0" />
+                                    <span className="text-xs font-black tracking-wide flex-1">Sign Out</span>
+                                </button>
+                            </>)}
                         </div>
                         <div className="border-t border-white/10 p-4">
                             <button type="button" onClick={() => { setShowFolderActions(false); setShowFolderColorPicker(false); setShowFolderIconPicker(false); setShowFolderMovePicker(false); }} className="w-full py-3 bg-white text-black font-black uppercase text-xs tracking-wide hover:bg-zinc-100 transition">Close</button>
