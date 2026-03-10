@@ -4976,19 +4976,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     </div>
                                 ) : (
                                     <>
-                                        {/* view modes — hidden in edit mode (moved to editor panel header) */}
-                                        {!editMode && (
-                                            <>
-                                                <div className="hidden sm:contents">
-                                                    <HeaderIconBtn icon={ListBulletIcon} label="List" onClick={() => { setMainListMode(true); setKanbanMode(false); setEditMode(false); }} style={mainListMode && !kanbanMode && !editMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
-                                                    <HeaderIconBtn icon={Squares2X2Icon} label="Grid" onClick={() => { setMainListMode(false); setKanbanMode(false); setEditMode(false); }} style={!mainListMode && !kanbanMode && !editMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
-                                                    <HeaderIconBtn icon={ViewColumnsIcon} label="Kanban" onClick={() => { setKanbanMode((v) => !v); setMainListMode(false); setEditMode(false); }} style={kanbanMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
-                                                    <HeaderIconBtn icon={PencilSquareIcon} label="Edit" onClick={() => { setEditMode((v) => !v); setKanbanMode(false); }} style={editMode ? { color: "#ffffff", textShadow: "0 0 8px rgba(255,255,255,0.6)" } : undefined} />
-                                                    {/* divider */}
-                                                    <div className="w-px h-4 bg-white/10 mx-1" />
-                                                </div>
-                                            </>
-                                        )}
                                         <HeaderIconBtn icon={Cog6ToothIcon} label="Settings" onClick={() => { const hueInt = integrationsRef.current.find(ig => ig.type === "hue"); setLightMode((hueInt?.config?.mode as any) ?? "flash"); setShowFolderActions(true); setShowFolderColorPicker(false); setShowFolderIconPicker(false); setShowFolderMovePicker(false); }} />
                                     </>
                                 )}
