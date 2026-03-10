@@ -33,11 +33,21 @@ const MONOKAI = `
 .token.atrule,.token.attr-value,.token.function,.token.class-name{color:#e6db74}
 .token.keyword{color:#66d9e8}
 .token.regex,.token.important{color:#fd971f}
+/* Override iOS Safari font-size zoom and disable word wrap */
+.code-viewer-wrap textarea,
+.code-viewer-wrap pre {
+  font-size: 13px !important;
+  line-height: 19px !important;
+  white-space: pre !important;
+  overflow-wrap: normal !important;
+  word-break: normal !important;
+  -webkit-text-size-adjust: none !important;
+}
 `;
 
 const GUTTER_W = 48; // px
 const FONT_SIZE = 13;   // px — single source of truth
-const LINE_HEIGHT = 20; // px — single source of truth
+const LINE_HEIGHT = 19; // px — single source of truth
 const PAD_TOP = 8;
 const PAD_BOTTOM = 24;
 
@@ -172,7 +182,7 @@ export function CodeViewer({ code, language, editing, onChange, onBlur, onClick 
             </div>
 
             {/* Editor */}
-            <div ref={wrapperRef} style={{ flex: 1, minWidth: 0, position: "relative", zIndex: 1 }}>
+            <div ref={wrapperRef} className="code-viewer-wrap" style={{ flex: 1, minWidth: 0, position: "relative", zIndex: 1 }}>
                 <Editor
                     value={code}
                     onValueChange={editing ? (onChange ?? (() => {})) : () => {}}
