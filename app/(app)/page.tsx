@@ -5340,7 +5340,12 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 const lines = c.split("\n").filter((l: string) => l.trim());
                                                 const checked = lines.filter((l: string) => /^\[x\]/i.test(l.trim())).length;
                                                 return <div className="flex flex-col items-end flex-shrink-0 gap-0.5">
-                                                    {isChecklist && lines.length > 0 && <span className="text-[11px] font-black text-emerald-500">{checked}/{lines.length}</span>}
+                                                    {isChecklist && lines.length > 0 && (
+                                                        <span className="text-[13px] font-black tabular-nums" style={{ textShadow: checked > 0 ? "0 0 8px rgba(34,197,94,0.7)" : "none" }}>
+                                                            <span style={{ color: "#22c55e" }}>{checked}</span>
+                                                            <span style={{ color: "#3f3f46" }}>/{lines.length}</span>
+                                                        </span>
+                                                    )}
                                                     <span className="text-[13px] sm:text-[13px] text-zinc-500 font-medium">{timeAgo(item.updated_at)}</span>
                                                 </div>;
                                             })()}
