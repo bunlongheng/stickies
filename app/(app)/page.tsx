@@ -5285,8 +5285,22 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 const titleStr = item.title || "";
                                                 const rawExt = titleStr.includes(".") ? (titleStr.split(".").pop() ?? "") : "";
                                                 const ext = rawExt && /^[a-zA-Z0-9]{1,5}$/.test(rawExt) ? rawExt.toUpperCase() : null;
-                                                const label = ext || badge?.label || "TXT";
+                                                const isChecklistItem = (item as any).type === "checklist" || listModeNotes.has(String(item.id));
                                                 const color = badge?.color || "#71717a";
+                                                if (isChecklistItem) {
+                                                    const c = item.content || "";
+                                                    const lines = c.split("\n").filter((l: string) => l.trim());
+                                                    const checked = lines.filter((l: string) => /^\[x\]/i.test(l.trim())).length;
+                                                    const total = lines.length;
+                                                    return (
+                                                        <div className="flex-shrink-0 w-[54px] h-[54px] sm:w-[36px] sm:h-[36px] flex flex-col items-center justify-center font-black overflow-hidden leading-none gap-px"
+                                                            style={{ backgroundColor: "#22c55e18", border: "1.5px solid #22c55e40", textShadow: checked > 0 ? "0 0 6px rgba(34,197,94,0.6)" : "none" }}>
+                                                            <span style={{ fontSize: 13, color: "#22c55e" }}>{checked}</span>
+                                                            <span style={{ fontSize: 8, color: "#3f3f46" }}>/{total}</span>
+                                                        </div>
+                                                    );
+                                                }
+                                                const label = ext || badge?.label || "TXT";
                                                 const fs = label.length <= 2 ? 10 : label.length <= 3 ? 8 : label.length <= 4 ? 7 : 6;
                                                 return (
                                                     <div className="flex-shrink-0 w-[54px] h-[54px] sm:w-[36px] sm:h-[36px] flex items-center justify-center font-black overflow-hidden"
