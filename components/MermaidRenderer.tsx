@@ -87,6 +87,12 @@ function applyColorfulMermaidStyle(svgString: string, diagramType: string, theme
     // CSS for foreignObject content
     const styleEl = doc.createElementNS("http://www.w3.org/2000/svg", "style");
     styleEl.textContent = `
+        /* Baseline — all SVG text visible on dark bg */
+        text, tspan { fill: ${th.plainTextFill} !important; font-family: ${f} !important; }
+        /* All lines/paths visible */
+        line { stroke: ${th.edgeStroke} !important; stroke-width: 1.5px !important; }
+        path { stroke: ${th.edgeStroke}; }
+        /* Node labels inside foreignObject */
         .node foreignObject div, .node foreignObject span, .node foreignObject p,
         .node .nodeLabel, .node .label div, .node .label p, .node .label span,
         .classGroup foreignObject div, .classGroup foreignObject span {
@@ -94,14 +100,17 @@ function applyColorfulMermaidStyle(svgString: string, diagramType: string, theme
             font-weight: 700 !important;
             font-family: ${f} !important;
         }
+        /* Edge labels */
         .edgeLabel foreignObject div, .edgeLabel .label {
             color: ${th.plainTextFill} !important;
             background: transparent !important;
             font-family: ${f} !important;
         }
-        text, tspan { font-family: ${f} !important; }
+        /* Sequence diagram */
         .messageText, .labelText, .loopText, .noteText { fill: ${th.plainTextFill} !important; font-weight: 600 !important; }
         .sequenceNumber { fill: ${th.labelFill} !important; }
+        .loopLine { stroke: ${th.edgeStroke} !important; }
+        .note { fill: ${th.bg} !important; stroke: ${th.edgeStroke} !important; }
     `;
     svgEl.insertBefore(styleEl, svgEl.firstChild);
 
