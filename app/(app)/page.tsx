@@ -5336,7 +5336,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             {!item.is_folder && item.updated_at && (() => {
                                                 const c = item.content || "";
                                                 const isListModeNote = listModeNotes.has(String(item.id));
-                                                const isChecklist = isListModeNote || /^\[[ x]\]/im.test(c);
+                                                const isChecklist = isListModeNote || (item as any).type === "checklist" || /^\[[ x]\]/im.test(c);
                                                 const lines = c.split("\n").filter((l: string) => l.trim());
                                                 const checked = lines.filter((l: string) => /^\[x\]/i.test(l.trim())).length;
                                                 return <div className="flex flex-col items-end flex-shrink-0 gap-0.5">
