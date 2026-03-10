@@ -5278,6 +5278,26 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                     </div>
                                                 );
                                             })()}
+                                            {!item.is_folder && (() => {
+                                                const badge = TYPE_BADGE[(item as any).type];
+                                                const initial = meaningfulInitial(item.title || "", "N");
+                                                return (
+                                                    <div className="flex-shrink-0 w-[54px] h-[54px] sm:w-[36px] sm:h-[36px] flex items-center justify-center font-black overflow-hidden"
+                                                        style={badge ? {
+                                                            fontSize: badge.label.length <= 2 ? 13 : badge.label.length <= 3 ? 10 : 8,
+                                                            backgroundColor: `${badge.color}18`,
+                                                            color: badge.color,
+                                                            border: `1.5px solid ${badge.color}40`,
+                                                        } : {
+                                                            fontSize: 13,
+                                                            backgroundColor: "rgba(255,255,255,0.04)",
+                                                            color: "#71717a",
+                                                            border: "1.5px solid rgba(255,255,255,0.08)",
+                                                        }}>
+                                                        {badge ? badge.label : initial}
+                                                    </div>
+                                                );
+                                            })()}
                                             <div className="flex-1 min-w-0">
                                                 <div className="text-[13px] sm:text-[14.4px] font-semibold tracking-tight text-white truncate">
                                                     {item.is_folder ? item.name : item.title}
@@ -5317,18 +5337,9 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 const isChecklist = isListModeNote || /^\[[ x]\]/im.test(c);
                                                 const lines = c.split("\n").filter((l: string) => l.trim());
                                                 const checked = lines.filter((l: string) => /^\[x\]/i.test(l.trim())).length;
-                                                const badge = TYPE_BADGE[(item as any).type];
                                                 return <div className="flex flex-col items-end flex-shrink-0 gap-0.5">
                                                     {isChecklist && lines.length > 0 && <span className="text-[11px] font-black text-emerald-500">{checked}/{lines.length}</span>}
-                                                    <div className="flex items-center gap-1.5">
-                                                        {badge && (
-                                                            <span className="text-[9px] font-black tracking-wide px-1 py-px leading-none"
-                                                                style={{ color: badge.color, border: `1px solid ${badge.color}40`, background: `${badge.color}15` }}>
-                                                                {badge.label}
-                                                            </span>
-                                                        )}
-                                                        <span className="text-[13px] sm:text-[13px] text-zinc-500 font-medium">{timeAgo(item.updated_at)}</span>
-                                                    </div>
+                                                    <span className="text-[13px] sm:text-[13px] text-zinc-500 font-medium">{timeAgo(item.updated_at)}</span>
                                                 </div>;
                                             })()}
                                             {!item.is_folder && looksLikeUrl(item.content || "") && !isSelectMode && (item.folder_name || activeFolder) !== "TEAM" && (
