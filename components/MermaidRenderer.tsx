@@ -290,10 +290,9 @@ export function MermaidRenderer({ code, onChange, showCode, theme = "dark" }: Pr
                     if (vbW > 0 && vbH > 0) setSvgSize({ w: vbW, h: vbH });
                 }
 
-                svgEl.removeAttribute("width");
-                svgEl.removeAttribute("height");
-                svgEl.style.width = "100%";
-                svgEl.style.height = "100%";
+                // Leave width/height unset here — the scale effect below will set them
+                svgEl.style.width = "";
+                svgEl.style.height = "";
                 svgEl.style.display = "block";
                 // Reset to fit on new render
                 setIsFit(true);
@@ -316,6 +315,15 @@ export function MermaidRenderer({ code, onChange, showCode, theme = "dark" }: Pr
 
     const activeScale = isFit ? getFitScale() : zoom;
     const displayPct = Math.round(activeScale * 100);
+
+    // Resize SVG directly (no CSS transform scale) so foreignObject re-renders crisply
+    useEffect(() => {
+        if (!wrapRef.current || !svgSize || activeScale <= 0) return;
+        const svgEl = wrapRef.current.querySelector("svg");
+        if (!svgEl) return;
+        svgEl.setAttribute("width",  String(Math.round(svgSize.w * activeScale)));
+        svgEl.setAttribute("height", String(Math.round(svgSize.h * activeScale)));
+    }, [activeScale, svgSize]);
 
     const applyZoom = (scale: number) => {
         setIsFit(false);
@@ -377,13 +385,10 @@ export function MermaidRenderer({ code, onChange, showCode, theme = "dark" }: Pr
                 <div style={{
                     position: "absolute",
                     top: "50%", left: "50%",
-                    transform: `translate(-50%, -50%) translate(${pan.x}px, ${pan.y}px) scale(${activeScale})`,
-                    transformOrigin: "center center",
+                    transform: `translate(-50%, -50%) translate(${pan.x}px, ${pan.y}px)`,
                     transition: dragging.current ? "none" : "transform 0.15s ease",
-                    width: svgSize ? `${svgSize.w}px` : "100%",
-                    height: svgSize ? `${svgSize.h}px` : "100%",
                 }}>
-                    <div ref={wrapRef} style={{ width: "100%", height: "100%" }} />
+                    <div ref={wrapRef} />
                 </div>
 
                 {/* Zoom toolbar */}
