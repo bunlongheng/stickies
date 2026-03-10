@@ -12,12 +12,13 @@ interface Props {
 }
 
 // ── Palette & themes ──────────────────────────────────────────────────────────
-const PAL = ["#ef4444","#f97316","#eab308","#22c55e","#14b8a6","#06b6d4","#3b82f6","#8b5cf6","#ec4899","#f43f5e","#84cc16","#0891b2"];
+const PAL         = ["#ef4444","#f97316","#eab308","#22c55e","#14b8a6","#06b6d4","#3b82f6","#8b5cf6","#ec4899","#f43f5e","#84cc16","#0891b2"];
+const PAL_MONOKAI = ["#ab9df2","#78dce8","#a9dc76","#ffd866","#fc9867","#f92672","#ff6da2","#23bbad","#25d9c8","#c678dd"];
 
-const THEMES: Record<string, { bg: string; titleFill: string; plainTextFill: string }> = {
-    dark:    { bg: "#16161e", titleFill: "#c0caf5", plainTextFill: "#c0caf5" },
-    monokai: { bg: "#272822", titleFill: "#f8f8f2", plainTextFill: "#f8f8f2" },
-    light:   { bg: "#ffffff", titleFill: "#1e293b", plainTextFill: "#1e293b" },
+const THEMES: Record<string, { bg: string; canvasBg: string; titleFill: string; plainTextFill: string; edgeStroke: string; labelFill: string }> = {
+    dark:    { bg: "#16161e", canvasBg: "#252636", titleFill: "#c0caf5", plainTextFill: "#c0caf5", edgeStroke: "#64748b", labelFill: "#ffffff" },
+    monokai: { bg: "#2C2B2F", canvasBg: "#39383C", titleFill: "#f8f8f2", plainTextFill: "#f8f8f2", edgeStroke: "#75715e", labelFill: "#2C2B2F" },
+    light:   { bg: "#ffffff", canvasBg: "#c8d0da", titleFill: "#1e293b", plainTextFill: "#1e293b", edgeStroke: "#94a3b8", labelFill: "#000000" },
 };
 
 const NODE_SELECTOR_MAP: Record<string, string> = {
@@ -65,9 +66,10 @@ function applyColorfulMermaidStyle(svgString: string, diagramType: string, theme
     if (!svgEl) return svgString;
 
     const th = THEMES[themeName] ?? THEMES.dark;
+    const pal = themeName === "monokai" ? PAL_MONOKAI : PAL;
     const f = `'Inter', ui-sans-serif, system-ui, sans-serif`;
 
-    // Strip mermaid's injected <style> — overrides presentation attributes
+    // Strip mermaid's injected <style>
     doc.querySelectorAll("style").forEach(s => s.remove());
 
     // Background
@@ -88,7 +90,7 @@ function applyColorfulMermaidStyle(svgString: string, diagramType: string, theme
         .node foreignObject div, .node foreignObject span, .node foreignObject p,
         .node .nodeLabel, .node .label div, .node .label p, .node .label span,
         .classGroup foreignObject div, .classGroup foreignObject span {
-            color: #ffffff !important;
+            color: ${th.labelFill} !important;
             font-weight: 700 !important;
             font-family: ${f} !important;
         }
@@ -97,6 +99,9 @@ function applyColorfulMermaidStyle(svgString: string, diagramType: string, theme
             background: transparent !important;
             font-family: ${f} !important;
         }
+        text, tspan { font-family: ${f} !important; }
+        .messageText, .labelText, .loopText, .noteText { fill: ${th.plainTextFill} !important; font-weight: 600 !important; }
+        .sequenceNumber { fill: ${th.labelFill} !important; }
     `;
     svgEl.insertBefore(styleEl, svgEl.firstChild);
 
@@ -104,7 +109,7 @@ function applyColorfulMermaidStyle(svgString: string, diagramType: string, theme
     const nodeSelector = NODE_SELECTOR_MAP[diagramType] ?? ".node";
     const nodes = Array.from(doc.querySelectorAll(nodeSelector));
     nodes.forEach((node, i) => {
-        const color = PAL[i % PAL.length];
+        const color = pal[i % pal.length];
 
         node.querySelectorAll("rect").forEach(el => {
             const r = el as SVGElement;
@@ -124,9 +129,9 @@ function applyColorfulMermaidStyle(svgString: string, diagramType: string, theme
             const p = el as SVGElement;
             p.style.fill = color; p.style.stroke = "none";
         });
-        node.querySelectorAll("text").forEach(el => {
+        node.querySelectorAll("text, tspan").forEach(el => {
             const t = el as SVGElement;
-            t.style.fill = "#ffffff";
+            t.style.fill = th.labelFill;
             t.style.fontWeight = "700";
             t.style.fontFamily = f;
         });
@@ -136,37 +141,45 @@ function applyColorfulMermaidStyle(svgString: string, diagramType: string, theme
     if (diagramType === "pie") {
         doc.querySelectorAll("path.slice, .pieSlice, .slice, path[class*='slice']").forEach((el, i) => {
             const s = el as SVGElement;
-            s.style.fill = PAL[i % PAL.length];
+            s.style.fill = pal[i % pal.length];
             s.style.stroke = th.bg;
             s.style.strokeWidth = "2";
         });
     }
 
-    // Sequence diagram: color actor boxes and lifeline headers
+    // Sequence: color actor boxes
     if (diagramType === "sequence") {
-        const actors = Array.from(doc.querySelectorAll(".actor, .actor-box, .actor-man, .labelBox, .messageText + rect, rect.actor"));
+        const actors = Array.from(doc.querySelectorAll(".actor, .actor-box, .actor-man, rect.actor"));
         actors.forEach((el, i) => {
             const r = el as SVGElement;
-            r.style.fill = PAL[i % PAL.length];
+            r.style.fill = pal[i % pal.length];
             r.style.stroke = "none";
         });
-        // Also try to color participant boxes
-        doc.querySelectorAll(".participant-box, .lifelineLabel rect, .loopText rect, .noteText rect").forEach((el, i) => {
-            const r = el as SVGElement;
-            r.style.fill = PAL[i % PAL.length];
-            r.style.stroke = "none";
+        doc.querySelectorAll(".loopLine, .loopText rect, .labelBox").forEach((el, i) => {
+            (el as SVGElement).style.fill = pal[i % pal.length];
+            (el as SVGElement).style.stroke = "none";
         });
         doc.querySelectorAll(".actor text, .actor tspan").forEach(el => {
             const t = el as SVGElement;
-            t.style.fill = "#ffffff";
+            t.style.fill = th.labelFill;
             t.style.fontWeight = "700";
+        });
+        // Lifelines
+        doc.querySelectorAll(".lifeLine, line.actor-line").forEach(el => {
+            (el as SVGElement).style.stroke = th.edgeStroke;
+            (el as SVGElement).style.strokeWidth = "1.5";
+        });
+        // Message arrows
+        doc.querySelectorAll(".messageLine0, .messageLine1, line[class*='message']").forEach(el => {
+            (el as SVGElement).style.stroke = th.edgeStroke;
+            (el as SVGElement).style.strokeWidth = "1.5";
         });
     }
 
     // Edge paths
     doc.querySelectorAll(".edgePath path, .flowchart-link, .transition").forEach(el => {
         const e = el as SVGElement;
-        e.style.stroke = "#64748b";
+        e.style.stroke = th.edgeStroke;
         e.style.strokeWidth = "1.5";
         e.style.fill = "none";
     });
@@ -174,12 +187,12 @@ function applyColorfulMermaidStyle(svgString: string, diagramType: string, theme
     // Arrowheads
     doc.querySelectorAll("marker polygon, marker path, marker circle").forEach(el => {
         const m = el as SVGElement;
-        m.style.fill = "#64748b";
+        m.style.fill = th.edgeStroke;
         m.style.stroke = "none";
     });
 
-    // Titles / section labels
-    doc.querySelectorAll(".titleText, .sectionTitle").forEach(el => {
+    // All SVG text not inside nodes — titles, axis labels, etc.
+    doc.querySelectorAll(".titleText, .sectionTitle, .actor-top text, .actor-bottom text").forEach(el => {
         const t = el as SVGElement;
         t.style.fill = th.titleFill;
         t.style.fontFamily = f;
@@ -365,7 +378,7 @@ export function MermaidRenderer({ code, onChange, showCode, theme = "dark" }: Pr
         applyZoom(activeScale + delta);
     };
 
-    const canvasBg = THEMES[theme]?.bg ?? "#16161e";
+    const canvasBg = THEMES[theme]?.canvasBg ?? "#252636";
 
     if (!showCode) {
         if (error) {
