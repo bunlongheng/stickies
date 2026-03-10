@@ -5282,8 +5282,9 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             })()}
                                             {!item.is_folder && (() => {
                                                 const badge = TYPE_BADGE[(item as any).type];
-                                                const rawExt = (item.title || "").split(".").pop() ?? "";
-                                                const ext = /^[a-zA-Z0-9]{1,5}$/.test(rawExt) ? rawExt.toUpperCase() : null;
+                                                const titleStr = item.title || "";
+                                                const rawExt = titleStr.includes(".") ? (titleStr.split(".").pop() ?? "") : "";
+                                                const ext = rawExt && /^[a-zA-Z0-9]{1,5}$/.test(rawExt) ? rawExt.toUpperCase() : null;
                                                 const label = ext || badge?.label || "TXT";
                                                 const color = badge?.color || "#71717a";
                                                 const fs = label.length <= 2 ? 10 : label.length <= 3 ? 8 : label.length <= 4 ? 7 : 6;
