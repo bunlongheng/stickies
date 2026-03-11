@@ -42,6 +42,7 @@ export function VoiceRecorder({ noteId, getToken, onComplete, onCancel }: Record
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const startTimeRef = useRef(0);
     const recognitionRef = useRef<any>(null);
+    const liveTextRef = useRef("");
 
     // ── Frequency bar waveform ────────────────────────────────────────────────
     const drawWave = useCallback(() => {
@@ -140,6 +141,7 @@ export function VoiceRecorder({ noteId, getToken, onComplete, onCancel }: Record
                         if (e.results[i].isFinal) finalText += t + " ";
                         else interim = t;
                     }
+                    liveTextRef.current = finalText + interim;
                     setLiveText(finalText + interim);
                 };
                 rec.onerror = () => {};
@@ -194,7 +196,7 @@ export function VoiceRecorder({ noteId, getToken, onComplete, onCancel }: Record
             onComplete({
                 _type: "voice",
                 audioUrl: data.audioUrl,
-                transcript: data.transcript ?? liveText,
+                transcript: data.transcript ?? liveTextRef.current,
                 summary: data.summary ?? "",
                 duration: durationSecs,
                 recordedAt: new Date().toISOString(),
@@ -203,7 +205,7 @@ export function VoiceRecorder({ noteId, getToken, onComplete, onCancel }: Record
             setError(err.message ?? "Upload failed");
             setPhase("error");
         }
-    }, [noteId, getToken, onComplete, liveText]);
+    }, [noteId, getToken, onComplete]);
 
     // ── Draw flat line when idle ──────────────────────────────────────────────
     useEffect(() => {
