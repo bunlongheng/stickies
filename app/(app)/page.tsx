@@ -1034,6 +1034,7 @@ export default function NotesMaster() {
     const [codeEditMode, setCodeEditMode] = useState(false);
     const [typeFilter, setTypeFilter] = useState<string | null>(null);
     const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
+    const [voiceAutoStart, setVoiceAutoStart] = useState(false);
     const [showNoteTypePicker, setShowNoteTypePicker] = useState(false);
     const [editMode, setEditMode] = useState(false);
     const [showAddMenu, setShowAddMenu] = useState(false);
@@ -5693,7 +5694,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     setImages([]);
                                     setTargetFolder(activeFolder || "General");
                                     setNoteColor(pickUniqueColor());
-                                    setShowVoiceRecorder(true);
+                                                    setVoiceAutoStart(true);
+                                        setShowVoiceRecorder(true);
                                 }}
                                 className="flex flex-col items-center gap-3 group"
                             >
@@ -5718,9 +5720,11 @@ const fireIntegrations = (trigger: string, note: any) => {
                         if (!title.trim()) setTitle("Voice Note");
                         setContent(json);
                         setShowVoiceRecorder(false);
+                        setVoiceAutoStart(false);
                         // autosave fires after 2s via useEffect → isDraftDirty
                     }}
-                    onCancel={() => setShowVoiceRecorder(false)}
+                    autoStart={voiceAutoStart}
+                    onCancel={() => { setShowVoiceRecorder(false); setVoiceAutoStart(false); }}
                 />
             )}
 

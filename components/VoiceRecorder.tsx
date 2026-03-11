@@ -15,6 +15,7 @@ interface RecorderProps {
     getToken: () => Promise<string>;
     onComplete: (data: VoiceNoteData) => void;
     onCancel: () => void;
+    autoStart?: boolean;
 }
 
 type Phase = "idle" | "recording" | "processing" | "done" | "error";
@@ -25,7 +26,7 @@ function fmt(secs: number): string {
     return `${m}:${s}`;
 }
 
-export function VoiceRecorder({ noteId, getToken, onComplete, onCancel }: RecorderProps) {
+export function VoiceRecorder({ noteId, getToken, onComplete, onCancel, autoStart = false }: RecorderProps) {
     const [phase, setPhase] = useState<Phase>("idle");
     const [elapsed, setElapsed] = useState(0);
     const [status, setStatus] = useState("Tap to record");
@@ -206,6 +207,12 @@ export function VoiceRecorder({ noteId, getToken, onComplete, onCancel }: Record
             setPhase("error");
         }
     }, [noteId, getToken, onComplete]);
+
+    // ── Auto-start on mount ───────────────────────────────────────────────────
+    useEffect(() => {
+        if (autoStart) startRecording();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     // ── Draw flat line when idle ──────────────────────────────────────────────
     useEffect(() => {
