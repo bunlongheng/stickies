@@ -75,10 +75,8 @@ async function main() {
 
     if (error) { console.error("Fetch error:", error.message); process.exit(1); }
 
-    const CODE_TYPES = new Set(["javascript", "typescript", "python", "css", "sql", "bash", "json", "html", "mermaid"]);
-    const codeNotes = notes.filter(n => CODE_TYPES.has(n.type));
-    console.log(`Found ${notes.length} notes → ${codeNotes.length} code notes.`);
-    const notes_filtered = codeNotes;
+    const codeNotes = notes;
+    console.log(`Found ${notes.length} notes.`);
 
     // Init export dir + git repo
     mkdirSync(EXPORT_DIR, { recursive: true });
@@ -92,7 +90,7 @@ async function main() {
     // Track filenames per folder to handle duplicates
     const seen = new Map();
 
-    for (const note of notes_filtered) {
+    for (const note of codeNotes) {
         const folder = (note.folder_name || "Unsorted").replace(/[/\\]/g, "_");
         const type   = note.type ?? "text";
         const dir    = join(EXPORT_DIR, folder);
@@ -134,17 +132,36 @@ async function main() {
         }
     } catch {}
 
-    // Always replace history with a single fresh commit (latest state only)
-    const date = new Date().toISOString().slice(0, 19).replace("T", " ");
-    execSync("git checkout --orphan latest_tmp", { cwd: EXPORT_DIR });
+    // Calculate delta vs previous commit
     execSync("git add -A", { cwd: EXPORT_DIR });
-    execSync(`git commit -m "latest ${date}"`, { cwd: EXPORT_DIR });
-    try { execSync("git branch -D main", { cwd: EXPORT_DIR }); } catch {}
-    execSync("git branch -m main", { cwd: EXPORT_DIR });
+    const diffStat = execSync("git diff --cached --stat", { cwd: EXPORT_DIR }).toString().trim();
+    const porcelain = execSync("git diff --cached --name-status", { cwd: EXPORT_DIR }).toString().trim();
 
-    // Push to stickies-air (force — single commit always)
-    execSync("git push -u origin main --force", { cwd: EXPORT_DIR });
-    console.log(`✓ Pushed latest ${codeNotes.length} code notes → ${REMOTE}`);
+    const added    = porcelain.split("\n").filter(l => l.startsWith("A")).length;
+    const modified = porcelain.split("\n").filter(l => l.startsWith("M")).length;
+    const deleted  = porcelain.split("\n").filter(l => l.startsWith("D")).length;
+
+    const date = new Date().toISOString().slice(0, 19).replace("T", " ");
+
+    if (!porcelain) {
+        console.log(`✓ No changes since last export.`);
+    } else {
+        // Replace history with single fresh commit
+        execSync("git checkout --orphan latest_tmp", { cwd: EXPORT_DIR });
+        execSync("git add -A", { cwd: EXPORT_DIR });
+        execSync(`git commit -m "latest ${date} | +${added} ~${modified} -${deleted}"`, { cwd: EXPORT_DIR });
+        try { execSync("git branch -D main", { cwd: EXPORT_DIR }); } catch {}
+        execSync("git branch -m main", { cwd: EXPORT_DIR });
+
+        execSync("git push origin main --force", { cwd: EXPORT_DIR });
+
+        console.log(`\nDelta:`);
+        if (added)    console.log(`  + ${added} added`);
+        if (modified) console.log(`  ~ ${modified} modified`);
+        if (deleted)  console.log(`  - ${deleted} deleted`);
+        console.log(`\n${diffStat}`);
+        console.log(`✓ Pushed → ${REMOTE}`);
+    }
 
     console.log(`\nDone! Your stickies are at:\n  ${EXPORT_DIR}\n`);
 }
