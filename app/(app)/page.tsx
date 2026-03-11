@@ -4916,7 +4916,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 onBlur={() => { setCodeEditMode(false); void saveNote({ silent: false }); }}
                                 onClick={() => setCodeEditMode(true)}
                             />
-                        ) : (
+                        ) : noteType === "rich" ? (
                             <div className="relative flex-1 min-h-0 flex flex-col" style={{ background: "#272822" }}>
                                 <RichTextEditor
                                     key={currentNoteId ?? "new"}
@@ -4939,6 +4939,34 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     editMode={editMode}
                                     onDelete={() => void deleteCurrentNote(editingNote, title)}
                                 />
+                            </div>
+                        ) : (
+                            <div className="relative flex-1">
+                                <textarea
+                                    ref={editorTextRef}
+                                    value={content}
+                                    onChange={(e) => { setContent(e.target.value); handleCursorUpdate(e); }}
+                                    onKeyUp={handleCursorUpdate}
+                                    onClick={(e) => { closeEditorTools(); handleCursorUpdate(e); }}
+                                    onScroll={handleEditorScroll}
+                                    onFocus={(e) => { closeEditorTools(); handleCursorUpdate(e); }}
+                                    onBlur={() => void saveNote({ silent: false })}
+                                    onPaste={handleEditorPaste}
+                                    className="note-textarea ios-editor-scroll relative z-10 w-full h-full bg-black pt-2 px-3 pb-3 outline-none resize-none font-mono leading-5 overflow-x-hidden overscroll-none touch-pan-y"
+                                    style={{ caretColor: activeAccentColor, paddingRight: "80px" }}
+                                    placeholder="START TYPING..."
+                                />
+                                {content && (
+                                    <button
+                                        type="button"
+                                        aria-label="Copy content"
+                                        onClick={() => { secureCopy(content); setCopiedContent(true); setTimeout(() => setCopiedContent(false), 2000); }}
+                                        className="absolute top-2 right-2 z-20 flex items-center justify-center w-7 h-7 rounded-md transition-all"
+                                        style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.12)" }}
+                                    >
+                                        {copiedContent ? <CheckIcon className="w-3.5 h-3.5 text-emerald-400" /> : <ClipboardIcon className="w-3.5 h-3.5 text-zinc-400" />}
+                                    </button>
+                                )}
                             </div>
                         )}
                     </div>
