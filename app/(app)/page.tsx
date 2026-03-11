@@ -215,6 +215,7 @@ const TYPE_BADGE: Record<string, { label: string; color: string }> = {
     mermaid:    { label: "M",    color: "#06b6d4" },
     voice:      { label: "🎙",   color: "#ef4444" },
     checklist:  { label: "✓",   color: "#22c55e" },
+    rich:       { label: "R",    color: "#e879f9" },
 };
 
 /** Client-side fallback type detection — used only when DB type is null (legacy notes) */
@@ -2921,7 +2922,7 @@ const fireIntegrations = (trigger: string, note: any) => {
     const baseMode = !listMode && !graphMode && !mindmapMode && !stackMode;
     const mermaidMode  = baseMode && noteType === "mermaid";
     const markdownMode = baseMode && noteType === "markdown";
-    const htmlMode     = baseMode && noteType === "html";
+    const htmlMode     = baseMode && (noteType === "html" || (!!currentNoteId && htmlModeNotes.has(currentNoteId)));
     const jsonMode     = baseMode && noteType === "json" && !mermaidMode;
     const codeMode     = baseMode && ["javascript","typescript","python","css","sql","bash"].includes(noteType);
     const voiceNote    = baseMode && noteType === "voice"
@@ -2935,7 +2936,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         content.replace(/<[^>]+>/g, "").split("\n").filter((l: string) => l.trim()).length < 12;
 
     // Unified active mode label
-    const noteViewMode = stackMode ? "Stack" : mindmapMode ? "Mindmap" : graphMode ? "Graph" : listMode ? "Checklist" : mermaidMode ? "Mermaid" : voiceNote ? "Voice" : codeMode ? noteType : markdownMode ? "Markdown" : htmlMode ? "HTML" : "Text";
+    const noteViewMode = stackMode ? "Stack" : mindmapMode ? "Mindmap" : graphMode ? "Graph" : listMode ? "Checklist" : mermaidMode ? "Mermaid" : voiceNote ? "Voice" : codeMode ? noteType : markdownMode ? "Markdown" : htmlMode ? "HTML" : noteType === "rich" ? "Rich" : "Text";
     // Rich note = TipTap HTML with embedded assets/headings — hide mode toggle
     const isRichNote = !listMode && !graphMode && !mindmapMode && !stackMode &&
         /(<img[\s>]|data-file-attachment|<h[1-6][\s>]|<pre[\s>]|<blockquote[\s>]|<table[\s>])/i.test(content);
@@ -3008,8 +3009,10 @@ const fireIntegrations = (trigger: string, note: any) => {
         if (!currentNoteId) return;
         setHtmlModeNotes((prev) => {
             const next = new Set(prev);
-            if (next.has(currentNoteId)) next.delete(currentNoteId);
-            else next.add(currentNoteId);
+            const enabling = !next.has(currentNoteId);
+            if (enabling) next.add(currentNoteId);
+            else next.delete(currentNoteId);
+            void notesApi.update(currentNoteId, { type: enabling ? "html" : null });
             return next;
         });
     }, [currentNoteId]);
@@ -4855,11 +4858,38 @@ const fireIntegrations = (trigger: string, note: any) => {
                         ) : htmlMode ? (
                             <div className="flex-1 flex flex-col">
                                 <iframe
-                                    srcDoc={
-                                        /^\s*<!DOCTYPE\s+html/i.test(content) || /^\s*<html[\s>]/i.test(content)
-                                            ? content
-                                            : `<!DOCTYPE html><html><head><meta charset="utf-8"><style>*{box-sizing:border-box}body{background:#000;color:#d1d5db;font-family:system-ui,-apple-system,sans-serif;padding:1.5rem 2rem;margin:0;line-height:1.7;font-size:14px}p{margin:0 0 1em}em,i{color:#a78bfa}strong,b{color:#fff}h1,h2,h3{color:#fff;margin:1em 0 0.5em}a{color:#60a5fa}</style></head><body>${content}</body></html>`
-                                    }
+                                    srcDoc={(() => {
+                                        const scrollbarCss = appTheme === "light"
+                                            ? `::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.18);border-radius:6px}::-webkit-scrollbar-thumb:hover{background:rgba(0,0,0,0.32)}*{scrollbar-width:thin;scrollbar-color:rgba(0,0,0,0.18) transparent}`
+                                            : appTheme === "monokai"
+                                            ? `::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:rgba(253,151,31,0.25);border-radius:6px}::-webkit-scrollbar-thumb:hover{background:rgba(253,151,31,0.45)}*{scrollbar-width:thin;scrollbar-color:rgba(253,151,31,0.25) transparent}`
+                                            : `::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.12);border-radius:6px}::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,0.22)}*{scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.12) transparent}`;
+                                        if (/^\s*<!DOCTYPE\s+html/i.test(content) || /^\s*<html[\s>]/i.test(content)) {
+                                            return content.replace(/(<head[^>]*>)/i, `$1<style>${scrollbarCss}</style>`);
+                                        }
+                                        // Extract bare CSS blocks (outside <style> tags) and bare <script> blocks
+                                        // so CSS renders correctly when content lacks full HTML structure
+                                        let bodyContent = content;
+                                        let extractedCss = '';
+                                        let extractedScripts = '';
+                                        // Move bare <script> tags to end (they may appear before body content)
+                                        extractedScripts = (content.match(/<script[\s\S]*?<\/script>/gi) ?? []).join('\n');
+                                        bodyContent = bodyContent.replace(/<script[\s\S]*?<\/script>/gi, '');
+                                        // Detect bare CSS: lines that look like CSS rules not wrapped in <style>
+                                        // Heuristic: line starts with a CSS selector (*,#,.,[a-z element],@) and ends with }
+                                        // Exclude JS-like lines (new, const, let, var, function, //, =)
+                                        const styleWrapped = bodyContent.includes('<style');
+                                        if (!styleWrapped) {
+                                            const cssLineRegex = /^[ \t]*(?:\*|#[\w-]|\.[\w-]|@[\w]|(?!(?:new|const|let|var|function|if|for|while|return|import|export)\b)[a-z][\w-]*(?:\s*[{,:.>+~]|\s+[.#*[\w]))[^;{}(]*\{[^{}]*\}[ \t]*$/gm;
+                                            const matches = [...bodyContent.matchAll(cssLineRegex)];
+                                            if (matches.length >= 3) { // Only extract if clearly CSS (3+ rules)
+                                                extractedCss = matches.map(m => m[0]).join('\n');
+                                                bodyContent = bodyContent.replace(cssLineRegex, '');
+                                            }
+                                        }
+                                        const baseCss = `*{box-sizing:border-box}body{background:#000;color:#d1d5db;font-family:system-ui,-apple-system,sans-serif;padding:1.5rem 2rem;margin:0;line-height:1.7;font-size:14px}p{margin:0 0 1em}em,i{color:#a78bfa}strong,b{color:#fff}h1,h2,h3{color:#fff;margin:1em 0 0.5em}a{color:#60a5fa}`;
+                                        return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${baseCss}${extractedCss}${scrollbarCss}</style></head><body>${bodyContent}${extractedScripts}</body></html>`;
+                                    })()}
                                     className="flex-1 w-full border-0"
                                     sandbox="allow-scripts"
                                     title="HTML Preview"
@@ -4877,7 +4907,15 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 onClick={() => setCodeEditMode(true)}
                             />
                         ) : jsonMode ? (
-                            <CodeViewer code={jsonDetect.ok ? JSON.stringify(jsonDetect.parsed, null, 2) : content} language="json" editing={false} />
+                            <CodeViewer
+                                code={codeEditMode ? content : (jsonDetect.ok ? JSON.stringify(jsonDetect.parsed, null, 2) : content)}
+                                language="json"
+                                editing={codeEditMode}
+                                wordWrap={!codeEditMode}
+                                onChange={setContent}
+                                onBlur={() => { setCodeEditMode(false); void saveNote({ silent: false }); }}
+                                onClick={() => setCodeEditMode(true)}
+                            />
                         ) : (
                             <div className="relative flex-1 min-h-0 flex flex-col" style={{ background: "#272822" }}>
                                 <RichTextEditor
@@ -4976,7 +5014,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 <button type="button" onClick={() => { setShowCmdK(true); setCmdKQuery(""); setCmdKCursor(0); }}
                                     className={`relative flex items-center transition-all duration-200 text-left ${searchFocused || search.trim() ? "flex-1" : "w-[220px]"} bg-transparent`}>
                                     <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-white/35 w-6 h-6 pointer-events-none" />
-                                    <span className="w-full pl-12 pr-3 py-3 text-sm font-black tracking-tight text-white/30">search</span>
+                                    <span className="w-full pl-12 pr-3 py-3 text-sm font-black tracking-tight text-white/30">SEARCH</span>
                                 </button>
                                 <div className="ml-auto flex items-center gap-1">
                                     <HeaderIconBtn icon={Cog6ToothIcon} label="Settings" onClick={() => { const hueInt = integrationsRef.current.find(ig => ig.type === "hue"); setLightMode((hueInt?.config?.mode as any) ?? "flash"); setShowFolderActions(true); }} />
@@ -5301,14 +5339,14 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                     const nc = (item as any).color || (item as any).folder_color || "#22c55e";
                                                     return (
                                                         <div className="flex-shrink-0 w-[54px] h-[54px] sm:w-[36px] sm:h-[36px] relative overflow-hidden font-black"
-                                                            style={{ backgroundColor: `${nc}22`, border: `1.5px solid ${nc}40` }}>
+                                                            style={{ backgroundColor: appTheme === "light" ? `${nc}40` : `${nc}22`, border: `1.5px solid ${appTheme === "light" ? `${nc}80` : `${nc}40`}` }}>
                                                             <div style={{
                                                                 position: "absolute", bottom: 0, left: 0, right: 0,
                                                                 height: `${total > 0 ? Math.round((checked / total) * 100) : 0}%`,
-                                                                background: `linear-gradient(to top, ${nc}80, ${nc}30)`,
+                                                                background: `linear-gradient(to top, ${nc}${appTheme === "light" ? "cc" : "80"}, ${nc}${appTheme === "light" ? "66" : "30"})`,
                                                                 transition: "height 0.4s ease",
                                                             }} />
-                                                            <div className="absolute inset-0 flex items-center justify-center" style={{ fontSize: total >= 10 ? 10 : 13, color: nc }}>
+                                                            <div className="absolute inset-0 flex items-center justify-center" style={{ fontSize: total >= 10 ? 10 : 13, color: appTheme === "light" ? `${nc}` : nc }}>
                                                                 {total}
                                                             </div>
                                                         </div>
@@ -5320,9 +5358,9 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                     <div className="flex-shrink-0 w-[54px] h-[54px] sm:w-[36px] sm:h-[36px] flex items-center justify-center font-black overflow-hidden"
                                                         style={{
                                                             fontSize: fs,
-                                                            backgroundColor: `${color}30`,
+                                                            backgroundColor: appTheme === "light" ? `${color}45` : `${color}30`,
                                                             color,
-                                                            border: `1.5px solid ${color}40`,
+                                                            border: `1.5px solid ${appTheme === "light" ? `${color}80` : `${color}40`}`,
                                                         }}>
                                                         {label}
                                                     </div>
@@ -5351,8 +5389,9 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                             return <div className="hidden sm:flex items-center gap-1.5 mt-0.5 overflow-hidden">
                                                                 {undone.slice(0, 3).map((l: string, i: number) => {
                                                                     const text = l.trim().replace(/^\[ \]\s*/i, "").replace(/^[-*]\s*/, "").trim();
+                                                                    const isLight = appTheme === "light";
                                                                     return <span key={i} className="text-[11px] font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0"
-                                                                        style={{ background: nc ? `${nc}20` : "rgba(255,255,255,0.08)", color: nc || "#d4d4d8" }}
+                                                                        style={{ background: nc ? `${nc}${isLight ? "30" : "20"}` : (isLight ? "rgba(0,0,0,0.07)" : "rgba(255,255,255,0.08)"), color: nc || (isLight ? "#3a3a3c" : "#d4d4d8"), border: isLight ? `1px solid ${nc ? `${nc}60` : "rgba(0,0,0,0.12)"}` : "none" }}
                                                                     >{text}</span>;
                                                                 })}
                                                                 {remaining > 3 && <span className="text-[10px] text-zinc-600 flex-shrink-0">+{remaining - 3}</span>}
@@ -5373,8 +5412,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 const checked = lines.filter((l: string) => /^\[x\]/i.test(l.trim())).length;
                                                 return <div className="flex flex-col items-end flex-shrink-0 gap-0.5">
                                                     {isChecklist && lines.length > 0 && (
-                                                        <span className="text-[13px] font-black tabular-nums" style={{ textShadow: checked > 0 ? "0 0 8px rgba(34,197,94,0.7)" : "none" }}>
-                                                            <span style={{ color: "#22c55e" }}>{checked}</span>
+                                                        <span className="text-[13px] font-black tabular-nums">
+                                                            <span style={{ color: "#22c55e", textShadow: checked > 0 ? "0 0 8px rgba(34,197,94,0.7)" : "none" }}>{checked}</span>
                                                             <span style={{ color: "#3f3f46" }}>/{lines.length}</span>
                                                         </span>
                                                     )}
@@ -6397,6 +6436,19 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         </button>
                                     </div>
                                 </div>
+                                {/* THEME */}
+                                <div className="px-6 py-3 border-b border-white/[0.06]">
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-2">Theme</p>
+                                    <div className="flex gap-1.5">
+                                        {(["dark", "monokai", "light"] as const).map((t) => (
+                                            <button key={t} type="button"
+                                                onClick={() => setAppTheme(t)}
+                                                className={`flex-1 py-2 rounded text-[10px] font-black uppercase tracking-wide transition ${appTheme === t ? "bg-white text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"}`}>
+                                                {t === "dark" ? "Dark" : t === "light" ? "Light" : "Monokai"}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
                                 <button type="button" className="w-full flex items-center gap-4 px-6 py-4 text-left text-zinc-300 hover:bg-white/5 hover:text-white active:bg-white/10 transition"
                                     onClick={() => { setIntegrationsSnapshot([...integrationsRef.current]); setShowIntegrationsPanel(true); }}>
                                     <PuzzlePieceIcon className="w-5 h-5 flex-shrink-0" />
@@ -6442,7 +6494,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 autoFocus
                                 value={cmdKQuery}
                                 onChange={(e) => { setCmdKQuery(e.target.value); setCmdKCursor(0); }}
-                                placeholder="Search notes…"
+                                placeholder="SEARCH NOTES…"
                                 className="flex-1 bg-transparent text-sm text-white outline-none placeholder-zinc-600 font-medium"
                             />
                             <kbd className="text-[10px] text-zinc-600 border border-zinc-700 px-1.5 py-0.5 font-mono">esc</kbd>
@@ -6562,7 +6614,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 autoFocus
                                 value={cmdBQuery}
                                 onChange={(e) => { setCmdBQuery(e.target.value); setCmdBCursor(0); }}
-                                placeholder="Search bookmarks…"
+                                placeholder="SEARCH BOOKMARKS…"
                                 className="flex-1 bg-transparent text-sm text-white outline-none placeholder-zinc-600 font-medium"
                             />
                             <kbd className="text-[10px] text-zinc-600 border border-zinc-700 px-1.5 py-0.5 font-mono">esc</kbd>
