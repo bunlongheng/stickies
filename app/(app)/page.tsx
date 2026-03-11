@@ -532,8 +532,16 @@ function VoiceNotePlayer({ data, onTranscriptChange, onConvertToText }: {
     const toggle = () => {
         const a = audioRef.current;
         if (!a) return;
-        if (playing) { a.pause(); setPlaying(false); stopAnalyser(); }
-        else { void a.play().then(() => { setPlaying(true); startAnalyser(); }); }
+        if (playing) {
+            a.pause();
+            setPlaying(false);
+            stopAnalyser();
+        } else {
+            void a.play().then(() => {
+                setPlaying(true);
+                try { startAnalyser(); } catch {}
+            }).catch(() => setPlaying(false));
+        }
     };
 
     return (
