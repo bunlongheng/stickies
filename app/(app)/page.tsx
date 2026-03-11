@@ -5883,10 +5883,10 @@ const fireIntegrations = (trigger: string, note: any) => {
                     <div className="flex flex-col items-center gap-6 px-6" onClick={(e) => e.stopPropagation()}>
                         <div className="text-[10px] font-black uppercase tracking-[0.25em] text-zinc-500">New Note</div>
                         <div className="flex items-center gap-8">
-                            {/* TYPE ball */}
+                            {/* TYPE ball → rich editor */}
                             <button
                                 type="button"
-                                onClick={() => { setShowNoteTypePicker(false); openNewNote(); }}
+                                onClick={() => { setShowNoteTypePicker(false); openNewNote("rich"); }}
                                 className="flex flex-col items-center gap-3 group"
                             >
                                 <div className="w-28 h-28 rounded-full flex items-center justify-center transition-transform active:scale-95 group-hover:scale-105"
@@ -5896,21 +5896,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     </svg>
                                 </div>
                                 <span className="text-xs font-black uppercase tracking-widest text-white">Type</span>
-                            </button>
-
-                            {/* RICH ball */}
-                            <button
-                                type="button"
-                                onClick={() => { setShowNoteTypePicker(false); openNewNote("rich"); }}
-                                className="flex flex-col items-center gap-3 group"
-                            >
-                                <div className="w-28 h-28 rounded-full flex items-center justify-center transition-transform active:scale-95 group-hover:scale-105"
-                                    style={{ background: "linear-gradient(135deg, #e879f9 0%, #a21caf 100%)", boxShadow: "0 0 40px rgba(232,121,249,0.4), 0 8px 32px rgba(0,0,0,0.5)" }}>
-                                    <svg className="w-12 h-12 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 21h18M3 3h18M3 9h18" />
-                                    </svg>
-                                </div>
-                                <span className="text-xs font-black uppercase tracking-widest" style={{ color: "#e879f9" }}>Rich</span>
                             </button>
 
                             {/* VOICE ball */}
