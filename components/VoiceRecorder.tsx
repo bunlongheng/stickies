@@ -273,7 +273,8 @@ export function VoiceRecorder({ noteId, getToken, onComplete, onCancel, autoStar
                 )}
 
                 {/* Status */}
-                <div className="text-xs text-zinc-500 uppercase tracking-widest min-h-[1rem]">
+                <div className="flex items-center gap-2 text-xs text-zinc-500 uppercase tracking-widest min-h-[1rem]">
+                    {isProcessing && <span className="w-3 h-3 border-2 border-zinc-500 border-t-white rounded-full animate-spin flex-shrink-0" />}
                     {phase === "error" ? error : status}
                 </div>
 
