@@ -4555,6 +4555,20 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 <MicrophoneIcon className="w-6 h-6 sm:w-6 sm:h-6" />
                             </button>
                         )}
+                        {voiceNote && (
+                            <button type="button"
+                                onClick={() => {
+                                    const text = voiceNote.length === 1
+                                        ? (voiceNote[0].transcript || "")
+                                        : voiceNote.map((e, i) => e.transcript ? `[${i + 1}] ${e.transcript}` : "").filter(Boolean).join("\n\n");
+                                    navigator.clipboard.writeText(text || "No transcript yet").catch(() => {});
+                                    showToast("Transcript copied");
+                                }}
+                                className="p-2 sm:p-3 text-zinc-500 hover:text-white transition flex-shrink-0"
+                                title="Copy all transcripts">
+                                <ClipboardIcon className="w-5 h-5" />
+                            </button>
+                        )}
                         <button type="button"
                             onClick={() => { setShowNoteActions(true); closeEditorTools(); }}
                             className="p-2 sm:p-3 text-zinc-300 hover:text-white active:text-white transition flex-shrink-0">
