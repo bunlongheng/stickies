@@ -5721,7 +5721,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                         setContent(json);
                         setShowVoiceRecorder(false);
                         setVoiceAutoStart(false);
-                        // autosave fires after 2s via useEffect → isDraftDirty
+                        setEditorOpen(true);
                     }}
                     autoStart={voiceAutoStart}
                     onCancel={() => { setShowVoiceRecorder(false); setVoiceAutoStart(false); }}
