@@ -2404,7 +2404,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                 isSavingRef.current = false;
             }
         },
-        [isDraftDirty, targetFolder, noteColor, activeFolder, folderStack, editingNote, title, content, folders, dbData],
+        [isDraftDirty, targetFolder, noteColor, activeFolder, folderStack, editingNote, title, content, folders, dbData, pendingNoteType],
     );
 
     const closeEditorTools = useCallback(() => {
