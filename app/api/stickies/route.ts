@@ -506,7 +506,7 @@ export async function DELETE(req: Request) {
 }
 
 // ── Note type detection ──────────────────────────────────────────────────────
-const VALID_TYPES = new Set(["text","markdown","html","json","mermaid","javascript","typescript","python","css","sql","bash","voice"]);
+const VALID_TYPES = new Set(["text","markdown","html","json","mermaid","javascript","typescript","python","css","sql","bash","voice","checklist"]);
 
 export function detectType(content: string, title?: string): string {
     const t = content.trim();
@@ -538,6 +538,8 @@ export function detectType(content: string, title?: string): string {
     }
     // HTML document
     if (/^\s*<!DOCTYPE\s+html/i.test(t) || /^\s*<html[\s>]/i.test(t)) return "html";
+    // Checklist: any line with [ ], [x], [X], or [] pattern
+    if (/^\s*\[[ xX]?\]/m.test(t)) return "checklist";
     // Markdown heuristic
     if (/^#{1,6}\s|^[-*]\s|\*\*|^>\s|^```/m.test(t)) return "markdown";
 
