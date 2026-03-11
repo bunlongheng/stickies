@@ -506,7 +506,7 @@ export async function DELETE(req: Request) {
 }
 
 // ── Note type detection ──────────────────────────────────────────────────────
-const VALID_TYPES = new Set(["text","markdown","html","json","mermaid","javascript","typescript","python","css","sql","bash","voice","checklist","richi"]);
+const VALID_TYPES = new Set(["text","markdown","html","json","mermaid","javascript","typescript","python","css","sql","bash","voice","checklist","rich"]);
 
 export function detectType(content: string, title?: string): string {
     const t = content.trim();
