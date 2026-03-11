@@ -51,7 +51,10 @@ import ViewColumnsIcon from "@heroicons/react/24/outline/ViewColumnsIcon";
 import HeartIcon from "@heroicons/react/24/outline/HeartIcon";
 import HeartSolidIcon from "@heroicons/react/24/solid/HeartIcon";
 import MicrophoneIcon from "@heroicons/react/24/outline/MicrophoneIcon";
+import XMarkIcon from "@heroicons/react/24/outline/XMarkIcon";
 import ArrowTopRightOnSquareIcon from "@heroicons/react/24/outline/ArrowTopRightOnSquareIcon";
+import ComputerDesktopIcon from "@heroicons/react/24/outline/ComputerDesktopIcon";
+import SparklesIcon from "@heroicons/react/24/outline/SparklesIcon";
 import PencilSquareIcon from "@heroicons/react/24/outline/PencilSquareIcon";
 import { marked, Renderer } from "marked";
 
@@ -235,17 +238,49 @@ function detectNoteType(content: string): string {
     return "text";
 }
 
-/** Extract raw mermaid code — strips ```mermaid fences and leading/trailing whitespace */
+/** Extract raw mermaid code — strips ```mermaid fences, YAML frontmatter, and leading/trailing whitespace */
 function extractMermaid(text: string): string {
-    const t = text.trim();
+    let t = text.trim();
     // Strip ```mermaid ... ``` fences
     const fenced = t.match(/^```(?:mermaid)?\s*\n?([\s\S]*?)```\s*$/im);
-    if (fenced) return fenced[1].trim();
+    if (fenced) t = fenced[1].trim();
+    // Strip YAML frontmatter (---\ntitle: ...\n---) and inject title as %% comment
+    const frontmatter = t.match(/^---\s*\n([\s\S]*?)\n---\s*\n([\s\S]*)$/m);
+    if (frontmatter) {
+        const titleMatch = frontmatter[1].match(/^title:\s*(.+)$/m);
+        const body = frontmatter[2].trim();
+        if (titleMatch) {
+            // Insert %% title after the first diagram-type line
+            const lines = body.split("\n");
+            lines.splice(1, 0, `%% ${titleMatch[1].trim()}`);
+            return lines.join("\n");
+        }
+        return body;
+    }
     return t;
 }
 
 function detectMermaid(text: string): boolean {
     return MERMAID_KEYWORDS.test(extractMermaid(text));
+}
+
+/** Strip ```mermaid fences + YAML frontmatter, inject title as %% comment */
+function cleanMermaidContent(text: string): string {
+    let t = text.trim();
+    // Strip ```mermaid ... ``` fences
+    const fenced = t.match(/^```(?:mermaid)?\s*\n?([\s\S]*?)```\s*$/im);
+    if (fenced) t = fenced[1].trim();
+    // Strip YAML frontmatter
+    const frontmatter = t.match(/^---\s*\n([\s\S]*?)\n---\s*\n([\s\S]*)$/m);
+    if (!frontmatter) return t;
+    const titleMatch = frontmatter[1].match(/^title:\s*(.+)$/m);
+    const body = frontmatter[2].trim();
+    if (titleMatch) {
+        const lines = body.split("\n");
+        lines.splice(1, 0, `%% ${titleMatch[1].trim()}`);
+        return lines.join("\n");
+    }
+    return body;
 }
 
 function mermaidSubType(text: string): string {
@@ -437,9 +472,11 @@ function layoutMindmap(title: string, roots: MindNode[]): { nodes: PlacedNode[];
 }
 
 // ── Voice Note Player ─────────────────────────────────────────────────────────
-function VoiceNotePlayer({ data, onTranscriptChange, onConvertToText }: {
+function VoiceNotePlayer({ data, index, onTranscriptChange, onDelete, onConvertToText }: {
     data: { audioUrl: string; transcript: string; summary: string; duration: number; recordedAt: string };
+    index: number;
     onTranscriptChange?: (t: string) => void;
+    onDelete?: () => void;
     onConvertToText: () => void;
 }) {
     const [playing, setPlaying] = useState(false);
@@ -449,6 +486,13 @@ function VoiceNotePlayer({ data, onTranscriptChange, onConvertToText }: {
     const canvasRef = useRef<HTMLCanvasElement>(null);
 
     const fmt = (s: number) => `${Math.floor(s / 60).toString().padStart(2, "0")}:${Math.floor(s % 60).toString().padStart(2, "0")}`;
+
+    // Karaoke: split transcript into words and highlight proportionally
+    const words = transcript.trim().split(/(\s+)/);
+    const nonSpaceWords = words.filter(w => w.trim().length > 0);
+    const progress = data.duration > 0 ? currentTime / data.duration : 0;
+    const highlightedCount = Math.ceil(progress * nonSpaceWords.length);
+    let wordIdx = 0;
 
     // Seed bars from transcript length for a unique-looking static waveform
     const staticBars = React.useMemo(() => {
@@ -510,19 +554,22 @@ function VoiceNotePlayer({ data, onTranscriptChange, onConvertToText }: {
             a.pause();
             setPlaying(false);
         } else {
-            void a.play().then(() => setPlaying(true)).catch(() => {});
+            a.play().then(() => setPlaying(true)).catch((err) => console.warn("Audio play failed:", err));
         }
     };
 
     return (
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 flex flex-col gap-4">
-            <audio ref={audioRef} src={data.audioUrl}
+        <div className="group flex items-start gap-3 px-4 py-3 border-b border-zinc-800/50">
+            <audio ref={audioRef} src={data.audioUrl} preload="metadata"
                 onTimeUpdate={(e) => setCurrentTime((e.target as HTMLAudioElement).currentTime)}
-                onEnded={() => setPlaying(false)} />
+                onEnded={() => { setPlaying(false); setCurrentTime(0); }}
+                onError={(e) => console.warn("Audio load error:", (e.target as HTMLAudioElement).error)} />
 
-            {/* iMessage-style player */}
-            <div className="flex items-center gap-2 px-3 py-2 rounded-full self-start"
-                style={{ background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.2)" }}>
+            {/* Row number */}
+            <span className="text-[10px] font-black text-zinc-600 w-4 flex-shrink-0 pt-1.5 select-none">{index + 1}</span>
+
+            {/* Play button + bars + duration inline */}
+            <div className="flex items-center gap-1.5 flex-shrink-0 mt-0.5">
                 <button onClick={toggle}
                     className="w-7 h-7 flex-shrink-0 rounded-full flex items-center justify-center bg-red-500 hover:bg-red-400 transition"
                     style={{ boxShadow: "0 0 8px rgba(239,68,68,0.4)" }}>
@@ -530,41 +577,62 @@ function VoiceNotePlayer({ data, onTranscriptChange, onConvertToText }: {
                         ? <span className="flex gap-[2px]"><span className="w-[2px] h-2.5 bg-white rounded-full" /><span className="w-[2px] h-2.5 bg-white rounded-full" /></span>
                         : <span className="w-0 h-0 border-t-[5px] border-b-[5px] border-l-[9px] border-t-transparent border-b-transparent border-l-white ml-0.5" />}
                 </button>
-
-                {/* Frequency bars */}
-                <canvas ref={canvasRef} width={240} height={48} style={{ background: "transparent", width: 120, height: 24 }} />
-
-                <span className="text-[10px] font-mono text-zinc-500 flex-shrink-0">{fmt(data.duration)}</span>
+                <canvas ref={canvasRef} width={240} height={48} style={{ background: "transparent", width: 60, height: 18 }} />
+                <span className="text-[9px] font-mono text-zinc-600 flex-shrink-0">{fmt(currentTime > 0 ? currentTime : data.duration)}</span>
             </div>
 
-            {/* Transcript — editable, always shown */}
-            <div className="flex flex-col gap-1">
-                <div className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Transcript</div>
-                <textarea
-                    value={transcript}
-                    onChange={(e) => {
-                        setTranscript(e.target.value);
-                        onTranscriptChange?.(e.target.value);
-                    }}
-                    placeholder="No transcript yet…"
-                    className="w-full bg-transparent text-sm text-zinc-300 leading-relaxed resize-none outline-none border-none placeholder:text-zinc-700"
-                    rows={Math.max(3, transcript.split("\n").length)}
-                    style={{ fontFamily: "inherit" }}
-                />
-            </div>
-
-            {/* Summary */}
-            {data.summary && (
-                <div className="p-3 border-l-2 border-red-500/40">
-                    <div className="text-[9px] font-black uppercase tracking-widest text-red-500/60 mb-1">Summary</div>
-                    <p className="text-sm text-zinc-400 leading-relaxed">{data.summary}</p>
+            {/* Transcript + meta */}
+            <div className="flex-1 flex flex-col gap-0.5 min-w-0">
+                <div className="flex items-start gap-2">
+                    {playing && transcript ? (
+                        <p className="flex-1 text-xs leading-relaxed" style={{ fontFamily: "inherit" }}>
+                            {words.map((chunk, i) => {
+                                if (!chunk.trim()) return <span key={i}>{chunk}</span>;
+                                const isHighlighted = wordIdx < highlightedCount;
+                                const isCurrent = wordIdx === highlightedCount - 1;
+                                wordIdx++;
+                                return (
+                                    <span key={i} style={{
+                                        color: isHighlighted ? "#ffffff" : "#52525b",
+                                        background: isCurrent ? "rgba(239,68,68,0.25)" : "transparent",
+                                        borderRadius: 2,
+                                        transition: "color 0.1s, background 0.1s",
+                                        padding: isCurrent ? "0 1px" : undefined,
+                                    }}>{chunk}</span>
+                                );
+                            })}
+                        </p>
+                    ) : (
+                        <textarea
+                            value={transcript}
+                            onChange={(e) => {
+                                setTranscript(e.target.value);
+                                onTranscriptChange?.(e.target.value);
+                            }}
+                            placeholder="No transcript…"
+                            className="flex-1 bg-transparent text-xs text-zinc-300 leading-relaxed resize-none outline-none border-none placeholder:text-zinc-700"
+                            rows={Math.max(2, transcript.split("\n").length)}
+                            style={{ fontFamily: "inherit" }}
+                        />
+                    )}
+                    {data.recordedAt && (
+                        <span className="text-[9px] text-zinc-700 font-mono flex-shrink-0 pt-0.5">
+                            {new Date(data.recordedAt).toLocaleString()}
+                        </span>
+                    )}
                 </div>
-            )}
+                {data.summary && (
+                    <p className="text-[10px] text-zinc-600 leading-snug italic">{data.summary}</p>
+                )}
+            </div>
 
-            {data.recordedAt && (
-                <span className="text-[10px] text-zinc-700 font-mono">
-                    {new Date(data.recordedAt).toLocaleString()}
-                </span>
+            {/* Delete */}
+            {onDelete && (
+                <button onClick={onDelete}
+                    className="opacity-0 group-hover:opacity-100 transition flex-shrink-0 mt-1.5 text-zinc-700 hover:text-red-500"
+                    title="Delete recording">
+                    <XMarkIcon className="w-4 h-4" />
+                </button>
             )}
         </div>
     );
@@ -967,6 +1035,7 @@ export default function NotesMaster() {
     const [search, setSearch] = useState("");
     const [toast, setToast] = useState("");
     const [toastColor, setToastColor] = useState("#34C759");
+    const [toastConfetti, setToastConfetti] = useState(false);
     const [undoDeleteTask, setUndoDeleteTask] = useState<{ text: string; lineIdx: number } | null>(null);
     useEffect(() => { if (!undoDeleteTask) return; const t = setTimeout(() => setUndoDeleteTask(null), 5000); return () => clearTimeout(t); }, [undoDeleteTask]);
     const [flashColor, setFlashColor] = useState("#ffffff");
@@ -1092,6 +1161,7 @@ export default function NotesMaster() {
     const [mermaidShowCode, setMermaidShowCode] = useState(false);
     const [codeEditMode, setCodeEditMode] = useState(false);
     const [typeFilter, setTypeFilter] = useState<string | null>(null);
+    const [pendingNoteType, setPendingNoteType] = useState<string | null>(null);
     const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
     const [voiceAutoStart, setVoiceAutoStart] = useState(false);
     const [showNoteTypePicker, setShowNoteTypePicker] = useState(false);
@@ -1722,6 +1792,21 @@ const fireIntegrations = (trigger: string, note: any) => {
         }
     }, [editingNote?.id]);
 
+    // Auto-clean mermaid frontmatter when a mermaid note opens
+    useEffect(() => {
+        if (!editingNote?.id) return;
+        if (editingNote.type !== "mermaid" && !detectMermaid(editingNote.content || "")) return;
+        const raw = editingNote.content || "";
+        if (!/---/.test(raw)) return;
+        const cleaned = cleanMermaidContent(raw);
+        if (cleaned === raw) return;
+        setContent(cleaned);
+        showToast("Cleaned ✦", "#06b6d4", true);
+        // Save directly with the cleaned value (avoids stale closure on saveNote)
+        void notesApi.update(String(editingNote.id), { content: cleaned });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [editingNote?.id]);
+
     useEffect(() => {
         if (!pendingRestoreNoteId || !isDataLoaded) return;
         const note = dbData.find((n) => !n.is_folder && String(n.id) === String(pendingRestoreNoteId));
@@ -1729,7 +1814,7 @@ const fireIntegrations = (trigger: string, note: any) => {
             setActiveFolder(note.folder_name || null);
             setEditingNote(note);
             setTitle(note.title || "");
-            setContent(note.content || "");
+            setContent((note.type === "mermaid" || detectMermaid(note.content || "")) ? cleanMermaidContent(note.content || "") : (note.content || ""));
             setImages((note as any).images ?? []);
             setTargetFolder(note.folder_name || "General");
             setNoteColor(note.folder_color || palette12[0]);
@@ -2245,16 +2330,28 @@ const fireIntegrations = (trigger: string, note: any) => {
             if (isSavingRef.current) return true;
             isSavingRef.current = true;
 
+            // Auto-clean mermaid junk (trailing fences, --- blocks) on every save
+            let saveContent = content;
+            const isMermaidNote = (editingNote as any)?.type === "mermaid" || detectMermaid(content);
+            if (isMermaidNote) {
+                const cleaned = cleanMermaidContent(content);
+                if (cleaned !== content) {
+                    saveContent = cleaned;
+                    setContent(cleaned);
+                    showToast("Cleaned ✦", "#06b6d4", true);
+                }
+            }
+
             const folderName = targetFolder || activeFolder || editingNote?.folder_name || "General";
             const activeFolderRow = folderStack.at(-1);
             const folderId = activeFolderRow && !activeFolderRow.id.startsWith("virtual-") ? activeFolderRow.id : null;
             const payload: any = {
                 title: title.trim() || "Untitled",
-                content,
+                content: saveContent,
                 folder_name: folderName,
                 folder_color: noteColor || folders.find((f) => f.name === folderName)?.color || editingNote?.folder_color || palette12[0],
                 is_folder: false,
-                type: (editingNote as any)?.type ?? detectNoteType(content),
+                type: pendingNoteType ?? (editingNote as any)?.type ?? detectNoteType(saveContent),
                 updated_at: new Date().toISOString(),
                 ...(folderId ? { folder_id: folderId } : {}),
             };
@@ -2286,6 +2383,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                 } else {
                     const { note: data } = await notesApi.insert(payload);
                     if (data) {
+                        setPendingNoteType(null);
                         setEditingNote(data);
                         setDbData((prev) => { const seen = new Set<string>(); return prev.map((n) => String(n.id) === optimisticId ? data : n).filter((n) => { const id = String(n.id); if (seen.has(id)) return false; seen.add(id); return true; }); });
                     }
@@ -2419,7 +2517,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         return pool[Math.floor(Math.random() * pool.length)];
     }, [dbData]);
 
-    const openNewNote = useCallback(() => {
+    const openNewNote = useCallback((type?: string) => {
         const isStandup = (activeFolder || "").toLowerCase() === "standup";
         const today = new Date();
         const dateStr = `${today.getMonth() + 1}/${today.getDate()}/${String(today.getFullYear()).slice(-2)}`;
@@ -2427,6 +2525,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         setTitle(isStandup ? dateStr : "");
         setContent("");
         setImages([]);
+        setPendingNoteType(type ?? null);
         setTargetFolder(activeFolder || (editMode ? "Work" : "General"));
         setNoteColor(pickUniqueColor());
         shouldFocusTitleOnOpenRef.current = !isStandup;
@@ -2437,10 +2536,11 @@ const fireIntegrations = (trigger: string, note: any) => {
         playSound("create");
     }, [activeFolder, editMode, closeEditorTools, pickUniqueColor]);
 
-    const showToast = (msg: string, color = "#34C759") => {
+    const showToast = (msg: string, color = "#34C759", confetti = false) => {
         setToastColor(color);
         setToast(msg);
-        setTimeout(() => setToast(""), 3000);
+        setToastConfetti(confetti);
+        setTimeout(() => { setToast(""); setToastConfetti(false); }, 3000);
         playSound(color === "#FF3B30" ? "toast-error" : "toast");
     };
 
@@ -2950,7 +3050,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         }
         setEditingNote(note);
         setTitle(note.title);
-        setContent(note.content);
+        setContent((note.type === "mermaid" || detectMermaid(note.content || "")) ? cleanMermaidContent(note.content || "") : (note.content || ""));
         setImages((note as any).images ?? []);
         setTargetFolder(note.folder_name || activeFolder || "General");
         setNoteColor(note.folder_color || folders.find((f: any) => f.name === (note.folder_name || activeFolder))?.color || palette12[0]);
@@ -2977,7 +3077,7 @@ const fireIntegrations = (trigger: string, note: any) => {
 
     // ── Type resolution: DB `type` is source of truth; fall back to client detection ──
     const dbType: string | null = (editingNote as any)?.type ?? null;
-    const noteType: string = dbType ?? detectNoteType(content);
+    const noteType: string = dbType ?? pendingNoteType ?? detectNoteType(content);
 
     // Derived booleans — clean, no detection chains
     const baseMode = !listMode && !graphMode && !mindmapMode && !stackMode;
@@ -4328,6 +4428,15 @@ const fireIntegrations = (trigger: string, note: any) => {
                         transform: translateX(-50%) translateY(-8px) scale(0.78);
                     }
                 }
+                @keyframes confettiShoot {
+                    0%   { transform: translate(0, 0) scale(0); opacity: 1; }
+                    60%  { transform: translate(var(--cx), var(--cy)) scale(1); opacity: 1; }
+                    100% { transform: translate(var(--cx), var(--cy)) scale(0); opacity: 0; }
+                }
+                @keyframes toastSpin {
+                    from { transform: rotate(0deg); }
+                    to   { transform: rotate(360deg); }
+                }
                 @keyframes emptyQuotePulse {
                     0% {
                         opacity: 0;
@@ -4432,22 +4541,47 @@ const fireIntegrations = (trigger: string, note: any) => {
                 ))}
             </div>
 
-            {toast && (
-                <div
-                    className="fixed left-1/2 -translate-x-1/2 z-[100002] pointer-events-none"
-                    style={{
-                        top: "calc(env(safe-area-inset-top, 0px) + 6px)",
-                        animation: "islandToastInOut 3s cubic-bezier(0.16, 1, 0.3, 1) forwards",
-                    }}>
-                    <div className="inline-flex items-center px-2 py-1 rounded-full text-white" style={{
-                        background: toastColor,
-                        border: `1px solid ${toastColor}99`,
-                        boxShadow: `0 8px 26px ${toastColor}66`,
-                    }}>
-                        <span className="font-black uppercase tracking-wide text-[7px] sm:text-[8px] leading-none whitespace-nowrap">{toast}</span>
-                    </div>
-                </div>
-            )}
+            {toast && (() => {
+                const isError = toastColor === "#ef4444" || toastColor === "#FF3B30";
+                const cx = typeof window !== "undefined" ? window.innerWidth / 2 : 200;
+                const cy = 28;
+                return (
+                    <>
+                        {/* Confetti — only when explicitly requested */}
+                        {toastConfetti && Array.from({ length: 18 }).map((_, i) => {
+                            const angle = (i / 18) * 360;
+                            const dist = 44 + (i % 5) * 14;
+                            const size = 4 + (i % 4);
+                            const tx = Math.round(cx + Math.cos(angle * Math.PI / 180) * dist);
+                            const ty = Math.round(cy + Math.sin(angle * Math.PI / 180) * dist);
+                            const cols = [toastColor, "#ffffff", "#FFD700", "#a78bfa", "#34d399", "#f472b6"];
+                            return (
+                                <div key={i} className="fixed z-[100003] pointer-events-none rounded-sm"
+                                    style={{
+                                        width: size, height: size,
+                                        left: cx, top: cy,
+                                        background: cols[i % cols.length],
+                                        animation: `confettiShoot 1.2s cubic-bezier(0.2,1,0.3,1) ${i * 45}ms both`,
+                                        ["--cx" as any]: `${tx - cx}px`,
+                                        ["--cy" as any]: `${ty - cy}px`,
+                                    }} />
+                            );
+                        })}
+                        {/* Toast pill */}
+                        <div className="fixed left-1/2 -translate-x-1/2 z-[100002] pointer-events-none"
+                            style={{ top: "calc(env(safe-area-inset-top, 0px) + 6px)", animation: "islandToastInOut 3s cubic-bezier(0.16, 1, 0.3, 1) forwards" }}>
+                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-white" style={{
+                                background: toastColor,
+                                border: `1px solid ${toastColor}99`,
+                                boxShadow: `0 8px 26px ${toastColor}66`,
+                            }}>
+                                <span style={{ width: 10, height: 10, borderRadius: "50%", border: "1.5px solid rgba(255,255,255,0.35)", borderTopColor: "#fff", display: "inline-block", flexShrink: 0, animation: "toastSpin 0.7s linear infinite" }} />
+                                <span className="font-black uppercase tracking-wide text-[7px] sm:text-[8px] leading-none whitespace-nowrap">{toast}</span>
+                            </div>
+                        </div>
+                    </>
+                );
+            })()}
             {undoDeleteTask && (
                 <div className="fixed left-1/2 -translate-x-1/2 z-[100003] flex items-center gap-2 px-3 py-1.5 rounded-full bg-zinc-800 border border-white/20 shadow-xl"
                     style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 80px)" }}>
@@ -4512,7 +4646,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     <button type="button"
                                         onClick={() => { goToIndex(i); void backToRootFromEditor(); }}
                                         className="flex items-center gap-1 font-black tracking-tight text-zinc-400 hover:text-white transition flex-shrink-0 text-xs px-0.5">
-                                        <span className="w-6 h-6 flex-shrink-0 flex items-center justify-center text-sm font-black text-white leading-none overflow-hidden" style={{ backgroundColor: frame.name === "CLAUDE" ? "#fff" : frame.color, boxShadow: frame.name === "CLAUDE" ? "inset 0 0 0 1px rgba(255,255,255,0.85)" : undefined }}>
+                                        <span className="w-6 h-6 flex-shrink-0 flex items-center justify-center text-sm font-black text-white leading-none overflow-hidden" style={{ backgroundColor: frame.name === "CLAUDE" ? "#fff" : (folderColors[frame.name] || frame.color), boxShadow: frame.name === "CLAUDE" ? "inset 0 0 0 1px rgba(255,255,255,0.85)" : undefined }}>
                                             {frame.name === "CLAUDE" ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-0.5" /> : (folderIcons[frame.name] || (frame.name || "F").charAt(0).toUpperCase())}
                                         </span>
                                         {frame.name}
@@ -4546,28 +4680,32 @@ const fireIntegrations = (trigger: string, note: any) => {
                         )}
                         <input ref={titleInputRef} value={title} onChange={(e) => setTitle(e.target.value)} onFocus={() => { closeEditorTools(); setShowNoteActions(false); }} autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false} className="sm:hidden bg-transparent border-0 appearance-none shadow-none ring-0 outline-none focus:outline-none focus:ring-0 px-2 flex-grow min-w-0 text-sm text-white placeholder:text-zinc-500" style={{ caretColor: activeAccentColor, border: "none" }} placeholder="NOTE TITLE" />
 
-                        {(noteType === "text" || noteType === "voice" || !noteType) && (
-                            <button type="button"
-                                onClick={() => { setShowVoiceRecorder(true); setShowNoteActions(false); closeEditorTools(); }}
-                                className="p-2 sm:p-3 transition flex-shrink-0"
-                                style={voiceNote ? { color: "#ef4444" } : { color: "#71717a" }}
-                                title="Voice note">
-                                <MicrophoneIcon className="w-6 h-6 sm:w-6 sm:h-6" />
-                            </button>
-                        )}
-                        {voiceNote && (
-                            <button type="button"
-                                onClick={() => {
-                                    const text = voiceNote.length === 1
-                                        ? (voiceNote[0].transcript || "")
-                                        : voiceNote.map((e, i) => e.transcript ? `[${i + 1}] ${e.transcript}` : "").filter(Boolean).join("\n\n");
-                                    navigator.clipboard.writeText(text || "No transcript yet").catch(() => {});
-                                    showToast("Transcript copied");
-                                }}
-                                className="p-2 sm:p-3 text-zinc-500 hover:text-white transition flex-shrink-0"
-                                title="Copy all transcripts">
-                                <ClipboardIcon className="w-5 h-5" />
-                            </button>
+                        {mermaidMode && (
+                            <div className="flex items-center gap-1 flex-shrink-0">
+                                <span className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-full" style={{ background: "rgba(6,182,212,0.15)", color: "#06b6d4", border: "1px solid rgba(6,182,212,0.3)" }}>
+                                    {mermaidSubType(content)}
+                                </span>
+                                <button type="button"
+                                    onClick={() => {
+                                        const encoded = LZString.compressToEncodedURIComponent(extractMermaid(content));
+                                        const h = window.location.hostname;
+                                        const localHost = (h === "localhost" || h.startsWith("10.") || h.startsWith("192.168.")) ? h : "localhost";
+                                        window.open(`http://${localHost}:3002/?data=${encoded}`, "_blank");
+                                    }}
+                                    className="p-2 sm:p-3 text-zinc-400 hover:text-cyan-400 active:text-cyan-400 transition flex-shrink-0"
+                                    title="Open in local Mermaid editor">
+                                    <ComputerDesktopIcon className="w-[29px] h-[29px] sm:w-7 sm:h-7" />
+                                </button>
+                                <button type="button"
+                                    onClick={() => {
+                                        const encoded = LZString.compressToEncodedURIComponent(extractMermaid(content));
+                                        window.open(`https://mermaid-bheng.vercel.app/?data=${encoded}`, "_blank");
+                                    }}
+                                    className="p-2 sm:p-3 text-zinc-400 hover:text-purple-400 active:text-purple-400 transition flex-shrink-0"
+                                    title="Open in prod Mermaid editor">
+                                    <SparklesIcon className="w-[29px] h-[29px] sm:w-7 sm:h-7" />
+                                </button>
+                            </div>
                         )}
                         <button type="button"
                             onClick={() => { setShowNoteActions(true); closeEditorTools(); }}
@@ -4577,46 +4715,18 @@ const fireIntegrations = (trigger: string, note: any) => {
                     </div>
                     <div className="relative flex-1 flex overflow-hidden bg-black font-mono">
                         {/* ── Unified pill bar — always visible top-right ── */}
-                        {!showNoteActions && (
-                        <div className="absolute top-3 right-3 z-[2147483647] flex gap-2 items-center pointer-events-auto">
-                            {!listMode && !graphMode && !mindmapMode && !stackMode && (
-                                <button type="button"
-                                    onClick={() => {
-                                        let toCopy = content;
-                                        if (jsonMode) toCopy = JSON.stringify(jsonDetect.parsed, null, 2);
-                                        else toCopy = content.replace(/<[^>]+>/g, "");
-                                        void secureCopy(toCopy).then(() => showToast("Copied!"));
-                                    }}
-                                    className="h-7 w-7 flex items-center justify-center bg-zinc-800/90 border border-white/10 text-zinc-400 hover:text-white hover:bg-zinc-700/90 transition backdrop-blur-sm">
-                                    <ClipboardIcon className="w-3.5 h-3.5" />
-                                </button>
-                            )}
-                            {mermaidMode && (
-                                <>
-                                <div className="flex items-center overflow-hidden shadow-lg" style={{ background: "#0a0a0a", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 0 }}>
-                                    <button
-                                        onClick={() => setMermaidShowCode(false)}
-                                        className="relative h-8 px-4 text-[10px] font-black uppercase tracking-widest transition-all"
-                                        style={!mermaidShowCode ? { background: "#22c55e", color: "#000", boxShadow: "0 0 12px rgba(34,197,94,0.5)" } : { background: "transparent", color: "#52525b" }}
-                                    >Render</button>
-                                    <div className="w-px h-5 bg-white/8 flex-shrink-0" />
-                                    <button
-                                        onClick={() => setMermaidShowCode(true)}
-                                        className="relative h-8 px-4 text-[10px] font-black uppercase tracking-widest transition-all"
-                                        style={mermaidShowCode ? { background: "#22c55e", color: "#000", boxShadow: "0 0 12px rgba(34,197,94,0.5)" } : { background: "transparent", color: "#52525b" }}
-                                    >Code</button>
-                                </div>
-                                <button
-                                    onClick={() => {
-                                        const encoded = LZString.compressToEncodedURIComponent(extractMermaid(content));
-                                        window.open(`https://mermaid-bheng.vercel.app/?data=${encoded}`, "_blank");
-                                    }}
-                                    className="h-8 px-3 text-[10px] font-black uppercase tracking-widest transition-all flex items-center"
-                                    style={{ background: "#8b5cf6", color: "#fff", boxShadow: "0 0 12px rgba(139,92,246,0.4)" }}
-                                    title="Open in Mermaid editor"
-                                >✦ Magic</button>
-                                </>
-                            )}
+                        {!showNoteActions && content.trim() && !listMode && !graphMode && !mindmapMode && !stackMode && !voiceNote && (
+                        <div className="absolute top-3 right-3 z-[2147483647] pointer-events-auto">
+                            <button type="button"
+                                onClick={() => {
+                                    let toCopy = content;
+                                    if (jsonMode) toCopy = JSON.stringify(jsonDetect.parsed, null, 2);
+                                    else toCopy = content.replace(/<[^>]+>/g, "");
+                                    void secureCopy(toCopy).then(() => showToast("Copied!"));
+                                }}
+                                className="h-7 w-7 flex items-center justify-center bg-zinc-800/90 border border-white/10 text-zinc-400 hover:text-white hover:bg-zinc-700/90 transition backdrop-blur-sm">
+                                <ClipboardIcon className="w-3.5 h-3.5" />
+                            </button>
                         </div>
                         )}
                         {mindmapMode ? (
@@ -4928,7 +5038,14 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 )}
                             </div>
                         ) : mermaidMode ? (
-                            <MermaidRenderer code={extractMermaid(content)} onChange={(c) => setContent(c)} showCode={mermaidShowCode} theme={appTheme === "light" ? "light" : appTheme === "monokai" ? "monokai" : "dark"} />
+                            <CodeViewer
+                                code={content}
+                                language="mermaid"
+                                editing={codeEditMode}
+                                onChange={setContent}
+                                onBlur={() => { setCodeEditMode(false); void saveNote({ silent: false }); }}
+                                onClick={() => setCodeEditMode(true)}
+                            />
                         ) : markdownMode ? (
                             <MarkdownWithMermaid content={content} theme={appTheme === "light" ? "light" : appTheme === "monokai" ? "monokai" : "dark"} />
                         ) : htmlMode ? (
@@ -4975,25 +5092,27 @@ const fireIntegrations = (trigger: string, note: any) => {
                             <div className="flex-1 overflow-y-auto flex flex-col">
                                 {voiceNote.map((entry, idx) => (
                                     <VoiceNotePlayer
-                                        key={idx}
+                                        key={entry.audioUrl}
+                                        index={idx}
                                         data={entry}
                                         onTranscriptChange={(t) => {
                                             const updated = voiceNote.map((e, i) => i === idx ? { ...e, transcript: t } : e);
                                             setContent(JSON.stringify(updated.length === 1 ? updated[0] : updated));
                                             void saveNote({ silent: true });
                                         }}
+                                        onDelete={() => {
+                                            const updated = voiceNote.filter((_, i) => i !== idx);
+                                            showToast(`Recording #${idx + 1} deleted`, "#ef4444");
+                                            if (updated.length === 0) {
+                                                setContent("");
+                                                setShowNoteTypePicker(true);
+                                            } else {
+                                                setContent(JSON.stringify(updated.length === 1 ? updated[0] : updated));
+                                                void saveNote({ silent: true });
+                                            }
+                                        }}
                                         onConvertToText={() => {}} />
                                 ))}
-                                {/* Add another recording */}
-                                <div className="px-4 pb-4">
-                                    <button
-                                        type="button"
-                                        onClick={() => { setVoiceAutoStart(true); setShowVoiceRecorder(true); }}
-                                        className="flex items-center gap-2 px-4 py-2 text-[10px] font-black uppercase tracking-widest border border-red-900/40 text-red-500/70 hover:text-red-400 hover:border-red-500/60 transition rounded-full">
-                                        <MicrophoneIcon className="w-3.5 h-3.5" />
-                                        Add Recording
-                                    </button>
-                                </div>
                             </div>
                         ) : codeMode ? (
                             <CodeViewer
@@ -5123,7 +5242,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 onClick={() => { goToIndex(i); }}
                                                 className={`flex items-center gap-1.5 font-black tracking-tight truncate max-w-[150px] flex-shrink-0 px-1 transition text-xs ${i === folderStack.length - 1 ? "text-white" : "text-zinc-400 hover:text-white"}`}
                                                 title={frame.name}>
-                                                <span className="flex-shrink-0 w-6 h-6 flex items-center justify-center text-sm font-black text-white leading-none overflow-hidden" style={{ backgroundColor: frame.name === "CLAUDE" ? "#fff" : frame.color, boxShadow: frame.name === "CLAUDE" ? "inset 0 0 0 1px rgba(255,255,255,0.85)" : undefined }}>
+                                                <span className="flex-shrink-0 w-6 h-6 flex items-center justify-center text-sm font-black text-white leading-none overflow-hidden" style={{ backgroundColor: frame.name === "CLAUDE" ? "#fff" : (folderColors[frame.name] || frame.color), boxShadow: frame.name === "CLAUDE" ? "inset 0 0 0 1px rgba(255,255,255,0.85)" : undefined }}>
                                                     {frame.name === "CLAUDE" ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-0.5" /> : (folderIcons[frame.name] || (frame.name || "F").charAt(0).toUpperCase())}
                                                 </span>
                                                 {frame.name}
@@ -5272,7 +5391,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                             onClick={() => {
                                                                 setEditingNote(note);
                                                                 setTitle(note.title || "");
-                                                                setContent(note.content || "");
+                                                                setContent((note.type === "mermaid" || detectMermaid(note.content || "")) ? cleanMermaidContent(note.content || "") : (note.content || ""));
                                                                 setImages((note as any).images ?? []);
                                                                 setTargetFolder(note.folder_name || "General");
                                                                 setNoteColor(note.folder_color || palette12[0]);
@@ -5779,6 +5898,21 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 <span className="text-xs font-black uppercase tracking-widest text-white">Type</span>
                             </button>
 
+                            {/* RICH ball */}
+                            <button
+                                type="button"
+                                onClick={() => { setShowNoteTypePicker(false); openNewNote("rich"); }}
+                                className="flex flex-col items-center gap-3 group"
+                            >
+                                <div className="w-28 h-28 rounded-full flex items-center justify-center transition-transform active:scale-95 group-hover:scale-105"
+                                    style={{ background: "linear-gradient(135deg, #e879f9 0%, #a21caf 100%)", boxShadow: "0 0 40px rgba(232,121,249,0.4), 0 8px 32px rgba(0,0,0,0.5)" }}>
+                                    <svg className="w-12 h-12 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 21h18M3 3h18M3 9h18" />
+                                    </svg>
+                                </div>
+                                <span className="text-xs font-black uppercase tracking-widest" style={{ color: "#e879f9" }}>Rich</span>
+                            </button>
+
                             {/* VOICE ball */}
                             <button
                                 type="button"
@@ -5805,6 +5939,18 @@ const fireIntegrations = (trigger: string, note: any) => {
                         <div className="text-[10px] text-zinc-600 uppercase tracking-widest">or tap outside to cancel</div>
                     </div>
                 </div>
+            )}
+
+            {/* Fixed mic FAB — always bottom-right when note type is voice */}
+            {noteType === "voice" && editorOpen && !showVoiceRecorder && (
+                <button
+                    type="button"
+                    onClick={() => { setVoiceAutoStart(true); setShowVoiceRecorder(true); }}
+                    className="fixed bottom-6 right-6 z-[500] w-12 h-12 rounded-full flex items-center justify-center bg-red-500 hover:bg-red-400 transition"
+                    style={{ boxShadow: "0 0 24px rgba(239,68,68,0.55)" }}
+                    title="Add Recording">
+                    <MicrophoneIcon className="w-5 h-5 text-white" />
+                </button>
             )}
 
             {showVoiceRecorder && (
