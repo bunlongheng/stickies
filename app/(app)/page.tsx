@@ -430,77 +430,166 @@ function layoutMindmap(title: string, roots: MindNode[]): { nodes: PlacedNode[];
 }
 
 // ── Voice Note Player ─────────────────────────────────────────────────────────
-function VoiceNotePlayer({ data, onConvertToText }: {
+function VoiceNotePlayer({ data, onTranscriptChange, onConvertToText }: {
     data: { audioUrl: string; transcript: string; summary: string; duration: number; recordedAt: string };
+    onTranscriptChange?: (t: string) => void;
     onConvertToText: () => void;
 }) {
     const [playing, setPlaying] = useState(false);
     const [currentTime, setCurrentTime] = useState(0);
+    const [transcript, setTranscript] = useState(data.transcript || "");
     const audioRef = useRef<HTMLAudioElement>(null);
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const audioCtxRef = useRef<AudioContext | null>(null);
+    const analyserRef = useRef<AnalyserNode | null>(null);
+    const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
+    const rafRef = useRef<number>(0);
 
     const fmt = (s: number) => `${Math.floor(s / 60).toString().padStart(2, "0")}:${Math.floor(s % 60).toString().padStart(2, "0")}`;
+
+    // Seed bars from transcript length for a unique-looking static waveform
+    const staticBars = React.useMemo(() => {
+        const seed = data.transcript?.length || data.duration * 10 || 42;
+        return Array.from({ length: 40 }, (_, i) => {
+            const x = Math.sin(i * 0.7 + seed * 0.01) * 0.5 + 0.5;
+            return 0.08 + x * 0.75;
+        });
+    }, [data.transcript, data.duration]);
+
+    const drawBars = React.useCallback((progress = 0, analyser?: AnalyserNode) => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+        const W = canvas.width;
+        const H = canvas.height;
+        ctx.clearRect(0, 0, W, H);
+
+        const count = 40;
+        const barW = (W / count) - 2;
+
+        let freqData: Uint8Array | null = null;
+        if (analyser) {
+            freqData = new Uint8Array(analyser.frequencyBinCount);
+            analyser.getByteFrequencyData(freqData);
+        }
+
+        for (let i = 0; i < count; i++) {
+            const played = i / count < progress;
+            let h: number;
+            if (freqData) {
+                const idx = Math.floor((i / count) * (freqData.length * 0.6));
+                h = Math.max(3, (freqData[idx] / 255) * H * 0.95);
+            } else {
+                h = staticBars[i] * H;
+            }
+            const x = i * (W / count);
+            const y = (H - h) / 2;
+            ctx.fillStyle = played ? "#ef4444" : "rgba(255,255,255,0.18)";
+            if (played) { ctx.shadowBlur = 4; ctx.shadowColor = "#ef4444"; }
+            else ctx.shadowBlur = 0;
+            ctx.beginPath();
+            ctx.roundRect(x + 1, y, barW, h, 2);
+            ctx.fill();
+        }
+        ctx.shadowBlur = 0;
+    }, [staticBars]);
+
+    // Draw static bars on mount / when not playing
+    useEffect(() => {
+        drawBars(currentTime / (data.duration || 1));
+    }, [currentTime, data.duration, drawBars]);
+
+    // Live analyser while playing
+    const startAnalyser = React.useCallback(() => {
+        const audio = audioRef.current;
+        if (!audio) return;
+        if (!audioCtxRef.current) {
+            const ctx = new AudioContext();
+            const source = ctx.createMediaElementSource(audio);
+            const analyser = ctx.createAnalyser();
+            analyser.fftSize = 128;
+            source.connect(analyser);
+            analyser.connect(ctx.destination);
+            audioCtxRef.current = ctx;
+            analyserRef.current = analyser;
+            sourceRef.current = source;
+        }
+        const loop = () => {
+            drawBars(currentTime / (data.duration || 1), analyserRef.current!);
+            rafRef.current = requestAnimationFrame(loop);
+        };
+        rafRef.current = requestAnimationFrame(loop);
+    }, [currentTime, data.duration, drawBars]);
+
+    const stopAnalyser = React.useCallback(() => {
+        cancelAnimationFrame(rafRef.current);
+        drawBars(currentTime / (data.duration || 1));
+    }, [currentTime, data.duration, drawBars]);
+
+    useEffect(() => () => { cancelAnimationFrame(rafRef.current); }, []);
 
     const toggle = () => {
         const a = audioRef.current;
         if (!a) return;
-        if (playing) { a.pause(); setPlaying(false); }
-        else { void a.play(); setPlaying(true); }
+        if (playing) { a.pause(); setPlaying(false); stopAnalyser(); }
+        else { void a.play().then(() => { setPlaying(true); startAnalyser(); }); }
     };
 
     return (
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 flex flex-col gap-5">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 flex flex-col gap-4">
             <audio ref={audioRef} src={data.audioUrl}
                 onTimeUpdate={(e) => setCurrentTime((e.target as HTMLAudioElement).currentTime)}
-                onEnded={() => setPlaying(false)} />
+                onEnded={() => { setPlaying(false); stopAnalyser(); }} />
 
-            {/* Player card */}
-            <div className="flex items-center gap-4 p-4 bg-zinc-900 border border-red-900/30"
-                style={{ boxShadow: "0 0 24px rgba(239,68,68,0.06)" }}>
+            {/* iMessage-style player */}
+            <div className="flex items-center gap-3 px-4 py-3 rounded-2xl"
+                style={{ background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.25)" }}>
                 <button onClick={toggle}
-                    className="w-12 h-12 flex-shrink-0 flex items-center justify-center bg-red-500 hover:bg-red-400 transition"
-                    style={{ boxShadow: "0 0 16px rgba(239,68,68,0.4)" }}>
+                    className="w-10 h-10 flex-shrink-0 rounded-full flex items-center justify-center bg-red-500 hover:bg-red-400 transition"
+                    style={{ boxShadow: "0 0 12px rgba(239,68,68,0.5)" }}>
                     {playing
-                        ? <span className="flex gap-1"><span className="w-1 h-4 bg-white block" /><span className="w-1 h-4 bg-white block" /></span>
-                        : <span className="w-0 h-0 border-t-[8px] border-b-[8px] border-l-[14px] border-t-transparent border-b-transparent border-l-white ml-1" />}
+                        ? <span className="flex gap-[3px]"><span className="w-[3px] h-3.5 bg-white rounded-full" /><span className="w-[3px] h-3.5 bg-white rounded-full" /></span>
+                        : <span className="w-0 h-0 border-t-[7px] border-b-[7px] border-l-[12px] border-t-transparent border-b-transparent border-l-white ml-0.5" />}
                 </button>
-                <div className="flex-1 min-w-0">
-                    {/* Progress bar */}
-                    <div className="h-1 bg-zinc-800 rounded-full overflow-hidden mb-2">
-                        <div className="h-full bg-red-500 transition-all"
-                            style={{ width: data.duration > 0 ? `${(currentTime / data.duration) * 100}%` : "0%" }} />
-                    </div>
-                    <div className="flex justify-between text-[10px] font-mono text-zinc-500">
-                        <span>{fmt(currentTime)}</span>
-                        <span>{fmt(data.duration)}</span>
-                    </div>
+
+                {/* Frequency bars */}
+                <canvas ref={canvasRef} width={180} height={36} className="flex-1" style={{ background: "transparent" }} />
+
+                <div className="flex flex-col items-end flex-shrink-0 gap-0.5">
+                    <span className="text-[10px] font-mono text-red-400">{fmt(currentTime)}</span>
+                    <span className="text-[9px] font-mono text-zinc-600">{fmt(data.duration)}</span>
                 </div>
-                <div className="text-[10px] font-black text-red-500 uppercase tracking-widest flex-shrink-0 flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-red-500" />VOICE
-                </div>
+            </div>
+
+            {/* Transcript — editable, always shown */}
+            <div className="flex flex-col gap-1">
+                <div className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Transcript</div>
+                <textarea
+                    value={transcript}
+                    onChange={(e) => {
+                        setTranscript(e.target.value);
+                        onTranscriptChange?.(e.target.value);
+                    }}
+                    placeholder="No transcript yet…"
+                    className="w-full bg-transparent text-sm text-zinc-300 leading-relaxed resize-none outline-none border-none placeholder:text-zinc-700"
+                    rows={Math.max(3, transcript.split("\n").length)}
+                    style={{ fontFamily: "inherit" }}
+                />
             </div>
 
             {/* Summary */}
             {data.summary && (
-                <div className="p-4 bg-zinc-900/60 border-l-2 border-red-500/50">
-                    <div className="text-[9px] font-black uppercase tracking-widest text-red-500/70 mb-2">AI Summary</div>
-                    <p className="text-sm text-zinc-300 leading-relaxed">{data.summary}</p>
-                </div>
-            )}
-
-            {/* Transcript */}
-            {data.transcript && (
-                <div className="p-4 bg-zinc-900/40 border border-zinc-800">
-                    <div className="text-[9px] font-black uppercase tracking-widest text-zinc-500 mb-2">Transcript</div>
-                    <p className="text-sm text-zinc-400 leading-relaxed whitespace-pre-wrap">{data.transcript}</p>
+                <div className="p-3 border-l-2 border-red-500/40">
+                    <div className="text-[9px] font-black uppercase tracking-widest text-red-500/60 mb-1">Summary</div>
+                    <p className="text-sm text-zinc-400 leading-relaxed">{data.summary}</p>
                 </div>
             )}
 
             {data.recordedAt && (
-                <div className="pt-2">
-                    <span className="text-[10px] text-zinc-600 font-mono">
-                        {new Date(data.recordedAt).toLocaleString()}
-                    </span>
-                </div>
+                <span className="text-[10px] text-zinc-700 font-mono">
+                    {new Date(data.recordedAt).toLocaleString()}
+                </span>
             )}
         </div>
     );
@@ -4893,11 +4982,14 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 />
                             </div>
                         ) : voiceNote ? (
-                            <VoiceNotePlayer data={voiceNote} onConvertToText={() => {
-                                // Copy transcript to clipboard — never touch the audio
-                                navigator.clipboard.writeText(voiceNote.transcript || "").catch(() => {});
-                                showToast("Transcript copied to clipboard");
-                            }} />
+                            <VoiceNotePlayer
+                                data={voiceNote}
+                                onTranscriptChange={(t) => {
+                                    const updated = JSON.stringify({ ...voiceNote, transcript: t });
+                                    setContent(updated);
+                                    void saveNote({ silent: true });
+                                }}
+                                onConvertToText={() => {}} />
                         ) : codeMode ? (
                             <CodeViewer
                                 code={content}
