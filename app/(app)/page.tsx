@@ -222,8 +222,11 @@ const TYPE_BADGE: Record<string, { label: string; color: string }> = {
 function detectNoteType(content: string): string {
     const t = content.trim();
     if (!t) return "text";
-    if (t.startsWith('{"_type":"voice"')) {
-        try { if (JSON.parse(t)?._type === "voice") return "voice"; } catch {}
+    if (t.startsWith('{"_type":"voice"') || t.startsWith('[{"_type":"voice"')) {
+        try {
+            const p = JSON.parse(t);
+            if (p?._type === "voice" || (Array.isArray(p) && p[0]?._type === "voice")) return "voice";
+        } catch {}
     }
     if (MERMAID_KEYWORDS.test(extractMermaid(t))) return "mermaid";
     if ((t.startsWith("{") || t.startsWith("[")) && detectJson(t).ok) return "json";
@@ -277,10 +280,14 @@ function detectMarkdown(text: string): boolean {
 function previewText(raw: string): string {
     const t = raw.trim();
     // Voice notes: show summary or transcript
-    if (t.startsWith('{"_type":"voice"')) {
+    if (t.startsWith('{"_type":"voice"') || t.startsWith('[{"_type":"voice"')) {
         try {
-            const v = JSON.parse(t);
-            if (v._type === "voice") return v.summary || v.transcript || "🎙 Voice note";
+            const p = JSON.parse(t);
+            const entries = Array.isArray(p) ? p : [p];
+            if (entries[0]?._type === "voice") {
+                const all = entries.map((v: any) => v.transcript || v.summary).filter(Boolean).join(" · ");
+                return all || `🎙 ${entries.length} voice note${entries.length > 1 ? "s" : ""}`;
+            }
         } catch {}
     }
     return raw
@@ -2979,8 +2986,9 @@ const fireIntegrations = (trigger: string, note: any) => {
     const htmlMode     = baseMode && (noteType === "html" || (!!currentNoteId && htmlModeNotes.has(currentNoteId)));
     const jsonMode     = baseMode && noteType === "json" && !mermaidMode;
     const codeMode     = baseMode && ["javascript","typescript","python","css","sql","bash"].includes(noteType);
-    const voiceNote    = baseMode && noteType === "voice"
-        ? (() => { try { return JSON.parse(content) as { _type: "voice"; audioUrl: string; transcript: string; summary: string; duration: number; recordedAt: string }; } catch { return null; } })()
+    type VoiceEntry = { _type: "voice"; audioUrl: string; transcript: string; summary: string; duration: number; recordedAt: string };
+    const voiceNote = baseMode && noteType === "voice"
+        ? (() => { try { const p = JSON.parse(content); return (Array.isArray(p) ? p : [p]) as VoiceEntry[]; } catch { return null; } })()
         : null;
     // jsonDetect kept for JSON syntax highlight fallback
     const jsonDetect = jsonMode ? detectJson(content) : { ok: false, parsed: null };
@@ -4950,14 +4958,29 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 />
                             </div>
                         ) : voiceNote ? (
-                            <VoiceNotePlayer
-                                data={voiceNote}
-                                onTranscriptChange={(t) => {
-                                    const updated = JSON.stringify({ ...voiceNote, transcript: t });
-                                    setContent(updated);
-                                    void saveNote({ silent: true });
-                                }}
-                                onConvertToText={() => {}} />
+                            <div className="flex-1 overflow-y-auto flex flex-col">
+                                {voiceNote.map((entry, idx) => (
+                                    <VoiceNotePlayer
+                                        key={idx}
+                                        data={entry}
+                                        onTranscriptChange={(t) => {
+                                            const updated = voiceNote.map((e, i) => i === idx ? { ...e, transcript: t } : e);
+                                            setContent(JSON.stringify(updated.length === 1 ? updated[0] : updated));
+                                            void saveNote({ silent: true });
+                                        }}
+                                        onConvertToText={() => {}} />
+                                ))}
+                                {/* Add another recording */}
+                                <div className="px-4 pb-4">
+                                    <button
+                                        type="button"
+                                        onClick={() => { setVoiceAutoStart(true); setShowVoiceRecorder(true); }}
+                                        className="flex items-center gap-2 px-4 py-2 text-[10px] font-black uppercase tracking-widest border border-red-900/40 text-red-500/70 hover:text-red-400 hover:border-red-500/60 transition rounded-full">
+                                        <MicrophoneIcon className="w-3.5 h-3.5" />
+                                        Add Recording
+                                    </button>
+                                </div>
+                            </div>
                         ) : codeMode ? (
                             <CodeViewer
                                 code={content}
@@ -5775,9 +5798,18 @@ const fireIntegrations = (trigger: string, note: any) => {
                     noteId={currentNoteId}
                     getToken={getAuthToken}
                     onComplete={(voiceData) => {
-                        const json = JSON.stringify(voiceData);
                         if (!title.trim()) setTitle("Voice Note");
-                        setContent(json);
+                        // Append to existing voice entries if note is already a voice note
+                        setContent(prev => {
+                            try {
+                                const existing = JSON.parse(prev);
+                                const entries = Array.isArray(existing) ? existing : [existing];
+                                if (entries[0]?._type === "voice") {
+                                    return JSON.stringify([...entries, voiceData]);
+                                }
+                            } catch {}
+                            return JSON.stringify(voiceData);
+                        });
                         setShowVoiceRecorder(false);
                         setVoiceAutoStart(false);
                         setEditorOpen(true);
