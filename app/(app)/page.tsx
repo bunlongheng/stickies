@@ -3098,7 +3098,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         content.replace(/<[^>]+>/g, "").split("\n").filter((l: string) => l.trim()).length < 12;
 
     // Unified active mode label
-    const noteViewMode = stackMode ? "Stack" : mindmapMode ? "Mindmap" : graphMode ? "Graph" : listMode ? "Checklist" : mermaidMode ? "Mermaid" : voiceNote ? "Voice" : codeMode ? noteType : markdownMode ? "Markdown" : htmlMode ? "HTML" : noteType === "rich" ? "Rich" : "Text";
+    const noteViewMode = stackMode ? "Stack" : mindmapMode ? "Mindmap" : graphMode ? "Graph" : listMode ? "Checklist" : mermaidMode ? "Mermaid" : voiceNote ? "Voice" : codeMode ? noteType : markdownMode ? "Markdown" : htmlMode ? "HTML" : noteType === "richi" ? "Rich" : "Text";
     // Rich note = TipTap HTML with embedded assets/headings — hide mode toggle
     const isRichNote = !listMode && !graphMode && !mindmapMode && !stackMode &&
         /(<img[\s>]|data-file-attachment|<h[1-6][\s>]|<pre[\s>]|<blockquote[\s>]|<table[\s>])/i.test(content);
@@ -5133,7 +5133,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 onBlur={() => { setCodeEditMode(false); void saveNote({ silent: false }); }}
                                 onClick={() => setCodeEditMode(true)}
                             />
-                        ) : noteType === "rich" ? (
+                        ) : noteType === "richi" ? (
                             <div className="relative flex-1 min-h-0 flex flex-col" style={{ background: "#272822" }}>
                                 <RichTextEditor
                                     key={currentNoteId ?? "new"}
@@ -5901,7 +5901,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                             {/* RICH ball */}
                             <button
                                 type="button"
-                                onClick={() => { setShowNoteTypePicker(false); openNewNote("rich"); }}
+                                onClick={() => { setShowNoteTypePicker(false); openNewNote("richi"); }}
                                 className="flex flex-col items-center gap-3 group"
                             >
                                 <div className="w-28 h-28 rounded-full flex items-center justify-center transition-transform active:scale-95 group-hover:scale-105"
