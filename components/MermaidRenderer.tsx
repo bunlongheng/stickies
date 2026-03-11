@@ -454,7 +454,7 @@ export function MermaidRenderer({ code, onChange, showCode, theme = "dark" }: Pr
 
     // Code view with monokai syntax highlighting
     return (
-        <div className="flex-1 min-h-0 relative overflow-hidden" style={{ background: "#272822" }}>
+        <div className="flex-1 min-h-0 relative" style={{ background: "#272822", overflow: "hidden" }}>
             <pre
                 ref={preRef}
                 aria-hidden
@@ -468,7 +468,7 @@ export function MermaidRenderer({ code, onChange, showCode, theme = "dark" }: Pr
                 onChange={(e) => onChange?.(e.target.value)}
                 onScroll={syncScroll}
                 className="absolute inset-0 w-full h-full p-4 sm:p-6 font-mono text-xs leading-relaxed resize-none outline-none border-none"
-                style={{ background: "transparent", color: "transparent", caretColor: "#f8f8f2", tabSize: 2, WebkitTextFillColor: "transparent" }}
+                style={{ background: "transparent", color: "transparent", caretColor: "#f8f8f2", tabSize: 2, WebkitTextFillColor: "transparent", WebkitOverflowScrolling: "touch", overflowY: "scroll" }}
                 spellCheck={false}
                 autoComplete="off"
                 autoCorrect="off"
