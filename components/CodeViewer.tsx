@@ -43,6 +43,13 @@ const MONOKAI = `
   word-break: normal !important;
   -webkit-text-size-adjust: none !important;
 }
+/* Word-wrap mode */
+.code-viewer-wrap.word-wrap textarea,
+.code-viewer-wrap.word-wrap pre {
+  white-space: pre-wrap !important;
+  overflow-wrap: break-word !important;
+  word-break: break-all !important;
+}
 `;
 
 const GUTTER_W = 48; // px
@@ -55,16 +62,39 @@ interface Props {
     code: string;
     language: string;
     editing: boolean;
+    wordWrap?: boolean;
     onChange?: (val: string) => void;
     onBlur?: () => void;
     onClick?: () => void;
 }
 
-export function CodeViewer({ code, language, editing, onChange, onBlur, onClick }: Props) {
+export function CodeViewer({ code, language, editing, wordWrap = false, onChange, onBlur, onClick }: Props) {
     const lang = LANG_MAP[language] ?? "javascript";
-    const lineCount = (code || "").split("\n").length;
+    const lines = (code || "").split("\n");
+    const lineCount = lines.length;
     const [activeLine, setActiveLine] = useState<number | null>(null);
     const wrapperRef = useRef<HTMLDivElement>(null);
+    const containerRef = useRef<HTMLDivElement>(null);
+    const [containerWidth, setContainerWidth] = useState(0);
+
+    // Track container width for wrap row calculation
+    useEffect(() => {
+        if (!wordWrap) return;
+        const el = containerRef.current;
+        if (!el) return;
+        const ro = new ResizeObserver(([e]) => setContainerWidth(e.contentRect.width));
+        ro.observe(el);
+        return () => ro.disconnect();
+    }, [wordWrap]);
+
+    // Calculate visual rows per logical line (for VS Code-style gutter in wrap mode)
+    const visualRowsPerLine = wordWrap && containerWidth > 0
+        ? lines.map(l => {
+            const editorWidth = containerWidth - GUTTER_W - 20 - 24; // minus gutter, left/right pad
+            const charsPerRow = Math.max(1, Math.floor(editorWidth / (FONT_SIZE * 0.6)));
+            return Math.max(1, Math.ceil((l.length || 1) / charsPerRow));
+          })
+        : null;
 
     const readActiveLine = useCallback(() => {
         const ta = wrapperRef.current?.querySelector("textarea");
@@ -90,11 +120,14 @@ export function CodeViewer({ code, language, editing, onChange, onBlur, onClick 
         const attach = () => {
             ta = container.querySelector("textarea");
             if (!ta) return;
+            ta.addEventListener("keydown",  readActiveLine);
             ta.addEventListener("keyup",    readActiveLine);
+            ta.addEventListener("input",    readActiveLine);
             ta.addEventListener("mouseup",  readActiveLine);
             ta.addEventListener("touchend", readActiveLine);
             ta.addEventListener("focus",    readActiveLine);
             ta.addEventListener("select",   readActiveLine);
+            ta.addEventListener("click",    readActiveLine);
         };
 
         // Try immediately, then via rAF in case Editor hasn't mounted yet
@@ -104,11 +137,14 @@ export function CodeViewer({ code, language, editing, onChange, onBlur, onClick 
         return () => {
             cancelAnimationFrame(raf);
             if (ta) {
+                ta.removeEventListener("keydown",  readActiveLine);
                 ta.removeEventListener("keyup",    readActiveLine);
+                ta.removeEventListener("input",    readActiveLine);
                 ta.removeEventListener("mouseup",  readActiveLine);
                 ta.removeEventListener("touchend", readActiveLine);
                 ta.removeEventListener("focus",    readActiveLine);
                 ta.removeEventListener("select",   readActiveLine);
+                ta.removeEventListener("click",    readActiveLine);
             }
         };
     }, [editing, readActiveLine]);
@@ -122,6 +158,7 @@ export function CodeViewer({ code, language, editing, onChange, onBlur, onClick 
 
     return (
         <div
+            ref={containerRef}
             className="flex-1 overflow-auto relative"
             style={{ background: "#272822", display: "flex" }}
             onClick={!editing ? onClick : undefined}
@@ -166,23 +203,27 @@ export function CodeViewer({ code, language, editing, onChange, onBlur, onClick 
                     color: "#75715e",
                 }}
             >
-                {Array.from({ length: lineCount }, (_, i) => (
-                    <div
-                        key={i}
-                        style={{
-                            height: LINE_HEIGHT,
-                            paddingRight: 10,
-                            color: i === activeLine ? "#f8f8f2" : "#75715e",
-                            fontWeight: i === activeLine ? 700 : 400,
-                        }}
-                    >
-                        {i + 1}
-                    </div>
-                ))}
+                {Array.from({ length: lineCount }, (_, i) => {
+                    const rows = visualRowsPerLine ? visualRowsPerLine[i] : 1;
+                    return (
+                        <div key={i} style={{ height: LINE_HEIGHT * rows }}>
+                            {/* First visual row: show line number */}
+                            <div style={{
+                                height: LINE_HEIGHT,
+                                paddingRight: 10,
+                                color: i === activeLine ? "#f8f8f2" : "#75715e",
+                                fontWeight: i === activeLine ? 700 : 400,
+                            }}>
+                                {i + 1}
+                            </div>
+                            {/* Extra wrapped rows: blank */}
+                        </div>
+                    );
+                })}
             </div>
 
             {/* Editor */}
-            <div ref={wrapperRef} className="code-viewer-wrap" style={{ flex: 1, minWidth: 0, position: "relative", zIndex: 1 }}>
+            <div ref={wrapperRef} className={`code-viewer-wrap${wordWrap ? " word-wrap" : ""}`} style={{ flex: 1, minWidth: 0, position: "relative", zIndex: 1 }}>
                 <Editor
                     value={code}
                     onValueChange={editing ? (onChange ?? (() => {})) : () => {}}

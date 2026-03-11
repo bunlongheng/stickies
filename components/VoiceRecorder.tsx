@@ -78,6 +78,9 @@ export function VoiceRecorder({ noteId, getToken, onComplete, onCancel }: Record
     // ── Start recording ──────────────────────────────────────────────────────
     const startRecording = useCallback(async () => {
         try {
+            if (!navigator.mediaDevices?.getUserMedia) {
+                throw new Error("Microphone requires HTTPS or localhost. Open via localhost:4444 instead.");
+            }
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             streamRef.current = stream;
 

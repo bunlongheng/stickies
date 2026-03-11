@@ -5443,6 +5443,9 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                     <PencilSquareIcon className="w-4 h-4" />
                                                 </button>
                                             )}
+                                            {!item.is_folder && (item as any).flag && (
+                                                <span className="flex-shrink-0 text-base leading-none" title={(item as any).flag}>{(item as any).flag}</span>
+                                            )}
                                             {!item.is_folder && pinnedIds.has(String(item.id)) && !isSelectMode && (
                                                 <HeartSolidIcon className="w-3.5 h-3.5 text-white flex-shrink-0" />
                                             )}
@@ -5502,6 +5505,9 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                     </>
                                                 ) : (
                                                     <>
+                                                        {(item as any).flag && (
+                                                            <span className="absolute top-1 left-1 text-sm leading-none">{(item as any).flag}</span>
+                                                        )}
                                                         <div className="text-3xl font-black text-white uppercase leading-none">{[...(item.title || "N")][0]}</div>
                                                         <div className="text-[8px] font-semibold text-white leading-tight mt-0.5 line-clamp-2 w-full">{item.title}</div>
                                                     </>
