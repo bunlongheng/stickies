@@ -1034,6 +1034,7 @@ export default function NotesMaster() {
     const [codeEditMode, setCodeEditMode] = useState(false);
     const [typeFilter, setTypeFilter] = useState<string | null>(null);
     const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
+    const [showNoteTypePicker, setShowNoteTypePicker] = useState(false);
     const [editMode, setEditMode] = useState(false);
     const [showAddMenu, setShowAddMenu] = useState(false);
     const colDragNoteRef = useRef<string | null>(null);
@@ -5576,10 +5577,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 type="button"
                                 onClick={() => {
                                     if (activeFolder) {
-                                        // L2: inside a folder → create new file directly
-                                        openNewNote();
+                                        setShowNoteTypePicker(true);
                                     } else {
-                                        // L1: root → create new folder directly
                                         openCreateFolder();
                                     }
                                 }}
@@ -5660,6 +5659,55 @@ const fireIntegrations = (trigger: string, note: any) => {
                 </div>{/* ── end left panel ── */}
 
             </div>{/* ── end two-panel wrapper ── */}
+
+            {/* NOTE TYPE PICKER — Type vs Voice */}
+            {showNoteTypePicker && (
+                <div className="fixed inset-0 z-[600] flex items-center justify-center bg-black/80 backdrop-blur-sm"
+                    onClick={() => setShowNoteTypePicker(false)}>
+                    <div className="flex flex-col items-center gap-6 px-6" onClick={(e) => e.stopPropagation()}>
+                        <div className="text-[10px] font-black uppercase tracking-[0.25em] text-zinc-500">New Note</div>
+                        <div className="flex items-center gap-8">
+                            {/* TYPE ball */}
+                            <button
+                                type="button"
+                                onClick={() => { setShowNoteTypePicker(false); openNewNote(); }}
+                                className="flex flex-col items-center gap-3 group"
+                            >
+                                <div className="w-28 h-28 rounded-full flex items-center justify-center transition-transform active:scale-95 group-hover:scale-105"
+                                    style={{ background: "linear-gradient(135deg, #ffffff 0%, #d4d4d4 100%)", boxShadow: "0 0 40px rgba(255,255,255,0.2), 0 8px 32px rgba(0,0,0,0.5)" }}>
+                                    <svg className="w-12 h-12 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 3.487a2.25 2.25 0 113.182 3.182L7.5 19.213l-4 1 1-4L16.862 3.487z" />
+                                    </svg>
+                                </div>
+                                <span className="text-xs font-black uppercase tracking-widest text-white">Type</span>
+                            </button>
+
+                            {/* VOICE ball */}
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setShowNoteTypePicker(false);
+                                    setEditingNote(null);
+                                    setTitle("Voice Note");
+                                    setContent("");
+                                    setImages([]);
+                                    setTargetFolder(activeFolder || "General");
+                                    setNoteColor(pickUniqueColor());
+                                    setShowVoiceRecorder(true);
+                                }}
+                                className="flex flex-col items-center gap-3 group"
+                            >
+                                <div className="w-28 h-28 rounded-full flex items-center justify-center transition-transform active:scale-95 group-hover:scale-105"
+                                    style={{ background: "linear-gradient(135deg, #ef4444 0%, #b91c1c 100%)", boxShadow: "0 0 40px rgba(239,68,68,0.5), 0 8px 32px rgba(0,0,0,0.5)", animation: "pulse 2s infinite" }}>
+                                    <MicrophoneIcon className="w-12 h-12 text-white" />
+                                </div>
+                                <span className="text-xs font-black uppercase tracking-widest text-red-400">Voice</span>
+                            </button>
+                        </div>
+                        <div className="text-[10px] text-zinc-600 uppercase tracking-widest">or tap outside to cancel</div>
+                    </div>
+                </div>
+            )}
 
             {showVoiceRecorder && (
                 <VoiceRecorder
