@@ -440,10 +440,6 @@ function VoiceNotePlayer({ data, onTranscriptChange, onConvertToText }: {
     const [transcript, setTranscript] = useState(data.transcript || "");
     const audioRef = useRef<HTMLAudioElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
-    const audioCtxRef = useRef<AudioContext | null>(null);
-    const analyserRef = useRef<AnalyserNode | null>(null);
-    const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
-    const rafRef = useRef<number>(0);
 
     const fmt = (s: number) => `${Math.floor(s / 60).toString().padStart(2, "0")}:${Math.floor(s % 60).toString().padStart(2, "0")}`;
 
@@ -495,39 +491,10 @@ function VoiceNotePlayer({ data, onTranscriptChange, onConvertToText }: {
         ctx.shadowBlur = 0;
     }, [staticBars]);
 
-    // Draw static bars on mount / when not playing
+    // Redraw bars on time update
     useEffect(() => {
         drawBars(currentTime / (data.duration || 1));
     }, [currentTime, data.duration, drawBars]);
-
-    // Live analyser while playing
-    const startAnalyser = React.useCallback(() => {
-        const audio = audioRef.current;
-        if (!audio) return;
-        if (!audioCtxRef.current) {
-            const ctx = new AudioContext();
-            const source = ctx.createMediaElementSource(audio);
-            const analyser = ctx.createAnalyser();
-            analyser.fftSize = 128;
-            source.connect(analyser);
-            analyser.connect(ctx.destination);
-            audioCtxRef.current = ctx;
-            analyserRef.current = analyser;
-            sourceRef.current = source;
-        }
-        const loop = () => {
-            drawBars(currentTime / (data.duration || 1), analyserRef.current!);
-            rafRef.current = requestAnimationFrame(loop);
-        };
-        rafRef.current = requestAnimationFrame(loop);
-    }, [currentTime, data.duration, drawBars]);
-
-    const stopAnalyser = React.useCallback(() => {
-        cancelAnimationFrame(rafRef.current);
-        drawBars(currentTime / (data.duration || 1));
-    }, [currentTime, data.duration, drawBars]);
-
-    useEffect(() => () => { cancelAnimationFrame(rafRef.current); }, []);
 
     const toggle = () => {
         const a = audioRef.current;
@@ -535,12 +502,8 @@ function VoiceNotePlayer({ data, onTranscriptChange, onConvertToText }: {
         if (playing) {
             a.pause();
             setPlaying(false);
-            stopAnalyser();
         } else {
-            void a.play().then(() => {
-                setPlaying(true);
-                try { startAnalyser(); } catch {}
-            }).catch(() => setPlaying(false));
+            void a.play().then(() => setPlaying(true)).catch(() => {});
         }
     };
 
@@ -548,7 +511,7 @@ function VoiceNotePlayer({ data, onTranscriptChange, onConvertToText }: {
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 flex flex-col gap-4">
             <audio ref={audioRef} src={data.audioUrl}
                 onTimeUpdate={(e) => setCurrentTime((e.target as HTMLAudioElement).currentTime)}
-                onEnded={() => { setPlaying(false); stopAnalyser(); }} />
+                onEnded={() => setPlaying(false)} />
 
             {/* iMessage-style player */}
             <div className="flex items-center gap-2 px-3 py-2 rounded-full self-start"
