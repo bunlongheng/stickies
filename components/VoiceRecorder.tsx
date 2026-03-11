@@ -30,6 +30,7 @@ export function VoiceRecorder({ noteId, getToken, onComplete, onCancel }: Record
     const [elapsed, setElapsed] = useState(0);
     const [status, setStatus] = useState("Tap to record");
     const [error, setError] = useState("");
+    const [liveText, setLiveText] = useState("");
 
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const streamRef = useRef<MediaStream | null>(null);
@@ -40,8 +41,9 @@ export function VoiceRecorder({ noteId, getToken, onComplete, onCancel }: Record
     const rafRef = useRef<number>(0);
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const startTimeRef = useRef(0);
+    const recognitionRef = useRef<any>(null);
 
-    // ── Waveform animation ───────────────────────────────────────────────────
+    // ── Frequency bar waveform ────────────────────────────────────────────────
     const drawWave = useCallback(() => {
         const canvas = canvasRef.current;
         const analyser = analyserRef.current;
@@ -49,51 +51,61 @@ export function VoiceRecorder({ noteId, getToken, onComplete, onCancel }: Record
         const ctx = canvas.getContext("2d");
         if (!ctx) return;
 
-        const buf = new Uint8Array(analyser.frequencyBinCount);
-        analyser.getByteTimeDomainData(buf);
+        const W = canvas.width;
+        const H = canvas.height;
 
-        const { width: W, height: H } = canvas;
+        const buf = new Uint8Array(analyser.frequencyBinCount);
+        analyser.getByteFrequencyData(buf);
+
         ctx.clearRect(0, 0, W, H);
 
-        // Glow line
-        ctx.beginPath();
-        ctx.strokeStyle = "#ef4444";
-        ctx.lineWidth = 2;
-        ctx.shadowBlur = 8;
-        ctx.shadowColor = "#ef4444";
+        const barCount = 48;
+        const step = Math.floor(buf.length / barCount);
+        const barW = W / barCount;
+        const gap = 2;
 
-        const slice = W / buf.length;
-        let x = 0;
-        for (let i = 0; i < buf.length; i++) {
-            const y = (buf[i] / 128) * (H / 2);
-            i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-            x += slice;
+        for (let i = 0; i < barCount; i++) {
+            // average a slice of frequency bins
+            let sum = 0;
+            for (let j = 0; j < step; j++) sum += buf[i * step + j];
+            const avg = sum / step;
+            const barH = Math.max(2, (avg / 255) * H * 1.4);
+            const x = i * barW;
+            const y = (H - barH) / 2;
+
+            // gradient: red → orange based on height
+            const intensity = avg / 255;
+            const r = 239;
+            const g = Math.floor(68 + intensity * 100);
+            const b = 68;
+
+            ctx.fillStyle = `rgba(${r},${g},${b},${0.5 + intensity * 0.5})`;
+            ctx.shadowBlur = intensity * 12;
+            ctx.shadowColor = `rgb(${r},${g},${b})`;
+            ctx.fillRect(x + gap / 2, y, barW - gap, barH);
         }
-        ctx.stroke();
         ctx.shadowBlur = 0;
 
         rafRef.current = requestAnimationFrame(drawWave);
     }, []);
 
-    // ── Start recording ──────────────────────────────────────────────────────
+    // ── Start recording ───────────────────────────────────────────────────────
     const startRecording = useCallback(async () => {
         try {
             if (!navigator.mediaDevices?.getUserMedia) {
-                throw new Error("Microphone requires HTTPS or localhost. Open via localhost:4444 instead.");
+                throw new Error("Microphone requires HTTPS or localhost.");
             }
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             streamRef.current = stream;
 
-            // Audio analyser for waveform
             const audioCtx = new AudioContext();
             const source = audioCtx.createMediaStreamSource(stream);
             const analyser = audioCtx.createAnalyser();
-            analyser.fftSize = 512;
+            analyser.fftSize = 256;
             source.connect(analyser);
             audioCtxRef.current = audioCtx;
             analyserRef.current = analyser;
 
-            // MediaRecorder
             const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
                 ? "audio/webm;codecs=opus"
                 : MediaRecorder.isTypeSupported("audio/webm")
@@ -103,7 +115,6 @@ export function VoiceRecorder({ noteId, getToken, onComplete, onCancel }: Record
             chunksRef.current = [];
             const recorder = new MediaRecorder(stream, { mimeType });
             recorderRef.current = recorder;
-
             recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
             recorder.onstop = handleRecordingStop;
             recorder.start(100);
@@ -114,6 +125,28 @@ export function VoiceRecorder({ noteId, getToken, onComplete, onCancel }: Record
                 setElapsed(Math.floor((Date.now() - startTimeRef.current) / 1000));
             }, 500);
 
+            // ── Live transcript via Web Speech API ────────────────────────────
+            const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+            if (SpeechRecognition) {
+                const rec = new SpeechRecognition();
+                rec.continuous = true;
+                rec.interimResults = true;
+                rec.lang = "en-US";
+                let finalText = "";
+                rec.onresult = (e: any) => {
+                    let interim = "";
+                    for (let i = e.resultIndex; i < e.results.length; i++) {
+                        const t = e.results[i][0].transcript;
+                        if (e.results[i].isFinal) finalText += t + " ";
+                        else interim = t;
+                    }
+                    setLiveText(finalText + interim);
+                };
+                rec.onerror = () => {};
+                rec.start();
+                recognitionRef.current = rec;
+            }
+
             setPhase("recording");
             setStatus("Recording…");
             rafRef.current = requestAnimationFrame(drawWave);
@@ -123,18 +156,19 @@ export function VoiceRecorder({ noteId, getToken, onComplete, onCancel }: Record
         }
     }, [drawWave]);
 
-    // ── Stop recording ───────────────────────────────────────────────────────
+    // ── Stop recording ────────────────────────────────────────────────────────
     const stopRecording = useCallback(() => {
         recorderRef.current?.stop();
         streamRef.current?.getTracks().forEach((t) => t.stop());
         cancelAnimationFrame(rafRef.current);
         if (timerRef.current) clearInterval(timerRef.current);
         audioCtxRef.current?.close();
+        recognitionRef.current?.stop();
         setPhase("processing");
         setStatus("Transcribing…");
     }, []);
 
-    // ── After MediaRecorder stops — upload + transcribe ──────────────────────
+    // ── After MediaRecorder stops — upload + transcribe ───────────────────────
     const handleRecordingStop = useCallback(async () => {
         const mimeType = recorderRef.current?.mimeType ?? "audio/webm";
         const blob = new Blob(chunksRef.current, { type: mimeType });
@@ -160,7 +194,7 @@ export function VoiceRecorder({ noteId, getToken, onComplete, onCancel }: Record
             onComplete({
                 _type: "voice",
                 audioUrl: data.audioUrl,
-                transcript: data.transcript ?? "",
+                transcript: data.transcript ?? liveText,
                 summary: data.summary ?? "",
                 duration: durationSecs,
                 recordedAt: new Date().toISOString(),
@@ -169,9 +203,9 @@ export function VoiceRecorder({ noteId, getToken, onComplete, onCancel }: Record
             setError(err.message ?? "Upload failed");
             setPhase("error");
         }
-    }, [noteId, getToken, onComplete]);
+    }, [noteId, getToken, onComplete, liveText]);
 
-    // ── Draw flat waveform when idle ──────────────────────────────────────────
+    // ── Draw flat line when idle ──────────────────────────────────────────────
     useEffect(() => {
         const canvas = canvasRef.current;
         if (!canvas || phase === "recording") return;
@@ -187,13 +221,14 @@ export function VoiceRecorder({ noteId, getToken, onComplete, onCancel }: Record
         ctx.stroke();
     }, [phase]);
 
-    // ── Cleanup on unmount ────────────────────────────────────────────────────
+    // ── Cleanup ───────────────────────────────────────────────────────────────
     useEffect(() => {
         return () => {
             streamRef.current?.getTracks().forEach((t) => t.stop());
             cancelAnimationFrame(rafRef.current);
             if (timerRef.current) clearInterval(timerRef.current);
             audioCtxRef.current?.close().catch(() => {});
+            recognitionRef.current?.stop();
         };
     }, []);
 
@@ -204,21 +239,29 @@ export function VoiceRecorder({ noteId, getToken, onComplete, onCancel }: Record
     return (
         <div className="fixed inset-0 z-[600] flex items-center justify-center bg-black/70 backdrop-blur-sm"
             onClick={(e) => { if (e.target === e.currentTarget && !isRecording && !isProcessing) onCancel(); }}>
-            <div className="flex flex-col items-center gap-6 p-8 bg-zinc-950 border border-zinc-800 w-full max-w-sm mx-4"
+            <div className="flex flex-col items-center gap-4 p-8 bg-zinc-950 border border-zinc-800 w-full max-w-sm mx-4"
                 style={{ boxShadow: "0 0 60px rgba(239,68,68,0.15)" }}>
 
                 {/* Title */}
                 <div className="text-xs font-black uppercase tracking-widest text-zinc-500">Voice Note</div>
 
                 {/* Waveform canvas */}
-                <canvas ref={canvasRef} width={280} height={48}
-                    className="w-full rounded-none"
+                <canvas ref={canvasRef} width={280} height={56}
+                    className="w-full"
                     style={{ background: "transparent" }} />
 
                 {/* Timer */}
                 <div className="text-3xl font-black tabular-nums text-white tracking-tight">
                     {fmt(elapsed)}
                 </div>
+
+                {/* Live transcript */}
+                {(isRecording || liveText) && (
+                    <div className="w-full min-h-[48px] max-h-[96px] overflow-y-auto text-[11px] text-zinc-400 leading-relaxed px-3 py-2 border border-zinc-800 bg-black/40"
+                        style={{ wordBreak: "break-word" }}>
+                        {liveText || <span className="text-zinc-700 italic">Listening…</span>}
+                    </div>
+                )}
 
                 {/* Status */}
                 <div className="text-xs text-zinc-500 uppercase tracking-widest min-h-[1rem]">
@@ -234,7 +277,6 @@ export function VoiceRecorder({ noteId, getToken, onComplete, onCancel }: Record
                         Cancel
                     </button>
 
-                    {/* Record / Stop button */}
                     <button
                         onClick={isRecording ? stopRecording : startRecording}
                         disabled={isDisabled}
@@ -244,18 +286,14 @@ export function VoiceRecorder({ noteId, getToken, onComplete, onCancel }: Record
                             boxShadow: isRecording ? "0 0 24px rgba(239,68,68,0.6)" : "none",
                         }}>
                         {isRecording ? (
-                            /* Stop square */
                             <span className="w-4 h-4 bg-white block" />
                         ) : isProcessing ? (
-                            /* Spinner */
                             <span className="w-4 h-4 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin block" />
                         ) : (
-                            /* Mic circle */
                             <span className="w-5 h-5 rounded-full bg-red-500 block" />
                         )}
                     </button>
 
-                    {/* Placeholder for layout balance */}
                     <div className="flex-1" />
                 </div>
 
