@@ -543,23 +543,20 @@ function VoiceNotePlayer({ data, onTranscriptChange, onConvertToText }: {
                 onEnded={() => { setPlaying(false); stopAnalyser(); }} />
 
             {/* iMessage-style player */}
-            <div className="flex items-center gap-3 px-4 py-3 rounded-2xl"
-                style={{ background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.25)" }}>
+            <div className="flex items-center gap-2 px-3 py-2 rounded-full self-start"
+                style={{ background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.2)" }}>
                 <button onClick={toggle}
-                    className="w-10 h-10 flex-shrink-0 rounded-full flex items-center justify-center bg-red-500 hover:bg-red-400 transition"
-                    style={{ boxShadow: "0 0 12px rgba(239,68,68,0.5)" }}>
+                    className="w-7 h-7 flex-shrink-0 rounded-full flex items-center justify-center bg-red-500 hover:bg-red-400 transition"
+                    style={{ boxShadow: "0 0 8px rgba(239,68,68,0.4)" }}>
                     {playing
-                        ? <span className="flex gap-[3px]"><span className="w-[3px] h-3.5 bg-white rounded-full" /><span className="w-[3px] h-3.5 bg-white rounded-full" /></span>
-                        : <span className="w-0 h-0 border-t-[7px] border-b-[7px] border-l-[12px] border-t-transparent border-b-transparent border-l-white ml-0.5" />}
+                        ? <span className="flex gap-[2px]"><span className="w-[2px] h-2.5 bg-white rounded-full" /><span className="w-[2px] h-2.5 bg-white rounded-full" /></span>
+                        : <span className="w-0 h-0 border-t-[5px] border-b-[5px] border-l-[9px] border-t-transparent border-b-transparent border-l-white ml-0.5" />}
                 </button>
 
                 {/* Frequency bars */}
-                <canvas ref={canvasRef} width={180} height={36} className="flex-1" style={{ background: "transparent" }} />
+                <canvas ref={canvasRef} width={240} height={48} style={{ background: "transparent", width: 120, height: 24 }} />
 
-                <div className="flex flex-col items-end flex-shrink-0 gap-0.5">
-                    <span className="text-[10px] font-mono text-red-400">{fmt(currentTime)}</span>
-                    <span className="text-[9px] font-mono text-zinc-600">{fmt(data.duration)}</span>
-                </div>
+                <span className="text-[10px] font-mono text-zinc-500 flex-shrink-0">{fmt(data.duration)}</span>
             </div>
 
             {/* Transcript — editable, always shown */}
