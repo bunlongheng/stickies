@@ -495,18 +495,13 @@ function VoiceNotePlayer({ data, onConvertToText }: {
                 </div>
             )}
 
-            {/* Actions */}
-            <div className="flex gap-2 mt-auto pt-2">
-                <button onClick={onConvertToText}
-                    className="px-4 py-2 text-[10px] font-black uppercase tracking-widest border border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500 transition">
-                    Copy Transcript
-                </button>
-                {data.recordedAt && (
-                    <span className="px-3 py-2 text-[10px] text-zinc-600 font-mono">
+            {data.recordedAt && (
+                <div className="pt-2">
+                    <span className="text-[10px] text-zinc-600 font-mono">
                         {new Date(data.recordedAt).toLocaleString()}
                     </span>
-                )}
-            </div>
+                </div>
+            )}
         </div>
     );
 }
