@@ -608,11 +608,14 @@ function VoiceNotePlayer({ data, index, onTranscriptChange, onDelete, onConvertT
                             onChange={(e) => {
                                 setTranscript(e.target.value);
                                 onTranscriptChange?.(e.target.value);
+                                e.target.style.height = "auto";
+                                e.target.style.height = e.target.scrollHeight + "px";
                             }}
+                            onFocus={(e) => { e.target.style.height = "auto"; e.target.style.height = e.target.scrollHeight + "px"; }}
                             placeholder="No transcript…"
-                            className="flex-1 bg-transparent text-xs text-zinc-300 leading-relaxed resize-none outline-none border-none placeholder:text-zinc-700"
-                            rows={Math.max(2, transcript.split("\n").length)}
-                            style={{ fontFamily: "inherit" }}
+                            className="flex-1 bg-transparent text-[11px] text-zinc-300 leading-relaxed resize-none outline-none border-none placeholder:text-zinc-700 overflow-hidden"
+                            rows={1}
+                            style={{ fontFamily: "inherit", height: "auto", minHeight: "1.5rem" }}
                         />
                     )}
                     {data.recordedAt && (
@@ -626,14 +629,31 @@ function VoiceNotePlayer({ data, index, onTranscriptChange, onDelete, onConvertT
                 )}
             </div>
 
-            {/* Delete */}
-            {onDelete && (
-                <button onClick={onDelete}
-                    className="opacity-0 group-hover:opacity-100 transition flex-shrink-0 mt-1.5 text-zinc-700 hover:text-red-500"
-                    title="Delete recording">
-                    <XMarkIcon className="w-4 h-4" />
-                </button>
-            )}
+            {/* Actions */}
+            <div className="opacity-0 group-hover:opacity-100 transition flex flex-col gap-1.5 flex-shrink-0 mt-1.5">
+                <a
+                    href={data.audioUrl}
+                    download={`voice-${data.recordedAt ? new Date(data.recordedAt).toISOString().slice(0,19).replace(/[:.]/g,"-") : index + 1}.webm`}
+                    className="text-zinc-700 hover:text-cyan-400 transition"
+                    title="Download audio file">
+                    <ArrowDownTrayIcon className="w-4 h-4" />
+                </a>
+                {transcript && (
+                    <button
+                        onClick={() => navigator.clipboard.writeText(transcript)}
+                        className="text-zinc-700 hover:text-emerald-400 transition"
+                        title="Copy transcript">
+                        <DocumentDuplicateIcon className="w-4 h-4" />
+                    </button>
+                )}
+                {onDelete && (
+                    <button onClick={onDelete}
+                        className="text-zinc-700 hover:text-red-500 transition"
+                        title="Delete recording">
+                        <XMarkIcon className="w-4 h-4" />
+                    </button>
+                )}
+            </div>
         </div>
     );
 }
@@ -3093,9 +3113,9 @@ const fireIntegrations = (trigger: string, note: any) => {
     // jsonDetect kept for JSON syntax highlight fallback
     const jsonDetect = jsonMode ? detectJson(content) : { ok: false, parsed: null };
 
-    // Checklist toggle allowed only for text/markdown notes
-    const canToggleChecklist = (noteType === "text" || noteType === "markdown") &&
-        content.replace(/<[^>]+>/g, "").split("\n").filter((l: string) => l.trim()).length < 12;
+    // Checklist toggle: text always ok; markdown only if it's a simple list (no headers/code/tables)
+    const canToggleChecklist = noteType === "text" ||
+        (noteType === "markdown" && !/^#{1,6}\s|^```|^\|/m.test(content));
 
     // Unified active mode label
     const noteViewMode = stackMode ? "Stack" : mindmapMode ? "Mindmap" : graphMode ? "Graph" : listMode ? "Checklist" : mermaidMode ? "Mermaid" : voiceNote ? "Voice" : codeMode ? noteType : markdownMode ? "Markdown" : htmlMode ? "HTML" : noteType === "rich" ? "Rich" : "Text";
@@ -5170,7 +5190,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     onBlur={() => void saveNote({ silent: false })}
                                     onPaste={handleEditorPaste}
                                     className="note-textarea ios-editor-scroll relative z-10 w-full h-full bg-black pt-2 px-3 pb-3 outline-none resize-none font-mono leading-5 overflow-x-hidden overscroll-none touch-pan-y"
-                                    style={{ caretColor: activeAccentColor, paddingRight: "80px" }}
+                                    style={{ paddingRight: "80px" }}
                                     placeholder="START TYPING..."
                                 />
                                 {content && (
