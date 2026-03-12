@@ -349,7 +349,7 @@ export function RichTextEditor({ noteId, content, onChange, onBlur, onUploadImag
         const current = JSON.stringify(editor.getJSON());
         const incoming = isTiptapJson(content) ? content : null;
         if (incoming ? current !== incoming : true) {
-            editor.commands.setContent(parsed, false);
+            editor.commands.setContent(parsed);
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [noteId]);
