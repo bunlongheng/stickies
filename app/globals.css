@@ -27,6 +27,24 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* iTerm2-style glowing block cursor for note textarea */
+.note-textarea {
+  caret-color: #ffffff !important;
+  caret-shape: block;
+}
+@supports not (caret-shape: block) {
+  .note-textarea {
+    caret-color: #ffffff !important;
+  }
+}
+.note-textarea:focus {
+  animation: caretGlow 1s ease-in-out infinite alternate;
+}
+@keyframes caretGlow {
+  from { filter: drop-shadow(0 0 2px rgba(255,255,255,0.6)); }
+  to   { filter: drop-shadow(0 0 6px rgba(255,255,255,1)); }
+}
+
 .safe-area {
   padding-top: 0;
   padding-bottom: env(safe-area-inset-bottom);
