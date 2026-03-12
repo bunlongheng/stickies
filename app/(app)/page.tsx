@@ -231,6 +231,8 @@ function detectNoteType(content: string): string {
             if (p?._type === "voice" || (Array.isArray(p) && p[0]?._type === "voice")) return "voice";
         } catch {}
     }
+    // TipTap JSON — must check before generic JSON detection
+    try { const p = JSON.parse(t); if (p?.type === "doc" && Array.isArray(p.content)) return "rich"; } catch {}
     if (MERMAID_KEYWORDS.test(extractMermaid(t))) return "mermaid";
     if ((t.startsWith("{") || t.startsWith("[")) && detectJson(t).ok) return "json";
     if (/^\s*<!DOCTYPE\s+html/i.test(t) || /^\s*<html[\s>]/i.test(t)) return "html";
@@ -3119,9 +3121,8 @@ const fireIntegrations = (trigger: string, note: any) => {
 
     // Unified active mode label
     const noteViewMode = stackMode ? "Stack" : mindmapMode ? "Mindmap" : graphMode ? "Graph" : listMode ? "Checklist" : mermaidMode ? "Mermaid" : voiceNote ? "Voice" : codeMode ? noteType : markdownMode ? "Markdown" : htmlMode ? "HTML" : noteType === "rich" ? "Rich" : "Text";
-    // Rich note = TipTap HTML with embedded assets/headings — hide mode toggle
-    const isRichNote = !listMode && !graphMode && !mindmapMode && !stackMode &&
-        /(<img[\s>]|data-file-attachment|<h[1-6][\s>]|<pre[\s>]|<blockquote[\s>]|<table[\s>])/i.test(content);
+    // Rich note = TipTap JSON format
+    const isRichNote = !listMode && !graphMode && !mindmapMode && !stackMode && noteType === "rich";
 
     const saveFolderIconToDb = useCallback(async (folderName: string, icon: string) => {
         try {

@@ -17,11 +17,17 @@ import { marked } from 'marked';
 import { useEffect, useRef, useState } from 'react';
 import type { EditorState, Transaction } from '@tiptap/pm/state';
 
-/** Convert markdown or raw content to HTML for TipTap. */
-function toHtml(content: string): string {
+/** Detect TipTap JSON format */
+function isTiptapJson(s: string): boolean {
+    try { const p = JSON.parse(s); return p?.type === 'doc'; } catch { return false; }
+}
+
+/** Parse content into something TipTap can consume (JSON object, HTML string, or empty) */
+function parseContent(content: string): object | string {
     if (!content.trim()) return '';
-    if (/^\s*<[a-zA-Z]/.test(content)) return content;
-    return marked.parse(content, { async: false }) as string;
+    if (isTiptapJson(content)) return JSON.parse(content);
+    if (/^\s*<[a-zA-Z]/.test(content)) return content; // legacy HTML
+    return marked.parse(content, { async: false }) as string; // markdown
 }
 
 /** Compress image to 50% of original dimensions, JPEG 85% quality. */
@@ -299,8 +305,8 @@ export function RichTextEditor({ noteId, content, onChange, onBlur, onUploadImag
             TableHeader,
             TableCell,
         ],
-        content: toHtml(content),
-        onUpdate: ({ editor }) => onChange(editor.getHTML()),
+        content: parseContent(content),
+        onUpdate: ({ editor }) => onChange(JSON.stringify(editor.getJSON())),
         onBlur: () => onBlur(),
         editorProps: {
             handlePaste(view, event) {
@@ -339,9 +345,11 @@ export function RichTextEditor({ noteId, content, onChange, onBlur, onUploadImag
     // Re-sync content when switching notes
     useEffect(() => {
         if (!editor || editor.isDestroyed) return;
-        const newHtml = toHtml(content);
-        if (editor.getHTML() !== newHtml) {
-            editor.commands.setContent(newHtml, { emitUpdate: false });
+        const parsed = parseContent(content);
+        const current = JSON.stringify(editor.getJSON());
+        const incoming = isTiptapJson(content) ? content : null;
+        if (incoming ? current !== incoming : true) {
+            editor.commands.setContent(parsed, false);
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [noteId]);
