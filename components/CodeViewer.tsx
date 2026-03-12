@@ -11,6 +11,18 @@ import "prismjs/components/prism-bash";
 import "prismjs/components/prism-json";
 import "prismjs/components/prism-markup";
 
+// Custom Prism grammar for Mermaid
+Prism.languages.mermaid = {
+    comment:   { pattern: /%%.*$/m, greedy: true },
+    string:    { pattern: /"[^"]*"/, greedy: true },
+    keyword:   /\b(?:graph|flowchart|sequenceDiagram|classDiagram|stateDiagram|stateDiagram-v2|erDiagram|gantt|pie|mindmap|timeline|gitGraph|journey)\b/,
+    direction: /\b(?:TB|TD|BT|LR|RL)\b/,
+    arrow:     /--?>|===>?|-.->|--/,
+    bracket:   /[()[\]{}]/,
+    label:     /\|[^|\n]*\|/,
+    number:    /\b\d+(?:\.\d+)?%?\b/,
+};
+
 const LANG_MAP: Record<string, string> = {
     javascript: "javascript",
     typescript: "typescript",
@@ -21,9 +33,11 @@ const LANG_MAP: Record<string, string> = {
     json:       "json",
     html:       "markup",
     markdown:   "markdown",
+    mermaid:    "mermaid",
 };
 
 const MONOKAI = `
+.token{transition:color 0.15s ease}
 .token.comment,.token.prolog,.token.doctype,.token.cdata{color:#75715e}
 .token.punctuation{color:#f8f8f2}
 .token.property,.token.tag,.token.constant,.token.symbol,.token.deleted{color:#f92672}
@@ -33,6 +47,10 @@ const MONOKAI = `
 .token.atrule,.token.attr-value,.token.function,.token.class-name{color:#e6db74}
 .token.keyword{color:#66d9e8}
 .token.regex,.token.important{color:#fd971f}
+.token.direction{color:#ae81ff}
+.token.arrow{color:#f92672}
+.token.bracket{color:#f8f8f2}
+.token.label{color:#e6db74}
 /* Override iOS Safari font-size zoom and disable word wrap */
 .code-viewer-wrap textarea,
 .code-viewer-wrap pre {

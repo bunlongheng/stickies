@@ -166,7 +166,8 @@ export function VoiceRecorder({ noteId, getToken, onComplete, onCancel, autoStar
         cancelAnimationFrame(rafRef.current);
         if (timerRef.current) clearInterval(timerRef.current);
         audioCtxRef.current?.close();
-        recognitionRef.current?.stop();
+        // Give speech recognition a moment to fire its final result before stopping
+        setTimeout(() => recognitionRef.current?.stop(), 400);
         setPhase("processing");
         setStatus("Transcribing…");
     }, []);
@@ -197,7 +198,7 @@ export function VoiceRecorder({ noteId, getToken, onComplete, onCancel, autoStar
             onComplete({
                 _type: "voice",
                 audioUrl: data.audioUrl,
-                transcript: data.transcript ?? liveTextRef.current,
+                transcript: liveTextRef.current || data.transcript || "",
                 summary: data.summary ?? "",
                 duration: durationSecs,
                 recordedAt: new Date().toISOString(),
