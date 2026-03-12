@@ -19,7 +19,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="apple-mobile-web-app-title" content="Stickies" />
         <meta name="theme-color" content="#FFCC00" />
       </head>
-      <body>
+      <body suppressHydrationWarning>
         {children}
         <script dangerouslySetInnerHTML={{
           __html: `if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js')`

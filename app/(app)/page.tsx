@@ -242,7 +242,7 @@ function detectNoteType(content: string): string {
 function extractMermaid(text: string): string {
     let t = text.trim();
     // Strip ```mermaid ... ``` fences
-    const fenced = t.match(/^```(?:mermaid)?\s*\n?([\s\S]*?)```\s*$/im);
+    const fenced = t.match(/^```mermaid\s*\n?([\s\S]*?)```\s*$/im);
     if (fenced) t = fenced[1].trim();
     // Strip YAML frontmatter (---\ntitle: ...\n---) and inject title as %% comment
     const frontmatter = t.match(/^---\s*\n([\s\S]*?)\n---\s*\n([\s\S]*)$/m);
@@ -268,7 +268,7 @@ function detectMermaid(text: string): boolean {
 function cleanMermaidContent(text: string): string {
     let t = text.trim();
     // Strip ```mermaid ... ``` fences
-    const fenced = t.match(/^```(?:mermaid)?\s*\n?([\s\S]*?)```\s*$/im);
+    const fenced = t.match(/^```mermaid\s*\n?([\s\S]*?)```\s*$/im);
     if (fenced) t = fenced[1].trim();
     // Strip YAML frontmatter
     const frontmatter = t.match(/^---\s*\n([\s\S]*?)\n---\s*\n([\s\S]*)$/m);
@@ -515,9 +515,9 @@ function VoiceNotePlayer({ data, index, onTranscriptChange, onDelete, onConvertT
         const count = 40;
         const barW = (W / count) - 2;
 
-        let freqData: Uint8Array | null = null;
+        let freqData: Uint8Array<ArrayBuffer> | null = null;
         if (analyser) {
-            freqData = new Uint8Array(analyser.frequencyBinCount);
+            freqData = new Uint8Array(analyser.frequencyBinCount) as Uint8Array<ArrayBuffer>;
             analyser.getByteFrequencyData(freqData);
         }
 
@@ -5214,7 +5214,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                         <PencilSquareIcon className="w-14 h-14 text-zinc-800" />
                         <p className="text-xs font-black uppercase tracking-[0.2em] text-zinc-700">Select a note</p>
                         <button
-                            onClick={openNewNote}
+                            onClick={() => openNewNote()}
                             className="mt-2 px-4 py-2 text-[10px] font-black uppercase tracking-widest border border-white/10 text-zinc-600 hover:text-white hover:border-white/30 transition">
                             + New note
                         </button>
