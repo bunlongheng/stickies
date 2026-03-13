@@ -5174,7 +5174,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         return (d2.url as string) ?? "";
                                     }}
                                     accentColor={activeAccentColor}
-                                    editMode={editMode}
+                                    editMode={true}
                                     onDelete={() => void deleteCurrentNote(editingNote, title)}
                                 />
                             </div>
