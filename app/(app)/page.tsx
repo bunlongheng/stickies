@@ -269,20 +269,10 @@ function detectMermaid(text: string): boolean {
 /** Strip ```mermaid fences + YAML frontmatter, inject title as %% comment */
 function cleanMermaidContent(text: string): string {
     let t = text.trim();
-    // Strip ```mermaid ... ``` fences
+    // Strip ```mermaid ... ``` fences but keep frontmatter intact
     const fenced = t.match(/^```mermaid\s*\n?([\s\S]*?)```\s*$/im);
     if (fenced) t = fenced[1].trim();
-    // Strip YAML frontmatter
-    const frontmatter = t.match(/^---\s*\n([\s\S]*?)\n---\s*\n([\s\S]*)$/m);
-    if (!frontmatter) return t;
-    const titleMatch = frontmatter[1].match(/^title:\s*(.+)$/m);
-    const body = frontmatter[2].trim();
-    if (titleMatch) {
-        const lines = body.split("\n");
-        lines.splice(1, 0, `%% ${titleMatch[1].trim()}`);
-        return lines.join("\n");
-    }
-    return body;
+    return t;
 }
 
 function mermaidSubType(text: string): string {
