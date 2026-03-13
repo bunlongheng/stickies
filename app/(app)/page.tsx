@@ -5589,7 +5589,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             {item.is_folder && (() => {
                                                 const c = item.color || item.folder_color || palette12[0];
                                                 return (
-                                                    <div className="flex-shrink-0 w-[54px] h-[54px] sm:w-[36px] sm:h-[36px] flex items-center justify-center text-base sm:text-sm font-black overflow-hidden"
+                                                    <div className="flex-shrink-0 w-[54px] h-[54px] sm:w-[46px] sm:h-[46px] flex items-center justify-center text-base sm:text-sm font-black overflow-hidden"
                                                         style={{ backgroundColor: item.name === "CLAUDE" ? "#fff" : c, color: "#fff", boxShadow: item.name === "CLAUDE" ? "inset 0 0 0 1px rgba(255,255,255,0.85)" : undefined }}>
                                                         {item.name === "CLAUDE"
                                                             ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-1" />
@@ -5611,7 +5611,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                     const total = lines.length;
                                                     const nc = (item as any).color || (item as any).folder_color || "#22c55e";
                                                     return (
-                                                        <div className="flex-shrink-0 w-[54px] h-[54px] sm:w-[36px] sm:h-[36px] relative overflow-hidden font-black"
+                                                        <div className="flex-shrink-0 w-[54px] h-[54px] sm:w-[46px] sm:h-[46px] relative overflow-hidden font-black"
                                                             style={{ backgroundColor: appTheme === "light" ? `${nc}40` : `${nc}22`, border: `1.5px solid ${appTheme === "light" ? `${nc}80` : `${nc}40`}` }}>
                                                             <div style={{
                                                                 position: "absolute", bottom: 0, left: 0, right: 0,
@@ -5628,7 +5628,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 const label = ext || badge?.label || "TXT";
                                                 const fs = label.length <= 2 ? 10 : label.length <= 3 ? 8 : label.length <= 4 ? 7 : 6;
                                                 return (
-                                                    <div className="flex-shrink-0 w-[54px] h-[54px] sm:w-[36px] sm:h-[36px] flex items-center justify-center font-black overflow-hidden"
+                                                    <div className="flex-shrink-0 w-[54px] h-[54px] sm:w-[46px] sm:h-[46px] flex items-center justify-center font-black overflow-hidden"
                                                         style={{
                                                             fontSize: fs,
                                                             backgroundColor: appTheme === "light" ? `${color}45` : `${color}30`,
