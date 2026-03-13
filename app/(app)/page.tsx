@@ -486,6 +486,13 @@ function VoiceNotePlayer({ data, index, onTranscriptChange, onDelete, onConvertT
     const [transcript, setTranscript] = useState(data.transcript || "");
     const audioRef = useRef<HTMLAudioElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
+    const txRef = useRef<HTMLTextAreaElement>(null);
+
+    // Auto-size transcript on mount so full text is visible without focus
+    useEffect(() => {
+        const el = txRef.current;
+        if (el) { el.style.height = "auto"; el.style.height = el.scrollHeight + "px"; }
+    }, [transcript]);
 
     const fmt = (s: number) => `${Math.floor(s / 60).toString().padStart(2, "0")}:${Math.floor(s % 60).toString().padStart(2, "0")}`;
 
@@ -606,6 +613,7 @@ function VoiceNotePlayer({ data, index, onTranscriptChange, onDelete, onConvertT
                         </p>
                     ) : (
                         <textarea
+                            ref={txRef}
                             value={transcript}
                             onChange={(e) => {
                                 setTranscript(e.target.value);
@@ -613,7 +621,6 @@ function VoiceNotePlayer({ data, index, onTranscriptChange, onDelete, onConvertT
                                 e.target.style.height = "auto";
                                 e.target.style.height = e.target.scrollHeight + "px";
                             }}
-                            onFocus={(e) => { e.target.style.height = "auto"; e.target.style.height = e.target.scrollHeight + "px"; }}
                             placeholder="No transcript…"
                             className="flex-1 bg-transparent text-[11px] text-zinc-300 leading-relaxed resize-none outline-none border-none placeholder:text-zinc-700 overflow-hidden"
                             rows={1}
