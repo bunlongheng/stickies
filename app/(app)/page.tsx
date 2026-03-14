@@ -558,71 +558,72 @@ function VoiceNotePlayer({ data, index, onTranscriptChange, onDelete, onConvertT
     };
 
     return (
-        <div className="flex flex-col px-4 py-3 border-b border-zinc-800/50">
+        <div className="flex flex-col px-5 py-4 border-b border-zinc-800/40 gap-3">
             <audio ref={audioRef} src={data.audioUrl} preload="metadata"
                 onTimeUpdate={(e) => setCurrentTime((e.target as HTMLAudioElement).currentTime)}
                 onEnded={() => { setPlaying(false); setCurrentTime(0); }}
                 onError={(e) => console.warn("Audio load error:", (e.target as HTMLAudioElement).error)} />
 
-            {/* Top row: index + play + waveform + duration + action buttons */}
+            {/* Top row: play + waveform + duration + spacer + timestamp + actions */}
             <div className="flex items-center gap-3">
                 {/* Row number */}
-                <span className="text-[10px] font-black text-zinc-600 w-4 flex-shrink-0 select-none">{index + 1}</span>
+                <span className="text-[10px] font-black text-zinc-600 w-5 flex-shrink-0 select-none tabular-nums">{index + 1}</span>
 
                 {/* Play button */}
                 <button onClick={toggle}
-                    className="w-9 h-9 flex-shrink-0 rounded-full flex items-center justify-center bg-red-500 hover:bg-red-400 transition"
-                    style={{ boxShadow: "0 0 10px rgba(239,68,68,0.45)" }}>
+                    className="w-10 h-10 flex-shrink-0 rounded-full flex items-center justify-center bg-red-500 hover:bg-red-400 active:scale-95 transition-all"
+                    style={{ boxShadow: "0 0 14px rgba(239,68,68,0.5)" }}>
                     {playing
-                        ? <span className="flex gap-[3px]"><span className="w-[3px] h-3 bg-white rounded-full" /><span className="w-[3px] h-3 bg-white rounded-full" /></span>
-                        : <span className="w-0 h-0 border-t-[6px] border-b-[6px] border-l-[10px] border-t-transparent border-b-transparent border-l-white ml-0.5" />}
+                        ? <span className="flex gap-[3px]"><span className="w-[3px] h-3.5 bg-white rounded-full" /><span className="w-[3px] h-3.5 bg-white rounded-full" /></span>
+                        : <span className="w-0 h-0 border-t-[6px] border-b-[6px] border-l-[11px] border-t-transparent border-b-transparent border-l-white ml-0.5" />}
                 </button>
 
-                {/* Waveform + time */}
-                <canvas ref={canvasRef} width={240} height={48} style={{ background: "transparent", width: 70, height: 20 }} />
-                <span className="text-[10px] font-mono text-zinc-500 flex-shrink-0">{fmt(currentTime > 0 ? currentTime : data.duration)}</span>
+                {/* Waveform */}
+                <canvas ref={canvasRef} width={240} height={48} style={{ background: "transparent", width: 80, height: 22, flexShrink: 0 }} />
 
-                {/* Spacer */}
+                {/* Duration */}
+                <span className="text-[11px] font-mono text-zinc-500 flex-shrink-0 tabular-nums">{fmt(currentTime > 0 ? currentTime : data.duration)}</span>
+
                 <div className="flex-1" />
 
                 {/* Timestamp */}
                 {data.recordedAt && (
-                    <span className="text-[9px] text-zinc-700 font-mono flex-shrink-0">
+                    <span className="text-[9px] text-zinc-600 font-mono flex-shrink-0 hidden sm:block">
                         {new Date(data.recordedAt).toLocaleString()}
                     </span>
                 )}
 
-                {/* Action buttons — always visible, larger */}
-                <div className="flex items-center gap-2 flex-shrink-0">
+                {/* Action buttons */}
+                <div className="flex items-center gap-3 flex-shrink-0">
                     <a
                         href={data.audioUrl}
                         download={`voice-${data.recordedAt ? new Date(data.recordedAt).toISOString().slice(0,19).replace(/[:.]/g,"-") : index + 1}.webm`}
-                        className="text-zinc-500 hover:text-cyan-400 transition"
-                        title="Download audio file">
+                        className="text-zinc-500 hover:text-cyan-400 transition-colors"
+                        title="Download">
                         <ArrowDownTrayIcon className="w-5 h-5" />
                     </a>
                     {transcript && (
                         <button
                             onClick={() => navigator.clipboard.writeText(transcript)}
-                            className="text-zinc-500 hover:text-emerald-400 transition"
+                            className="text-zinc-500 hover:text-emerald-400 transition-colors"
                             title="Copy transcript">
                             <DocumentDuplicateIcon className="w-5 h-5" />
                         </button>
                     )}
                     {onDelete && (
                         <button onClick={onDelete}
-                            className="text-zinc-500 hover:text-red-500 transition"
-                            title="Delete recording">
+                            className="text-zinc-500 hover:text-red-500 transition-colors"
+                            title="Delete">
                             <XMarkIcon className="w-5 h-5" />
                         </button>
                     )}
                 </div>
             </div>
 
-            {/* Transcript below */}
-            <div className="mt-2 ml-7 flex flex-col gap-0.5">
+            {/* Transcript */}
+            <div className="ml-8 flex flex-col gap-1">
                 {playing && transcript ? (
-                    <p className="text-xs leading-relaxed" style={{ fontFamily: "inherit" }}>
+                    <p className="text-[12px] leading-relaxed text-zinc-400" style={{ fontFamily: "inherit" }}>
                         {words.map((chunk, i) => {
                             if (!chunk.trim()) return <span key={i}>{chunk}</span>;
                             const isHighlighted = wordIdx < highlightedCount;
@@ -634,7 +635,7 @@ function VoiceNotePlayer({ data, index, onTranscriptChange, onDelete, onConvertT
                                     background: isCurrent ? "rgba(239,68,68,0.25)" : "transparent",
                                     borderRadius: 2,
                                     transition: "color 0.1s, background 0.1s",
-                                    padding: isCurrent ? "0 1px" : undefined,
+                                    padding: isCurrent ? "0 2px" : undefined,
                                 }}>{chunk}</span>
                             );
                         })}
@@ -650,13 +651,13 @@ function VoiceNotePlayer({ data, index, onTranscriptChange, onDelete, onConvertT
                             e.target.style.height = e.target.scrollHeight + "px";
                         }}
                         placeholder="No transcript…"
-                        className="w-full bg-transparent text-[11px] text-zinc-300 leading-relaxed resize-none outline-none border-none placeholder:text-zinc-700 overflow-hidden"
+                        className="w-full bg-transparent text-[12px] text-zinc-300 leading-relaxed resize-none outline-none border-none placeholder:text-zinc-600 overflow-hidden"
                         rows={1}
                         style={{ fontFamily: "inherit", height: "auto", minHeight: "1.5rem" }}
                     />
                 )}
                 {data.summary && (
-                    <p className="text-[10px] text-zinc-600 leading-snug italic">{data.summary}</p>
+                    <p className="text-[11px] text-zinc-600 leading-snug italic">{data.summary}</p>
                 )}
             </div>
         </div>
