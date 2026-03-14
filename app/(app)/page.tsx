@@ -3713,6 +3713,23 @@ const fireIntegrations = (trigger: string, note: any) => {
 
     const isFolderGridView = !search.trim() && ((!activeFolder) || (kanbanMode && dbData.some(r => r.is_folder && r.parent_folder_name === activeFolder)));
     const isListMode = editMode || mainListMode; // edit mode always forces list layout
+
+    // Compute exact square cell size via ResizeObserver → set as CSS var on grid container
+    useEffect(() => {
+        const el = mainScrollRef.current;
+        if (!el) return;
+        const update = () => {
+            if (isListMode) { el.style.removeProperty('--cell-size'); return; }
+            const gap = 6;
+            const cellSize = Math.floor((el.clientWidth - (gridCols - 1) * gap) / gridCols);
+            el.style.setProperty('--cell-size', cellSize + 'px');
+        };
+        update();
+        const ro = new ResizeObserver(update);
+        ro.observe(el);
+        return () => ro.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isListMode, gridCols]);
     const isNoteGridView = Boolean(activeFolder) && !search.trim();
     const fitAllMode = (isFolderGridView || isNoteGridView) && displayItems.length > 12;
     const fitCols = fitAllMode ? Math.ceil(Math.sqrt(displayItems.length)) : 0;
