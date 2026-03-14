@@ -5540,12 +5540,12 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             return { position: "relative", isolation: "isolate", "--row-color": c } as React.CSSProperties;
                                         }
                                         return item.is_folder
-                                            ? { position: "relative", isolation: "isolate", paddingBottom: "100%", backgroundColor: item.name === "CLAUDE" ? "#ffffff" : c }
-                                            : { position: "relative", isolation: "isolate", paddingBottom: "100%", backgroundColor: `${c}55`, border: `1.5px solid ${c}88` };
+                                            ? { isolation: "isolate", backgroundColor: item.name === "CLAUDE" ? "#ffffff" : c }
+                                            : { isolation: "isolate", backgroundColor: `${c}55`, border: `1.5px solid ${c}88` };
                                     })()}
                                     className={`${isListMode
                                         ? `group list-row-hover flex items-center gap-3 px-4 py-1 sm:py-1 border-b border-white/5 cursor-pointer select-none transition-colors active:bg-white/10 overflow-hidden ${isDragging ? "opacity-30" : dt?.mode === "into" ? "bg-cyan-950/60 ring-1 ring-inset ring-cyan-400" : ""} ${isSelectMode && !item.is_folder && selectedIds.has(String(item.id)) ? "bg-blue-950/50" : ""} ${isFolderSelectMode && item.is_folder && selectedFolderNames.includes(item.name || "") ? "bg-emerald-950/50" : ""}`
-                                        : `relative min-w-0 cursor-pointer transition-all group overflow-hidden ${isDragging ? "opacity-30 scale-95" : dt?.mode === "into" ? "ring-4 ring-cyan-400 ring-inset z-10" : ""}`}`}>
+                                        : `grid-square-tile min-w-0 cursor-pointer transition-all group ${isDragging ? "opacity-30 scale-95" : dt?.mode === "into" ? "ring-4 ring-cyan-400 ring-inset z-10" : ""}`}`}>
                                     {/* Cursor spotlight glow */}
                                     {isListMode && glowCard?.id === tileId && (() => {
                                         const c = item.color || item.folder_color || "#888888";
