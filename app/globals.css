@@ -2,9 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Square grid tiles — cross-browser (Safari padding-% bug workaround) */
+/* Square grid tiles — JS-measured height via CSS var (works on all browsers incl. iOS Safari) */
 .grid-square-tile {
-  aspect-ratio: 1 / 1;
+  height: var(--cell-size, auto);
   overflow: hidden;
   position: relative;
 }
