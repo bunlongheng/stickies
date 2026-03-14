@@ -6825,15 +6825,18 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         <ArrowRightIcon className="w-4 h-4 text-zinc-600 flex-shrink-0" />
                                     </div>
                                 </button>
-                                <button type="button" className="w-full flex items-center gap-4 px-6 py-4 text-left text-zinc-300 hover:bg-white/5 hover:text-white active:bg-white/10 transition"
-                                    onClick={async () => { setShowFolderActions(false); await fetch("/api/stickies/logout", { method: "POST" }); window.location.href = "/sign-in"; }}>
-                                    <ArrowRightOnRectangleIcon className="w-5 h-5 flex-shrink-0" />
-                                    <span className="text-xs font-black tracking-wide flex-1">Sign Out</span>
-                                </button>
                             </>)}
                         </div>
-                        <div className="border-t border-white/10 p-4">
-                            <button type="button" onClick={() => { setShowFolderActions(false); setShowFolderColorPicker(false); setShowFolderIconPicker(false); setShowFolderMovePicker(false); }} className="w-full py-3 bg-white text-black font-black uppercase text-xs tracking-wide hover:bg-zinc-100 transition">Close</button>
+                        <div className="border-t border-white/10 p-4 flex gap-3">
+                            <button type="button" onClick={() => { setShowFolderActions(false); setShowFolderColorPicker(false); setShowFolderIconPicker(false); setShowFolderMovePicker(false); }} className="flex-1 py-3 bg-white text-black font-black uppercase text-xs tracking-wide hover:bg-zinc-100 transition">Close</button>
+                            {folderStack.length === 0 && (
+                                <button type="button"
+                                    onClick={async () => { setShowFolderActions(false); await fetch("/api/stickies/logout", { method: "POST" }); window.location.href = "/sign-in"; }}
+                                    className="flex items-center gap-2 px-5 py-3 bg-red-500/10 text-red-400 hover:bg-red-500/20 active:bg-red-500/30 transition font-black uppercase text-xs tracking-wide border border-red-500/20">
+                                    <ArrowRightOnRectangleIcon className="w-4 h-4 flex-shrink-0" />
+                                    Sign Out
+                                </button>
+                            )}
                         </div>
                     </div>
                 </div>
