@@ -594,25 +594,25 @@ function VoiceNotePlayer({ data, index, onTranscriptChange, onDelete, onConvertT
                 )}
 
                 {/* Action buttons */}
-                <div className="flex items-center gap-3 flex-shrink-0">
+                <div className="flex items-center gap-1 flex-shrink-0">
                     <a
                         href={data.audioUrl}
                         download={`voice-${data.recordedAt ? new Date(data.recordedAt).toISOString().slice(0,19).replace(/[:.]/g,"-") : index + 1}.webm`}
-                        className="text-zinc-500 hover:text-cyan-400 transition-colors"
+                        className="w-10 h-10 flex items-center justify-center text-zinc-500 hover:text-cyan-400 transition-colors"
                         title="Download">
                         <ArrowDownTrayIcon className="w-5 h-5" />
                     </a>
                     {transcript && (
                         <button
                             onClick={() => navigator.clipboard.writeText(transcript)}
-                            className="text-zinc-500 hover:text-emerald-400 transition-colors"
+                            className="w-10 h-10 flex items-center justify-center text-zinc-500 hover:text-emerald-400 transition-colors"
                             title="Copy transcript">
                             <DocumentDuplicateIcon className="w-5 h-5" />
                         </button>
                     )}
                     {onDelete && (
                         <button onClick={onDelete}
-                            className="text-zinc-500 hover:text-red-500 transition-colors"
+                            className="w-10 h-10 flex items-center justify-center text-zinc-500 hover:text-red-500 transition-colors"
                             title="Delete">
                             <XMarkIcon className="w-5 h-5" />
                         </button>
