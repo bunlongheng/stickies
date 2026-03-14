@@ -5540,8 +5540,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             return { position: "relative", isolation: "isolate", "--row-color": c } as React.CSSProperties;
                                         }
                                         return item.is_folder
-                                            ? { position: "relative", isolation: "isolate", backgroundColor: item.name === "CLAUDE" ? "#ffffff" : c }
-                                            : { position: "relative", isolation: "isolate", backgroundColor: `${c}55`, border: `1.5px solid ${c}88` };
+                                            ? { position: "relative", isolation: "isolate", aspectRatio: "1", backgroundColor: item.name === "CLAUDE" ? "#ffffff" : c }
+                                            : { position: "relative", isolation: "isolate", aspectRatio: "1", backgroundColor: `${c}55`, border: `1.5px solid ${c}88` };
                                     })()}
                                     className={`${isListMode
                                         ? `group list-row-hover flex items-center gap-3 px-4 py-1 sm:py-1 border-b border-white/5 cursor-pointer select-none transition-colors active:bg-white/10 overflow-hidden ${isDragging ? "opacity-30" : dt?.mode === "into" ? "bg-cyan-950/60 ring-1 ring-inset ring-cyan-400" : ""} ${isSelectMode && !item.is_folder && selectedIds.has(String(item.id)) ? "bg-blue-950/50" : ""} ${isFolderSelectMode && item.is_folder && selectedFolderNames.includes(item.name || "") ? "bg-emerald-950/50" : ""}`
@@ -5716,8 +5716,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         </>
                                     ) : (
                                         <>
-                                            {/* padding-bottom:100% forces height = width = perfect square in any grid context */}
-                                            <div style={{ paddingBottom: "100%" }} />
                                             {!item.is_folder && (
                                                 <>
                                                     <button
