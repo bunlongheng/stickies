@@ -2,6 +2,13 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Square grid tiles — cross-browser (Safari padding-% bug workaround) */
+.grid-square-tile {
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  position: relative;
+}
+
 :root {
   --foreground-rgb: 0, 0, 0;
   --background-start-rgb: 255, 255, 255;
