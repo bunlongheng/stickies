@@ -558,99 +558,105 @@ function VoiceNotePlayer({ data, index, onTranscriptChange, onDelete, onConvertT
     };
 
     return (
-        <div className="group flex items-start gap-3 px-4 py-3 border-b border-zinc-800/50">
+        <div className="flex flex-col px-4 py-3 border-b border-zinc-800/50">
             <audio ref={audioRef} src={data.audioUrl} preload="metadata"
                 onTimeUpdate={(e) => setCurrentTime((e.target as HTMLAudioElement).currentTime)}
                 onEnded={() => { setPlaying(false); setCurrentTime(0); }}
                 onError={(e) => console.warn("Audio load error:", (e.target as HTMLAudioElement).error)} />
 
-            {/* Row number */}
-            <span className="text-[10px] font-black text-zinc-600 w-4 flex-shrink-0 pt-1.5 select-none">{index + 1}</span>
+            {/* Top row: index + play + waveform + duration + action buttons */}
+            <div className="flex items-center gap-3">
+                {/* Row number */}
+                <span className="text-[10px] font-black text-zinc-600 w-4 flex-shrink-0 select-none">{index + 1}</span>
 
-            {/* Play button + bars + duration inline */}
-            <div className="flex items-center gap-1.5 flex-shrink-0 mt-0.5">
+                {/* Play button */}
                 <button onClick={toggle}
-                    className="w-7 h-7 flex-shrink-0 rounded-full flex items-center justify-center bg-red-500 hover:bg-red-400 transition"
-                    style={{ boxShadow: "0 0 8px rgba(239,68,68,0.4)" }}>
+                    className="w-9 h-9 flex-shrink-0 rounded-full flex items-center justify-center bg-red-500 hover:bg-red-400 transition"
+                    style={{ boxShadow: "0 0 10px rgba(239,68,68,0.45)" }}>
                     {playing
-                        ? <span className="flex gap-[2px]"><span className="w-[2px] h-2.5 bg-white rounded-full" /><span className="w-[2px] h-2.5 bg-white rounded-full" /></span>
-                        : <span className="w-0 h-0 border-t-[5px] border-b-[5px] border-l-[9px] border-t-transparent border-b-transparent border-l-white ml-0.5" />}
+                        ? <span className="flex gap-[3px]"><span className="w-[3px] h-3 bg-white rounded-full" /><span className="w-[3px] h-3 bg-white rounded-full" /></span>
+                        : <span className="w-0 h-0 border-t-[6px] border-b-[6px] border-l-[10px] border-t-transparent border-b-transparent border-l-white ml-0.5" />}
                 </button>
-                <canvas ref={canvasRef} width={240} height={48} style={{ background: "transparent", width: 60, height: 18 }} />
-                <span className="text-[9px] font-mono text-zinc-600 flex-shrink-0">{fmt(currentTime > 0 ? currentTime : data.duration)}</span>
-            </div>
 
-            {/* Transcript + meta */}
-            <div className="flex-1 flex flex-col gap-0.5 min-w-0">
-                <div className="flex items-start gap-2">
-                    {playing && transcript ? (
-                        <p className="flex-1 text-xs leading-relaxed" style={{ fontFamily: "inherit" }}>
-                            {words.map((chunk, i) => {
-                                if (!chunk.trim()) return <span key={i}>{chunk}</span>;
-                                const isHighlighted = wordIdx < highlightedCount;
-                                const isCurrent = wordIdx === highlightedCount - 1;
-                                wordIdx++;
-                                return (
-                                    <span key={i} style={{
-                                        color: isHighlighted ? "#ffffff" : "#52525b",
-                                        background: isCurrent ? "rgba(239,68,68,0.25)" : "transparent",
-                                        borderRadius: 2,
-                                        transition: "color 0.1s, background 0.1s",
-                                        padding: isCurrent ? "0 1px" : undefined,
-                                    }}>{chunk}</span>
-                                );
-                            })}
-                        </p>
-                    ) : (
-                        <textarea
-                            ref={txRef}
-                            value={transcript}
-                            onChange={(e) => {
-                                setTranscript(e.target.value);
-                                onTranscriptChange?.(e.target.value);
-                                e.target.style.height = "auto";
-                                e.target.style.height = e.target.scrollHeight + "px";
-                            }}
-                            placeholder="No transcript…"
-                            className="flex-1 bg-transparent text-[11px] text-zinc-300 leading-relaxed resize-none outline-none border-none placeholder:text-zinc-700 overflow-hidden"
-                            rows={1}
-                            style={{ fontFamily: "inherit", height: "auto", minHeight: "1.5rem" }}
-                        />
+                {/* Waveform + time */}
+                <canvas ref={canvasRef} width={240} height={48} style={{ background: "transparent", width: 70, height: 20 }} />
+                <span className="text-[10px] font-mono text-zinc-500 flex-shrink-0">{fmt(currentTime > 0 ? currentTime : data.duration)}</span>
+
+                {/* Spacer */}
+                <div className="flex-1" />
+
+                {/* Timestamp */}
+                {data.recordedAt && (
+                    <span className="text-[9px] text-zinc-700 font-mono flex-shrink-0">
+                        {new Date(data.recordedAt).toLocaleString()}
+                    </span>
+                )}
+
+                {/* Action buttons — always visible, larger */}
+                <div className="flex items-center gap-2 flex-shrink-0">
+                    <a
+                        href={data.audioUrl}
+                        download={`voice-${data.recordedAt ? new Date(data.recordedAt).toISOString().slice(0,19).replace(/[:.]/g,"-") : index + 1}.webm`}
+                        className="text-zinc-500 hover:text-cyan-400 transition"
+                        title="Download audio file">
+                        <ArrowDownTrayIcon className="w-5 h-5" />
+                    </a>
+                    {transcript && (
+                        <button
+                            onClick={() => navigator.clipboard.writeText(transcript)}
+                            className="text-zinc-500 hover:text-emerald-400 transition"
+                            title="Copy transcript">
+                            <DocumentDuplicateIcon className="w-5 h-5" />
+                        </button>
                     )}
-                    {data.recordedAt && (
-                        <span className="text-[9px] text-zinc-700 font-mono flex-shrink-0 pt-0.5">
-                            {new Date(data.recordedAt).toLocaleString()}
-                        </span>
+                    {onDelete && (
+                        <button onClick={onDelete}
+                            className="text-zinc-500 hover:text-red-500 transition"
+                            title="Delete recording">
+                            <XMarkIcon className="w-5 h-5" />
+                        </button>
                     )}
                 </div>
-                {data.summary && (
-                    <p className="text-[10px] text-zinc-600 leading-snug italic">{data.summary}</p>
-                )}
             </div>
 
-            {/* Actions */}
-            <div className="opacity-0 group-hover:opacity-100 transition flex flex-col gap-1.5 flex-shrink-0 mt-1.5">
-                <a
-                    href={data.audioUrl}
-                    download={`voice-${data.recordedAt ? new Date(data.recordedAt).toISOString().slice(0,19).replace(/[:.]/g,"-") : index + 1}.webm`}
-                    className="text-zinc-700 hover:text-cyan-400 transition"
-                    title="Download audio file">
-                    <ArrowDownTrayIcon className="w-4 h-4" />
-                </a>
-                {transcript && (
-                    <button
-                        onClick={() => navigator.clipboard.writeText(transcript)}
-                        className="text-zinc-700 hover:text-emerald-400 transition"
-                        title="Copy transcript">
-                        <DocumentDuplicateIcon className="w-4 h-4" />
-                    </button>
+            {/* Transcript below */}
+            <div className="mt-2 ml-7 flex flex-col gap-0.5">
+                {playing && transcript ? (
+                    <p className="text-xs leading-relaxed" style={{ fontFamily: "inherit" }}>
+                        {words.map((chunk, i) => {
+                            if (!chunk.trim()) return <span key={i}>{chunk}</span>;
+                            const isHighlighted = wordIdx < highlightedCount;
+                            const isCurrent = wordIdx === highlightedCount - 1;
+                            wordIdx++;
+                            return (
+                                <span key={i} style={{
+                                    color: isHighlighted ? "#ffffff" : "#52525b",
+                                    background: isCurrent ? "rgba(239,68,68,0.25)" : "transparent",
+                                    borderRadius: 2,
+                                    transition: "color 0.1s, background 0.1s",
+                                    padding: isCurrent ? "0 1px" : undefined,
+                                }}>{chunk}</span>
+                            );
+                        })}
+                    </p>
+                ) : (
+                    <textarea
+                        ref={txRef}
+                        value={transcript}
+                        onChange={(e) => {
+                            setTranscript(e.target.value);
+                            onTranscriptChange?.(e.target.value);
+                            e.target.style.height = "auto";
+                            e.target.style.height = e.target.scrollHeight + "px";
+                        }}
+                        placeholder="No transcript…"
+                        className="w-full bg-transparent text-[11px] text-zinc-300 leading-relaxed resize-none outline-none border-none placeholder:text-zinc-700 overflow-hidden"
+                        rows={1}
+                        style={{ fontFamily: "inherit", height: "auto", minHeight: "1.5rem" }}
+                    />
                 )}
-                {onDelete && (
-                    <button onClick={onDelete}
-                        className="text-zinc-700 hover:text-red-500 transition"
-                        title="Delete recording">
-                        <XMarkIcon className="w-4 h-4" />
-                    </button>
+                {data.summary && (
+                    <p className="text-[10px] text-zinc-600 leading-snug italic">{data.summary}</p>
                 )}
             </div>
         </div>
@@ -1173,7 +1179,7 @@ export default function NotesMaster() {
     const [pusherFlash, setPusherFlash] = useState(false);
     const [aiMode, setAiMode] = useState<{ active: boolean; message: string }>({ active: false, message: "" });
     const [botColor, setBotColor] = useState({ primary: "#7c3aed", secondary: "#a78bfa", light: "#c4b5fd" });
-    const [mainListMode, setMainListMode] = useState(true);
+    const [mainListMode, setMainListMode] = useState(false);
     const [navMode, setNavMode] = useState<"folders-and-files" | "files-only">("folders-and-files");
     const [kanbanMode, setKanbanMode] = useState(false);
     const [appTheme, setAppTheme] = useState<"dark" | "light" | "monokai">("dark");
@@ -2408,7 +2414,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                     }
                 }
                 localStorage.removeItem(ACTIVE_DRAFT_KEY);
-                if (!silent) { const t = (payload.title || "Untitled").slice(0, 10) + ((payload.title || "").length > 10 ? "…" : ""); showToast(existingNoteIdStr ? `"${t}" updated` : `+ "${t}"`, payload.folder_color || "#34C759"); }
+                if (!silent) { const t = (payload.title || "Untitled").slice(0, 10) + ((payload.title || "").length > 10 ? "…" : ""); const isFirst = !existingNoteIdStr && dbData.filter(n => !n.is_folder && !n._optimistic).length <= 1; showToast(existingNoteIdStr ? `"${t}" updated` : `+ "${t}"`, payload.folder_color || "#34C759", isFirst); }
                 return true;
             } catch (err) {
                 console.error("Save Error:", err);
@@ -3596,7 +3602,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                 setFolderStack((prev) => prev.map((f) => f.id === optimisticId ? { ...f, id: String(data.id) } : f));
             }
             playSound("create");
-            showToast(`+ "${folderName}"`, color);
+            const isFirstFolder = dbData.filter(n => n.is_folder).length <= 1;
+            showToast(`+ "${folderName}"`, color, isFirstFolder);
         } catch (err) {
             console.error("Create folder failed:", err);
             setDbData((prev) => prev.filter((row) => String(row.id) !== optimisticId));
@@ -6770,7 +6777,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 {/* VIEW MODE */}
                                 <div className="px-6 py-3 border-b border-white/[0.06]">
                                     <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-2">View Mode</p>
-                                    <div className="grid grid-cols-4 gap-1.5">
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
                                         <button type="button" onClick={() => { setMainListMode(true); setKanbanMode(false); }}
                                             className={`py-2 rounded flex flex-col items-center gap-1 transition ${mainListMode && !kanbanMode ? "bg-white text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"}`}>
                                             <ListBulletIcon className="w-4 h-4" />
@@ -6782,12 +6789,12 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             <span className="text-[9px] font-black uppercase tracking-wide">Thumb</span>
                                         </button>
                                         <button type="button" onClick={() => { setKanbanMode(true); setMainListMode(false); }}
-                                            className={`py-2 rounded flex flex-col items-center gap-1 transition ${kanbanMode ? "bg-white text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"}`}>
+                                            className={`hidden sm:flex py-2 rounded flex-col items-center gap-1 transition ${kanbanMode ? "bg-white text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"}`}>
                                             <ViewColumnsIcon className="w-4 h-4" />
                                             <span className="text-[9px] font-black uppercase tracking-wide">Kanban</span>
                                         </button>
                                         <button type="button" onClick={() => { setShowFolderActions(false); setShowGlobalGraph(true); }}
-                                            className="py-2 rounded flex flex-col items-center gap-1 transition bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200">
+                                            className="hidden sm:flex py-2 rounded flex-col items-center gap-1 transition bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200">
                                             <CubeTransparentIcon className="w-4 h-4" />
                                             <span className="text-[9px] font-black uppercase tracking-wide">Graph</span>
                                         </button>
