@@ -3721,7 +3721,9 @@ const fireIntegrations = (trigger: string, note: any) => {
         const update = () => {
             if (isListMode) { el.style.removeProperty('--cell-size'); return; }
             const gap = 6;
-            const cellSize = Math.floor((el.clientWidth - (gridCols - 1) * gap) / gridCols);
+            const cs = getComputedStyle(el);
+            const px = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
+            const cellSize = Math.floor((el.clientWidth - px - (gridCols - 1) * gap) / gridCols);
             el.style.setProperty('--cell-size', cellSize + 'px');
         };
         update();
