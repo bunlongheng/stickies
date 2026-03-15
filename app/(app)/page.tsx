@@ -1608,6 +1608,21 @@ export default function NotesMaster() {
         } catch { /* ignore */ }
     }, [listModeNotes]);
 
+    // Sync listModeNotes from DB on initial data load
+    useEffect(() => {
+        if (!isDataLoaded) return;
+        const checklistIds = dbData
+            .filter((r: any) => !r.is_folder && (r.list_mode || r.type === "checklist"))
+            .map((r: any) => String(r.id));
+        if (checklistIds.length > 0) {
+            setListModeNotes((prev) => {
+                const next = new Set(prev);
+                checklistIds.forEach((id: string) => next.add(id));
+                return next;
+            });
+        }
+    }, [isDataLoaded]);
+
     useEffect(() => {
         try {
             localStorage.setItem(GRAPH_MODE_KEY, JSON.stringify([...graphModeNotes]));
@@ -3233,10 +3248,11 @@ const fireIntegrations = (trigger: string, note: any) => {
             }
             localWriteRef.current.set(currentNoteId, Date.now());
             void notesApi.update(currentNoteId, { list_mode: newVal, type: newVal ? "checklist" : null });
-            // Update dbData locally so editingNote reflects new type immediately
+            // Update dbData + editingNote locally so type reflects change immediately everywhere
             setDbData((prev: any[]) => prev.map((r: any) =>
                 String(r.id) === currentNoteId ? { ...r, list_mode: newVal, type: newVal ? "checklist" : null } : r
             ));
+            setEditingNote((prev: any) => prev ? { ...prev, list_mode: newVal, type: newVal ? "checklist" : null } : prev);
             showToast(newVal ? "Checklist on" : "Checklist off", newVal ? "#34C759" : "#8e8e93");
             return next;
         });
@@ -5779,7 +5795,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 const isChecklist = isListModeNote || (item as any).type === "checklist" || /^\[[ x]\]/im.test(c);
                                                 const lines = c.split("\n").filter((l: string) => l.trim());
                                                 const checked = lines.filter((l: string) => /^\[x\]/i.test(l.trim())).length;
-                                                const typeBadge = TYPE_BADGE[(item as any).type];
+                                                const effectiveType = (isListModeNote || (item as any).list_mode) ? "checklist" : (item as any).type;
+                                                const typeBadge = TYPE_BADGE[effectiveType];
                                                 return <div className="flex flex-col items-end flex-shrink-0 gap-1">
                                                     {isChecklist && lines.length > 0 && (
                                                         <span className="text-[13px] font-black tabular-nums">
