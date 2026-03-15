@@ -4641,11 +4641,12 @@ const fireIntegrations = (trigger: string, note: any) => {
                 const cy = 28;
                 return (
                     <>
-                        {/* Confetti — only when explicitly requested */}
-                        {toastConfetti && Array.from({ length: 18 }).map((_, i) => {
-                            const angle = (i / 18) * 360;
-                            const dist = 44 + (i % 5) * 14;
-                            const size = 4 + (i % 4);
+                        {/* Confetti — mini on every toast, bigger when explicitly requested */}
+                        {Array.from({ length: toastConfetti ? 18 : 10 }).map((_, i) => {
+                            const count = toastConfetti ? 18 : 10;
+                            const angle = (i / count) * 360;
+                            const dist = toastConfetti ? 44 + (i % 5) * 14 : 24 + (i % 4) * 7;
+                            const size = toastConfetti ? 4 + (i % 4) : 2 + (i % 3);
                             const tx = Math.round(cx + Math.cos(angle * Math.PI / 180) * dist);
                             const ty = Math.round(cy + Math.sin(angle * Math.PI / 180) * dist);
                             const cols = [toastColor, "#ffffff", "#FFD700", "#a78bfa", "#34d399", "#f472b6"];
@@ -4670,7 +4671,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 boxShadow: `0 8px 26px ${toastColor}66`,
                             }}>
                                 <span style={{ width: 10, height: 10, borderRadius: "50%", border: "1.5px solid rgba(255,255,255,0.35)", borderTopColor: "#fff", display: "inline-block", flexShrink: 0, animation: "toastSpin 0.7s linear infinite" }} />
-                                <span className="font-black uppercase tracking-wide text-[7px] sm:text-[8px] leading-none whitespace-nowrap">{toast}</span>
+                                <span className="font-black uppercase tracking-wide text-[7px] sm:text-[8px] leading-snug max-w-[220px] break-words text-center">{toast}</span>
                             </div>
                         </div>
                     </>
@@ -5143,7 +5144,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 language="mermaid"
                                 editing={codeEditMode}
                                 onChange={setContent}
-                                onBlur={() => { setCodeEditMode(false); void saveNote({ silent: false }); }}
+                                onBlur={() => { setCodeEditMode(false); void saveNote({ silent: true }); }}
                                 onClick={() => setCodeEditMode(true)}
                             />
                         ) : markdownMode ? (
@@ -5220,7 +5221,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 language={noteType}
                                 editing={codeEditMode}
                                 onChange={setContent}
-                                onBlur={() => { setCodeEditMode(false); void saveNote({ silent: false }); }}
+                                onBlur={() => { setCodeEditMode(false); void saveNote({ silent: true }); }}
                                 onClick={() => setCodeEditMode(true)}
                             />
                         ) : jsonMode ? (
@@ -5230,7 +5231,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 editing={codeEditMode}
                                 wordWrap={!codeEditMode}
                                 onChange={setContent}
-                                onBlur={() => { setCodeEditMode(false); void saveNote({ silent: false }); }}
+                                onBlur={() => { setCodeEditMode(false); void saveNote({ silent: true }); }}
                                 onClick={() => setCodeEditMode(true)}
                             />
                         ) : noteType === "rich" ? (
@@ -5240,7 +5241,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     noteId={currentNoteId}
                                     content={content}
                                     onChange={(html) => setContent(html)}
-                                    onBlur={() => void saveNote({ silent: false })}
+                                    onBlur={() => void saveNote({ silent: true })}
                                     onUploadImage={async (file) => {
                                         const token = await getAuthToken();
                                         const fd = new FormData();
@@ -5267,7 +5268,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     onClick={(e) => { closeEditorTools(); handleCursorUpdate(e); }}
                                     onScroll={handleEditorScroll}
                                     onFocus={(e) => { closeEditorTools(); handleCursorUpdate(e); }}
-                                    onBlur={() => void saveNote({ silent: false })}
+                                    onBlur={() => void saveNote({ silent: true })}
                                     onPaste={handleEditorPaste}
                                     className="note-textarea ios-editor-scroll relative z-10 w-full h-full bg-black pt-2 px-3 pb-3 outline-none resize-none font-mono leading-5 overflow-x-hidden overscroll-none touch-pan-y"
                                     style={{ paddingRight: "80px" }}
