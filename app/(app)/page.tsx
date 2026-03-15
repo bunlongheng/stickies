@@ -5668,7 +5668,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             })()}
                                             <div className="flex-1 min-w-0">
                                                 <div className="text-[13px] font-semibold tracking-tight text-white truncate">
-                                                    {item.is_folder ? `${item.name}/` : item.title}
+                                                    {item.is_folder ? <>{item.name}<span className="text-white/30 font-light ml-0.5">/</span></> : item.title}
                                                 </div>
                                                 {item.is_folder ? (
                                                     <div className="text-[13px] sm:text-[13px] text-zinc-500 font-medium">
