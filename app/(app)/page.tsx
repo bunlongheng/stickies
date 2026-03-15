@@ -5798,12 +5798,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 const effectiveType = (isListModeNote || (item as any).list_mode) ? "checklist" : (item as any).type;
                                                 const typeBadge = TYPE_BADGE[effectiveType];
                                                 return <div className="flex flex-col items-end flex-shrink-0 gap-1">
-                                                    {isChecklist && lines.length > 0 && (
-                                                        <span className="text-[13px] font-black tabular-nums">
-                                                            <span style={{ color: "#22c55e", textShadow: checked > 0 ? "0 0 8px rgba(34,197,94,0.7)" : "none" }}>{checked}</span>
-                                                            <span style={{ color: "#3f3f46" }}>/{lines.length}</span>
-                                                        </span>
-                                                    )}
                                                     <div className="flex items-center gap-1.5 flex-shrink-0">
                                                         {typeBadge && (
                                                             <span className="text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-full"
