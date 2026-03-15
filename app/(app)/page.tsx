@@ -31,6 +31,7 @@ import ExclamationTriangleIcon from "@heroicons/react/24/outline/ExclamationTria
 import ArrowRightOnRectangleIcon from "@heroicons/react/24/outline/ArrowRightOnRectangleIcon";
 import Cog6ToothIcon from "@heroicons/react/24/outline/Cog6ToothIcon";
 import CheckIcon from "@heroicons/react/24/outline/CheckIcon";
+import ChevronDownIcon from "@heroicons/react/24/outline/ChevronDownIcon";
 import EyeIcon from "@heroicons/react/24/outline/EyeIcon";
 import CodeBracketIcon from "@heroicons/react/24/outline/CodeBracketIcon";
 import FaceSmileIcon from "@heroicons/react/24/outline/FaceSmileIcon";
@@ -1185,6 +1186,7 @@ export default function NotesMaster() {
     const isAdmin = userEmail === "bheng.code@gmail.com";
     const [mainListMode, setMainListMode] = useState(false);
     const [defaultFolder, setDefaultFolder] = useState<string>("CLAUDE");
+    const [showDefaultFolderPicker, setShowDefaultFolderPicker] = useState(false);
     const [navMode, setNavMode] = useState<"folders-and-files" | "files-only">("folders-and-files");
     const [kanbanMode, setKanbanMode] = useState(false);
     const [appTheme, setAppTheme] = useState<"dark" | "light" | "monokai">("dark");
@@ -2151,6 +2153,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                     count: noteCountByFolderId.get(rowId) || noteCountByFolder.get(folderName) || 0,
                     subfolderCount: subfolderCountByFolder.get(folderName) || 0,
                     icon: folderIcons[folderName] || "",
+                    parent_folder_name: row.parent_folder_name || null,
                 };
             })
             .sort((a, b) => a.order - b.order);
@@ -6321,7 +6324,7 @@ const fireIntegrations = (trigger: string, note: any) => {
 
             {/* SETTINGS + INTEGRATIONS PANEL (single sliding container) */}
             {showFolderActions && (
-                <div className="fixed inset-0 z-[510] flex items-center justify-center p-4 lg:items-stretch lg:justify-end lg:p-0" onClick={() => { setShowFolderActions(false); setShowIntegrationsPanel(false); setConfiguringIntegration(null); setShowAutomationsPanel(false); setSelectedAutomation(null); setShowFolderColorPicker(false); setShowFolderIconPicker(false); setShowFolderMovePicker(false); }}>
+                <div className="fixed inset-0 z-[510] flex items-center justify-center p-4 lg:items-stretch lg:justify-end lg:p-0" onClick={() => { setShowFolderActions(false); setShowIntegrationsPanel(false); setConfiguringIntegration(null); setShowAutomationsPanel(false); setSelectedAutomation(null); setShowFolderColorPicker(false); setShowFolderIconPicker(false); setShowFolderMovePicker(false); setShowDefaultFolderPicker(false); }}>
                     <div className="note-actions-panel bg-zinc-900 border border-white/15 w-full max-w-sm flex flex-col overflow-hidden lg:max-w-[300px] lg:w-[300px] lg:h-full lg:border-l lg:border-r-0 lg:border-t-0 lg:border-b-0 lg:rounded-none relative" onClick={(e) => e.stopPropagation()}>
 
                         {/* Depth level watermark */}
@@ -6804,78 +6807,92 @@ const fireIntegrations = (trigger: string, note: any) => {
                             {/* L1 only: App Settings, Graph, Integrations, Sign Out */}
                             {folderStack.length === 0 && (<>
                                 {/* DEFAULT NOTEBOOK */}
-                                <div className="px-6 py-3 border-b border-white/[0.06]">
-                                    <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-2">Default Notebook</p>
-                                    <div className="flex flex-col gap-1">
-                                        {[{ name: "", label: "None — open root" }, ...folders.filter(f => f.name && !f.parent_folder_name).map(f => ({ name: f.name, label: f.name, color: f.color, icon: folderIcons[f.name] }))].map((f) => {
-                                            const isSelected = (defaultFolder || "") === f.name;
-                                            const fc = (f as any).color;
-                                            return (
-                                                <button key={f.name || "none"} type="button"
-                                                    onClick={() => { setDefaultFolder(f.name); localStorage.setItem(DEFAULT_FOLDER_KEY, f.name); }}
-                                                    className="flex items-center gap-2.5 px-3 py-2 text-left transition"
-                                                    style={{ background: isSelected ? "rgba(255,255,255,0.08)" : "transparent", border: `1px solid ${isSelected ? "rgba(255,255,255,0.15)" : "transparent"}` }}>
-                                                    {fc ? (
-                                                        <span className="w-5 h-5 flex-shrink-0 flex items-center justify-center text-[11px] font-black text-white leading-none" style={{ backgroundColor: fc, fontSize: 13 }}>
-                                                            {(f as any).icon || f.name?.charAt(0).toUpperCase()}
-                                                        </span>
-                                                    ) : (
-                                                        <span className="w-5 h-5 flex-shrink-0" />
-                                                    )}
-                                                    <span className={`text-xs font-bold flex-1 truncate ${isSelected ? "text-white" : "text-zinc-400"}`}>{f.label}</span>
-                                                    {isSelected && <CheckIcon className="w-3.5 h-3.5 text-white flex-shrink-0" />}
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
+                                {(() => {
+                                    const df = folders.find(f => f.name === defaultFolder);
+                                    const dfColor = df?.color;
+                                    return (
+                                        <div className="px-6 py-2 border-b border-white/[0.06]">
+                                            <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-1.5">Default Notebook</p>
+                                            <button type="button"
+                                                onClick={(e) => { e.stopPropagation(); setShowDefaultFolderPicker(v => !v); }}
+                                                className="w-full flex items-center gap-2.5 px-3 py-2 text-left transition rounded"
+                                                style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}>
+                                                {dfColor ? (
+                                                    <span className="w-5 h-5 flex-shrink-0 flex items-center justify-center text-[11px] font-black text-white leading-none overflow-hidden" style={{ backgroundColor: defaultFolder === "CLAUDE" ? "#fff" : dfColor, fontSize: 13 }}>
+                                                        {defaultFolder === "CLAUDE"
+                                                            ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-0.5" />
+                                                            : (folderIcons[defaultFolder] || defaultFolder?.charAt(0).toUpperCase())}
+                                                    </span>
+                                                ) : <span className="w-5 h-5 flex-shrink-0" />}
+                                                <span className="text-xs font-bold flex-1 truncate text-white">{defaultFolder || "None"}</span>
+                                                <ChevronDownIcon className="w-3.5 h-3.5 text-zinc-500 flex-shrink-0" />
+                                            </button>
+                                            {showDefaultFolderPicker && (
+                                                <div className="mt-1 flex flex-col gap-0.5">
+                                                    {folders.filter(f => f.name && !f.parent_folder_name && f.name !== defaultFolder).map(f => (
+                                                        <button key={f.name} type="button"
+                                                            onClick={(e) => { e.stopPropagation(); setDefaultFolder(f.name); localStorage.setItem(DEFAULT_FOLDER_KEY, f.name); setShowDefaultFolderPicker(false); setShowFolderActions(false); }}
+                                                            className="flex items-center gap-2.5 px-3 py-1.5 text-left transition hover:bg-white/5 rounded">
+                                                            <span className="w-5 h-5 flex-shrink-0 flex items-center justify-center text-[11px] font-black text-white leading-none overflow-hidden" style={{ backgroundColor: f.name === "CLAUDE" ? "#fff" : f.color, fontSize: 13 }}>
+                                                                {f.name === "CLAUDE"
+                                                                    ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-0.5" />
+                                                                    : (folderIcons[f.name] || f.name?.charAt(0).toUpperCase())}
+                                                            </span>
+                                                            <span className="text-xs font-bold flex-1 truncate text-zinc-400">{f.name}</span>
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })()}
                                 {/* NAV MODE */}
-                                <div className="px-6 py-3 border-b border-white/[0.06]">
-                                    <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-2">Navigation</p>
+                                <div className="px-6 py-2 border-b border-white/[0.06]">
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-1.5">Navigation</p>
                                     <div className="flex gap-1.5">
                                         {(["folders-and-files", "files-only"] as const).map((mode) => (
                                             <button key={mode} type="button"
                                                 onClick={() => setNavMode(mode)}
-                                                className={`flex-1 py-2 rounded text-[10px] font-black uppercase tracking-wide transition ${navMode === mode ? "bg-white text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"}`}>
+                                                className={`flex-1 py-1.5 rounded text-[10px] font-black uppercase tracking-wide transition ${navMode === mode ? "bg-white text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"}`}>
                                                 {mode === "folders-and-files" ? "Folders" : "Files"}
                                             </button>
                                         ))}
                                     </div>
                                 </div>
                                 {/* VIEW MODE */}
-                                <div className="px-6 py-3 border-b border-white/[0.06]">
-                                    <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-2">View Mode</p>
+                                <div className="px-6 py-2 border-b border-white/[0.06]">
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-1.5">View Mode</p>
                                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
                                         <button type="button" onClick={() => { setMainListMode(true); setKanbanMode(false); }}
-                                            className={`py-2 rounded flex flex-col items-center gap-1 transition ${mainListMode && !kanbanMode ? "bg-white text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"}`}>
+                                            className={`py-1.5 rounded flex flex-col items-center gap-0.5 transition ${mainListMode && !kanbanMode ? "bg-white text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"}`}>
                                             <ListBulletIcon className="w-4 h-4" />
                                             <span className="text-[9px] font-black uppercase tracking-wide">List</span>
                                         </button>
                                         <button type="button" onClick={() => { setMainListMode(false); setKanbanMode(false); }}
-                                            className={`py-2 rounded flex flex-col items-center gap-1 transition ${!mainListMode && !kanbanMode ? "bg-white text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"}`}>
+                                            className={`py-1.5 rounded flex flex-col items-center gap-0.5 transition ${!mainListMode && !kanbanMode ? "bg-white text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"}`}>
                                             <Squares2X2Icon className="w-4 h-4" />
                                             <span className="text-[9px] font-black uppercase tracking-wide">Thumb</span>
                                         </button>
                                         <button type="button" onClick={() => { setKanbanMode(true); setMainListMode(false); }}
-                                            className={`hidden sm:flex py-2 rounded flex-col items-center gap-1 transition ${kanbanMode ? "bg-white text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"}`}>
+                                            className={`hidden sm:flex py-1.5 rounded flex-col items-center gap-0.5 transition ${kanbanMode ? "bg-white text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"}`}>
                                             <ViewColumnsIcon className="w-4 h-4" />
                                             <span className="text-[9px] font-black uppercase tracking-wide">Kanban</span>
                                         </button>
                                         <button type="button" onClick={() => { setShowFolderActions(false); setShowGlobalGraph(true); }}
-                                            className="hidden sm:flex py-2 rounded flex-col items-center gap-1 transition bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200">
+                                            className="hidden sm:flex py-1.5 rounded flex-col items-center gap-0.5 transition bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200">
                                             <CubeTransparentIcon className="w-4 h-4" />
                                             <span className="text-[9px] font-black uppercase tracking-wide">Graph</span>
                                         </button>
                                     </div>
                                 </div>
                                 {/* THEME */}
-                                <div className="px-6 py-3 border-b border-white/[0.06]">
-                                    <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-2">Theme</p>
+                                <div className="px-6 py-2 border-b border-white/[0.06]">
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-1.5">Theme</p>
                                     <div className="flex gap-1.5">
                                         {(["dark", "monokai", "light"] as const).map((t) => (
                                             <button key={t} type="button"
                                                 onClick={() => setAppTheme(t)}
-                                                className={`flex-1 py-2 rounded text-[10px] font-black uppercase tracking-wide transition ${appTheme === t ? "bg-white text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"}`}>
+                                                className={`flex-1 py-1.5 rounded text-[10px] font-black uppercase tracking-wide transition ${appTheme === t ? "bg-white text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"}`}>
                                                 {t === "dark" ? "Dark" : t === "light" ? "Light" : "Monokai"}
                                             </button>
                                         ))}
