@@ -2523,19 +2523,21 @@ const fireIntegrations = (trigger: string, note: any) => {
     );
 
     const closeNoteModal = useCallback(() => {
+        const wasChanged = isDraftDirty;
         void saveNote({ silent: true });
-        if (title.trim()) {
+        if (wasChanged && title.trim()) {
             const t = title.slice(0, 10) + (title.length > 10 ? "…" : "");
             showToast(`"${t}" saved`, noteColor || "#34C759");
         }
         closeEditorTools();
         setEditorOpen(false);
         setImages([]);
-    }, [saveNote, closeEditorTools, title, noteColor]);
+    }, [saveNote, closeEditorTools, isDraftDirty, title, noteColor]);
 
     const backToRootFromEditor = useCallback(() => {
+        const wasChanged = isDraftDirty;
         void saveNote({ silent: true });
-        if (title.trim()) {
+        if (wasChanged && title.trim()) {
             const t = title.slice(0, 10) + (title.length > 10 ? "…" : "");
             showToast(`"${t}" saved`, noteColor || "#34C759");
         }
@@ -2545,7 +2547,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         // Stay in the note's folder; only go to root if no folder
         setActiveFolder(targetFolder || null);
         setSearch("");
-    }, [saveNote, closeEditorTools, targetFolder, title, noteColor]);
+    }, [saveNote, closeEditorTools, isDraftDirty, targetFolder, title, noteColor]);
 
     // Pick a random palette color, avoiding the last-used one if possible
     const pickUniqueColor = useCallback(() => {
