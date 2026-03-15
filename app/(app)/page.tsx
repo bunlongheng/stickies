@@ -6816,7 +6816,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         className="w-full bg-white/5 border border-white/10 text-white text-xs font-bold px-3 py-2.5 outline-none appearance-none"
                                     >
                                         <option value="">None (open root)</option>
-                                        {folders.filter(f => f.name).map(f => (
+                                        {folders.filter(f => f.name && !f.parent_folder_name).map(f => (
                                             <option key={f.id || f.name} value={f.name}>{f.name}</option>
                                         ))}
                                     </select>
