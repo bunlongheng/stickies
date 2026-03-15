@@ -5187,7 +5187,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 onClick={() => setCodeEditMode(true)}
                             />
                         ) : noteType === "rich" ? (
-                            <div className="relative flex-1 min-h-0 flex flex-col" style={{ background: "#272822" }}>
+                            <div className="relative flex-1 min-h-0 flex flex-col" style={{ background: "#000000" }}>
                                 <RichTextEditor
                                     key={currentNoteId ?? "new"}
                                     noteId={currentNoteId}
