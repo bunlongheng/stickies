@@ -206,19 +206,19 @@ function syntaxHighlightJson(obj: any): string {
 const MERMAID_KEYWORDS = /^(flowchart|graph|sequenceDiagram|classDiagram|stateDiagram(-v2)?|erDiagram|gantt|pie|gitGraph|mindmap|timeline|xychart(-beta)?|quadrantChart|requirementDiagram|zenuml|sankey|block-beta)\b/im;
 
 const TYPE_BADGE: Record<string, { label: string; color: string }> = {
-    javascript: { label: "JS",   color: "#f97316" },
-    typescript: { label: "TS",   color: "#3b82f6" },
-    python:     { label: "PY",   color: "#eab308" },
-    css:        { label: "CSS",  color: "#8b5cf6" },
-    sql:        { label: "SQL",  color: "#14b8a6" },
-    bash:       { label: "SH",   color: "#22c55e" },
-    markdown:   { label: "MD",   color: "#a78bfa" },
-    html:       { label: "HTML", color: "#f43f5e" },
-    json:       { label: "JSON", color: "#fbbf24" },
-    mermaid:    { label: "M",    color: "#06b6d4" },
-    voice:      { label: "🎙",   color: "#ef4444" },
-    checklist:  { label: "✓",   color: "#22c55e" },
-    rich:       { label: "R",    color: "#e879f9" },
+    javascript: { label: "Javascript",  color: "#f97316" },
+    typescript: { label: "Typescript",  color: "#3b82f6" },
+    python:     { label: "Python",      color: "#eab308" },
+    css:        { label: "CSS",         color: "#8b5cf6" },
+    sql:        { label: "SQL",         color: "#14b8a6" },
+    bash:       { label: "Bash",        color: "#22c55e" },
+    markdown:   { label: "Markdown",    color: "#a78bfa" },
+    html:       { label: "HTML",        color: "#f43f5e" },
+    json:       { label: "JSON",        color: "#fbbf24" },
+    mermaid:    { label: "Mermaid",     color: "#06b6d4" },
+    voice:      { label: "Voice",       color: "#ef4444" },
+    checklist:  { label: "Checklist",   color: "#22c55e" },
+    rich:       { label: "Rich Text",   color: "#e879f9" },
 };
 
 /** Client-side fallback type detection — used only when DB type is null (legacy notes) */
@@ -6687,10 +6687,13 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             {palette12.map((c) => (
                                                 <button key={c} type="button"
                                                     onClick={() => { applySingleFolderColor(c); setShowFolderColorPicker(false); }}
-                                                    className="w-7 h-7 transition-all relative"
-                                                    style={{ backgroundColor: c, border: activeFolderColor === c ? `2px solid ${c === "#FFFFFF" ? "#000" : c}` : `1px solid ${c === "#FFFFFF" ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.2)"}` }}>
-                                                    {activeFolderColor === c && <CheckIcon className="w-4 h-4 absolute inset-0 m-auto drop-shadow" style={{ color: c === "#FFFFFF" ? "#000" : "#fff" }} />}
-                                                </button>
+                                                    className="w-7 h-7 transition-all"
+                                                    style={{
+                                                        background: "transparent",
+                                                        border: activeFolderColor === c ? `2.5px solid ${c}` : `1.5px solid ${c}60`,
+                                                        boxShadow: activeFolderColor === c ? `0 0 0 1px ${c}40` : "none",
+                                                    }}
+                                                />
                                             ))}
                                         </div>
                                     )}
