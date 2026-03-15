@@ -110,7 +110,9 @@ body {
 /* ── Monokai editor ─────────────────────────────────────── */
 /* Applied when the RichTextEditor sits on #272822 background */
 [style*="272822"] .ProseMirror,
-[style*="272822"] .tiptap {
+[style*="272822"] .tiptap,
+[style*="000000"] .ProseMirror,
+[style*="000000"] .tiptap {
   color: #f8f8f2 !important;
   caret-color: #f8f8f2 !important;
   overflow-wrap: break-word;
