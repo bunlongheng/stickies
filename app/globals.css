@@ -254,6 +254,21 @@ body {
   background: rgba(253,151,31,0.45);
 }
 
+/* Folder icon badge — white by default, solid folder color on hover */
+.folder-icon-badge {
+  background: #fff;
+  color: var(--fc);
+  transition: background 0.15s, color 0.15s;
+}
+.folder-icon-badge:hover {
+  background: var(--fc) !important;
+  color: #fff !important;
+}
+/* Folder list row — name text turns white on row hover */
+.list-row-hover:hover .folder-name-text {
+  color: #fff !important;
+}
+
 @keyframes confettiShoot {
   0%   { transform: translate(0, 0) scale(0); opacity: 1; }
   60%  { transform: translate(var(--cx), var(--cy)) scale(1); opacity: 1; }

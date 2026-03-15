@@ -4796,7 +4796,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     <button type="button"
                                         onClick={() => { goToIndex(i); void backToRootFromEditor(); }}
                                         className="flex items-center gap-1 font-black tracking-tight text-zinc-400 hover:text-white transition flex-shrink-0 text-xs px-0.5">
-                                        <span className="w-6 h-6 flex-shrink-0 flex items-center justify-center text-sm font-black leading-none overflow-hidden" style={{ backgroundColor: "#fff", color: folderColors[frame.name] || frame.color, borderRadius: 0 }}>
+                                        <span className="folder-icon-badge w-6 h-6 flex-shrink-0 flex items-center justify-center text-sm font-black leading-none overflow-hidden" style={{ "--fc": folderColors[frame.name] || frame.color, borderRadius: 0 } as React.CSSProperties}>
                                             {frame.name === "CLAUDE"
                                                 ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-0.5" />
                                                 : (folderIcons[frame.name] || (frame.name || "F").charAt(0).toUpperCase())}
@@ -5401,7 +5401,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 onClick={() => { goToIndex(i); }}
                                                 className={`flex items-center gap-1.5 font-black tracking-tight truncate max-w-[150px] flex-shrink-0 px-1 transition text-xs ${i === folderStack.length - 1 ? "text-white" : "text-zinc-400 hover:text-white"}`}
                                                 title={frame.name}>
-                                                <span className="flex-shrink-0 w-6 h-6 flex items-center justify-center text-sm font-black leading-none overflow-hidden" style={{ backgroundColor: "#fff", color: folderColors[frame.name] || frame.color, borderRadius: 0 }}>
+                                                <span className="folder-icon-badge flex-shrink-0 w-6 h-6 flex items-center justify-center text-sm font-black leading-none overflow-hidden" style={{ "--fc": folderColors[frame.name] || frame.color, borderRadius: 0 } as React.CSSProperties}>
                                                     {frame.name === "CLAUDE" ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-0.5" /> : (folderIcons[frame.name] || (frame.name || "F").charAt(0).toUpperCase())}
                                                 </span>
                                                 <span className="uppercase">{frame.name}</span>
@@ -5722,8 +5722,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             {item.is_folder && (() => {
                                                 const c = item.color || item.folder_color || palette12[0];
                                                 return (
-                                                    <div className="flex-shrink-0 w-[54px] h-[54px] sm:w-[46px] sm:h-[46px] flex items-center justify-center font-black overflow-hidden"
-                                                        style={{ fontSize: 22, backgroundColor: "#fff", color: c, boxShadow: `2px 3px 8px ${c}55` }}>
+                                                    <div className="folder-icon-badge flex-shrink-0 w-[54px] h-[54px] sm:w-[46px] sm:h-[46px] flex items-center justify-center font-black overflow-hidden"
+                                                        style={{ fontSize: 22, "--fc": c, boxShadow: `2px 3px 8px ${c}55` } as React.CSSProperties}>
                                                         {item.name === "CLAUDE"
                                                             ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-1" />
                                                             : (item.icon || meaningfulInitial(item.name, "F"))}
@@ -5749,10 +5749,10 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             })()}
                                             <div className="flex-1 min-w-0">
                                                 <div className="text-[13px] font-semibold tracking-tight text-white truncate">
-                                                    {item.is_folder ? <><span className="uppercase">{item.name}</span><span className="text-white/30 font-light ml-0.5">/</span></> : item.title}
+                                                    {item.is_folder ? <><span className="uppercase folder-name-text">{item.name}</span><span className="text-white/30 font-light ml-0.5">/</span></> : item.title}
                                                 </div>
                                                 {item.is_folder ? (
-                                                    <div className="text-[13px] sm:text-[13px] text-zinc-500 font-medium">
+                                                    <div className="text-[13px] sm:text-[13px] text-zinc-500 font-medium folder-name-text">
                                                         {item.subfolderCount > 0 && <span>{item.subfolderCount} folder{item.subfolderCount !== 1 ? "s" : ""}{item.count > 0 ? " · " : ""}</span>}
                                                         {item.count > 0 && <span>{item.count} note{item.count !== 1 ? "s" : ""}</span>}
                                                     </div>
