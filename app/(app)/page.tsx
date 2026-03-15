@@ -5720,13 +5720,15 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                             <span style={{ color: "#3f3f46" }}>/{lines.length}</span>
                                                         </span>
                                                     )}
-                                                    {typeBadge && (
-                                                        <span className="text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-full flex-shrink-0"
-                                                            style={{ background: `${typeBadge.color}20`, color: typeBadge.color, border: `1px solid ${typeBadge.color}40` }}>
-                                                            {typeBadge.label}
-                                                        </span>
-                                                    )}
-                                                    <span className="text-[11px] text-zinc-500 font-medium">{timeAgo(item.updated_at)}</span>
+                                                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                                                        {typeBadge && (
+                                                            <span className="text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-full"
+                                                                style={{ background: `${typeBadge.color}20`, color: typeBadge.color, border: `1px solid ${typeBadge.color}40` }}>
+                                                                {typeBadge.label}
+                                                            </span>
+                                                        )}
+                                                        <span className="text-[11px] text-zinc-500 font-medium whitespace-nowrap">{timeAgo(item.updated_at)}</span>
+                                                    </div>
                                                 </div>;
                                             })()}
                                             {!item.is_folder && looksLikeUrl(item.content || "") && !isSelectMode && (item.folder_name || activeFolder) !== "TEAM" && (
