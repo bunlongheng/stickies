@@ -5652,11 +5652,12 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 const nc = (item as any).color || (item as any).folder_color || "#71717a";
                                                 const initial = meaningfulInitial(item.title || "", "N");
                                                 return (
-                                                    <div className="flex-shrink-0 w-[54px] h-[54px] sm:w-[46px] sm:h-[46px] flex items-center justify-center font-black overflow-visible relative"
+                                                    <div className="flex-shrink-0 w-[54px] h-[54px] sm:w-[46px] sm:h-[46px] flex items-center justify-center font-black overflow-hidden relative"
                                                         style={{
                                                             fontSize: 22,
                                                             backgroundColor: nc,
                                                             color: "#fff",
+                                                            borderRadius: "3px 3px 3px 14px",
                                                             boxShadow: `2px 3px 8px ${nc}55`,
                                                         }}>
                                                         {initial}
