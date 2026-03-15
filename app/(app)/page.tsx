@@ -2523,21 +2523,29 @@ const fireIntegrations = (trigger: string, note: any) => {
     );
 
     const closeNoteModal = useCallback(() => {
-        void saveNote();
+        void saveNote({ silent: true });
+        if (title.trim()) {
+            const t = title.slice(0, 10) + (title.length > 10 ? "…" : "");
+            showToast(`"${t}" saved`, noteColor || "#34C759");
+        }
         closeEditorTools();
         setEditorOpen(false);
         setImages([]);
-    }, [saveNote, closeEditorTools]);
+    }, [saveNote, closeEditorTools, title, noteColor]);
 
     const backToRootFromEditor = useCallback(() => {
-        void saveNote();
+        void saveNote({ silent: true });
+        if (title.trim()) {
+            const t = title.slice(0, 10) + (title.length > 10 ? "…" : "");
+            showToast(`"${t}" saved`, noteColor || "#34C759");
+        }
         closeEditorTools();
         setEditorOpen(false);
         setImages([]);
         // Stay in the note's folder; only go to root if no folder
         setActiveFolder(targetFolder || null);
         setSearch("");
-    }, [saveNote, closeEditorTools, targetFolder]);
+    }, [saveNote, closeEditorTools, targetFolder, title, noteColor]);
 
     // Pick a random palette color, avoiding the last-used one if possible
     const pickUniqueColor = useCallback(() => {
@@ -2550,6 +2558,23 @@ const fireIntegrations = (trigger: string, note: any) => {
         const pool = available.length > 0 ? available : palette12;
         return pool[Math.floor(Math.random() * pool.length)];
     }, [dbData]);
+
+    // Cmd+S → save + toast
+    useEffect(() => {
+        const handler = (e: KeyboardEvent) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === "s") {
+                e.preventDefault();
+                void saveNote({ silent: true }).then(() => {
+                    if (title.trim()) {
+                        const t = title.slice(0, 10) + (title.length > 10 ? "…" : "");
+                        showToast(`"${t}" saved`, noteColor || "#34C759");
+                    }
+                });
+            }
+        };
+        window.addEventListener("keydown", handler);
+        return () => window.removeEventListener("keydown", handler);
+    }, [saveNote, title, noteColor]);
 
     const openNewNote = useCallback((type?: string) => {
         const isStandup = (activeFolder || "").toLowerCase() === "standup";
