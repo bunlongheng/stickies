@@ -179,10 +179,11 @@ function SignInContent() {
                     placeholder="your@email.com"
                     autoFocus
                     required
-                    className="w-full px-4 py-3 rounded-2xl text-sm text-white placeholder:text-zinc-600 outline-none"
+                    className="w-full px-4 py-3 rounded-2xl text-base text-white placeholder:text-zinc-600 outline-none"
                     style={{
                       background: 'rgba(255,255,255,0.05)',
                       border: '1px solid rgba(255,255,255,0.1)',
+                      caretColor: '#FFCC00',
                     }}
                   />
                   <button
