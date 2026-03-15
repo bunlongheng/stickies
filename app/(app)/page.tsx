@@ -4724,7 +4724,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     <button type="button"
                                         onClick={() => { goToIndex(i); void backToRootFromEditor(); }}
                                         className="flex items-center gap-1 font-black tracking-tight text-zinc-400 hover:text-white transition flex-shrink-0 text-xs px-0.5">
-                                        <span className="w-6 h-6 flex-shrink-0 flex items-center justify-center text-sm font-black text-white leading-none overflow-hidden" style={{ backgroundColor: frame.name === "CLAUDE" ? "#fff" : (folderColors[frame.name] || frame.color), borderRadius: frame.name === "CLAUDE" ? "4px" : "2px 2px 2px 8px", boxShadow: frame.name === "CLAUDE" ? "inset 0 0 0 1px rgba(255,255,255,0.85)" : undefined }}>
+                                        <span className="w-6 h-6 flex-shrink-0 flex items-center justify-center text-sm font-black text-white leading-none overflow-hidden" style={{ backgroundColor: frame.name === "CLAUDE" ? "#fff" : (folderColors[frame.name] || frame.color), borderRadius: 0, boxShadow: frame.name === "CLAUDE" ? "inset 0 0 0 1px rgba(255,255,255,0.85)" : undefined }}>
                                             {frame.name === "CLAUDE" ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-0.5" /> : (folderIcons[frame.name] || (frame.name || "F").charAt(0).toUpperCase())}
                                         </span>
                                         {frame.name}
@@ -5601,7 +5601,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         }
                                         return item.is_folder
                                             ? { isolation: "isolate", backgroundColor: item.name === "CLAUDE" ? "#ffffff" : c }
-                                            : { isolation: "isolate", backgroundColor: `${c}55`, border: `1.5px solid ${c}88` };
+                                            : { isolation: "isolate", backgroundColor: c, borderRadius: 0 };
                                     })()}
                                     className={`${isListMode
                                         ? `group list-row-hover flex items-center gap-3 px-4 py-1 sm:py-1 border-b border-white/5 cursor-pointer select-none transition-colors active:bg-white/10 overflow-hidden ${isDragging ? "opacity-30" : dt?.mode === "into" ? "bg-cyan-950/60 ring-1 ring-inset ring-cyan-400" : ""} ${isSelectMode && !item.is_folder && selectedIds.has(String(item.id)) ? "bg-blue-950/50" : ""} ${isFolderSelectMode && item.is_folder && selectedFolderNames.includes(item.name || "") ? "bg-emerald-950/50" : ""}`
@@ -5657,7 +5657,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                             fontSize: 22,
                                                             backgroundColor: nc,
                                                             color: "#fff",
-                                                            borderRadius: "3px 3px 3px 14px",
                                                             boxShadow: `2px 3px 8px ${nc}55`,
                                                         }}>
                                                         {initial}
