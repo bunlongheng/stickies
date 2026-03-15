@@ -4724,7 +4724,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     <button type="button"
                                         onClick={() => { goToIndex(i); void backToRootFromEditor(); }}
                                         className="flex items-center gap-1 font-black tracking-tight text-zinc-400 hover:text-white transition flex-shrink-0 text-xs px-0.5">
-                                        <span className="w-6 h-6 flex-shrink-0 flex items-center justify-center text-sm font-black text-white leading-none overflow-hidden" style={{ backgroundColor: frame.name === "CLAUDE" ? "#fff" : (folderColors[frame.name] || frame.color), boxShadow: frame.name === "CLAUDE" ? "inset 0 0 0 1px rgba(255,255,255,0.85)" : undefined }}>
+                                        <span className="w-6 h-6 flex-shrink-0 flex items-center justify-center text-sm font-black text-white leading-none overflow-hidden" style={{ backgroundColor: frame.name === "CLAUDE" ? "#fff" : (folderColors[frame.name] || frame.color), borderRadius: frame.name === "CLAUDE" ? "4px" : "2px 2px 2px 8px", boxShadow: frame.name === "CLAUDE" ? "inset 0 0 0 1px rgba(255,255,255,0.85)" : undefined }}>
                                             {frame.name === "CLAUDE" ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-0.5" /> : (folderIcons[frame.name] || (frame.name || "F").charAt(0).toUpperCase())}
                                         </span>
                                         {frame.name}
@@ -6087,9 +6087,9 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 onClick={() => { setNoteColor(c); setShowColorPicker(false); }}
                                                 className="w-7 h-7 transition-all"
                                                 style={{
-                                                    background: "transparent",
-                                                    border: noteColor === c ? `2.5px solid ${c}` : `1.5px solid ${c}60`,
-                                                    boxShadow: noteColor === c ? `0 0 0 1px ${c}40` : "none",
+                                                    background: c,
+                                                    border: noteColor === c ? `2.5px solid rgba(255,255,255,0.9)` : `1.5px solid rgba(255,255,255,0.15)`,
+                                                    boxShadow: noteColor === c ? `0 0 0 1px ${c}60` : "none",
                                                 }}
                                             />
                                         ))}
@@ -6283,10 +6283,13 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 )}
                             </div>
 
-                            {/* DELETE / DISCARD */}
+                        </div>
+
+                        {/* Delete / Discard */}
+                        <div className="border-t border-white/10 px-4 py-3 flex justify-end">
                             <button
                                 type="button"
-                                className="w-full flex items-center gap-4 px-6 py-4 text-left text-red-400 hover:bg-red-500/10 active:bg-red-500/20 transition"
+                                className="flex items-center gap-2 px-4 py-2.5 text-red-400 hover:bg-red-500/10 active:bg-red-500/20 transition text-xs font-black uppercase tracking-wide"
                                 onClick={() => {
                                     setShowNoteActions(false);
                                     closeEditorTools();
@@ -6297,8 +6300,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     });
                                 }}
                             >
-                                <TrashIcon className="w-5 h-5 flex-shrink-0" />
-                                <span className="text-xs font-black uppercase tracking-wide">{editingNote?.id ? "Delete Note" : "Discard Draft"}</span>
+                                <TrashIcon className="w-4 h-4 flex-shrink-0" />
+                                {editingNote?.id ? "Delete Note" : "Discard Draft"}
                             </button>
                         </div>
 
@@ -6689,9 +6692,9 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                     onClick={() => { applySingleFolderColor(c); setShowFolderColorPicker(false); }}
                                                     className="w-7 h-7 transition-all"
                                                     style={{
-                                                        background: "transparent",
-                                                        border: activeFolderColor === c ? `2.5px solid ${c}` : `1.5px solid ${c}60`,
-                                                        boxShadow: activeFolderColor === c ? `0 0 0 1px ${c}40` : "none",
+                                                        background: c,
+                                                        border: activeFolderColor === c ? `2.5px solid rgba(255,255,255,0.9)` : `1.5px solid rgba(255,255,255,0.15)`,
+                                                        boxShadow: activeFolderColor === c ? `0 0 0 1px ${c}60` : "none",
                                                     }}
                                                 />
                                             ))}
