@@ -5882,8 +5882,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                                 ? <div style={{ fontSize: "2.8rem", lineHeight: 1 }} className="relative z-10">{item.icon}</div>
                                                                 : <div style={{ fontSize: "3rem", lineHeight: 1, color: item.color || item.folder_color || palette12[0] }} className="font-black relative z-10">{meaningfulInitial(item.name, "F")}</div>
                                                         }
-                                                        <div className="mt-0.5 text-[9px] font-black tracking-tight line-clamp-1 w-full text-center relative z-10" style={{ color: item.name === "CLAUDE" ? "#000" : (item.color || item.folder_color || palette12[0]) }}>
-                                                            {item.name} <span className="opacity-60">({(item.subfolderCount || 0) + (item.count || 0)})</span>
+                                                        <div className="mt-1 text-[11px] font-bold line-clamp-1 w-full text-center relative z-10" style={{ color: item.name === "CLAUDE" ? "#000" : (item.color || item.folder_color || palette12[0]) }}>
+                                                            {item.name} <span className="opacity-50 font-normal text-[10px]">({(item.subfolderCount || 0) + (item.count || 0)})</span>
                                                         </div>
                                                     </>
                                                 ) : (
