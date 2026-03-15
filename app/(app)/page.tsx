@@ -5683,12 +5683,12 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             return { position: "relative", isolation: "isolate", "--row-color": c } as React.CSSProperties;
                                         }
                                         return item.is_folder
-                                            ? { isolation: "isolate", backgroundColor: "#ffffff" }
+                                            ? { isolation: "isolate", "--fc": c } as React.CSSProperties
                                             : { isolation: "isolate", backgroundColor: c, borderRadius: "3px 3px 3px 14px" };
                                     })()}
                                     className={`${isListMode
                                         ? `group list-row-hover flex items-center gap-3 px-4 py-3 border-b border-white/5 cursor-pointer select-none transition-colors active:bg-white/10 overflow-hidden ${isDragging ? "opacity-30" : dt?.mode === "into" ? "bg-cyan-950/60 ring-1 ring-inset ring-cyan-400" : ""} ${isSelectMode && !item.is_folder && selectedIds.has(String(item.id)) ? "bg-blue-950/50" : ""} ${isFolderSelectMode && item.is_folder && selectedFolderNames.includes(item.name || "") ? "bg-emerald-950/50" : ""}`
-                                        : `grid-square-tile min-w-0 cursor-pointer transition-all group ${isDragging ? "opacity-30 scale-95" : dt?.mode === "into" ? "ring-4 ring-cyan-400 ring-inset z-10" : ""}`}`}>
+                                        : `grid-square-tile min-w-0 cursor-pointer transition-all group ${item.is_folder ? "folder-grid-tile" : ""} ${isDragging ? "opacity-30 scale-95" : dt?.mode === "into" ? "ring-4 ring-cyan-400 ring-inset z-10" : ""}`}`}>
                                     {/* Cursor spotlight glow */}
                                     {isListMode && glowCard?.id === tileId && (() => {
                                         const c = item.color || item.folder_color || "#888888";
@@ -5882,7 +5882,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                                 ? <div style={{ fontSize: "2.8rem", lineHeight: 1 }} className="relative z-10">{item.icon}</div>
                                                                 : <div style={{ fontSize: "3rem", lineHeight: 1, color: item.color || item.folder_color || palette12[0] }} className="font-black relative z-10">{meaningfulInitial(item.name, "F")}</div>
                                                         }
-                                                        <div className="mt-1 text-[11px] font-bold line-clamp-1 w-full text-center relative z-10" style={{ color: item.name === "CLAUDE" ? "#000" : (item.color || item.folder_color || palette12[0]) }}>
+                                                        <div className="folder-grid-name mt-1 text-[11px] font-bold line-clamp-1 w-full text-center relative z-10" style={{ color: item.name === "CLAUDE" ? "#000" : (item.color || item.folder_color || palette12[0]) }}>
                                                             <span className="uppercase">{item.name}</span> <span className="opacity-50 font-normal text-[10px]">({(item.subfolderCount || 0) + (item.count || 0)})</span>
                                                         </div>
                                                     </>
