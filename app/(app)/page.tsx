@@ -32,7 +32,7 @@ import ArrowRightOnRectangleIcon from "@heroicons/react/24/outline/ArrowRightOnR
 import Cog6ToothIcon from "@heroicons/react/24/outline/Cog6ToothIcon";
 import CheckIcon from "@heroicons/react/24/outline/CheckIcon";
 import ChevronDownIcon from "@heroicons/react/24/outline/ChevronDownIcon";
-import QueueListIcon from "@heroicons/react/24/outline/QueueListIcon";
+import ClipboardDocumentListIcon from "@heroicons/react/24/outline/ClipboardDocumentListIcon";
 import EyeIcon from "@heroicons/react/24/outline/EyeIcon";
 import CodeBracketIcon from "@heroicons/react/24/outline/CodeBracketIcon";
 import FaceSmileIcon from "@heroicons/react/24/outline/FaceSmileIcon";
@@ -3210,13 +3210,34 @@ const fireIntegrations = (trigger: string, note: any) => {
             const newVal = !next.has(currentNoteId);
             if (newVal) {
                 next.add(currentNoteId);
-                // Convert HTML to plain lines when enabling checklist mode
-                setContent(c => /<[a-z][^>]*>/i.test(c) ? htmlToPlainLines(c) : c);
+                // Convert rich content (TipTap JSON or HTML) to plain lines
+                setContent(c => {
+                    try {
+                        const p = JSON.parse(c);
+                        if (p?.type === "doc" && Array.isArray(p.content)) {
+                            const lines: string[] = [];
+                            const extract = (nodes: any[]) => nodes.forEach(n => {
+                                if (n.type === "text") lines[lines.length - 1] = (lines[lines.length - 1] || "") + (n.text || "");
+                                else if (["paragraph","heading","listItem","bulletList","orderedList"].includes(n.type)) { if (lines.length) lines.push(""); else lines.push(""); if (n.content) extract(n.content); }
+                                else if (n.content) extract(n.content);
+                            });
+                            lines.push("");
+                            extract(p.content);
+                            return lines.map(l => l.trim()).filter(l => l).join("\n") || "";
+                        }
+                    } catch {}
+                    return /<[a-z][^>]*>/i.test(c) ? htmlToPlainLines(c) : c;
+                });
             } else {
                 next.delete(currentNoteId);
             }
             localWriteRef.current.set(currentNoteId, Date.now());
             void notesApi.update(currentNoteId, { list_mode: newVal, type: newVal ? "checklist" : null });
+            // Update dbData locally so editingNote reflects new type immediately
+            setDbData((prev: any[]) => prev.map((r: any) =>
+                String(r.id) === currentNoteId ? { ...r, list_mode: newVal, type: newVal ? "checklist" : null } : r
+            ));
+            showToast(newVal ? "Checklist on" : "Checklist off", newVal ? "#34C759" : "#8e8e93");
             return next;
         });
     }, [currentNoteId, graphModeNotes]);
@@ -4837,7 +4858,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                             className="p-2 sm:p-3 transition flex-shrink-0"
                             style={{ color: listMode ? activeAccentColor : "rgba(255,255,255,0.4)" }}
                             title="Toggle checklist">
-                            <QueueListIcon className="w-[26px] h-[26px] sm:w-6 sm:h-6" />
+                            <ClipboardDocumentListIcon className="w-[26px] h-[26px] sm:w-6 sm:h-6" />
                         </button>
                         <button type="button"
                             onClick={() => { setShowNoteActions(true); closeEditorTools(); }}
