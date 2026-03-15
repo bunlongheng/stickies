@@ -1466,7 +1466,7 @@ export default function NotesMaster() {
             const isNewSession = !sessionStorage.getItem("stickies:session-started");
             if (isNewSession) {
                 sessionStorage.setItem("stickies:session-started", "1");
-                setActiveFolder(savedDefaultFolder);
+                if (savedDefaultFolder) setActiveFolder(savedDefaultFolder);
                 setMainListMode(false); // thumbnail as default
             } else {
                 try {
@@ -6828,6 +6828,24 @@ const fireIntegrations = (trigger: string, note: any) => {
                             )}
                             {/* L1 only: App Settings, Graph, Integrations, Sign Out */}
                             {folderStack.length === 0 && (<>
+                                {/* DEFAULT NOTEBOOK */}
+                                <div className="px-6 py-3 border-b border-white/[0.06]">
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-2">Default Notebook</p>
+                                    <select
+                                        value={defaultFolder || ""}
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            setDefaultFolder(val);
+                                            localStorage.setItem(DEFAULT_FOLDER_KEY, val);
+                                        }}
+                                        className="w-full bg-white/5 border border-white/10 text-white text-xs font-bold px-3 py-2.5 outline-none appearance-none"
+                                    >
+                                        <option value="">None (open root)</option>
+                                        {folders.filter(f => f.name).map(f => (
+                                            <option key={f.id || f.name} value={f.name}>{f.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
                                 {/* NAV MODE */}
                                 <div className="px-6 py-3 border-b border-white/[0.06]">
                                     <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-2">Navigation</p>
