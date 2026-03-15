@@ -6890,7 +6890,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             </button>
                                             {showDefaultFolderPicker && (
                                                 <div className="mt-1 flex flex-col gap-0.5">
-                                                    {folders.filter(f => f.name && !f.parent_folder_name && f.name !== defaultFolder).map(f => (
+                                                    {folders.filter(f => f.name && !(f as any).parent_folder_name && f.name !== defaultFolder).map(f => (
                                                         <button key={f.name} type="button"
                                                             onClick={(e) => { e.stopPropagation(); setDefaultFolder(f.name); localStorage.setItem(DEFAULT_FOLDER_KEY, f.name); setShowDefaultFolderPicker(false); setShowFolderActions(false); }}
                                                             className="flex items-center gap-2.5 px-3 py-1.5 text-left transition hover:bg-white/5 rounded">
