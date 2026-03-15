@@ -4,7 +4,8 @@
 
 /* Square grid tiles — JS-measured height via CSS var (works on all browsers incl. iOS Safari) */
 .grid-square-tile {
-  height: var(--cell-size, auto);
+  height: var(--cell-size, 0px);
+  min-height: var(--cell-size, 0px);
   overflow: hidden;
   position: relative;
 }
