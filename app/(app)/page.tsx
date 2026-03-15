@@ -4768,7 +4768,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                     </div>
                     <div className="relative flex-1 flex overflow-hidden bg-black font-mono">
                         {/* ── Unified pill bar — always visible top-right ── */}
-                        {!showNoteActions && content.trim() && !listMode && !graphMode && !mindmapMode && !stackMode && !voiceNote && (
+                        {!showNoteActions && content.trim() && !listMode && !graphMode && !mindmapMode && !stackMode && !voiceNote && noteType !== "rich" && (
                         <div className="absolute top-3 right-3 z-[2147483647] pointer-events-auto">
                             <button type="button"
                                 onClick={() => {
