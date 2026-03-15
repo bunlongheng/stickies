@@ -4796,13 +4796,10 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     <button type="button"
                                         onClick={() => { goToIndex(i); void backToRootFromEditor(); }}
                                         className="flex items-center gap-1 font-black tracking-tight text-zinc-400 hover:text-white transition flex-shrink-0 text-xs px-0.5">
-                                        <span className="w-6 h-6 flex-shrink-0 relative flex items-center justify-center text-sm font-black leading-none overflow-hidden" style={{ backgroundColor: "#fff", borderRadius: 0 }}>
+                                        <span className="w-6 h-6 flex-shrink-0 flex items-center justify-center text-sm font-black leading-none overflow-hidden" style={{ backgroundColor: "#fff", color: folderColors[frame.name] || frame.color, borderRadius: 0 }}>
                                             {frame.name === "CLAUDE"
                                                 ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-0.5" />
-                                                : <>
-                                                    <FolderIcon className="absolute inset-0 m-auto" style={{ width: "90%", height: "90%", color: folderColors[frame.name] || frame.color, opacity: 0.9 }} />
-                                                    <span className="relative z-10 text-white text-[10px]">{folderIcons[frame.name] || (frame.name || "F").charAt(0).toUpperCase()}</span>
-                                                </>}
+                                                : (folderIcons[frame.name] || (frame.name || "F").charAt(0).toUpperCase())}
                                         </span>
                                         {frame.name}
                                     </button>
@@ -5725,14 +5722,11 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             {item.is_folder && (() => {
                                                 const c = item.color || item.folder_color || palette12[0];
                                                 return (
-                                                    <div className="flex-shrink-0 w-[54px] h-[54px] sm:w-[46px] sm:h-[46px] relative flex items-center justify-center font-black overflow-hidden"
-                                                        style={{ fontSize: 22, backgroundColor: "#fff", ...(activeFolder ? { border: "2px solid rgba(255,255,255,1)" } : {}), boxShadow: `2px 3px 8px ${c}55` }}>
+                                                    <div className="flex-shrink-0 w-[54px] h-[54px] sm:w-[46px] sm:h-[46px] flex items-center justify-center font-black overflow-hidden"
+                                                        style={{ fontSize: 22, backgroundColor: "#fff", color: c, ...(activeFolder ? { border: "2px solid rgba(255,255,255,1)" } : {}), boxShadow: `2px 3px 8px ${c}55` }}>
                                                         {item.name === "CLAUDE"
                                                             ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-1" />
-                                                            : <>
-                                                                <FolderIcon className="absolute inset-0 m-auto" style={{ width: "90%", height: "90%", color: c, opacity: 0.9 }} />
-                                                                <span className="relative z-10 text-white">{item.icon || meaningfulInitial(item.name, "F")}</span>
-                                                            </>}
+                                                            : (item.icon || meaningfulInitial(item.name, "F"))}
                                                     </div>
                                                 );
                                             })()}
@@ -5882,15 +5876,11 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-1.5 overflow-hidden">
                                                 {item.is_folder ? (
                                                     <>
-                                                        {/* Large folder icon colored by folder color */}
-                                                        {item.name !== "CLAUDE" && (
-                                                            <FolderIcon className="absolute inset-0 m-auto pointer-events-none" style={{ width: "85%", height: "85%", color: item.color || item.folder_color || palette12[0], opacity: 0.9 }} />
-                                                        )}
                                                         {item.name === "CLAUDE"
                                                             ? <img src="/claude-icon.png" alt="Claude" className="w-16 h-16 object-contain relative z-10" />
                                                             : item.icon
                                                                 ? <div style={{ fontSize: "2.8rem", lineHeight: 1 }} className="relative z-10">{item.icon}</div>
-                                                                : <div style={{ fontSize: "3rem", lineHeight: 1 }} className="font-black text-white relative z-10">{meaningfulInitial(item.name, "F")}</div>
+                                                                : <div style={{ fontSize: "3rem", lineHeight: 1, color: item.color || item.folder_color || palette12[0] }} className="font-black relative z-10">{meaningfulInitial(item.name, "F")}</div>
                                                         }
                                                         <div className="mt-0.5 text-[9px] font-black tracking-tight line-clamp-1 w-full text-center relative z-10" style={{ color: item.name === "CLAUDE" ? "#000" : (item.color || item.folder_color || palette12[0]) }}>
                                                             {item.name} <span className="opacity-60">({(item.subfolderCount || 0) + (item.count || 0)})</span>
