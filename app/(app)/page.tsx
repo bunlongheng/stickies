@@ -4768,7 +4768,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 <div className="absolute inset-0 flex items-center justify-center" style={{ fontSize: breadcrumbTotal >= 10 ? 9 : 11, color: activeAccentColor }}>{breadcrumbTotal}</div>
                             </div>
                         ) : (
-                            <span className="sm:hidden w-[30px] h-[30px] inline-flex items-center justify-center font-black leading-none tracking-tight flex-shrink-0" style={{ border: `1.5px solid ${(TYPE_BADGE[noteType]?.color ?? activeAccentColor)}99`, color: TYPE_BADGE[noteType]?.color ?? activeAccentColor, fontSize: noteBadgeFontSize }}>
+                            <span className="sm:hidden w-[30px] h-[30px] inline-flex items-center justify-center font-black leading-none tracking-tight flex-shrink-0" style={{ backgroundColor: activeAccentColor, color: "#fff", borderRadius: "2px 2px 2px 10px", fontSize: noteBadgeFontSize }}>
                                 {noteBadgeLabel}
                             </span>
                         )}
@@ -4800,6 +4800,12 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     <SparklesIcon className="w-[29px] h-[29px] sm:w-7 sm:h-7" />
                                 </button>
                             </div>
+                        )}
+                        {TYPE_BADGE[noteType] && (
+                            <span className="hidden sm:inline-flex text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-full flex-shrink-0"
+                                style={{ background: `${TYPE_BADGE[noteType].color}20`, color: TYPE_BADGE[noteType].color, border: `1px solid ${TYPE_BADGE[noteType].color}40` }}>
+                                {TYPE_BADGE[noteType].label}
+                            </span>
                         )}
                         <button type="button"
                             onClick={() => { setShowNoteActions(true); closeEditorTools(); }}
