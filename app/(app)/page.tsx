@@ -5648,18 +5648,13 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 );
                                             })()}
                                             {!item.is_folder && (() => {
-                                                const badge = TYPE_BADGE[(item as any).type];
-                                                const titleStr = item.title || "";
-                                                const rawExt = titleStr.includes(".") ? (titleStr.split(".").pop() ?? "") : "";
-                                                const ext = rawExt && /^[a-zA-Z0-9]{1,5}$/.test(rawExt) ? rawExt.toUpperCase() : null;
                                                 const isChecklistItem = (item as any).type === "checklist" || listModeNotes.has(String(item.id));
-                                                const color = badge?.color || "#71717a";
+                                                const nc = (item as any).color || (item as any).folder_color || "#71717a";
                                                 if (isChecklistItem) {
                                                     const c = item.content || "";
                                                     const lines = c.split("\n").filter((l: string) => l.trim());
                                                     const checked = lines.filter((l: string) => /^\[x\]/i.test(l.trim())).length;
                                                     const total = lines.length;
-                                                    const nc = (item as any).color || (item as any).folder_color || "#22c55e";
                                                     return (
                                                         <div className="flex-shrink-0 w-[54px] h-[54px] sm:w-[46px] sm:h-[46px] relative overflow-hidden font-black"
                                                             style={{ backgroundColor: appTheme === "light" ? `${nc}40` : `${nc}22`, border: `1.5px solid ${appTheme === "light" ? `${nc}80` : `${nc}40`}` }}>
@@ -5675,17 +5670,17 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                         </div>
                                                     );
                                                 }
-                                                const label = ext || badge?.label || "TXT";
-                                                const fs = label.length <= 2 ? 10 : label.length <= 3 ? 8 : label.length <= 4 ? 7 : 6;
+                                                const initial = meaningfulInitial(item.title || "", "N");
                                                 return (
-                                                    <div className="flex-shrink-0 w-[54px] h-[54px] sm:w-[46px] sm:h-[46px] flex items-center justify-center font-black overflow-hidden"
+                                                    <div className="flex-shrink-0 w-[54px] h-[54px] sm:w-[46px] sm:h-[46px] flex items-center justify-center font-black overflow-visible relative"
                                                         style={{
-                                                            fontSize: fs,
-                                                            backgroundColor: appTheme === "light" ? `${color}45` : `${color}30`,
-                                                            color,
-                                                            border: `1.5px solid ${appTheme === "light" ? `${color}80` : `${color}40`}`,
+                                                            fontSize: 22,
+                                                            backgroundColor: nc,
+                                                            color: "rgba(0,0,0,0.55)",
+                                                            borderRadius: "3px 3px 3px 14px",
+                                                            boxShadow: `2px 3px 8px ${nc}55`,
                                                         }}>
-                                                        {label}
+                                                        {initial}
                                                     </div>
                                                 );
                                             })()}
@@ -5733,14 +5728,21 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 const isChecklist = isListModeNote || (item as any).type === "checklist" || /^\[[ x]\]/im.test(c);
                                                 const lines = c.split("\n").filter((l: string) => l.trim());
                                                 const checked = lines.filter((l: string) => /^\[x\]/i.test(l.trim())).length;
-                                                return <div className="flex flex-col items-end flex-shrink-0 gap-0.5">
+                                                const typeBadge = TYPE_BADGE[(item as any).type];
+                                                return <div className="flex flex-col items-end flex-shrink-0 gap-1">
                                                     {isChecklist && lines.length > 0 && (
                                                         <span className="text-[13px] font-black tabular-nums">
                                                             <span style={{ color: "#22c55e", textShadow: checked > 0 ? "0 0 8px rgba(34,197,94,0.7)" : "none" }}>{checked}</span>
                                                             <span style={{ color: "#3f3f46" }}>/{lines.length}</span>
                                                         </span>
                                                     )}
-                                                    <span className="text-[13px] sm:text-[13px] text-zinc-500 font-medium">{timeAgo(item.updated_at)}</span>
+                                                    {typeBadge && (
+                                                        <span className="text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-full flex-shrink-0"
+                                                            style={{ background: `${typeBadge.color}20`, color: typeBadge.color, border: `1px solid ${typeBadge.color}40` }}>
+                                                            {typeBadge.label}
+                                                        </span>
+                                                    )}
+                                                    <span className="text-[11px] text-zinc-500 font-medium">{timeAgo(item.updated_at)}</span>
                                                 </div>;
                                             })()}
                                             {!item.is_folder && looksLikeUrl(item.content || "") && !isSelectMode && (item.folder_name || activeFolder) !== "TEAM" && (
