@@ -5614,7 +5614,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             return { position: "relative", isolation: "isolate", "--row-color": c } as React.CSSProperties;
                                         }
                                         return item.is_folder
-                                            ? { isolation: "isolate", backgroundColor: item.name === "CLAUDE" ? "#ffffff" : c, outline: "2px solid rgba(255,255,255,1)", outlineOffset: "-2px" }
+                                            ? { isolation: "isolate", backgroundColor: item.name === "CLAUDE" ? "#ffffff" : c, ...(activeFolder ? { outline: "2px solid rgba(255,255,255,1)", outlineOffset: "-2px" } : {}) }
                                             : { isolation: "isolate", backgroundColor: c, borderRadius: "3px 3px 3px 14px" };
                                     })()}
                                     className={`${isListMode
