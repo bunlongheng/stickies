@@ -5603,7 +5603,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         }
                                         return item.is_folder
                                             ? { isolation: "isolate", backgroundColor: item.name === "CLAUDE" ? "#ffffff" : c, border: "2px solid rgba(255,255,255,1)" }
-                                            : { isolation: "isolate", backgroundColor: c, borderRadius: 0 };
+                                            : { isolation: "isolate", backgroundColor: c, borderRadius: "3px 3px 3px 14px" };
                                     })()}
                                     className={`${isListMode
                                         ? `group list-row-hover flex items-center gap-3 px-4 py-1 sm:py-1 border-b border-white/5 cursor-pointer select-none transition-colors active:bg-white/10 overflow-hidden ${isDragging ? "opacity-30" : dt?.mode === "into" ? "bg-cyan-950/60 ring-1 ring-inset ring-cyan-400" : ""} ${isSelectMode && !item.is_folder && selectedIds.has(String(item.id)) ? "bg-blue-950/50" : ""} ${isFolderSelectMode && item.is_folder && selectedFolderNames.includes(item.name || "") ? "bg-emerald-950/50" : ""}`
