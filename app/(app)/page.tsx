@@ -5421,7 +5421,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     <span className="w-full pl-12 pr-3 py-3 text-sm font-black tracking-tight text-white/30">SEARCH</span>
                                 </button>
                                 <div className="ml-auto flex items-center gap-1">
-                                    <HeaderIconBtn icon={mainListMode ? Bars3Icon : Squares2X2Icon} label={mainListMode ? "List" : "Thumb"} onClick={() => { setMainListMode(v => !v); setKanbanMode(false); }} />
+                                    <HeaderIconBtn icon={mainListMode ? Bars3Icon : Squares2X2Icon} label={mainListMode ? "List" : "Thumb"} active={!mainListMode && !kanbanMode} onClick={() => { setMainListMode(v => !v); setKanbanMode(false); }} />
                                     <HeaderIconBtn icon={Cog6ToothIcon} label="Settings" onClick={() => { const hueInt = integrationsRef.current.find(ig => ig.type === "hue"); setLightMode((hueInt?.config?.mode as any) ?? "flash"); setShowFolderActions(true); }} />
                                 </div>
                             </>
@@ -5438,7 +5438,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     </div>
                                 ) : (
                                     <>
-                                        <HeaderIconBtn icon={mainListMode ? Bars3Icon : Squares2X2Icon} label={mainListMode ? "List" : "Thumb"} onClick={() => { setMainListMode(v => !v); setKanbanMode(false); }} />
+                                        <HeaderIconBtn icon={mainListMode ? Bars3Icon : Squares2X2Icon} label={mainListMode ? "List" : "Thumb"} active={!mainListMode && !kanbanMode} onClick={() => { setMainListMode(v => !v); setKanbanMode(false); }} />
                                         <HeaderIconBtn icon={Cog6ToothIcon} label="Settings" onClick={() => { const hueInt = integrationsRef.current.find(ig => ig.type === "hue"); setLightMode((hueInt?.config?.mode as any) ?? "flash"); setShowFolderActions(true); setShowFolderColorPicker(false); setShowFolderIconPicker(false); setShowFolderMovePicker(false); }} />
                                     </>
                                 )}
@@ -7622,8 +7622,8 @@ const MobileEditorIconBtn = ({ icon: Icon, label, onClick, active = false }: any
     </button>
 );
 
-const HeaderIconBtn = ({ icon: Icon, label, onClick, style }: any) => (
-    <button type="button" onClick={onClick} className="p-3 text-zinc-500 hover:text-white hover:bg-white/10 transition" title={label} aria-label={label} style={style}>
+const HeaderIconBtn = ({ icon: Icon, label, onClick, style, active }: any) => (
+    <button type="button" onClick={onClick} className={`p-3 transition ${active ? "text-white bg-white/15" : "text-zinc-500 hover:text-white hover:bg-white/10"}`} title={label} aria-label={label} style={style}>
         <Icon className="w-[26px] h-[26px]" />
     </button>
 );
