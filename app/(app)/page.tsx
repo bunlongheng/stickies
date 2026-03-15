@@ -4801,7 +4801,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-0.5" />
                                                 : (folderIcons[frame.name] || (frame.name || "F").charAt(0).toUpperCase())}
                                         </span>
-                                        {frame.name}
+                                        <span className="uppercase">{frame.name}</span>
                                     </button>
                                 </React.Fragment>
                             ))}
@@ -5401,10 +5401,10 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 onClick={() => { goToIndex(i); }}
                                                 className={`flex items-center gap-1.5 font-black tracking-tight truncate max-w-[150px] flex-shrink-0 px-1 transition text-xs ${i === folderStack.length - 1 ? "text-white" : "text-zinc-400 hover:text-white"}`}
                                                 title={frame.name}>
-                                                <span className="flex-shrink-0 w-6 h-6 flex items-center justify-center text-sm font-black text-white leading-none overflow-hidden" style={{ backgroundColor: frame.name === "CLAUDE" ? "#fff" : (folderColors[frame.name] || frame.color), borderRadius: 0, border: frame.name === "CLAUDE" ? undefined : "2px solid rgba(255,255,255,1)" }}>
+                                                <span className="flex-shrink-0 w-6 h-6 flex items-center justify-center text-sm font-black leading-none overflow-hidden" style={{ backgroundColor: "#fff", color: folderColors[frame.name] || frame.color, borderRadius: 0 }}>
                                                     {frame.name === "CLAUDE" ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-0.5" /> : (folderIcons[frame.name] || (frame.name || "F").charAt(0).toUpperCase())}
                                                 </span>
-                                                {frame.name}
+                                                <span className="uppercase">{frame.name}</span>
                                             </button>
                                         </React.Fragment>
                                     ))}
@@ -5683,7 +5683,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             return { position: "relative", isolation: "isolate", "--row-color": c } as React.CSSProperties;
                                         }
                                         return item.is_folder
-                                            ? { isolation: "isolate", backgroundColor: "#ffffff", ...(activeFolder ? { outline: "2px solid rgba(255,255,255,1)", outlineOffset: "-2px" } : {}) }
+                                            ? { isolation: "isolate", backgroundColor: "#ffffff" }
                                             : { isolation: "isolate", backgroundColor: c, borderRadius: "3px 3px 3px 14px" };
                                     })()}
                                     className={`${isListMode
@@ -5723,7 +5723,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 const c = item.color || item.folder_color || palette12[0];
                                                 return (
                                                     <div className="flex-shrink-0 w-[54px] h-[54px] sm:w-[46px] sm:h-[46px] flex items-center justify-center font-black overflow-hidden"
-                                                        style={{ fontSize: 22, backgroundColor: "#fff", color: c, ...(activeFolder ? { border: "2px solid rgba(255,255,255,1)" } : {}), boxShadow: `2px 3px 8px ${c}55` }}>
+                                                        style={{ fontSize: 22, backgroundColor: "#fff", color: c, boxShadow: `2px 3px 8px ${c}55` }}>
                                                         {item.name === "CLAUDE"
                                                             ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-1" />
                                                             : (item.icon || meaningfulInitial(item.name, "F"))}
@@ -5749,7 +5749,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             })()}
                                             <div className="flex-1 min-w-0">
                                                 <div className="text-[13px] font-semibold tracking-tight text-white truncate">
-                                                    {item.is_folder ? <>{item.name}<span className="text-white/30 font-light ml-0.5">/</span></> : item.title}
+                                                    {item.is_folder ? <><span className="uppercase">{item.name}</span><span className="text-white/30 font-light ml-0.5">/</span></> : item.title}
                                                 </div>
                                                 {item.is_folder ? (
                                                     <div className="text-[13px] sm:text-[13px] text-zinc-500 font-medium">
@@ -5883,7 +5883,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                                 : <div style={{ fontSize: "3rem", lineHeight: 1, color: item.color || item.folder_color || palette12[0] }} className="font-black relative z-10">{meaningfulInitial(item.name, "F")}</div>
                                                         }
                                                         <div className="mt-1 text-[11px] font-bold line-clamp-1 w-full text-center relative z-10" style={{ color: item.name === "CLAUDE" ? "#000" : (item.color || item.folder_color || palette12[0]) }}>
-                                                            {item.name} <span className="opacity-50 font-normal text-[10px]">({(item.subfolderCount || 0) + (item.count || 0)})</span>
+                                                            <span className="uppercase">{item.name}</span> <span className="opacity-50 font-normal text-[10px]">({(item.subfolderCount || 0) + (item.count || 0)})</span>
                                                         </div>
                                                     </>
                                                 ) : (
@@ -6711,8 +6711,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                         <div className="border-b border-white/10 px-6 py-4 flex items-center gap-3">
                             {activeFolder ? (
                                 <>
-                                    <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center text-sm font-black text-white leading-none overflow-hidden"
-                                        style={{ backgroundColor: activeFolder === "CLAUDE" ? "#fff" : activeFolderColor, boxShadow: activeFolder === "CLAUDE" ? "inset 0 0 0 1px rgba(255,255,255,0.85)" : undefined }}>
+                                    <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center text-sm font-black leading-none overflow-hidden"
+                                        style={{ backgroundColor: "#fff", color: activeFolder === "CLAUDE" ? "#000" : activeFolderColor }}>
                                         {activeFolder === "CLAUDE" ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-1" /> : (folderIcons[activeFolder] || [...(activeFolder || "F")][0].toUpperCase())}
                                     </div>
                                     {isEditingFolderTitle ? (
@@ -6875,7 +6875,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 className="w-full flex items-center gap-2.5 px-3 py-2 text-left transition rounded"
                                                 style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}>
                                                 {dfColor ? (
-                                                    <span className="w-5 h-5 flex-shrink-0 flex items-center justify-center text-[11px] font-black text-white leading-none overflow-hidden" style={{ backgroundColor: defaultFolder === "CLAUDE" ? "#fff" : dfColor, fontSize: 13 }}>
+                                                    <span className="w-5 h-5 flex-shrink-0 flex items-center justify-center text-[11px] font-black leading-none overflow-hidden" style={{ backgroundColor: "#fff", color: defaultFolder === "CLAUDE" ? "#000" : dfColor, fontSize: 13 }}>
                                                         {defaultFolder === "CLAUDE"
                                                             ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-0.5" />
                                                             : (folderIcons[defaultFolder] || defaultFolder?.charAt(0).toUpperCase())}
@@ -6890,12 +6890,12 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                         <button key={f.name} type="button"
                                                             onClick={(e) => { e.stopPropagation(); setDefaultFolder(f.name); localStorage.setItem(DEFAULT_FOLDER_KEY, f.name); setShowDefaultFolderPicker(false); setShowFolderActions(false); }}
                                                             className="flex items-center gap-2.5 px-3 py-1.5 text-left transition hover:bg-white/5 rounded">
-                                                            <span className="w-5 h-5 flex-shrink-0 flex items-center justify-center text-[11px] font-black text-white leading-none overflow-hidden" style={{ backgroundColor: f.name === "CLAUDE" ? "#fff" : f.color, fontSize: 13 }}>
+                                                            <span className="w-5 h-5 flex-shrink-0 flex items-center justify-center text-[11px] font-black leading-none overflow-hidden" style={{ backgroundColor: "#fff", color: f.name === "CLAUDE" ? "#000" : f.color, fontSize: 13 }}>
                                                                 {f.name === "CLAUDE"
                                                                     ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-0.5" />
                                                                     : (folderIcons[f.name] || f.name?.charAt(0).toUpperCase())}
                                                             </span>
-                                                            <span className="text-xs font-bold flex-1 truncate text-zinc-400">{f.name}</span>
+                                                            <span className="text-xs font-bold flex-1 truncate text-zinc-400 uppercase">{f.name}</span>
                                                         </button>
                                                     ))}
                                                 </div>
@@ -7033,7 +7033,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                         }}
                                                         className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition ${i === cmdKCursor ? "bg-white/10" : "hover:bg-white/5"}`}>
                                                         <div className="w-7 h-7 flex-shrink-0 flex items-center justify-center text-sm font-black overflow-hidden"
-                                                            style={{ backgroundColor: folder.name === "CLAUDE" ? "#fff" : (folder.color || "#3f3f46"), color: "#fff" }}>
+                                                            style={{ backgroundColor: "#fff", color: folder.name === "CLAUDE" ? "#000" : (folder.color || "#3f3f46") }}>
                                                             {folder.name === "CLAUDE"
                                                                 ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-0.5" />
                                                                 : (folder.icon || [...(folder.name || "F")][0]?.toUpperCase())}
@@ -7045,7 +7045,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                                     <span className="text-zinc-700">/</span>
                                                                 </div>
                                                             )}
-                                                            <div className="text-sm font-semibold text-white truncate">{folder.name}</div>
+                                                            <div className="text-sm font-semibold text-white truncate uppercase">{folder.name}</div>
                                                             <div className="text-[10px] text-zinc-500">{folder.count ?? 0} note{(folder.count ?? 0) !== 1 ? "s" : ""}</div>
                                                         </div>
                                                         <ChevronRightIcon className="w-4 h-4 text-zinc-600 flex-shrink-0" />
