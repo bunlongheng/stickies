@@ -100,6 +100,17 @@ body {
 ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 6px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.22); }
 
+/* ── Rich text editor cursor (bright white, glowing) ────── */
+.ProseMirror,
+.tiptap {
+  caret-color: #ffffff !important;
+  caret-shape: block;
+}
+.ProseMirror:focus,
+.tiptap:focus {
+  animation: caretGlow 1s ease-in-out infinite alternate;
+}
+
 /* ── Monokai editor ─────────────────────────────────────── */
 /* Applied when the RichTextEditor sits on #272822 background */
 [style*="272822"] .ProseMirror,
