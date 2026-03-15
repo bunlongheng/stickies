@@ -5659,7 +5659,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                             fontSize: 22,
                                                             backgroundColor: nc,
                                                             color: "#fff",
-                                                            borderRadius: "3px 3px 3px 14px",
+                                                            borderRadius: "0 0 0 14px",
                                                             boxShadow: `2px 3px 8px ${nc}55`,
                                                         }}>
                                                         {initial}
