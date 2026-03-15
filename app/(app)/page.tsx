@@ -19,7 +19,7 @@ import PlusIcon from "@heroicons/react/24/outline/PlusIcon";
 import Bars3Icon from "@heroicons/react/24/outline/Bars3Icon";
 import ArrowLeftIcon from "@heroicons/react/24/outline/ArrowLeftIcon";
 import ArrowRightIcon from "@heroicons/react/24/outline/ArrowRightIcon";
-import FolderIcon from "@heroicons/react/24/outline/FolderIcon";
+import FolderIcon from "@heroicons/react/24/solid/FolderIcon";
 import SwatchIcon from "@heroicons/react/24/outline/SwatchIcon";
 import DocumentDuplicateIcon from "@heroicons/react/24/outline/DocumentDuplicateIcon";
 import ListBulletIcon from "@heroicons/react/24/outline/ListBulletIcon";
