@@ -5650,26 +5650,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             {!item.is_folder && (() => {
                                                 const isChecklistItem = (item as any).type === "checklist" || listModeNotes.has(String(item.id));
                                                 const nc = (item as any).color || (item as any).folder_color || "#71717a";
-                                                if (isChecklistItem) {
-                                                    const c = item.content || "";
-                                                    const lines = c.split("\n").filter((l: string) => l.trim());
-                                                    const checked = lines.filter((l: string) => /^\[x\]/i.test(l.trim())).length;
-                                                    const total = lines.length;
-                                                    return (
-                                                        <div className="flex-shrink-0 w-[54px] h-[54px] sm:w-[46px] sm:h-[46px] relative overflow-hidden font-black"
-                                                            style={{ backgroundColor: appTheme === "light" ? `${nc}40` : `${nc}22`, border: `1.5px solid ${appTheme === "light" ? `${nc}80` : `${nc}40`}` }}>
-                                                            <div style={{
-                                                                position: "absolute", bottom: 0, left: 0, right: 0,
-                                                                height: `${total > 0 ? Math.round((checked / total) * 100) : 0}%`,
-                                                                background: `linear-gradient(to top, ${nc}${appTheme === "light" ? "cc" : "80"}, ${nc}${appTheme === "light" ? "66" : "30"})`,
-                                                                transition: "height 0.4s ease",
-                                                            }} />
-                                                            <div className="absolute inset-0 flex items-center justify-center" style={{ fontSize: total >= 10 ? 10 : 13, color: appTheme === "light" ? `${nc}` : nc }}>
-                                                                {total}
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                }
                                                 const initial = meaningfulInitial(item.title || "", "N");
                                                 return (
                                                     <div className="flex-shrink-0 w-[54px] h-[54px] sm:w-[46px] sm:h-[46px] flex items-center justify-center font-black overflow-visible relative"
