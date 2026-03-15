@@ -5602,7 +5602,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             return { position: "relative", isolation: "isolate", "--row-color": c } as React.CSSProperties;
                                         }
                                         return item.is_folder
-                                            ? { isolation: "isolate", backgroundColor: item.name === "CLAUDE" ? "#ffffff" : c }
+                                            ? { isolation: "isolate", backgroundColor: item.name === "CLAUDE" ? "#ffffff" : c, border: "2px solid rgba(255,255,255,1)" }
                                             : { isolation: "isolate", backgroundColor: c, borderRadius: 0 };
                                     })()}
                                     className={`${isListMode
@@ -5805,7 +5805,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                                 : <div style={{ fontSize: "3rem", lineHeight: 1 }} className="font-black text-white">{meaningfulInitial(item.name, "F")}</div>
                                                         }
                                                         <div className="mt-0.5 text-[9px] font-medium tracking-tight line-clamp-1 w-full text-center" style={{ color: item.name === "CLAUDE" ? "#000" : "#fff" }}>
-                                                            {item.name} <span className="opacity-70">({(item.subfolderCount || 0) + (item.count || 0)})</span>
+                                                            {item.name}<span className="opacity-30 font-light">/</span> <span className="opacity-70">({(item.subfolderCount || 0) + (item.count || 0)})</span>
                                                         </div>
                                                     </>
                                                 ) : (
