@@ -6806,20 +6806,28 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 {/* DEFAULT NOTEBOOK */}
                                 <div className="px-6 py-3 border-b border-white/[0.06]">
                                     <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-2">Default Notebook</p>
-                                    <select
-                                        value={defaultFolder || ""}
-                                        onChange={(e) => {
-                                            const val = e.target.value;
-                                            setDefaultFolder(val);
-                                            localStorage.setItem(DEFAULT_FOLDER_KEY, val);
-                                        }}
-                                        className="w-full bg-white/5 border border-white/10 text-white text-xs font-bold px-3 py-2.5 outline-none appearance-none"
-                                    >
-                                        <option value="">None (open root)</option>
-                                        {folders.filter(f => f.name && !f.parent_folder_name).map(f => (
-                                            <option key={f.id || f.name} value={f.name}>{f.name}</option>
-                                        ))}
-                                    </select>
+                                    <div className="flex flex-col gap-1">
+                                        {[{ name: "", label: "None — open root" }, ...folders.filter(f => f.name && !f.parent_folder_name).map(f => ({ name: f.name, label: f.name, color: f.color, icon: folderIcons[f.name] }))].map((f) => {
+                                            const isSelected = (defaultFolder || "") === f.name;
+                                            const fc = (f as any).color;
+                                            return (
+                                                <button key={f.name || "none"} type="button"
+                                                    onClick={() => { setDefaultFolder(f.name); localStorage.setItem(DEFAULT_FOLDER_KEY, f.name); }}
+                                                    className="flex items-center gap-2.5 px-3 py-2 text-left transition"
+                                                    style={{ background: isSelected ? "rgba(255,255,255,0.08)" : "transparent", border: `1px solid ${isSelected ? "rgba(255,255,255,0.15)" : "transparent"}` }}>
+                                                    {fc ? (
+                                                        <span className="w-5 h-5 flex-shrink-0 flex items-center justify-center text-[11px] font-black text-white leading-none" style={{ backgroundColor: fc, fontSize: 13 }}>
+                                                            {(f as any).icon || f.name?.charAt(0).toUpperCase()}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="w-5 h-5 flex-shrink-0" />
+                                                    )}
+                                                    <span className={`text-xs font-bold flex-1 truncate ${isSelected ? "text-white" : "text-zinc-400"}`}>{f.label}</span>
+                                                    {isSelected && <CheckIcon className="w-3.5 h-3.5 text-white flex-shrink-0" />}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
                                 </div>
                                 {/* NAV MODE */}
                                 <div className="px-6 py-3 border-b border-white/[0.06]">
