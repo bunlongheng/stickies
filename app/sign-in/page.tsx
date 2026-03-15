@@ -73,11 +73,6 @@ function SignInContent() {
         .fade-up-3  { animation: fadeUp 0.5s ease 0.2s forwards; opacity: 0; }
         .btn-google:hover { background: #2563eb !important; transform: translateY(-1px); box-shadow: 0 8px 24px rgba(66,133,244,0.3) !important; }
         .email-input { caret-color: #FFCC00; caret-shape: block; }
-        .email-input:focus { animation: caretGlow 1s ease-in-out infinite alternate; }
-        @keyframes caretGlow {
-          from { filter: drop-shadow(0 0 2px rgba(255,204,0,0.6)); }
-          to   { filter: drop-shadow(0 0 8px rgba(255,204,0,1)); }
-        }
       `}</style>
 
       {/* Floating sticky notes */}
