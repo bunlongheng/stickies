@@ -6842,7 +6842,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                             {folderStack.length === 0 && (
                                 <button type="button"
                                     onClick={async () => { setShowFolderActions(false); await fetch("/api/stickies/logout", { method: "POST" }); window.location.href = "/sign-in"; }}
-                                    className="flex items-center gap-2 px-5 py-3 bg-red-500/10 text-red-400 hover:bg-red-500/20 active:bg-red-500/30 transition font-black uppercase text-xs tracking-wide border border-red-500/20">
+                                    className="flex items-center gap-2 px-5 py-3 bg-red-500 text-white hover:bg-red-600 active:bg-red-700 transition font-black uppercase text-xs tracking-wide">
                                     <ArrowRightOnRectangleIcon className="w-4 h-4 flex-shrink-0" />
                                     Sign Out
                                 </button>
