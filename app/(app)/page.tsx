@@ -3176,7 +3176,7 @@ const fireIntegrations = (trigger: string, note: any) => {
 
     // Derived booleans — clean, no detection chains
     const baseMode = !listMode && !graphMode && !mindmapMode && !stackMode;
-    const mermaidMode  = baseMode && noteType === "mermaid";
+    const mermaidMode  = process.env.NODE_ENV === "development" && baseMode && noteType === "mermaid";
     const markdownMode = baseMode && noteType === "markdown";
     const htmlMode     = baseMode && (noteType === "html" || (!!currentNoteId && htmlModeNotes.has(currentNoteId)));
     const jsonMode     = baseMode && noteType === "json" && !mermaidMode;
@@ -4243,14 +4243,8 @@ const fireIntegrations = (trigger: string, note: any) => {
     if (!mounted || isUrlChecking) return <div className="h-screen bg-black" />;
     const activeAccentColor = noteColor || editingNote?.folder_color || folders.find((f) => f.name === activeFolder)?.color || "#22d3ee";
     const noteBadgeInitial = meaningfulInitial(title.trim() || editingNote?.title || "", "U");
-    const noteBadgeLabel = TYPE_BADGE[noteType]?.label ?? noteBadgeInitial;
-    const noteBadgeFontSize = (() => {
-        const lbl = TYPE_BADGE[noteType]?.label;
-        if (!lbl) return "0.75rem";
-        if (lbl.length <= 2) return "8px";
-        if (lbl.length <= 3) return "6px";
-        return "5.5px";
-    })();
+    const noteBadgeLabel = noteBadgeInitial;
+    const noteBadgeFontSize = noteBadgeInitial.length <= 1 ? "0.75rem" : noteBadgeInitial.length <= 2 ? "9px" : "7px";
     const isBreadcrumbChecklist = listMode;
     const breadcrumbChecklistLines = isBreadcrumbChecklist ? (content || "").split("\n").filter((l: string) => l.trim()) : [];
     const breadcrumbChecked = breadcrumbChecklistLines.filter((l: string) => /^\[x\]/i.test(l.trim())).length;
@@ -4802,8 +4796,13 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     <button type="button"
                                         onClick={() => { goToIndex(i); void backToRootFromEditor(); }}
                                         className="flex items-center gap-1 font-black tracking-tight text-zinc-400 hover:text-white transition flex-shrink-0 text-xs px-0.5">
-                                        <span className="w-6 h-6 flex-shrink-0 flex items-center justify-center text-sm font-black text-white leading-none overflow-hidden" style={{ backgroundColor: frame.name === "CLAUDE" ? "#fff" : (folderColors[frame.name] || frame.color), borderRadius: 0, border: frame.name === "CLAUDE" ? undefined : "2px solid rgba(255,255,255,1)" }}>
-                                            {frame.name === "CLAUDE" ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-0.5" /> : (folderIcons[frame.name] || (frame.name || "F").charAt(0).toUpperCase())}
+                                        <span className="w-6 h-6 flex-shrink-0 relative flex items-center justify-center text-sm font-black leading-none overflow-hidden" style={{ backgroundColor: "#fff", borderRadius: 0 }}>
+                                            {frame.name === "CLAUDE"
+                                                ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-0.5" />
+                                                : <>
+                                                    <FolderIcon className="absolute inset-0 m-auto" style={{ width: "90%", height: "90%", color: folderColors[frame.name] || frame.color, opacity: 0.9 }} />
+                                                    <span className="relative z-10 text-white text-[10px]">{folderIcons[frame.name] || (frame.name || "F").charAt(0).toUpperCase()}</span>
+                                                </>}
                                         </span>
                                         {frame.name}
                                     </button>
@@ -4864,7 +4863,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                             </div>
                         )}
                         {TYPE_BADGE[noteType] && (
-                            <span className="hidden sm:inline-flex text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-full flex-shrink-0"
+                            <span className="inline-flex text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-full flex-shrink-0"
                                 style={{ background: `${TYPE_BADGE[noteType].color}20`, color: TYPE_BADGE[noteType].color, border: `1px solid ${TYPE_BADGE[noteType].color}40` }}>
                                 {TYPE_BADGE[noteType].label}
                             </span>
@@ -5425,7 +5424,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     <span className="w-full pl-12 pr-3 py-3 text-sm font-black tracking-tight text-white/30">SEARCH</span>
                                 </button>
                                 <div className="ml-auto flex items-center gap-1">
-                                    <HeaderIconBtn icon={mainListMode ? Squares2X2Icon : Bars3Icon} label={mainListMode ? "Thumb" : "List"} onClick={() => { setMainListMode(v => !v); setKanbanMode(false); }} />
+                                    <HeaderIconBtn icon={mainListMode ? Bars3Icon : Squares2X2Icon} label={mainListMode ? "List" : "Thumb"} onClick={() => { setMainListMode(v => !v); setKanbanMode(false); }} />
                                     <HeaderIconBtn icon={Cog6ToothIcon} label="Settings" onClick={() => { const hueInt = integrationsRef.current.find(ig => ig.type === "hue"); setLightMode((hueInt?.config?.mode as any) ?? "flash"); setShowFolderActions(true); }} />
                                 </div>
                             </>
@@ -5442,7 +5441,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     </div>
                                 ) : (
                                     <>
-                                        <HeaderIconBtn icon={mainListMode ? Squares2X2Icon : Bars3Icon} label={mainListMode ? "Thumb" : "List"} onClick={() => { setMainListMode(v => !v); setKanbanMode(false); }} />
+                                        <HeaderIconBtn icon={mainListMode ? Bars3Icon : Squares2X2Icon} label={mainListMode ? "List" : "Thumb"} onClick={() => { setMainListMode(v => !v); setKanbanMode(false); }} />
                                         <HeaderIconBtn icon={Cog6ToothIcon} label="Settings" onClick={() => { const hueInt = integrationsRef.current.find(ig => ig.type === "hue"); setLightMode((hueInt?.config?.mode as any) ?? "flash"); setShowFolderActions(true); setShowFolderColorPicker(false); setShowFolderIconPicker(false); setShowFolderMovePicker(false); }} />
                                     </>
                                 )}
@@ -5687,7 +5686,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             return { position: "relative", isolation: "isolate", "--row-color": c } as React.CSSProperties;
                                         }
                                         return item.is_folder
-                                            ? { isolation: "isolate", backgroundColor: item.name === "CLAUDE" ? "#ffffff" : c, ...(activeFolder ? { outline: "2px solid rgba(255,255,255,1)", outlineOffset: "-2px" } : {}) }
+                                            ? { isolation: "isolate", backgroundColor: "#ffffff", ...(activeFolder ? { outline: "2px solid rgba(255,255,255,1)", outlineOffset: "-2px" } : {}) }
                                             : { isolation: "isolate", backgroundColor: c, borderRadius: "3px 3px 3px 14px" };
                                     })()}
                                     className={`${isListMode
@@ -5726,11 +5725,14 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             {item.is_folder && (() => {
                                                 const c = item.color || item.folder_color || palette12[0];
                                                 return (
-                                                    <div className="flex-shrink-0 w-[54px] h-[54px] sm:w-[46px] sm:h-[46px] flex items-center justify-center font-black overflow-hidden"
-                                                        style={{ fontSize: 22, backgroundColor: item.name === "CLAUDE" ? "#fff" : c, color: "#fff", ...(activeFolder ? { border: "2px solid rgba(255,255,255,1)" } : {}), boxShadow: `2px 3px 8px ${c}55` }}>
+                                                    <div className="flex-shrink-0 w-[54px] h-[54px] sm:w-[46px] sm:h-[46px] relative flex items-center justify-center font-black overflow-hidden"
+                                                        style={{ fontSize: 22, backgroundColor: "#fff", ...(activeFolder ? { border: "2px solid rgba(255,255,255,1)" } : {}), boxShadow: `2px 3px 8px ${c}55` }}>
                                                         {item.name === "CLAUDE"
                                                             ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-1" />
-                                                            : (item.icon || meaningfulInitial(item.name, "F"))}
+                                                            : <>
+                                                                <FolderIcon className="absolute inset-0 m-auto" style={{ width: "90%", height: "90%", color: c, opacity: 0.9 }} />
+                                                                <span className="relative z-10 text-white">{item.icon || meaningfulInitial(item.name, "F")}</span>
+                                                            </>}
                                                     </div>
                                                 );
                                             })()}
@@ -5880,9 +5882,9 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-1.5 overflow-hidden">
                                                 {item.is_folder ? (
                                                     <>
-                                                        {/* Large transparent background folder icon */}
+                                                        {/* Large folder icon colored by folder color */}
                                                         {item.name !== "CLAUDE" && (
-                                                            <FolderIcon className="absolute inset-0 m-auto text-white pointer-events-none" style={{ width: "85%", height: "85%", opacity: 0.07 }} />
+                                                            <FolderIcon className="absolute inset-0 m-auto pointer-events-none" style={{ width: "85%", height: "85%", color: item.color || item.folder_color || palette12[0], opacity: 0.9 }} />
                                                         )}
                                                         {item.name === "CLAUDE"
                                                             ? <img src="/claude-icon.png" alt="Claude" className="w-16 h-16 object-contain relative z-10" />
@@ -5890,7 +5892,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                                 ? <div style={{ fontSize: "2.8rem", lineHeight: 1 }} className="relative z-10">{item.icon}</div>
                                                                 : <div style={{ fontSize: "3rem", lineHeight: 1 }} className="font-black text-white relative z-10">{meaningfulInitial(item.name, "F")}</div>
                                                         }
-                                                        <div className="mt-0.5 text-[9px] font-medium tracking-tight line-clamp-1 w-full text-center relative z-10" style={{ color: item.name === "CLAUDE" ? "#000" : "#fff" }}>
+                                                        <div className="mt-0.5 text-[9px] font-medium tracking-tight line-clamp-1 w-full text-center relative z-10" style={{ color: "#fff" }}>
                                                             {item.name}<span className="opacity-30 font-light">/</span> <span className="opacity-70">({(item.subfolderCount || 0) + (item.count || 0)})</span>
                                                         </div>
                                                     </>
