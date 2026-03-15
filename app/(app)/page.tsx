@@ -5877,7 +5877,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 {item.is_folder ? (
                                                     <>
                                                         {item.name === "CLAUDE"
-                                                            ? <img src="/claude-icon.png" alt="Claude" className="w-12 h-12 object-contain relative z-10" />
+                                                            ? <img src="/claude-icon.png" alt="Claude" className="w-14 h-14 object-contain relative z-10" />
                                                             : item.icon
                                                                 ? <div style={{ fontSize: "2.8rem", lineHeight: 1 }} className="relative z-10">{item.icon}</div>
                                                                 : <div style={{ fontSize: "3rem", lineHeight: 1, color: item.color || item.folder_color || palette12[0] }} className="font-black relative z-10">{meaningfulInitial(item.name, "F")}</div>
