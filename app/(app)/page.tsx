@@ -5639,8 +5639,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             {item.is_folder && (() => {
                                                 const c = item.color || item.folder_color || palette12[0];
                                                 return (
-                                                    <div className="flex-shrink-0 w-[54px] h-[54px] sm:w-[46px] sm:h-[46px] flex items-center justify-center text-base sm:text-sm font-black overflow-hidden"
-                                                        style={{ backgroundColor: item.name === "CLAUDE" ? "#fff" : c, color: "#fff", boxShadow: item.name === "CLAUDE" ? "inset 0 0 0 1px rgba(255,255,255,0.85)" : undefined }}>
+                                                    <div className="flex-shrink-0 w-[54px] h-[54px] sm:w-[46px] sm:h-[46px] flex items-center justify-center font-black overflow-hidden"
+                                                        style={{ fontSize: 22, backgroundColor: item.name === "CLAUDE" ? "#fff" : c, color: "#fff", boxShadow: `2px 3px 8px ${c}55` }}>
                                                         {item.name === "CLAUDE"
                                                             ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-1" />
                                                             : (item.icon || meaningfulInitial(item.name, "F"))}
@@ -5676,7 +5676,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                         style={{
                                                             fontSize: 22,
                                                             backgroundColor: nc,
-                                                            color: "rgba(0,0,0,0.55)",
+                                                            color: "#fff",
                                                             borderRadius: "3px 3px 3px 14px",
                                                             boxShadow: `2px 3px 8px ${nc}55`,
                                                         }}>
