@@ -5774,12 +5774,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             {!item.is_folder && pinnedIds.has(String(item.id)) && !isSelectMode && (
                                                 <HeartSolidIcon className="w-3.5 h-3.5 text-white flex-shrink-0" />
                                             )}
-                                            {item.is_folder && (
-                                                <div className="flex items-center gap-1.5 flex-shrink-0">
-                                                    {defaultFolder === item.name && <HeartSolidIcon className="w-3.5 h-3.5 text-zinc-500 flex-shrink-0" />}
-                                                    <ArrowRightIcon className="w-4 h-4 text-zinc-600" />
-                                                </div>
-                                            )}
+                                            {item.is_folder && <ArrowRightIcon className="w-4 h-4 text-zinc-600 flex-shrink-0" />}
                                         </>
                                     ) : (
                                         <>
@@ -5834,22 +5829,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                         <div className="mt-0.5 text-[9px] font-medium tracking-tight line-clamp-1 w-full text-center relative z-10" style={{ color: item.name === "CLAUDE" ? "#000" : "#fff" }}>
                                                             {item.name}<span className="opacity-30 font-light">/</span> <span className="opacity-70">({(item.subfolderCount || 0) + (item.count || 0)})</span>
                                                         </div>
-                                                        {/* Heart — set as default notebook */}
-                                                        <button
-                                                            type="button"
-                                                            className="absolute top-1 right-1 z-20 p-1 transition"
-                                                            title={defaultFolder === item.name ? "Default notebook" : "Set as default"}
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                const next = defaultFolder === item.name ? "CLAUDE" : (item.name || "CLAUDE");
-                                                                setDefaultFolder(next);
-                                                                localStorage.setItem(DEFAULT_FOLDER_KEY, next);
-                                                            }}
-                                                        >
-                                                            {defaultFolder === item.name
-                                                                ? <HeartSolidIcon className="w-3.5 h-3.5 text-zinc-400" />
-                                                                : <HeartIcon className="w-3.5 h-3.5 text-white/20 hover:text-white/60" />}
-                                                        </button>
                                                     </>
                                                 ) : (
                                                     <>
