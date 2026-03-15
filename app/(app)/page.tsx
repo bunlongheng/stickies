@@ -395,6 +395,7 @@ const MARKDOWN_MODE_KEY = "stickies:markdown-mode-notes:v1";
 const HTML_MODE_KEY = "stickies:html-mode-notes:v1";
 const MINDMAP_MODE_KEY = "stickies:mindmap-mode-notes:v1";
 const STACK_MODE_KEY = "stickies:stack-mode-notes:v1";
+const DEFAULT_FOLDER_KEY = "stickies:default-folder:v1";
 
 // --- Mindmap ---
 const MIND_COLORS = ["#FF3B30","#FF9500","#FFCC00","#34C759","#00C7BE","#007AFF","#5856D6","#AF52DE","#FF2D55","#FF6B4E"];
@@ -1183,6 +1184,7 @@ export default function NotesMaster() {
     const [userEmail, setUserEmail] = useState<string | null>(null);
     const isAdmin = userEmail === "bheng.code@gmail.com";
     const [mainListMode, setMainListMode] = useState(false);
+    const [defaultFolder, setDefaultFolder] = useState<string>("CLAUDE");
     const [navMode, setNavMode] = useState<"folders-and-files" | "files-only">("folders-and-files");
     const [kanbanMode, setKanbanMode] = useState(false);
     const [appTheme, setAppTheme] = useState<"dark" | "light" | "monokai">("dark");
@@ -1456,22 +1458,34 @@ export default function NotesMaster() {
         }
 
         if (!restoredFromUrl) {
-            try {
-                const raw = localStorage.getItem(VIEW_STATE_KEY);
-                if (raw) {
-                    const parsed = JSON.parse(raw);
-                    if (Array.isArray(parsed?.folderStack) && parsed.folderStack.length > 0) {
-                        setFolderStack(parsed.folderStack);
-                    } else if (typeof parsed?.activeFolder === "string") {
-                        setActiveFolder(parsed.activeFolder);
+            // Load default folder
+            const savedDefaultFolder = localStorage.getItem(DEFAULT_FOLDER_KEY) || "CLAUDE";
+            setDefaultFolder(savedDefaultFolder);
+
+            // On first load of a new session, open default folder + thumbnail view
+            const isNewSession = !sessionStorage.getItem("stickies:session-started");
+            if (isNewSession) {
+                sessionStorage.setItem("stickies:session-started", "1");
+                setActiveFolder(savedDefaultFolder);
+                setMainListMode(false); // thumbnail as default
+            } else {
+                try {
+                    const raw = localStorage.getItem(VIEW_STATE_KEY);
+                    if (raw) {
+                        const parsed = JSON.parse(raw);
+                        if (Array.isArray(parsed?.folderStack) && parsed.folderStack.length > 0) {
+                            setFolderStack(parsed.folderStack);
+                        } else if (typeof parsed?.activeFolder === "string") {
+                            setActiveFolder(parsed.activeFolder);
+                        }
+                        if ((parsed?.editorOpen || parsed?.noteModalOpen) && parsed?.editingNoteId) {
+                            shouldWaitForInitialTarget = true;
+                            setPendingRestoreNoteId(String(parsed.editingNoteId));
+                        }
                     }
-                    if ((parsed?.editorOpen || parsed?.noteModalOpen) && parsed?.editingNoteId) {
-                        shouldWaitForInitialTarget = true;
-                        setPendingRestoreNoteId(String(parsed.editingNoteId));
-                    }
+                } catch (err) {
+                    console.error("Failed to restore local view state:", err);
                 }
-            } catch (err) {
-                console.error("Failed to restore local view state:", err);
             }
         }
         try {
@@ -5760,7 +5774,26 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             {!item.is_folder && pinnedIds.has(String(item.id)) && !isSelectMode && (
                                                 <HeartSolidIcon className="w-3.5 h-3.5 text-white flex-shrink-0" />
                                             )}
-                                            {item.is_folder && <ArrowRightIcon className="w-4 h-4 text-zinc-600 flex-shrink-0" />}
+                                            {item.is_folder && (
+                                                <div className="flex items-center gap-1.5 flex-shrink-0">
+                                                    <button
+                                                        type="button"
+                                                        title={defaultFolder === item.name ? "Default notebook" : "Set as default notebook"}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            const next = defaultFolder === item.name ? "CLAUDE" : (item.name || "CLAUDE");
+                                                            setDefaultFolder(next);
+                                                            localStorage.setItem(DEFAULT_FOLDER_KEY, next);
+                                                        }}
+                                                        className="p-1 transition"
+                                                    >
+                                                        {defaultFolder === item.name
+                                                            ? <HeartSolidIcon className="w-4 h-4 text-zinc-500" />
+                                                            : <HeartIcon className="w-4 h-4 text-zinc-700 hover:text-zinc-500" />}
+                                                    </button>
+                                                    <ArrowRightIcon className="w-4 h-4 text-zinc-600" />
+                                                </div>
+                                            )}
                                         </>
                                     ) : (
                                         <>
