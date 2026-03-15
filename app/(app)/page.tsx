@@ -5386,7 +5386,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                 </div>{/* ── end right panel ── */}
 
                 {/* LEFT PANEL: slim notes list */}
-                <div className={`bg-black flex flex-col overflow-hidden ${editMode ? "order-first w-[240px] min-w-[180px] max-w-[300px] flex-shrink-0 border-r border-white/10" : editorOpen ? "hidden" : "flex-1"}`}>
+                <div className={`bg-black flex flex-col overflow-hidden ${editMode ? "order-first w-[30%] min-w-[260px] max-w-[420px] flex-shrink-0 border-r border-white/10" : editorOpen ? "hidden" : "flex-1"}`}>
                 <>
                     <div className="safe-top-bar shrink-0 bg-black sticky top-0 z-40" />
                     <header className="ios-mobile-header relative h-auto min-h-[4rem] px-4 flex items-center gap-2 sticky top-0 bg-black z-40 shrink-0">
