@@ -269,6 +269,22 @@ body {
   color: #fff !important;
 }
 
+/* Folder grid tile — white bg, real color on hover */
+.folder-grid-tile {
+  background: #fff;
+  transition: background 0.15s;
+}
+.folder-grid-tile:hover {
+  background: var(--fc) !important;
+}
+.folder-grid-tile:hover .folder-grid-name {
+  color: #fff !important;
+}
+.folder-grid-tile:hover .folder-icon-badge {
+  background: rgba(255,255,255,0.25) !important;
+  color: #fff !important;
+}
+
 @keyframes confettiShoot {
   0%   { transform: translate(0, 0) scale(0); opacity: 1; }
   60%  { transform: translate(var(--cx), var(--cy)) scale(1); opacity: 1; }
