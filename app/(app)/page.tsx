@@ -2492,21 +2492,22 @@ const fireIntegrations = (trigger: string, note: any) => {
             playSound("move");
             showToast(`→ "${name}"`, color);
             if (editingNote?.id) {
+                // Optimistic update — happen immediately, before the API call
+                const noteId = String(editingNote.id);
+                setDbData((prev) =>
+                    prev.map((r) =>
+                        String(r.id) === noteId ? { ...r, folder_name: name, folder_color: color } : r,
+                    ),
+                );
+                setEditingNote((prev: any) => (prev ? { ...prev, folder_name: name, folder_color: color } : prev));
+                const folderRow = folders.find((f) => f.name === name);
+                const folderId = folderRow?.id ?? `virtual-${name}`;
+                setActiveFolder(name);
+                setFolderStack([{ id: folderId, name, color }]);
+                setShowNoteActions(false);
+                setEditorOpen(false);
                 try {
-                    await notesApi.update(String(editingNote.id), { folder_name: name, folder_color: color });
-                    setDbData((prev) =>
-                        prev.map((r) =>
-                            String(r.id) === String(editingNote.id)
-                                ? { ...r, folder_name: name, folder_color: color }
-                                : r,
-                        ),
-                    );
-                    setEditingNote((prev: any) => (prev ? { ...prev, folder_name: name, folder_color: color } : prev));
-                    // Update breadcrumb to reflect new location
-                    const folderRow = folders.find((f) => f.name === name);
-                    const folderId = folderRow?.id ?? `virtual-${name}`;
-                    setActiveFolder(name);
-                    setFolderStack([{ id: folderId, name, color }]);
+                    await notesApi.update(noteId, { folder_name: name, folder_color: color });
                 } catch (err) {
                     console.error("Move failed:", err);
                     showToast("Move Failed");
@@ -4550,6 +4551,9 @@ const fireIntegrations = (trigger: string, note: any) => {
                 }
                 .list-row-hover {
                     transition: background-color 0.15s ease;
+                }
+                .list-row-hover:hover {
+                    background-color: color-mix(in srgb, var(--row-color) 12%, transparent) !important;
                 }
                 @keyframes fabIn {
                     from { opacity: 0; transform: scale(0.5) rotate(-90deg); }
