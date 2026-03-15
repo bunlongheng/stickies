@@ -5801,7 +5801,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 {item.is_folder ? (
                                                     <>
                                                         {/* Large transparent background folder icon */}
-                                                        {item.name !== "CLAUDE" && !item.icon && (
+                                                        {item.name !== "CLAUDE" && (
                                                             <FolderIcon className="absolute inset-0 m-auto w-3/4 h-3/4 text-white pointer-events-none" style={{ opacity: 0.12 }} />
                                                         )}
                                                         {item.name === "CLAUDE"
