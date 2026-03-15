@@ -32,6 +32,7 @@ import ArrowRightOnRectangleIcon from "@heroicons/react/24/outline/ArrowRightOnR
 import Cog6ToothIcon from "@heroicons/react/24/outline/Cog6ToothIcon";
 import CheckIcon from "@heroicons/react/24/outline/CheckIcon";
 import ChevronDownIcon from "@heroicons/react/24/outline/ChevronDownIcon";
+import QueueListIcon from "@heroicons/react/24/outline/QueueListIcon";
 import EyeIcon from "@heroicons/react/24/outline/EyeIcon";
 import CodeBracketIcon from "@heroicons/react/24/outline/CodeBracketIcon";
 import FaceSmileIcon from "@heroicons/react/24/outline/FaceSmileIcon";
@@ -1065,6 +1066,7 @@ export default function NotesMaster() {
     const [toastColor, setToastColor] = useState("#34C759");
     const [toastConfetti, setToastConfetti] = useState(false);
     const [undoDeleteTask, setUndoDeleteTask] = useState<{ text: string; lineIdx: number } | null>(null);
+    const taskContentHistory = useRef<string[]>([]);
     useEffect(() => { if (!undoDeleteTask) return; const t = setTimeout(() => setUndoDeleteTask(null), 5000); return () => clearTimeout(t); }, [undoDeleteTask]);
     const [flashColor, setFlashColor] = useState("#ffffff");
     const [flashNote, setFlashNote] = useState<any | null>(null);
@@ -3336,6 +3338,10 @@ const fireIntegrations = (trigger: string, note: any) => {
         return result;
     }, [content, listMode, graphMode, stackMode]);
 
+    const pushTaskHistory = useCallback((c: string) => {
+        taskContentHistory.current = [...taskContentHistory.current.slice(-30), c];
+    }, []);
+
     const toggleTask = useCallback((lineIdx: number) => {
         const lines = content.split("\n");
         const line = lines[lineIdx];
@@ -3343,20 +3349,27 @@ const fireIntegrations = (trigger: string, note: any) => {
         const trimmed = line.trim();
         const noBullet = trimmed.replace(/^\s*[-*•+_]\s*/, "").replace(/^\s*\d+\.\s*/, "").trim();
         const wasDone = /^\[x\]/i.test(noBullet) || /^\[x\]/i.test(trimmed);
+        pushTaskHistory(content);
         lines[lineIdx] = wasDone ? line.replace(/^\s*\[x\]\s*/i, "") : `[x] ${line}`;
         playSound(wasDone ? "uncheck" : "check");
         setContent(lines.join("\n"));
-    }, [content]);
+        if (!wasDone) {
+            const label = noBullet.replace(/^\[.\]\s*/i, "").trim();
+            showToast(`✓ ${label.length > 18 ? label.slice(0, 18) + "…" : label}`, "#34C759");
+        }
+    }, [content, pushTaskHistory]);
 
     const reorderTask = useCallback((fromLineIdx: number, toLineIdx: number) => {
         if (fromLineIdx === toLineIdx) return;
+        pushTaskHistory(content);
         const lines = content.split("\n");
         const [moved] = lines.splice(fromLineIdx, 1);
         lines.splice(toLineIdx > fromLineIdx ? toLineIdx - 1 : toLineIdx, 0, moved);
         setContent(lines.join("\n"));
-    }, [content]);
+    }, [content, pushTaskHistory]);
 
     const deleteTask = useCallback((lineIdx: number, label?: string, color?: string) => {
+        pushTaskHistory(content);
         const lines = content.split("\n");
         const deletedText = lines[lineIdx];
         lines.splice(lineIdx, 1);
@@ -3365,18 +3378,20 @@ const fireIntegrations = (trigger: string, note: any) => {
         playSound("delete");
         if (deletedText !== undefined) setUndoDeleteTask({ text: deletedText, lineIdx });
         if (label) showToast(`"${label.length > 10 ? label.slice(0, 10) + "…" : label}" deleted`, color || "#FF3B30");
-    }, [content]);
+    }, [content, pushTaskHistory]);
 
     const renameTask = useCallback((lineIdx: number, newText: string) => {
         const trimmed = newText.trim();
         if (!trimmed) return;
+        pushTaskHistory(content);
         const lines = content.split("\n");
         if (lines[lineIdx] === undefined) return;
         const isDone = /^\s*\[x\]\s*/i.test(lines[lineIdx]);
         lines[lineIdx] = isDone ? `[x] ${trimmed}` : trimmed;
         setContent(lines.join("\n"));
         setEditingTaskIdx(null);
-    }, [content]);
+        showToast("Updated", "#32ADE6");
+    }, [content, pushTaskHistory]);
 
     const openAddTask = useCallback(() => {
         setNewTaskText("");
@@ -3394,11 +3409,13 @@ const fireIntegrations = (trigger: string, note: any) => {
     const confirmAddTask = useCallback(() => {
         const text = newTaskText.trim();
         if (!text) { setShowAddTask(false); return; }
+        pushTaskHistory(content);
         setContent((prev) => (prev.trim() ? prev.trimEnd() + "\n" + text : text));
         setNewTaskText("");
         playSound("add");
+        showToast(`Added`, "#34C759");
         setTimeout(() => addTaskInputRef.current?.focus(), 50);
-    }, [newTaskText]);
+    }, [newTaskText, content, pushTaskHistory]);
 
     // --- Graph/bubble force simulation ---
     useEffect(() => {
@@ -4108,6 +4125,10 @@ const fireIntegrations = (trigger: string, note: any) => {
                 setShowGlobalGraph(false);
                 if (!editorOpen) goBack();
             }
+            if ((event.metaKey || event.ctrlKey) && event.key === "z" && taskContentHistory.current.length > 0) {
+                const prev = taskContentHistory.current.pop();
+                if (prev !== undefined) { setContent(prev); showToast("Undone", "#32ADE6"); event.preventDefault(); }
+            }
         };
 
         document.addEventListener("mousedown", onPointerDown);
@@ -4184,7 +4205,7 @@ const fireIntegrations = (trigger: string, note: any) => {
 
     if (!mounted || isUrlChecking) return <div className="h-screen bg-black" />;
     const activeAccentColor = noteColor || editingNote?.folder_color || folders.find((f) => f.name === activeFolder)?.color || "#22d3ee";
-    const noteBadgeInitial = meaningfulInitial(title.trim() || editingNote?.title || "", folderIcons[targetFolder] || (targetFolder || "N").charAt(0));
+    const noteBadgeInitial = meaningfulInitial(title.trim() || editingNote?.title || "", "U");
     const noteBadgeLabel = TYPE_BADGE[noteType]?.label ?? noteBadgeInitial;
     const noteBadgeFontSize = (() => {
         const lbl = TYPE_BADGE[noteType]?.label;
@@ -4193,7 +4214,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         if (lbl.length <= 3) return "6px";
         return "5.5px";
     })();
-    const isBreadcrumbChecklist = listMode || noteType === "checklist";
+    const isBreadcrumbChecklist = listMode;
     const breadcrumbChecklistLines = isBreadcrumbChecklist ? (content || "").split("\n").filter((l: string) => l.trim()) : [];
     const breadcrumbChecked = breadcrumbChecklistLines.filter((l: string) => /^\[x\]/i.test(l.trim())).length;
     const breadcrumbTotal = breadcrumbChecklistLines.length;
@@ -4753,9 +4774,9 @@ const fireIntegrations = (trigger: string, note: any) => {
                             ))}
                             {folderStack.length > 0 && <span className="text-zinc-700 text-[10px] flex-shrink-0">/</span>}
                             {isBreadcrumbChecklist ? (
-                                <div className="w-7 h-7 flex-shrink-0 relative overflow-hidden font-black" style={{ border: `1.5px solid ${activeAccentColor}40` }}>
-                                    <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: `${breadcrumbFillPct}%`, background: `linear-gradient(to top, ${activeAccentColor}80, ${activeAccentColor}30)`, transition: "height 0.4s ease" }} />
-                                    <div className="absolute inset-0 flex items-center justify-center" style={{ fontSize: breadcrumbTotal >= 10 ? 9 : 11, color: activeAccentColor }}>{breadcrumbTotal}</div>
+                                <div className="w-7 h-7 flex-shrink-0 relative overflow-hidden font-black" style={{ backgroundColor: activeAccentColor, borderRadius: "2px 2px 2px 10px" }}>
+                                    <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: `${breadcrumbFillPct}%`, background: "rgba(0,0,0,0.25)", transition: "height 0.4s ease" }} />
+                                    <div className="absolute inset-0 flex items-center justify-center" style={{ fontSize: breadcrumbTotal >= 10 ? 9 : 11, color: "#fff" }}>{breadcrumbTotal}</div>
                                 </div>
                             ) : (
                                 <span className="w-7 h-7 flex-shrink-0 flex items-center justify-center font-black leading-none tracking-tight" style={{ backgroundColor: activeAccentColor, color: "#fff", borderRadius: "2px 2px 2px 10px", fontSize: noteBadgeFontSize }}>
@@ -4767,9 +4788,9 @@ const fireIntegrations = (trigger: string, note: any) => {
 
                         {/* Mobile: badge + title */}
                         {isBreadcrumbChecklist ? (
-                            <div className="sm:hidden w-[30px] h-[30px] flex-shrink-0 relative overflow-hidden font-black" style={{ border: `1.5px solid ${activeAccentColor}40` }}>
-                                <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: `${breadcrumbFillPct}%`, background: `linear-gradient(to top, ${activeAccentColor}80, ${activeAccentColor}30)`, transition: "height 0.4s ease" }} />
-                                <div className="absolute inset-0 flex items-center justify-center" style={{ fontSize: breadcrumbTotal >= 10 ? 9 : 11, color: activeAccentColor }}>{breadcrumbTotal}</div>
+                            <div className="sm:hidden w-[30px] h-[30px] flex-shrink-0 relative overflow-hidden font-black" style={{ backgroundColor: activeAccentColor }}>
+                                <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: `${breadcrumbFillPct}%`, background: "rgba(0,0,0,0.25)", transition: "height 0.4s ease" }} />
+                                <div className="absolute inset-0 flex items-center justify-center" style={{ fontSize: breadcrumbTotal >= 10 ? 9 : 11, color: "#fff" }}>{breadcrumbTotal}</div>
                             </div>
                         ) : (
                             <span className="sm:hidden w-[30px] h-[30px] inline-flex items-center justify-center font-black leading-none tracking-tight flex-shrink-0" style={{ backgroundColor: activeAccentColor, color: "#fff", borderRadius: "2px 2px 2px 10px", fontSize: noteBadgeFontSize }}>
@@ -4811,6 +4832,13 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 {TYPE_BADGE[noteType].label}
                             </span>
                         )}
+                        <button type="button"
+                            onClick={() => toggleListMode()}
+                            className="p-2 sm:p-3 transition flex-shrink-0"
+                            style={{ color: listMode ? activeAccentColor : "rgba(255,255,255,0.4)" }}
+                            title="Toggle checklist">
+                            <QueueListIcon className="w-[26px] h-[26px] sm:w-6 sm:h-6" />
+                        </button>
                         <button type="button"
                             onClick={() => { setShowNoteActions(true); closeEditorTools(); }}
                             className="p-2 sm:p-3 text-zinc-300 hover:text-white active:text-white transition flex-shrink-0">
@@ -5036,6 +5064,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         onDrop={(e) => { e.preventDefault(); if (reorderDragOrigIdx === null || reorderDragOrigIdx === origIdx) return; const from = parsedTasks[reorderDragOrigIdx].lineIdx; const to = parsedTasks[origIdx].lineIdx; reorderTask(from, to); setReorderDragOrigIdx(null); setReorderOverOrigIdx(null); }}
                                         onDragEnd={() => { setReorderDragOrigIdx(null); setReorderOverOrigIdx(null); }}
                                         onClick={() => setActiveTaskIdx(i => i === origIdx ? null : origIdx)}
+                                        onDoubleClick={(e) => { e.stopPropagation(); toggleTask(task.lineIdx); }}
                                         onTouchStart={(e) => {
                                             taskRowSwipeStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
                                             setDraggingTaskIdx(origIdx);
@@ -5071,7 +5100,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             <TrashIcon className="w-5 h-5 text-white" />
                                         </div>
                                         {/* Sliding content */}
-                                        <div className="flex items-center gap-3 px-4 py-4 relative overflow-hidden"
+                                        <div className="flex items-center gap-3 px-4 py-3 min-h-[78px] sm:min-h-[70px] relative overflow-hidden"
                                             style={{
                                                 background: task.done ? "rgba(255,255,255,0.04)" : `${c}50`,
                                                 transform: `translateX(-${rowOffset}px)`,
@@ -5097,10 +5126,14 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                     autoComplete="off"
                                                 />
                                             ) : (
-                                                <span
-                                                    className={`relative flex-1 text-left text-[12px] sm:text-sm font-bold truncate cursor-text ${task.done ? "line-through text-zinc-600" : "text-white"}`}
-                                                    onClick={() => { if (!task.done) { setEditingTaskIdx(origIdx); setEditingTaskText(task.text); setTimeout(() => editTaskInputRef.current?.focus(), 30); } }}
-                                                >{task.text}</span>
+                                                <span className={`relative flex-1 text-left text-[12px] sm:text-sm font-bold truncate ${task.done ? "line-through text-zinc-600" : "text-white"}`}>{task.text}</span>
+                                            )}
+                                            {!task.done && activeTaskIdx === origIdx && editingTaskIdx !== origIdx && (
+                                                <button type="button"
+                                                    onClick={(e) => { e.stopPropagation(); setEditingTaskIdx(origIdx); setEditingTaskText(task.text); setTimeout(() => editTaskInputRef.current?.focus(), 30); }}
+                                                    className="relative z-10 flex-shrink-0 p-1 text-white/60 hover:text-white transition">
+                                                    <PencilSquareIcon className="w-3.5 h-3.5" />
+                                                </button>
                                             )}
                                             {task.done && (
                                                 <button type="button" onClick={(e) => { e.stopPropagation(); deleteTask(task.lineIdx, task.text, c); }} className="relative z-10 flex-shrink-0 p-1 text-transparent group-hover:text-zinc-500 hover:!text-red-400 transition" title="Delete"><TrashIcon className="w-4 h-4" /></button>
@@ -5112,7 +5145,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     return (<>
                                         {undone.map((t, i) => renderRow(t, i))}
                                         {showAddTask && (
-                                    <div className="relative overflow-hidden flex items-center gap-3 px-4 py-4" style={{ background: `${taskColor(parsedTasks.length, parsedTasks.length + 1)}50` }}>
+                                    <div className="relative overflow-hidden flex items-center gap-3 px-4 py-3 min-h-[62px] sm:min-h-[54px]" style={{ background: `${taskColor(parsedTasks.length, parsedTasks.length + 1)}50` }}>
                                         <span className="task-card-pattern absolute inset-0 pointer-events-none" />
                                         <span className="relative z-10 text-[11px] font-black w-6 text-right flex-shrink-0" style={{ color: taskColor(parsedTasks.length, parsedTasks.length + 1) }}>{String(parsedTasks.length + 1).padStart(2, "0")}</span>
                                         <input
@@ -5621,7 +5654,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             : { isolation: "isolate", backgroundColor: c, borderRadius: "3px 3px 3px 14px" };
                                     })()}
                                     className={`${isListMode
-                                        ? `group list-row-hover flex items-center gap-3 px-4 py-1 sm:py-1 border-b border-white/5 cursor-pointer select-none transition-colors active:bg-white/10 overflow-hidden ${isDragging ? "opacity-30" : dt?.mode === "into" ? "bg-cyan-950/60 ring-1 ring-inset ring-cyan-400" : ""} ${isSelectMode && !item.is_folder && selectedIds.has(String(item.id)) ? "bg-blue-950/50" : ""} ${isFolderSelectMode && item.is_folder && selectedFolderNames.includes(item.name || "") ? "bg-emerald-950/50" : ""}`
+                                        ? `group list-row-hover flex items-center gap-3 px-4 py-3 border-b border-white/5 cursor-pointer select-none transition-colors active:bg-white/10 overflow-hidden ${isDragging ? "opacity-30" : dt?.mode === "into" ? "bg-cyan-950/60 ring-1 ring-inset ring-cyan-400" : ""} ${isSelectMode && !item.is_folder && selectedIds.has(String(item.id)) ? "bg-blue-950/50" : ""} ${isFolderSelectMode && item.is_folder && selectedFolderNames.includes(item.name || "") ? "bg-emerald-950/50" : ""}`
                                         : `grid-square-tile min-w-0 cursor-pointer transition-all group ${isDragging ? "opacity-30 scale-95" : dt?.mode === "into" ? "ring-4 ring-cyan-400 ring-inset z-10" : ""}`}`}>
                                     {/* Cursor spotlight glow */}
                                     {isListMode && glowCard?.id === tileId && (() => {
@@ -5834,7 +5867,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                         {(item as any).flag && (
                                                             <span className="absolute top-1 left-1 text-sm leading-none">{(item as any).flag}</span>
                                                         )}
-                                                        <div className="text-3xl font-black text-white uppercase leading-none">{[...(item.title || "N")][0]}</div>
+                                                        <div style={{ fontSize: "3rem", lineHeight: 1 }} className="font-black text-white relative z-10">{meaningfulInitial(item.title || "", "N")}</div>
                                                         <div className="text-[8px] font-semibold text-white leading-tight mt-0.5 line-clamp-2 w-full">{item.title}</div>
                                                     </>
                                                 )}
