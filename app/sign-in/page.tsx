@@ -12,6 +12,7 @@ function SignInContent() {
   const [emailSent, setEmailSent] = useState(false)
   const [emailLoading, setEmailLoading] = useState(false)
   const [showEmail, setShowEmail] = useState(false)
+  const [emailError, setEmailError] = useState<string | null>(null)
 
   const siteUrl = (typeof window !== 'undefined' ? window.location.origin : (process.env.NEXT_PUBLIC_SITE_URL ?? '')).replace('0.0.0.0', 'localhost')
 
@@ -31,6 +32,21 @@ function SignInContent() {
     e.preventDefault()
     if (!email.trim()) return
     setEmailLoading(true)
+    setEmailError(null)
+
+    // Check if email is already a Google account
+    const check = await fetch('/api/auth/check-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email.trim() }),
+    }).then(r => r.json())
+
+    if (check.exists && check.provider === 'google') {
+      setEmailLoading(false)
+      setEmailError('This email is linked to Google. Please use "Continue with Google" above.')
+      return
+    }
+
     const supabase = createClient()
     const { error } = await supabase.auth.signInWithOtp({
       email: email.trim(),
@@ -181,16 +197,19 @@ function SignInContent() {
                   <input
                     type="email"
                     value={email}
-                    onChange={e => setEmail(e.target.value)}
+                    onChange={e => { setEmail(e.target.value); setEmailError(null); }}
                     placeholder="your@email.com"
                     autoFocus
                     required
                     className="email-input w-full px-4 py-3 rounded-2xl text-base text-white placeholder:text-zinc-600 outline-none"
                     style={{
                       background: 'rgba(255,255,255,0.05)',
-                      border: '1px solid rgba(255,255,255,0.1)',
+                      border: emailError ? '1px solid rgba(239,68,68,0.6)' : '1px solid rgba(255,255,255,0.1)',
                     }}
                   />
+                  {emailError && (
+                    <p className="text-xs text-red-400 text-center leading-snug">{emailError}</p>
+                  )}
                   <button
                     type="submit"
                     disabled={emailLoading || !email.trim()}
