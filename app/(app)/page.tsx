@@ -5273,17 +5273,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     style={{ paddingRight: "80px" }}
                                     placeholder="START TYPING..."
                                 />
-                                {content && (
-                                    <button
-                                        type="button"
-                                        aria-label="Copy content"
-                                        onClick={() => { secureCopy(content); setCopiedContent(true); setTimeout(() => setCopiedContent(false), 2000); }}
-                                        className="absolute top-2 right-2 z-20 flex items-center justify-center w-7 h-7 rounded-md transition-all"
-                                        style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.12)" }}
-                                    >
-                                        {copiedContent ? <CheckIcon className="w-3.5 h-3.5 text-emerald-400" /> : <ClipboardIcon className="w-3.5 h-3.5 text-zinc-400" />}
-                                    </button>
-                                )}
                             </div>
                         )}
                     </div>
