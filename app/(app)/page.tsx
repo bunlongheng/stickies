@@ -5342,6 +5342,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     <span className="w-full pl-12 pr-3 py-3 text-sm font-black tracking-tight text-white/30">SEARCH</span>
                                 </button>
                                 <div className="ml-auto flex items-center gap-1">
+                                    <HeaderIconBtn icon={mainListMode ? Squares2X2Icon : Bars3Icon} label={mainListMode ? "Thumb" : "List"} onClick={() => { setMainListMode(v => !v); setKanbanMode(false); }} />
                                     <HeaderIconBtn icon={Cog6ToothIcon} label="Settings" onClick={() => { const hueInt = integrationsRef.current.find(ig => ig.type === "hue"); setLightMode((hueInt?.config?.mode as any) ?? "flash"); setShowFolderActions(true); }} />
                                 </div>
                             </>
@@ -5358,6 +5359,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     </div>
                                 ) : (
                                     <>
+                                        <HeaderIconBtn icon={mainListMode ? Squares2X2Icon : Bars3Icon} label={mainListMode ? "Thumb" : "List"} onClick={() => { setMainListMode(v => !v); setKanbanMode(false); }} />
                                         <HeaderIconBtn icon={Cog6ToothIcon} label="Settings" onClick={() => { const hueInt = integrationsRef.current.find(ig => ig.type === "hue"); setLightMode((hueInt?.config?.mode as any) ?? "flash"); setShowFolderActions(true); setShowFolderColorPicker(false); setShowFolderIconPicker(false); setShowFolderMovePicker(false); }} />
                                     </>
                                 )}
@@ -5798,13 +5800,17 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-1.5 overflow-hidden">
                                                 {item.is_folder ? (
                                                     <>
+                                                        {/* Large transparent background folder icon */}
+                                                        {item.name !== "CLAUDE" && !item.icon && (
+                                                            <FolderIcon className="absolute inset-0 m-auto w-3/4 h-3/4 text-white pointer-events-none" style={{ opacity: 0.12 }} />
+                                                        )}
                                                         {item.name === "CLAUDE"
-                                                            ? <img src="/claude-icon.png" alt="Claude" className="w-16 h-16 object-contain" />
+                                                            ? <img src="/claude-icon.png" alt="Claude" className="w-16 h-16 object-contain relative z-10" />
                                                             : item.icon
-                                                                ? <div style={{ fontSize: "2.8rem", lineHeight: 1 }}>{item.icon}</div>
-                                                                : <div style={{ fontSize: "3rem", lineHeight: 1 }} className="font-black text-white">{meaningfulInitial(item.name, "F")}</div>
+                                                                ? <div style={{ fontSize: "2.8rem", lineHeight: 1 }} className="relative z-10">{item.icon}</div>
+                                                                : <div style={{ fontSize: "3rem", lineHeight: 1 }} className="font-black text-white relative z-10">{meaningfulInitial(item.name, "F")}</div>
                                                         }
-                                                        <div className="mt-0.5 text-[9px] font-medium tracking-tight line-clamp-1 w-full text-center" style={{ color: item.name === "CLAUDE" ? "#000" : "#fff" }}>
+                                                        <div className="mt-0.5 text-[9px] font-medium tracking-tight line-clamp-1 w-full text-center relative z-10" style={{ color: item.name === "CLAUDE" ? "#000" : "#fff" }}>
                                                             {item.name}<span className="opacity-30 font-light">/</span> <span className="opacity-70">({(item.subfolderCount || 0) + (item.count || 0)})</span>
                                                         </div>
                                                     </>
