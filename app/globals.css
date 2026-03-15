@@ -106,10 +106,6 @@ body {
   caret-color: #ffffff !important;
   caret-shape: block;
 }
-.ProseMirror:focus,
-.tiptap:focus {
-  animation: caretGlow 1s ease-in-out infinite alternate;
-}
 
 /* ── Monokai editor ─────────────────────────────────────── */
 /* Applied when the RichTextEditor sits on #272822 background */
