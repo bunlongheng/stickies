@@ -335,7 +335,9 @@ export function MermaidRenderer({ code, onChange, showCode, theme = "dark" }: Pr
         const { clientWidth: cw, clientHeight: ch } = canvasRef.current;
         const scaleX = (cw - 32) / svgSize.w;
         const scaleY = (ch - 32) / svgSize.h;
-        return Math.min(scaleX, scaleY);
+        // Wide diagrams (gitGraph, gantt, timeline): fit to height, pan horizontally
+        const wide = svgSize.w > svgSize.h * 2.5;
+        return wide ? Math.min(scaleY, 1.5) : Math.min(scaleX, scaleY);
     }, [svgSize]);
 
     const activeScale = isFit ? getFitScale() : zoom;
