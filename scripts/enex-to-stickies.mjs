@@ -94,7 +94,9 @@ function parseResources(xml) {
     // Compute MD5 of the binary so we can match <en-media hash="...">
     const binary = Buffer.from(b64, 'base64');
     const md5 = createHash('md5').update(binary).digest('hex');
-    resources[md5] = { mime, b64 };
+    const filenameMatch = body.match(/<file-name>(.*?)<\/file-name>/);
+    const filename = filenameMatch ? filenameMatch[1].trim() : null;
+    resources[md5] = { mime, b64, filename };
   }
   return resources;
 }
@@ -168,7 +170,7 @@ async function parseNodes(html, out, resources) {
   const processedBlocks = [];
 
   // Collect all block matches with positions
-  const allMatches = [...html.matchAll(/<(h[1-6]|ul|ol|div|p|pre)([^>]*)>([\s\S]*?)<\/\1>|<br\s*\/?>|<hr\s*\/?>|<en-media([^>]*)\/>/gi)];
+  const allMatches = [...html.matchAll(/<(table|h[1-6]|ul|ol|div|p|pre)([^>]*)>([\s\S]*?)<\/\1>|<br\s*\/?>|<hr\s*\/?>|<en-media([^>]*)\/>/gi)];
 
   if (allMatches.length === 0) {
     // Pure inline content
@@ -206,6 +208,9 @@ async function parseNodes(html, out, resources) {
     } else if (tag === 'pre') {
       const code = decodeHtmlEntities(inner);
       if (code.trim()) out.push({ type: 'codeBlock', attrs: { language: detectLanguage(code) }, content: [{ type: 'text', text: code }] });
+    } else if (tag === 'table') {
+      const tableNode = await parseTable(m[0], resources);
+      if (tableNode) out.push(tableNode);
     } else if (tag === 'div' || tag === 'p') {
       if (attrs.includes('en-codeblock:true') || attrs.includes('--en-codeblock') || attrs.includes('font-family:') && attrs.includes('monospace')) {
         const code = decodeHtmlEntities(stripTags(inner));
@@ -226,6 +231,64 @@ async function parseNodes(html, out, resources) {
     const nodes = parseInline(trailing);
     if (nodes.length) out.push({ type: 'paragraph', content: nodes });
   }
+}
+
+async function parseTable(tableHtml, resources) {
+  const rows = [];
+  let isFirstRow = true;
+
+  for (const rowMatch of tableHtml.matchAll(/<tr([^>]*)>([\s\S]*?)<\/tr>/gi)) {
+    const rowHtml = rowMatch[2];
+    const cells = [];
+    const cellRe = /<(td|th)([^>]*?)>([\s\S]*?)<\/\1>/gi;
+
+    for (const cellMatch of rowHtml.matchAll(cellRe)) {
+      const cellTag  = cellMatch[1].toLowerCase();
+      const cellAttrs = cellMatch[2];
+      const cellHtml  = cellMatch[3];
+
+      const colspanMatch = cellAttrs.match(/colspan="?(\d+)"?/i);
+      const rowspanMatch = cellAttrs.match(/rowspan="?(\d+)"?/i);
+      const colspan = colspanMatch ? parseInt(colspanMatch[1]) : 1;
+      const rowspan = rowspanMatch ? parseInt(rowspanMatch[1]) : 1;
+
+      // Parse cell content — unwrap divs/p, preserve links/bold via parseInline
+      // Split on block boundaries inside cell, parse each line as inline
+      const cellLines = cellHtml
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<\/div>/gi, '\n').replace(/<\/p>/gi, '\n')
+        .split('\n');
+      const cellContent = [];
+      for (const line of cellLines) {
+        // strip outer <div> or <p> open tags, keep inner content
+        const inner = line.replace(/^<(div|p)[^>]*>/i, '').trim();
+        if (!inner) continue;
+        const inlineNodes = parseInline(inner);
+        if (inlineNodes.length) cellContent.push({ type: 'paragraph', content: inlineNodes });
+      }
+      // Handle en-media inside cells (images)
+      for (const mediaMatch of cellHtml.matchAll(/<en-media([^>]*)\/>/gi)) {
+        const mediaNode = await parseEnMedia(mediaMatch[1], resources);
+        if (mediaNode) cellContent.push(mediaNode);
+      }
+      if (cellContent.length === 0) cellContent.push({ type: 'paragraph' });
+
+      const isHeader = cellTag === 'th' || isFirstRow;
+      cells.push({
+        type: isHeader ? 'tableHeader' : 'tableCell',
+        attrs: { colspan, rowspan, colwidth: null },
+        content: cellContent,
+      });
+    }
+
+    if (cells.length > 0) {
+      rows.push({ type: 'tableRow', content: cells });
+      isFirstRow = false;
+    }
+  }
+
+  if (rows.length === 0) return null;
+  return { type: 'table', content: rows };
 }
 
 async function parseList(html, listType, resources) {
@@ -288,13 +351,35 @@ async function parseEnMedia(attrs, resources) {
   if (!typeMatch) return null;
 
   const mime = typeMatch[1];
-  if (!mime.startsWith('image/')) return null;
 
   const resource = hashMatch
     ? resources[hashMatch[1]]
     : Object.values(resources).find(r => r.mime === mime);
 
   if (!resource) return null;
+
+  // ── Text/plain attachment → code block ────────────────────────────────────
+  if (mime === 'text/plain' || mime === 'text/x-web-markdown') {
+    const text = Buffer.from(resource.b64, 'base64').toString('utf8');
+    const lang = detectLanguage(text);
+    const header = resource.filename ? `// ${resource.filename}\n` : '';
+    return {
+      type: 'codeBlock',
+      attrs: { language: lang },
+      content: [{ type: 'text', text: header + text }],
+    };
+  }
+
+  // ── Unsupported attachment → filename placeholder paragraph ─────────────────
+  if (!mime.startsWith('image/')) {
+    const name = resource.filename || mime;
+    const bytes = Math.round(Buffer.from(resource.b64, 'base64').length);
+    const kb = bytes < 1024 * 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${(bytes / 1024 / 1024).toFixed(2)} MB`;
+    return {
+      type: 'paragraph',
+      content: [{ type: 'text', text: `📎 ${name} (${kb})` }],
+    };
+  }
 
   const rawBuf = Buffer.from(resource.b64, 'base64');
   const { buf, mime: finalMime } = await compressImage(rawBuf, resource.mime);

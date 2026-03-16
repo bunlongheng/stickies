@@ -1284,7 +1284,7 @@ export default function NotesMaster() {
     const [botColor, setBotColor] = useState({ primary: "#7c3aed", secondary: "#a78bfa", light: "#c4b5fd" });
     const [userEmail, setUserEmail] = useState<string | null>(null);
     const isAdmin = userEmail === "bheng.code@gmail.com";
-    const [mainListMode, setMainListMode] = useState(false);
+    const [mainListMode, setMainListMode] = useState<"thumb" | "list" | "compact-list" | "compact-thumb">("thumb");
     const [defaultFolder, setDefaultFolder] = useState<string>("CLAUDE");
     const [showDefaultFolderPicker, setShowDefaultFolderPicker] = useState(false);
     const [navMode, setNavMode] = useState<"folders-and-files" | "files-only">("folders-and-files");
@@ -1306,8 +1306,10 @@ export default function NotesMaster() {
     const [imgPopover, setImgPopover] = useState<{ src: string; alt: string; x: number; y: number } | null>(null);
     const [now, setNow] = useState(() => new Date());
     const [showCmdK, setShowCmdK] = useState(false);
+    const [cmdKQueryRaw, setCmdKQueryRaw] = useState("");
     const [cmdKQuery, setCmdKQuery] = useState("");
     const [cmdKCursor, setCmdKCursor] = useState(0);
+    const [cmdKGlobal, setCmdKGlobal] = useState(false);
     const cmdKInputRef = useRef<HTMLInputElement | null>(null);
     const [showCmdB, setShowCmdB] = useState(false);
     const [cmdBQuery, setCmdBQuery] = useState("");
@@ -1569,7 +1571,7 @@ export default function NotesMaster() {
             if (isNewSession) {
                 sessionStorage.setItem("stickies:session-started", "1");
                 if (savedDefaultFolder) setActiveFolder(savedDefaultFolder);
-                setMainListMode(false); // thumbnail as default
+                setMainListMode("thumb"); // thumbnail as default
             } else {
                 try {
                     const raw = localStorage.getItem(VIEW_STATE_KEY);
@@ -1639,7 +1641,10 @@ export default function NotesMaster() {
         } catch { /* ignore */ }
         try {
             const rawMainList = localStorage.getItem(MAIN_LIST_MODE_KEY);
-            if (rawMainList) setMainListMode(rawMainList === "true");
+            if (rawMainList) {
+                const v = rawMainList === "true" ? "list" : rawMainList === "false" ? "thumb" : rawMainList;
+                if (v === "list" || v === "compact-list" || v === "compact-thumb" || v === "thumb") setMainListMode(v as any);
+            }
         } catch { /* ignore */ }
         try {
             const rawNavMode = localStorage.getItem(NAV_MODE_KEY);
@@ -1662,9 +1667,9 @@ export default function NotesMaster() {
             const themeParam = urlParams.get("theme");
             if (themeParam === "light" || themeParam === "dark" || themeParam === "monokai") setAppTheme(themeParam);
             const viewParam = urlParams.get("view");
-            if (viewParam === "list") { setMainListMode(true); setKanbanMode(false); }
-            else if (viewParam === "thumb") { setMainListMode(false); setKanbanMode(false); }
-            else if (viewParam === "kanban") { setMainListMode(false); setKanbanMode(true); }
+            if (viewParam === "list") { setMainListMode("list"); setKanbanMode(false); }
+            else if (viewParam === "thumb") { setMainListMode("thumb"); setKanbanMode(false); }
+            else if (viewParam === "kanban") { setMainListMode("thumb"); setKanbanMode(true); }
             const navParam = urlParams.get("nav");
             if (navParam === "folders" || navParam === "folders-and-files") setNavMode("folders-and-files");
             else if (navParam === "files" || navParam === "files-only") setNavMode("files-only");
@@ -1797,7 +1802,9 @@ export default function NotesMaster() {
         const handler = (e: KeyboardEvent) => {
             if ((e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "j")) {
                 e.preventDefault();
-                setShowCmdK(v => { if (!v) { setCmdKQuery(""); setCmdKCursor(0); } return !v; });
+                const global = e.shiftKey;
+                setCmdKGlobal(global);
+                setShowCmdK(v => { if (!v) { setCmdKQueryRaw(""); setCmdKQuery(""); setCmdKCursor(0); } return !v; });
             }
             if ((e.metaKey || e.ctrlKey) && e.key === "b") {
                 e.preventDefault();
@@ -2429,42 +2436,56 @@ const fireIntegrations = (trigger: string, note: any) => {
         return displayItems.filter((item: any) => item.is_folder || item._header || item.type === typeFilter);
     }, [displayItems, typeFilter]);
 
+    // Search index — rebuilt only when data changes, not on every keystroke
+    const cmdKIndex = useMemo(() =>
+        dbData
+            .filter((n: any) => !n.is_folder)
+            .map((n: any) => ({
+                _orig: n,
+                t: (n.title || "").toLowerCase(),
+                f: (n.folder_name || "").toLowerCase(),
+                // Only index first 400 chars of content — enough for a match signal
+                c: (n.content || "").slice(0, 400).toLowerCase(),
+                date: String(n.updated_at || ""),
+            })),
+    [dbData]);
+
+    // Debounce: input updates instantly, search fires 120ms after typing stops
+    useEffect(() => {
+        const t = setTimeout(() => setCmdKQuery(cmdKQueryRaw), 120);
+        return () => clearTimeout(t);
+    }, [cmdKQueryRaw]);
+
     const cmdKResults = useMemo(() => {
-        const notes = dbData.filter((n: any) => !n.is_folder);
-        const byDate = (a: any, b: any) => String(b.updated_at || "").localeCompare(String(a.updated_at || ""));
+        // Scope to active folder unless global mode
+        const scopedIndex = (activeFolder && !cmdKGlobal)
+            ? cmdKIndex.filter(e => e.f === activeFolder.toLowerCase())
+            : cmdKIndex;
+        const byDate = (a: any, b: any) => b.date.localeCompare(a.date);
         if (!cmdKQuery.trim()) {
-            return notes.sort(byDate).slice(0, 5);
+            return scopedIndex.slice().sort(byDate).slice(0, 5).map(x => x._orig);
         }
         const q = cmdKQuery.toLowerCase();
-        const matchingFolders = folders
+        // Only show folder results when not scoped to a folder
+        const matchingFolders = (activeFolder && !cmdKGlobal) ? [] : folders
             .filter(f => f.name.toLowerCase().includes(q))
             .map(f => ({ ...f, _isFolder: true }))
             .slice(0, 3);
-        const score = (n: any): number => {
-            const t = (n.title || "").toLowerCase();
-            const f = (n.folder_name || "").toLowerCase();
-            const c = (n.content || "").toLowerCase();
-            const pinned = pinnedIds.has(String(n.id));
-            // priority: folder > file name > bookmark > content
-            if (f === q)           return 0;
-            if (f.startsWith(q))   return 1;
-            if (f.includes(q))     return 2;
-            if (t === q)           return 3;
-            if (t.startsWith(q))   return 4;
-            if (t.includes(q))     return pinned ? 5 : 6;
-            if (pinned && c.includes(q)) return 7;
-            if (c.includes(q))     return 8;
+        const scoreEntry = (e: typeof cmdKIndex[0]): number => {
+            const pinned = pinnedIds.has(String(e._orig.id));
+            if (e.t === q)              return 0;
+            if (e.t.startsWith(q))      return 1;
+            if (e.t.includes(q))        return pinned ? 2 : 3;
+            if (pinned && e.c.includes(q)) return 4;
+            if (e.c.includes(q))        return 5;
             return 9;
         };
-        const matchedNotes = notes
-            .filter((n: any) => score(n) < 9)
-            .sort((a: any, b: any) => {
-                const sd = score(a) - score(b);
-                if (sd !== 0) return sd;
-                return byDate(a, b);
-            });
-        return [...matchingFolders, ...matchedNotes];
-    }, [dbData, cmdKQuery, pinnedIds, folders]);
+        const scored = scopedIndex
+            .map(e => ({ e, s: scoreEntry(e) }))
+            .filter(x => x.s < 9)
+            .sort((a, b) => a.s !== b.s ? a.s - b.s : b.e.date.localeCompare(a.e.date));
+        return [...matchingFolders, ...scored.map(x => x.e._orig)];
+    }, [cmdKIndex, cmdKQuery, pinnedIds, folders, activeFolder, cmdKGlobal]);
 
     const cmdBResults = useMemo(() => {
         if (!cmdBQuery.trim()) return bookmarksData.slice(0, 12);
@@ -3255,7 +3276,7 @@ const fireIntegrations = (trigger: string, note: any) => {
 
     const openNoteFromCmdK = useCallback((note: any, cmdClick = false) => {
         setShowCmdK(false);
-        setCmdKQuery("");
+        setCmdKQueryRaw(""); setCmdKQuery("");
         if (note.folder_name) {
             const fr = dbData.find((r: any) => r.is_folder && r.folder_name === note.folder_name);
             if (fr) enterFolder({ id: String(fr.id), name: note.folder_name, color: fr.color || fr.folder_color || palette12[0] });
@@ -3997,7 +4018,9 @@ const fireIntegrations = (trigger: string, note: any) => {
     );
 
     const isFolderGridView = !search.trim() && ((!activeFolder) || (kanbanMode && dbData.some(r => r.is_folder && r.parent_folder_name === activeFolder)));
-    const isListMode = editMode || mainListMode; // edit mode always forces list layout
+    const isListMode = editMode || mainListMode === "list" || mainListMode === "compact-list";
+    const isCompactList = mainListMode === "compact-list";
+    const isCompactThumb = mainListMode === "compact-thumb";
 
     // Compute exact square cell size via ResizeObserver → set as CSS var on grid container
     useEffect(() => {
@@ -4005,10 +4028,11 @@ const fireIntegrations = (trigger: string, note: any) => {
         if (!el) return;
         const update = () => {
             if (isListMode) { el.style.removeProperty('--cell-size'); return; }
-            const gap = 6;
+            const cols = isCompactThumb ? gridCols * 2 : gridCols;
+            const gap = isCompactThumb ? 3 : 6;
             const cs = getComputedStyle(el);
             const px = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
-            const cellSize = Math.floor((el.clientWidth - px - (gridCols - 1) * gap) / gridCols);
+            const cellSize = Math.floor((el.clientWidth - px - (cols - 1) * gap) / cols);
             el.style.setProperty('--cell-size', cellSize + 'px');
         };
         update();
@@ -4016,7 +4040,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         ro.observe(el);
         return () => ro.disconnect();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isListMode, gridCols]);
+    }, [isListMode, isCompactThumb, gridCols]);
     const isNoteGridView = Boolean(activeFolder) && !search.trim();
     const fitAllMode = (isFolderGridView || isNoteGridView) && displayItems.length > 12;
     const fitCols = fitAllMode ? Math.ceil(Math.sqrt(displayItems.length)) : 0;
@@ -4117,7 +4141,7 @@ const fireIntegrations = (trigger: string, note: any) => {
             event.dataTransfer.dropEffect = "move";
             const rect = (event.currentTarget as HTMLDivElement).getBoundingClientRect();
             let mode: "before" | "after" | "into" = "after";
-            if (mainListMode) {
+            if (isListMode) {
                 const relY = (event.clientY - rect.top) / rect.height;
                 if (item?.is_folder && relY > 0.25 && relY < 0.75) mode = "into";
                 else mode = relY < 0.5 ? "before" : "after";
@@ -4128,7 +4152,7 @@ const fireIntegrations = (trigger: string, note: any) => {
             }
             setDropTarget({ id: targetId, mode });
         },
-        [mainListMode],
+        [isListMode],
     );
 
     const handleTileDragLeave = useCallback(() => {
@@ -5592,6 +5616,44 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     editMode={true}
                                     onDelete={() => void deleteCurrentNote(editingNote, title)}
                                 />
+                                {/* Rich text live stats bar */}
+                                {(() => {
+                                    let tiptap: any = null;
+                                    try { tiptap = JSON.parse(content); } catch {}
+                                    const topNodes: any[] = tiptap?.content ?? [];
+                                    let words = 0, images = 0, codeBlocks = 0, tables = 0;
+                                    const walkStat = (nodes: any[]) => {
+                                        for (const n of nodes) {
+                                            if (n.type === "text" && n.text) words += n.text.trim().split(/\s+/).filter(Boolean).length;
+                                            else if (n.type === "image") images++;
+                                            else if (n.type === "codeBlock") codeBlocks++;
+                                            else if (n.type === "table") tables++;
+                                            if (n.content) walkStat(n.content);
+                                        }
+                                    };
+                                    walkStat(topNodes);
+                                    const bytes = new TextEncoder().encode(content).length;
+                                    const sizeStr = bytes >= 1_048_576 ? `${(bytes / 1_048_576).toFixed(1)} MB`
+                                        : bytes >= 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${bytes} B`;
+                                    const chips = [
+                                        `${topNodes.length} blocks`,
+                                        `${words} words`,
+                                        sizeStr,
+                                        images > 0 ? `${images} img` : null,
+                                        codeBlocks > 0 ? `${codeBlocks} code` : null,
+                                        tables > 0 ? `${tables} tbl` : null,
+                                    ].filter(Boolean) as string[];
+                                    return (
+                                        <div className="shrink-0 flex items-center gap-2 px-3 py-1 border-t border-white/[0.06] bg-black/60 overflow-x-auto" style={{ fontSize: 9, opacity: 0.55 }}>
+                                            {chips.map((c, i) => (
+                                                <span key={i} className="flex items-center gap-1.5 whitespace-nowrap">
+                                                    {i > 0 && <span className="text-zinc-700">·</span>}
+                                                    <span className="text-zinc-400">{c}</span>
+                                                </span>
+                                            ))}
+                                        </div>
+                                    );
+                                })()}
                             </div>
                         ) : (
                             <div className="relative flex-1">
@@ -5672,12 +5734,12 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             {i > 0 && <span className="text-zinc-700 text-[10px] flex-shrink-0">/</span>}
                                             <button
                                                 onClick={() => { goToIndex(i); }}
-                                                className={`flex items-center gap-1.5 font-black tracking-tight truncate max-w-[150px] flex-shrink-0 px-1 transition text-xs ${i === folderStack.length - 1 ? "text-white" : "text-zinc-400 hover:text-white"}`}
+                                                className={`flex items-center gap-1.5 font-black tracking-tight truncate sm:max-w-[150px] flex-shrink-0 px-0.5 sm:px-1 transition text-xs ${i === folderStack.length - 1 ? "text-white" : "text-zinc-400 hover:text-white"}`}
                                                 title={frame.name}>
                                                 <span className="folder-icon-badge flex-shrink-0 w-6 h-6 flex items-center justify-center text-sm font-black leading-none overflow-hidden" style={{ "--fc": folderColors[frame.name] || frame.color, borderRadius: 0 } as React.CSSProperties}>
                                                     {frame.name === "CLAUDE" ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-0.5" /> : <FolderIconDisplay value={folderIcons[frame.name] || ""} folderName={frame.name} className="w-3.5 h-3.5" />}
                                                 </span>
-                                                <span className="uppercase">{frame.name}</span>
+                                                <span className="hidden sm:inline uppercase">{frame.name}</span>
                                             </button>
                                         </React.Fragment>
                                     ))}
@@ -5688,13 +5750,13 @@ const fireIntegrations = (trigger: string, note: any) => {
 
                         {!activeFolder ? (
                             <>
-                                <button type="button" onClick={() => { setShowCmdK(true); setCmdKQuery(""); setCmdKCursor(0); }}
+                                <button type="button" onClick={() => { setShowCmdK(true); setCmdKQueryRaw(""); setCmdKQuery(""); setCmdKCursor(0); }}
                                     className={`relative flex items-center transition-all duration-200 text-left ${searchFocused || search.trim() ? "flex-1" : "w-[220px]"} bg-transparent`}>
                                     <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-white/35 w-6 h-6 pointer-events-none" />
                                     <span className="w-full pl-12 pr-3 py-3 text-sm font-black tracking-tight text-white/30">SEARCH</span>
                                 </button>
                                 <div className="ml-auto flex items-center gap-1">
-                                    <HeaderIconBtn icon={mainListMode ? Bars3Icon : Squares2X2Icon} label={mainListMode ? "List" : "Thumb"} active={!mainListMode && !kanbanMode} onClick={() => { setMainListMode(v => !v); setKanbanMode(false); }} />
+                                    <HeaderIconBtn icon={mainListMode === "list" ? Bars3Icon : mainListMode === "compact-list" ? ListBulletIcon : mainListMode === "compact-thumb" ? RectangleStackIcon : Squares2X2Icon} label={mainListMode === "list" ? "List" : mainListMode === "compact-list" ? "Compact List" : mainListMode === "compact-thumb" ? "Compact Thumb" : "Thumb"} active={!kanbanMode} onClick={() => { setMainListMode(v => v === "thumb" ? "list" : v === "list" ? "compact-list" : v === "compact-list" ? "compact-thumb" : "thumb"); setKanbanMode(false); }} />
                                     <HeaderIconBtn icon={Cog6ToothIcon} label="Settings" onClick={() => { const hueInt = integrationsRef.current.find(ig => ig.type === "hue"); setLightMode((hueInt?.config?.mode as any) ?? "flash"); setShowFolderActions(true); }} />
                                 </div>
                             </>
@@ -5711,7 +5773,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     </div>
                                 ) : (
                                     <>
-                                        <HeaderIconBtn icon={mainListMode ? Bars3Icon : Squares2X2Icon} label={mainListMode ? "List" : "Thumb"} active={!mainListMode && !kanbanMode} onClick={() => { setMainListMode(v => !v); setKanbanMode(false); }} />
+                                        <HeaderIconBtn icon={mainListMode === "list" ? Bars3Icon : mainListMode === "compact-list" ? ListBulletIcon : mainListMode === "compact-thumb" ? RectangleStackIcon : Squares2X2Icon} label={mainListMode === "list" ? "List" : mainListMode === "compact-list" ? "Compact List" : mainListMode === "compact-thumb" ? "Compact Thumb" : "Thumb"} active={!kanbanMode} onClick={() => { setMainListMode(v => v === "thumb" ? "list" : v === "list" ? "compact-list" : v === "compact-list" ? "compact-thumb" : "thumb"); setKanbanMode(false); }} />
                                         <HeaderIconBtn icon={Cog6ToothIcon} label="Settings" onClick={() => { const hueInt = integrationsRef.current.find(ig => ig.type === "hue"); setLightMode((hueInt?.config?.mode as any) ?? "flash"); setShowFolderActions(true); setShowFolderColorPicker(false); setShowFolderIconPicker(false); setShowFolderMovePicker(false); }} />
                                     </>
                                 )}
@@ -5745,7 +5807,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                             ? { display: "flex", flexDirection: "column", height: "100%", overflowX: "auto", overflowY: "hidden" }
                             : isListMode
                                 ? { display: "block" }
-                                : { display: "grid", gridTemplateColumns: `repeat(${gridCols}, 1fr)`, gap: "6px", alignContent: "start", alignItems: "start" }}
+                                : { display: "grid", gridTemplateColumns: `repeat(${isCompactThumb ? gridCols * 2 : gridCols}, 1fr)`, gap: isCompactThumb ? "3px" : "6px", alignContent: "start", alignItems: "start" }}
                     >
                         {kanbanMode && isFolderGridView && (
                             <div className="flex gap-0 h-full" style={{ minWidth: `${currentLevelFolders.length * 220}px` }}>
@@ -5949,7 +6011,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             : { isolation: "isolate", backgroundColor: c, borderRadius: "3px 3px 3px 14px" };
                                     })()}
                                     className={`${isListMode
-                                        ? `group list-row-hover flex items-center gap-3 px-4 py-3 border-b border-white/5 cursor-pointer select-none transition-colors active:bg-white/10 overflow-hidden ${isDragging ? "opacity-30" : dt?.mode === "into" ? "bg-cyan-950/60 ring-1 ring-inset ring-cyan-400" : ""} ${isSelectMode && !item.is_folder && selectedIds.has(String(item.id)) ? "bg-blue-950/50" : ""}`
+                                        ? `group list-row-hover flex items-center gap-3 ${isCompactList ? "px-3 py-1" : "px-4 py-3"} border-b border-white/5 cursor-pointer select-none transition-colors active:bg-white/10 overflow-hidden ${isDragging ? "opacity-30" : dt?.mode === "into" ? "bg-cyan-950/60 ring-1 ring-inset ring-cyan-400" : ""} ${isSelectMode && !item.is_folder && selectedIds.has(String(item.id)) ? "bg-blue-950/50" : ""}`
                                         : `grid-square-tile min-w-0 cursor-pointer transition-all group ${item.is_folder ? "folder-grid-tile" : ""} ${isDragging ? "opacity-30 scale-95" : dt?.mode === "into" ? "ring-4 ring-cyan-400 ring-inset z-10" : ""}`}`}>
                                     {/* Cursor spotlight glow */}
                                     {isListMode && glowCard?.id === tileId && (() => {
@@ -5977,12 +6039,13 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             )}
                                             {item.is_folder && (() => {
                                                 const c = item.color || item.folder_color || palette12[0];
+                                                const sz = isCompactList ? "w-6 h-6" : "w-[54px] h-[54px] sm:w-[46px] sm:h-[46px]";
                                                 return (
-                                                    <div className="folder-icon-badge flex-shrink-0 w-[54px] h-[54px] sm:w-[46px] sm:h-[46px] flex items-center justify-center font-black overflow-hidden"
-                                                        style={{ fontSize: 22, "--fc": c, boxShadow: `2px 3px 8px ${c}55` } as React.CSSProperties}>
+                                                    <div className={`folder-icon-badge flex-shrink-0 ${sz} flex items-center justify-center font-black overflow-hidden`}
+                                                        style={{ fontSize: isCompactList ? 12 : 22, "--fc": c, boxShadow: isCompactList ? "none" : `2px 3px 8px ${c}55` } as React.CSSProperties}>
                                                         {item.name === "CLAUDE"
-                                                            ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-1" />
-                                                            : <FolderIconDisplay value={item.icon || ""} folderName={item.name || "F"} className="w-6 h-6" />}
+                                                            ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-0.5" />
+                                                            : <FolderIconDisplay value={item.icon || ""} folderName={item.name || "F"} className={isCompactList ? "w-3 h-3" : "w-6 h-6"} />}
                                                     </div>
                                                 );
                                             })()}
@@ -5990,14 +6053,15 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 const isChecklistItem = (item as any).type === "checklist" || listModeNotes.has(String(item.id));
                                                 const nc = (item as any).color || (item as any).folder_color || "#71717a";
                                                 const initial = meaningfulInitial(item.title || "", "N");
+                                                const sz = isCompactList ? "w-6 h-6" : "w-[54px] h-[54px] sm:w-[46px] sm:h-[46px]";
                                                 return (
-                                                    <div className="flex-shrink-0 w-[54px] h-[54px] sm:w-[46px] sm:h-[46px] flex items-center justify-center font-black overflow-hidden relative"
+                                                    <div className={`flex-shrink-0 ${sz} flex items-center justify-center font-black overflow-hidden relative`}
                                                         style={{
-                                                            fontSize: 22,
+                                                            fontSize: isCompactList ? 10 : 22,
                                                             backgroundColor: nc,
                                                             color: "#fff",
-                                                            borderRadius: "3px 3px 3px 14px",
-                                                            boxShadow: `2px 3px 8px ${nc}55`,
+                                                            borderRadius: isCompactList ? "2px 2px 2px 6px" : "3px 3px 3px 14px",
+                                                            boxShadow: isCompactList ? "none" : `2px 3px 8px ${nc}55`,
                                                         }}>
                                                         {initial}
                                                     </div>
@@ -6007,12 +6071,12 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 <div className="text-[13px] font-semibold tracking-tight text-white truncate">
                                                     {item.is_folder ? <><span className="uppercase folder-name-text">{item.name}</span><span className="text-white/30 font-light ml-0.5">/</span></> : item.title}
                                                 </div>
-                                                {item.is_folder ? (
+                                                {!isCompactList && item.is_folder ? (
                                                     <div className="text-[13px] sm:text-[13px] text-zinc-500 font-medium folder-name-text">
                                                         {item.subfolderCount > 0 && <span>{item.subfolderCount} folder{item.subfolderCount !== 1 ? "s" : ""}{item.count > 0 ? " · " : ""}</span>}
                                                         {item.count > 0 && <span>{item.count} note{item.count !== 1 ? "s" : ""}</span>}
                                                     </div>
-                                                ) : (
+                                                ) : !isCompactList ? (
                                                     (() => {
                                                         const c = item.content || "";
                                                         const isListModeNote = listModeNotes.has(String(item.id));
@@ -6036,7 +6100,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                         }
                                                         return null;
                                                     })()
-                                                )}
+                                                ) : null}
                                             </div>
                                             {item.is_folder && item.latestUpdatedAt && (
                                                 <span className="text-[13px] sm:text-[13px] text-zinc-500 flex-shrink-0 font-medium">{timeAgo(item.latestUpdatedAt)}</span>
@@ -6129,12 +6193,12 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                         {item.name === "CLAUDE"
                                                             ? <img src="/claude-icon.png" alt="Claude" className="w-14 h-14 object-contain relative z-10" />
                                                             : item.icon
-                                                                ? <div style={{ fontSize: item.icon.startsWith("__hero:") ? undefined : "2.8rem", lineHeight: 1 }} className="relative z-10 flex items-center justify-center">
-                                                                    <FolderIconDisplay value={item.icon} folderName={item.name || "F"} className="w-12 h-12" />
+                                                                ? <div style={{ fontSize: item.icon.startsWith("__hero:") ? undefined : (isCompactThumb ? "1.2rem" : "2.8rem"), lineHeight: 1 }} className="relative z-10 flex items-center justify-center">
+                                                                    <FolderIconDisplay value={item.icon} folderName={item.name || "F"} className={isCompactThumb ? "w-5 h-5" : "w-12 h-12"} />
                                                                   </div>
-                                                                : <div style={{ fontSize: "3rem", lineHeight: 1, color: item.color || item.folder_color || palette12[0] }} className="font-black relative z-10">{meaningfulInitial(item.name, "F")}</div>
+                                                                : <div style={{ fontSize: isCompactThumb ? "1.2rem" : "3rem", lineHeight: 1, color: item.color || item.folder_color || palette12[0] }} className="font-black relative z-10">{meaningfulInitial(item.name, "F")}</div>
                                                         }
-                                                        <div className="folder-grid-name mt-1 text-[11px] font-bold line-clamp-1 w-full text-center relative z-10" style={{ color: item.name === "CLAUDE" ? "#000" : (item.color || item.folder_color || palette12[0]) }}>
+                                                        <div className={`folder-grid-name mt-0.5 font-bold line-clamp-1 w-full text-center relative z-10 ${isCompactThumb ? "text-[7px]" : "text-[11px]"}`} style={{ color: item.name === "CLAUDE" ? "#000" : (item.color || item.folder_color || palette12[0]) }}>
                                                             <span className="uppercase">{item.name}</span> <span className="opacity-50 font-normal text-[10px]">({(item.subfolderCount || 0) + (item.count || 0)})</span>
                                                         </div>
                                                     </>
@@ -6143,8 +6207,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                         {(item as any).flag && (
                                                             <span className="absolute top-1 left-1 text-sm leading-none">{(item as any).flag}</span>
                                                         )}
-                                                        <div style={{ fontSize: "3rem", lineHeight: 1 }} className="font-black text-white relative z-10">{meaningfulInitial(item.title || "", "N")}</div>
-                                                        <div className="text-[8px] font-semibold text-white leading-tight mt-0.5 line-clamp-2 w-full">{item.title}</div>
+                                                        <div style={{ fontSize: isCompactThumb ? "1.2rem" : "3rem", lineHeight: 1 }} className="font-black text-white relative z-10">{meaningfulInitial(item.title || "", "N")}</div>
+                                                        <div className={`font-semibold text-white leading-tight mt-0.5 line-clamp-2 w-full ${isCompactThumb ? "text-[6px]" : "text-[8px]"}`}>{item.title}</div>
                                                     </>
                                                 )}
                                             </div>
@@ -7151,17 +7215,27 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 <div className="px-6 py-2 border-b border-white/[0.06]">
                                     <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-1.5">View Mode</p>
                                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
-                                        <button type="button" onClick={() => { setMainListMode(true); setKanbanMode(false); }}
-                                            className={`py-1.5 rounded flex flex-col items-center gap-0.5 transition ${mainListMode && !kanbanMode ? "bg-white text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"}`}>
-                                            <ListBulletIcon className="w-4 h-4" />
+                                        <button type="button" onClick={() => { setMainListMode("list"); setKanbanMode(false); }}
+                                            className={`py-1.5 rounded flex flex-col items-center gap-0.5 transition ${mainListMode === "list" && !kanbanMode ? "bg-white text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"}`}>
+                                            <Bars3Icon className="w-4 h-4" />
                                             <span className="text-[9px] font-black uppercase tracking-wide">List</span>
                                         </button>
-                                        <button type="button" onClick={() => { setMainListMode(false); setKanbanMode(false); }}
-                                            className={`py-1.5 rounded flex flex-col items-center gap-0.5 transition ${!mainListMode && !kanbanMode ? "bg-white text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"}`}>
+                                        <button type="button" onClick={() => { setMainListMode("compact-list"); setKanbanMode(false); }}
+                                            className={`py-1.5 rounded flex flex-col items-center gap-0.5 transition ${mainListMode === "compact-list" && !kanbanMode ? "bg-white text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"}`}>
+                                            <ListBulletIcon className="w-4 h-4" />
+                                            <span className="text-[9px] font-black uppercase tracking-wide">Compact List</span>
+                                        </button>
+                                        <button type="button" onClick={() => { setMainListMode("thumb"); setKanbanMode(false); }}
+                                            className={`py-1.5 rounded flex flex-col items-center gap-0.5 transition ${mainListMode === "thumb" && !kanbanMode ? "bg-white text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"}`}>
                                             <Squares2X2Icon className="w-4 h-4" />
                                             <span className="text-[9px] font-black uppercase tracking-wide">Thumb</span>
                                         </button>
-                                        <button type="button" onClick={() => { setKanbanMode(true); setMainListMode(false); }}
+                                        <button type="button" onClick={() => { setMainListMode("compact-thumb"); setKanbanMode(false); }}
+                                            className={`py-1.5 rounded flex flex-col items-center gap-0.5 transition ${mainListMode === "compact-thumb" && !kanbanMode ? "bg-white text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"}`}>
+                                            <RectangleStackIcon className="w-4 h-4" />
+                                            <span className="text-[9px] font-black uppercase tracking-wide">Compact Thumb</span>
+                                        </button>
+                                        <button type="button" onClick={() => { setKanbanMode(true); setMainListMode("thumb"); }}
                                             className={`hidden sm:flex py-1.5 rounded flex-col items-center gap-0.5 transition ${kanbanMode ? "bg-white text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"}`}>
                                             <ViewColumnsIcon className="w-4 h-4" />
                                             <span className="text-[9px] font-black uppercase tracking-wide">Kanban</span>
@@ -7234,11 +7308,22 @@ const fireIntegrations = (trigger: string, note: any) => {
                             <input
                                 ref={cmdKInputRef}
                                 autoFocus
-                                value={cmdKQuery}
-                                onChange={(e) => { setCmdKQuery(e.target.value); setCmdKCursor(0); }}
+                                value={cmdKQueryRaw}
+                                onChange={(e) => { setCmdKQueryRaw(e.target.value); setCmdKCursor(0); }}
                                 placeholder="SEARCH NOTES…"
                                 className="flex-1 bg-transparent text-sm text-white outline-none placeholder-zinc-600 font-medium"
                             />
+                            {activeFolder && (
+                                <button
+                                    type="button"
+                                    onClick={() => setCmdKGlobal(v => !v)}
+                                    className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-black tracking-wide transition-colors flex-shrink-0"
+                                    style={cmdKGlobal
+                                        ? { background: "rgba(255,255,255,0.08)", color: "#71717a" }
+                                        : { background: "rgba(99,102,241,0.15)", color: "#818cf8", border: "1px solid rgba(99,102,241,0.3)" }}>
+                                    {cmdKGlobal ? "GLOBAL" : activeFolder}
+                                </button>
+                            )}
                             <kbd className="text-[10px] text-zinc-600 border border-zinc-700 px-1.5 py-0.5 font-mono">esc</kbd>
                         </div>
                         {/* Results */}
@@ -7258,7 +7343,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                     <button key={`f-${folder.id}`} type="button"
                                                         onMouseEnter={() => setCmdKCursor(i)}
                                                         onClick={() => {
-                                                            setShowCmdK(false); setCmdKQuery("");
+                                                            setShowCmdK(false); setCmdKQueryRaw(""); setCmdKQuery("");
                                                             const fr = dbData.find((r: any) => r.is_folder && (r.folder_name === folder.name || r.name === folder.name));
                                                             enterFolder({ id: fr ? String(fr.id) : `virtual-${folder.name}`, name: folder.name, color: folder.color || palette12[0] });
                                                         }}
