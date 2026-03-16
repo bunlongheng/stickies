@@ -69,8 +69,11 @@ function applyColorfulMermaidStyle(svgString: string, diagramType: string, theme
     const pal = themeName === "monokai" ? PAL_MONOKAI : PAL;
     const f = `'Inter', ui-sans-serif, system-ui, sans-serif`;
 
-    // Strip mermaid's injected <style>
-    doc.querySelectorAll("style").forEach(s => s.remove());
+    // These types rely on their CSS for structural rendering — keep their styles
+    const CSS_KEEP = new Set(["git", "timeline", "kanban", "sankey", "packet", "radar", "treemap"]);
+    if (!CSS_KEEP.has(diagramType)) {
+        doc.querySelectorAll("style").forEach(s => s.remove());
+    }
 
     // Background
     const rootBg = svgEl.querySelector(":scope > rect");
