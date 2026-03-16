@@ -3782,8 +3782,11 @@ const fireIntegrations = (trigger: string, note: any) => {
         // Optimistic update
         setDbData(prev => prev.map(r => picks[String(r.id)] ? { ...r, folder_color: picks[String(r.id)] } : r));
         showToast(`🎲 ${folderNotes.length} colors randomized`, "#AF52DE");
-        // Persist
-        await Promise.all(folderNotes.map(n => notesApi.update(String(n.id), { folder_color: picks[String(n.id)] })));
+        // Persist — direct Supabase update so updated_at is NOT touched
+        const sb = createBrowserClient();
+        await Promise.all(folderNotes.map(n =>
+            sb.from("notes").update({ folder_color: picks[String(n.id)] }).eq("id", n.id)
+        ));
     }, [activeFolder, dbData]);
 
     const renameFolderTo = useCallback(async (newName: string) => {
