@@ -115,11 +115,15 @@ async function authenticate(req: Request): Promise<AuthResult | null> {
         }
     }
 
-    // Supabase JWT → check if owner email, else regular user
+    // Supabase JWT → check if owner (by user ID or email), else regular user
     const { data: { user } } = await getSupabase().auth.getUser(bearer);
     if (user) {
         const ownerUserId = process.env.OWNER_USER_ID?.trim();
-        if (ownerUserId && user.id === ownerUserId) return { type: "apikey" };
+        const ownerEmail  = process.env.OWNER_EMAIL?.trim();
+        const isOwner =
+            (ownerUserId && user.id === ownerUserId) ||
+            (ownerEmail  && user.email?.toLowerCase() === ownerEmail.toLowerCase());
+        if (isOwner) return { type: "apikey" };
         return { type: "user", userId: user.id };
     }
 
@@ -159,30 +163,80 @@ export async function GET(req: Request) {
 
     if (foldersOnly) {
         const { data, error } = await scope(
-            sb.from(table).select("id, folder_name, folder_color, parent_folder_name, order, updated_at").eq("is_folder", true).order("order", { ascending: true })
+            sb.from(table).select("id, folder_name, folder_color, parent_folder_name, order, updated_at").eq("is_folder", true).order("order", { ascending: true }).limit(2000)
         );
         if (error) return NextResponse.json({ error: "Database error" }, { status: 500 });
         return NextResponse.json({ folders: data ?? [] });
     }
 
-    if (folderFilter) {
-        const { data, error } = await scope(
-            sb.from(table).select("*").eq("is_folder", false).eq("folder_name", folderFilter).order("order", { ascending: true })
-        );
+    // Lightweight per-folder note counts — avoids loading all notes just for tile badges
+    if (url.searchParams.get("counts") === "1") {
+        // RPC: GROUP BY on DB side — returns ~N folder rows instead of all notes
+        const { data, error } = await sb.rpc("get_note_counts");
         if (error) return NextResponse.json({ error: "Database error" }, { status: 500 });
-        return NextResponse.json({ notes: data ?? [] });
+        const byName: Record<string, number> = {};
+        const byId: Record<string, number> = {};
+        let total = 0;
+        for (const row of (data as any[]) ?? []) {
+            const n = Number(row.cnt ?? 0);
+            if (row.folder_name) byName[row.folder_name] = (byName[row.folder_name] || 0) + n;
+            if (row.folder_id) byId[String(row.folder_id)] = (byId[String(row.folder_id)] || 0) + n;
+            total += n;
+        }
+        return NextResponse.json({ counts: byName, countsByFolderId: byId, total });
+    }
+
+    if (folderFilter) {
+        const FOLDER_COLS = "id,title,folder_name,folder_color,folder_id,parent_folder_name,order,updated_at,created_at,type,is_folder";
+        const limitParam = parseInt(url.searchParams.get("limit") ?? "0");
+        const offsetParam = parseInt(url.searchParams.get("offset") ?? "0");
+        let query = scope(
+            sb.from(table)
+                .select(FOLDER_COLS, { count: "exact" })
+                .eq("is_folder", false)
+                .eq("folder_name", folderFilter)
+                .order("updated_at", { ascending: false })
+        );
+        if (limitParam > 0) query = (query as any).range(offsetParam, offsetParam + limitParam - 1);
+        const { data, error, count } = await (query as any);
+        if (error) return NextResponse.json({ error: "Database error" }, { status: 500 });
+        return NextResponse.json({ notes: data ?? [], total: count ?? 0 });
     }
 
     if (q) {
+        // Metadata-only search — skip content to avoid large payloads
+        const SEARCH_COLS = "id,title,folder_name,folder_color,folder_id,parent_folder_name,order,updated_at,created_at,type,is_folder";
         const { data, error } = await scope(
-            sb.from(table).select("*").eq("is_folder", false).or(`title.ilike.%${q}%,content.ilike.%${q}%`).order("updated_at", { ascending: false })
+            sb.from(table).select(SEARCH_COLS).eq("is_folder", false).or(`title.ilike.%${q}%,content.ilike.%${q}%`).order("updated_at", { ascending: false }).limit(50)
         );
         if (error) return NextResponse.json({ error: "Database error" }, { status: 500 });
         return NextResponse.json({ notes: data ?? [], query: q });
     }
 
+    // Single note by id (full content)
+    const idParam = url.searchParams.get("id")?.trim();
+    if (idParam) {
+        const { data, error } = await scope(
+            sb.from(table).select("*").eq("is_folder", false).eq("id", idParam)
+        ).maybeSingle();
+        if (error) return NextResponse.json({ error: "Database error" }, { status: 500 });
+        return NextResponse.json({ note: data ?? null });
+    }
+
+    // Full export (for migration) — includes content
+    const exportAll = url.searchParams.get("export") === "1";
+    if (exportAll) {
+        const { data, error } = await scope(
+            sb.from(table).select("*").eq("is_folder", false).order("updated_at", { ascending: false }).limit(10000)
+        );
+        if (error) return NextResponse.json({ error: "Database error" }, { status: 500 });
+        return NextResponse.json({ notes: data ?? [], total: (data ?? []).length });
+    }
+
+    // List — metadata only, no content (saves ~95% bandwidth)
+    const LIST_COLS = "id,title,folder_name,folder_color,folder_id,parent_folder_name,order,updated_at,created_at,type,is_folder";
     const { data, error } = await scope(
-        sb.from(table).select("*").eq("is_folder", false).order("order", { ascending: true })
+        sb.from(table).select(LIST_COLS).eq("is_folder", false).order("order", { ascending: true }).limit(10000)
     );
     if (error) return NextResponse.json({ error: "Database error" }, { status: 500 });
     return NextResponse.json({ notes: data ?? [] });

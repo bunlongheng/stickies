@@ -4,6 +4,8 @@ import { useEditor, EditorContent, NodeViewWrapper, NodeViewContent, ReactNodeVi
 import type { NodeViewProps } from '@tiptap/react';
 import { Node, mergeAttributes } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
+import { TextStyle } from '@tiptap/extension-text-style';
+import { FontFamily } from '@tiptap/extension-font-family';
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
 import { createLowlight, all } from 'lowlight';
 import TipTapImage from '@tiptap/extension-image';
@@ -188,7 +190,7 @@ function ImageNodeView({ node, updateAttributes, selected }: NodeViewProps) {
                     alt={node.attrs.alt ?? ''}
                     draggable={false}
                     style={{
-                        width: node.attrs.width ? `${node.attrs.width}px` : '100%',
+                        width: node.attrs.width ? `min(100%, ${node.attrs.width}px)` : '100%',
                         maxWidth: '100%',
                         display: 'block',
                         borderRadius: 6,
@@ -287,6 +289,8 @@ const CodeBlockWithCopy = CodeBlockLowlight.extend({
 export function RichTextEditor({ noteId, content, onChange, onBlur, onUploadImage, onDelete, accentColor, editMode }: Props) {
     const [uploading, setUploading] = useState(false);
     const [dragPos, setDragPos] = useState<{ x: number; y: number } | null>(null);
+    const [fontOpen, setFontOpen] = useState(false);
+    const fontRef = useRef<HTMLDivElement>(null);
 
     const uploadAndCompress = async (file: File) => onUploadImage(await compressImage(file));
 
@@ -335,6 +339,8 @@ export function RichTextEditor({ noteId, content, onChange, onBlur, onUploadImag
         immediatelyRender: false,
         extensions: [
             StarterKit.configure({ codeBlock: false }),
+            TextStyle,
+            FontFamily,
             CodeBlockWithCopy.configure({ lowlight, defaultLanguage: 'bash' }),
             ResizableImage.configure({ inline: false, allowBase64: false }),
             FileAttachmentExtension,
@@ -395,6 +401,26 @@ export function RichTextEditor({ noteId, content, onChange, onBlur, onUploadImag
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [noteId]);
+
+    const FONTS = [
+        { label: 'Default',    value: '' },
+        { label: 'Sans',       value: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' },
+        { label: 'Serif',      value: 'Georgia, "Times New Roman", serif' },
+        { label: 'Mono',       value: '"Fira Code", "Cascadia Code", Consolas, monospace' },
+        { label: 'Inter',      value: 'Inter, sans-serif' },
+        { label: 'Garamond',   value: 'Garamond, "EB Garamond", serif' },
+        { label: 'Courier',    value: '"Courier New", Courier, monospace' },
+    ];
+
+    // Close font dropdown on outside click
+    useEffect(() => {
+        if (!fontOpen) return;
+        const handler = (e: MouseEvent) => {
+            if (fontRef.current && !fontRef.current.contains(e.target as globalThis.Node)) setFontOpen(false);
+        };
+        document.addEventListener('mousedown', handler);
+        return () => document.removeEventListener('mousedown', handler);
+    }, [fontOpen]);
 
     const tb = editor; // shorthand for toolbar commands
 
@@ -461,13 +487,72 @@ export function RichTextEditor({ noteId, content, onChange, onBlur, onUploadImag
                     flexShrink: 0,
                     scrollbarWidth: 'none',
                 }}>
+                    {/* Font family picker */}
+                    <div ref={fontRef} style={{ position: 'relative', flexShrink: 0 }}>
+                        <button
+                            type="button"
+                            onMouseDown={(e) => { e.preventDefault(); setFontOpen(v => !v); }}
+                            style={{
+                                ...btnBase(fontOpen),
+                                padding: '0 7px', minWidth: 52, gap: 4,
+                                fontFamily: tb.getAttributes('textStyle').fontFamily || 'inherit',
+                                fontSize: 11, fontWeight: 700,
+                                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                            }}
+                            title="Font family"
+                        >
+                            <span style={{ maxWidth: 44, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {(() => {
+                                    const cur = tb.getAttributes('textStyle').fontFamily || '';
+                                    return FONTS.find(f => f.value === cur)?.label ?? 'Font';
+                                })()}
+                            </span>
+                            <svg width="7" height="5" viewBox="0 0 7 5" fill="currentColor" style={{ flexShrink: 0, opacity: 0.6 }}><path d="M0 0h7L3.5 5z"/></svg>
+                        </button>
+                        {fontOpen && (
+                            <div style={{
+                                position: 'absolute', top: '100%', left: 0, zIndex: 999, marginTop: 4,
+                                background: '#18181b', border: '1px solid rgba(255,255,255,0.12)',
+                                borderRadius: 8, padding: '4px 0', minWidth: 130,
+                                boxShadow: '0 8px 24px rgba(0,0,0,0.6)',
+                            }}>
+                                {FONTS.map(f => {
+                                    const cur = tb.getAttributes('textStyle').fontFamily || '';
+                                    const isActive = f.value === cur;
+                                    return (
+                                        <button
+                                            key={f.value}
+                                            type="button"
+                                            onMouseDown={(e) => {
+                                                e.preventDefault();
+                                                if (f.value) {
+                                                    tb.chain().focus().setFontFamily(f.value).run();
+                                                } else {
+                                                    tb.chain().focus().unsetFontFamily().run();
+                                                }
+                                                setFontOpen(false);
+                                            }}
+                                            style={{
+                                                display: 'block', width: '100%', textAlign: 'left',
+                                                padding: '6px 12px', fontFamily: f.value || 'inherit',
+                                                fontSize: 12, background: isActive ? 'rgba(255,255,255,0.1)' : 'transparent',
+                                                color: isActive ? '#fff' : 'rgba(255,255,255,0.72)',
+                                                border: 'none', cursor: 'pointer', transition: 'background 0.1s',
+                                            }}
+                                            onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; }}
+                                            onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
+                                        >
+                                            {f.label}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+                    <Sep />
                     <SvgBtn icon={<IcoBold />}    active={tb.isActive('bold')}    onClick={() => tb.chain().focus().toggleBold().run()}    title="Bold" />
                     <SvgBtn icon={<IcoItalic />}  active={tb.isActive('italic')}  onClick={() => tb.chain().focus().toggleItalic().run()}  title="Italic" />
                     <SvgBtn icon={<IcoStrike />}  active={tb.isActive('strike')}  onClick={() => tb.chain().focus().toggleStrike().run()}  title="Strikethrough" />
-                    <Sep />
-                    <ToolBtn label="H1" wide active={tb.isActive('heading', { level: 1 })} onClick={() => tb.chain().focus().toggleHeading({ level: 1 }).run()} />
-                    <ToolBtn label="H2" wide active={tb.isActive('heading', { level: 2 })} onClick={() => tb.chain().focus().toggleHeading({ level: 2 }).run()} />
-                    <ToolBtn label="H3" wide active={tb.isActive('heading', { level: 3 })} onClick={() => tb.chain().focus().toggleHeading({ level: 3 }).run()} />
                     <Sep />
                     <SvgBtn icon={<IcoBullet />}  active={tb.isActive('bulletList')}  onClick={() => tb.chain().focus().toggleBulletList().run()}  title="Bullet list" />
                     <SvgBtn icon={<IcoOrdered />} active={tb.isActive('orderedList')} onClick={() => tb.chain().focus().toggleOrderedList().run()} title="Numbered list" />
@@ -504,7 +589,7 @@ export function RichTextEditor({ noteId, content, onChange, onBlur, onUploadImag
             )}
             {/* ── Editor content ── */}
             <div
-                className="rich-editor flex-1 overflow-y-auto ios-editor-scroll relative"
+                className="rich-editor flex-1 overflow-y-auto overflow-x-hidden ios-editor-scroll relative"
                 onDragOver={(e) => { e.preventDefault(); setDragPos({ x: e.clientX, y: e.clientY }); }}
                 onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as globalThis.Node | null)) setDragPos(null); }}
                 onDrop={() => setDragPos(null)}
