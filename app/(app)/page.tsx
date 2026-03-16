@@ -4874,6 +4874,16 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     title="Open in prod Mermaid editor">
                                     <SparklesIcon className="w-[29px] h-[29px] sm:w-7 sm:h-7" />
                                 </button>
+                                <button type="button"
+                                    onClick={() => {
+                                        const state = JSON.stringify({ code: extractMermaid(content), mermaid: { theme: "default" } });
+                                        const encoded = btoa(unescape(encodeURIComponent(state)));
+                                        window.open(`https://mermaid.live/edit#base64:${encoded}`, "_blank");
+                                    }}
+                                    className="p-2 sm:p-3 text-zinc-400 hover:text-emerald-400 active:text-emerald-400 transition flex-shrink-0"
+                                    title="Open in mermaid.live">
+                                    <ArrowTopRightOnSquareIcon className="w-[29px] h-[29px] sm:w-7 sm:h-7" />
+                                </button>
                             </div>
                         )}
                         {noteType === "mermaid" ? (
