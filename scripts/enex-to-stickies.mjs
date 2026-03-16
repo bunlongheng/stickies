@@ -8,6 +8,7 @@ import { readFileSync, writeFileSync, existsSync, createReadStream } from 'fs';
 import { basename, dirname } from 'path';
 import { createHmac, createHash } from 'crypto';
 import { fileURLToPath } from 'url';
+import sharp from 'sharp';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const MANIFEST_FILE = `${__dirname}/.import-manifest.json`;
@@ -145,20 +146,16 @@ function flattenCodeBlocks(html) {
 }
 
 // ── Convert ENML content to TipTap JSON ──────────────────────────────────────
-function enmlToTiptap(enml, resources) {
-  // Extract inner content of <en-note>
+async function enmlToTiptap(enml, resources) {
   const inner = flattenCodeBlocks(
     enml.replace(/^[\s\S]*?<en-note[^>]*>/, '').replace(/<\/en-note>[\s\S]*$/, '')
   );
-
   const content = [];
-  parseNodes(inner, content, resources);
-
-  // Filter empty paragraphs at start/end
+  await parseNodes(inner, content, resources);
   return { type: 'doc', content: content.length ? content : [{ type: 'paragraph' }] };
 }
 
-function parseNodes(html, out, resources) {
+async function parseNodes(html, out, resources) {
   // Strip hidden Evernote metadata div
   html = html.replace(/<div[^>]*display:none[^>]*>[\s\S]*?<\/div>/gi, '');
 
@@ -196,29 +193,26 @@ function parseNodes(html, out, resources) {
     } else if (!tag && m[0].match(/^<hr/i)) {
       out.push({ type: 'horizontalRule' });
     } else if (!tag && m[0].match(/^<en-media/i)) {
-      const node = parseEnMedia(attrs, resources);
+      const node = await parseEnMedia(attrs, resources);
       if (node) out.push(node);
     } else if (tag?.match(/^h[1-6]$/)) {
       const level = parseInt(tag[1]);
       const text = stripTags(inner).trim();
       if (text) out.push({ type: 'heading', attrs: { level }, content: [{ type: 'text', text }] });
     } else if (tag === 'ul') {
-      out.push(parseList(inner, 'bulletList', resources));
+      out.push(await parseList(inner, 'bulletList', resources));
     } else if (tag === 'ol') {
-      out.push(parseList(inner, 'orderedList', resources));
+      out.push(await parseList(inner, 'orderedList', resources));
     } else if (tag === 'pre') {
-      // <pre> tags are always code blocks (inner is already entity-encoded plain text from flattenCodeBlocks)
       const code = decodeHtmlEntities(inner);
       if (code.trim()) out.push({ type: 'codeBlock', attrs: { language: detectLanguage(code) }, content: [{ type: 'text', text: code }] });
     } else if (tag === 'div' || tag === 'p') {
-      // Check for code block
       if (attrs.includes('en-codeblock:true') || attrs.includes('--en-codeblock') || attrs.includes('font-family:') && attrs.includes('monospace')) {
         const code = decodeHtmlEntities(stripTags(inner));
         if (code.trim()) out.push({ type: 'codeBlock', attrs: { language: detectLanguage(code) }, content: [{ type: 'text', text: code }] });
       } else {
-        // Recurse into div
         const sub = [];
-        parseNodes(inner, sub, resources);
+        await parseNodes(inner, sub, resources);
         out.push(...sub);
       }
     }
@@ -234,7 +228,7 @@ function parseNodes(html, out, resources) {
   }
 }
 
-function parseList(html, listType, resources) {
+async function parseList(html, listType, resources) {
   const items = [];
   for (const m of html.matchAll(/<li[^>]*>([\s\S]*?)<\/li>/gi)) {
     const text = stripTags(m[1]).trim();
@@ -270,7 +264,25 @@ function getImageDimensions(buf, mime) {
   return null;
 }
 
-function parseEnMedia(attrs, resources) {
+// ── Compress image buffer via sharp (max 1200px, JPEG 82%) ───────────────────
+async function compressImage(buf, mime) {
+  try {
+    const img = sharp(buf).rotate(); // auto-rotate from EXIF
+    const meta = await img.metadata();
+    const MAX = 1200;
+    if (meta.width > MAX || meta.height > MAX) {
+      img.resize(MAX, MAX, { fit: 'inside', withoutEnlargement: true });
+    }
+    const out = await img.jpeg({ quality: 82, mozjpeg: true }).toBuffer();
+    // Only use compressed if it's actually smaller
+    if (out.length < buf.length) return { buf: out, mime: 'image/jpeg' };
+  } catch (e) {
+    // fall through — return original
+  }
+  return { buf, mime };
+}
+
+async function parseEnMedia(attrs, resources) {
   const typeMatch = attrs.match(/type="([^"]+)"/);
   const hashMatch = attrs.match(/hash="([^"]+)"/);
   if (!typeMatch) return null;
@@ -278,17 +290,18 @@ function parseEnMedia(attrs, resources) {
   const mime = typeMatch[1];
   if (!mime.startsWith('image/')) return null;
 
-  // Match by MD5 hash first, fallback to first available
   const resource = hashMatch
     ? resources[hashMatch[1]]
     : Object.values(resources).find(r => r.mime === mime);
 
   if (!resource) return null;
 
-  const buf = Buffer.from(resource.b64, 'base64');
-  const dims = getImageDimensions(buf, mime);
+  const rawBuf = Buffer.from(resource.b64, 'base64');
+  const { buf, mime: finalMime } = await compressImage(rawBuf, resource.mime);
+  const finalB64 = buf.toString('base64');
+  const dims = getImageDimensions(buf, finalMime);
   const attrs2 = {
-    src: `data:${resource.mime};base64,${resource.b64}`,
+    src: `data:${finalMime};base64,${finalB64}`,
     style: 'display:block;',
     ...(dims ? { width: dims.width, height: dims.height } : { style: 'max-width:100%;height:auto;display:block;' }),
   };
@@ -512,7 +525,7 @@ async function main() {
     // Now fully parse this single block (base64 decode only for this note)
     const note = parseNoteBlock(block);
     console.log(`Converting: ${note.title}`);
-    const tiptap = enmlToTiptap(note.enml, note.resources);
+    const tiptap = await enmlToTiptap(note.enml, note.resources);
     const imageCount = JSON.stringify(tiptap).match(/"type":"image"/g)?.length || 0;
     console.log(`  → ${tiptap.content.length} blocks, ${imageCount} image(s)`);
 
