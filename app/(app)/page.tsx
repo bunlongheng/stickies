@@ -1025,8 +1025,6 @@ export default function NotesMaster() {
     const activeFolder = folderStack.at(-1)?.name ?? null;
     const [isSelectMode, setIsSelectMode] = useState(false);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-    const [isFolderSelectMode, setIsFolderSelectMode] = useState(false);
-    const [selectedFolderNames, setSelectedFolderNames] = useState<string[]>([]);
     // Compat shim — keeps all existing setActiveFolder() call sites working unchanged
     const setActiveFolder = useCallback((name: string | null) => {
         setFolderStack(name ? [{ id: `virtual-${name}`, name, color: palette12[0] }] : []);
@@ -1095,9 +1093,6 @@ export default function NotesMaster() {
     const [showSwitcher, setShowSwitcher] = useState(false);
     const [folderSearchQuery, setFolderSearchQuery] = useState("");
     const folderSearchRef = useRef<HTMLInputElement | null>(null);
-    const [showMerger, setShowMerger] = useState(false);
-    const [mergeQuery, setMergeQuery] = useState("");
-    const mergerSearchRef = useRef<HTMLInputElement | null>(null);
     const [targetFolder, setTargetFolder] = useState("General");
     const [noteColor, setNoteColor] = useState(palette12[0]);
     const [folderColors, setFolderColors] = useState<Record<string, string>>({});
@@ -2531,8 +2526,6 @@ const fireIntegrations = (trigger: string, note: any) => {
     const closeEditorTools = useCallback(() => {
         setShowColorPicker(false);
         setShowSwitcher(false);
-        setShowMerger(false);
-        setMergeQuery("");
     }, []);
 
     const moveToFolder = useCallback(
@@ -2570,45 +2563,6 @@ const fireIntegrations = (trigger: string, note: any) => {
         [folders, editingNote],
     );
 
-    const mergeWithNote = useCallback(
-        async (sourceNote: { id: string; title: string; content: string; folder_color?: string }) => {
-            const sourceId = String(sourceNote.id);
-            const currentId = editingNote?.id ? String(editingNote.id) : null;
-            if (!currentId || sourceId === currentId) return;
-
-            // Append source content to current
-            const sep = content.trim() ? "\n" : "";
-            const merged = content + sep + (sourceNote.content || "");
-            setContent(merged);
-
-            // Persist merged content to current note
-            try {
-                await notesApi.update(currentId, { content: merged });
-                setDbData((prev) => prev.map((r) => String(r.id) === currentId ? { ...r, content: merged } : r));
-            } catch (err) {
-                console.error("Merge update failed:", err);
-            }
-
-            // Delete source note
-            try {
-                await notesApi.delete(sourceId);
-                setDbData((prev) => prev.filter((r) => String(r.id) !== sourceId));
-            } catch (err) {
-                console.error("Merge delete failed:", err);
-            }
-
-            const currentLabel = (title.trim() || editingNote?.title || "Untitled").slice(0, 10);
-            const sourceLabel = (sourceNote.title || "Untitled").slice(0, 10);
-            const currentColor = noteColor || "#FFCC00";
-            const sourceColor = sourceNote.folder_color || "#FF3B30";
-
-            setShowMerger(false);
-            setMergeQuery("");
-            showToast(`"${currentLabel}" merged`, currentColor);
-            setTimeout(() => showToast(`"${sourceLabel}" deleted`, sourceColor), 800);
-        },
-        [editingNote, content, title, noteColor],
-    );
 
     const closeNoteModal = useCallback(() => {
         const wasChanged = noteEverDirtyRef.current;
@@ -3130,43 +3084,6 @@ const fireIntegrations = (trigger: string, note: any) => {
         [closeEditorTools, goBack],
     );
 
-    const mergeFolders = useCallback(
-        async () => {
-            if (selectedFolderNames.length < 2) return;
-            const [primary, ...others] = selectedFolderNames;
-            const primaryColor = folderColors[primary] || palette12[0];
-            try {
-                // Move all notes from secondary folders into primary
-                for (const name of others) {
-                    await notesApi.updateByFolder({ folder_name: name }, { folder_name: primary });
-                }
-                // Delete the folder rows for the secondary folders
-                setDbData((prev) => {
-                    const folderRowIds = prev
-                        .filter((r) => r.is_folder && others.includes(String(r.folder_name || r.name || "")))
-                        .map((r) => String(r.id));
-                    Promise.all(folderRowIds.map((id) => notesApi.delete(id))).catch(() => {});
-                    return prev
-                        .map((r) => !r.is_folder && others.includes(String(r.folder_name || "")) ? { ...r, folder_name: primary } : r)
-                        .filter((r) => !(r.is_folder && others.includes(String(r.folder_name || r.name || ""))));
-                });
-                setFolderColors((prev) => {
-                    const next = { ...prev };
-                    others.forEach((n) => delete next[n]);
-                    return next;
-                });
-                setIsFolderSelectMode(false);
-                setSelectedFolderNames([]);
-                playSound("move");
-                showToast(`Merged into "${primary}"`, primaryColor);
-            } catch (err) {
-                console.error("Merge folders failed:", err);
-                showToast("Merge Failed", "#FF3B30");
-            }
-        },
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-        [selectedFolderNames, folderColors],
-    );
 
     const bulkDeleteSelected = useCallback(
         async () => {
@@ -4206,7 +4123,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         if (!editorOpen) return;
 
         const onPointerDown = (event: MouseEvent | TouchEvent) => {
-            if (!showColorPicker && !showSwitcher && !showMerger) return;
+            if (!showColorPicker && !showSwitcher) return;
             const target = event.target as Node | null;
             if (!target) return;
             if (editorToolsRef.current?.contains(target)) return;
@@ -4235,7 +4152,7 @@ const fireIntegrations = (trigger: string, note: any) => {
             document.removeEventListener("touchstart", onPointerDown);
             document.removeEventListener("keydown", onKeyDown);
         };
-    }, [editorOpen, showColorPicker, showSwitcher, showMerger, closeEditorTools, goBack]);
+    }, [editorOpen, showColorPicker, showSwitcher, closeEditorTools, goBack]);
 
     const createRipple = (e: any, color: string) => {
         const ripple = {
@@ -5736,10 +5653,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         longPressTimer.current = setTimeout(() => {
                                             longPressTimer.current = null;
                                             suppressOpenRef.current = true;
-                                            if (item.is_folder) {
-                                                setIsFolderSelectMode(true);
-                                                setSelectedFolderNames([item.name || ""]);
-                                            } else {
+                                            if (!item.is_folder) {
                                                 setIsSelectMode(true);
                                                 setSelectedIds(new Set([String(item.id)]));
                                             }
@@ -5750,14 +5664,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     onClick={(e) => {
                                         if (suppressOpenRef.current) { suppressOpenRef.current = false; return; }
                                         e.stopPropagation();
-                                        if (isFolderSelectMode && item.is_folder) {
-                                            const name = item.name || "";
-                                            setSelectedFolderNames((prev) => {
-                                                if (prev[0] === name) return prev; // can't deselect primary
-                                                return prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name];
-                                            });
-                                            return;
-                                        }
                                         if (isSelectMode && !item.is_folder) {
                                             const id = String(item.id);
                                             setSelectedIds((prev) => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
@@ -5801,7 +5707,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             : { isolation: "isolate", backgroundColor: c, borderRadius: "3px 3px 3px 14px" };
                                     })()}
                                     className={`${isListMode
-                                        ? `group list-row-hover flex items-center gap-3 px-4 py-3 border-b border-white/5 cursor-pointer select-none transition-colors active:bg-white/10 overflow-hidden ${isDragging ? "opacity-30" : dt?.mode === "into" ? "bg-cyan-950/60 ring-1 ring-inset ring-cyan-400" : ""} ${isSelectMode && !item.is_folder && selectedIds.has(String(item.id)) ? "bg-blue-950/50" : ""} ${isFolderSelectMode && item.is_folder && selectedFolderNames.includes(item.name || "") ? "bg-emerald-950/50" : ""}`
+                                        ? `group list-row-hover flex items-center gap-3 px-4 py-3 border-b border-white/5 cursor-pointer select-none transition-colors active:bg-white/10 overflow-hidden ${isDragging ? "opacity-30" : dt?.mode === "into" ? "bg-cyan-950/60 ring-1 ring-inset ring-cyan-400" : ""} ${isSelectMode && !item.is_folder && selectedIds.has(String(item.id)) ? "bg-blue-950/50" : ""}`
                                         : `grid-square-tile min-w-0 cursor-pointer transition-all group ${item.is_folder ? "folder-grid-tile" : ""} ${isDragging ? "opacity-30 scale-95" : dt?.mode === "into" ? "ring-4 ring-cyan-400 ring-inset z-10" : ""}`}`}>
                                     {/* Cursor spotlight glow */}
                                     {isListMode && glowCard?.id === tileId && (() => {
@@ -5822,12 +5728,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     )}
                                     {isListMode ? (
                                         <>
-                                            {isFolderSelectMode && item.is_folder && (
-                                                <div className={`w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center border-2 transition-all ${selectedFolderNames.includes(item.name || "") ? selectedFolderNames[0] === item.name ? "bg-emerald-400 border-emerald-400" : "bg-emerald-600 border-emerald-600" : "border-zinc-600"}`}>
-                                                    {selectedFolderNames[0] === item.name && <span className="text-[8px] leading-none">★</span>}
-                                                    {selectedFolderNames.includes(item.name || "") && selectedFolderNames[0] !== item.name && <CheckIcon className="w-3 h-3 text-white" />}
-                                                </div>
-                                            )}
                                             {isSelectMode && !item.is_folder && (
                                                 <div className={`w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center border-2 transition-all ${selectedIds.has(String(item.id)) ? "bg-blue-500 border-blue-500" : "border-zinc-600"}`}>
                                                     {selectedIds.has(String(item.id)) && <CheckIcon className="w-3 h-3 text-white" />}
@@ -6039,7 +5939,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                     </main>
 
                     {/* FAB — floating + button bottom right */}
-                    {!isSelectMode && !isFolderSelectMode && (
+                    {!isSelectMode && (
                         <div className="absolute bottom-5 right-4 z-[130]" style={{ filter: "drop-shadow(0 4px 16px rgba(0,0,0,0.5))" }}>
                             <button
                                 type="button"
@@ -6074,31 +5974,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                             <span className="text-white/50 font-bold">{now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
                             <span className="text-zinc-700">/</span>
                             <span className="text-zinc-600 uppercase tracking-wide">{now.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}</span>
-                        </div>
-                    )}
-
-                    {/* FOLDER MERGE ACTION BAR */}
-                    {isFolderSelectMode && (
-                        <div className="fixed bottom-0 left-0 right-0 z-[150] bg-zinc-900/97 border-t border-emerald-500/30 px-4 py-3 flex items-center gap-3">
-                            <span className="text-xs text-zinc-400 flex-1 font-bold">
-                                {selectedFolderNames.length === 0
-                                    ? "Long-press a folder to start"
-                                    : selectedFolderNames.length === 1
-                                        ? `"${selectedFolderNames[0]}" — tap more folders`
-                                        : `★ "${selectedFolderNames[0]}" + ${selectedFolderNames.length - 1} more`}
-                            </span>
-                            {selectedFolderNames.length >= 2 && (
-                                <button
-                                    onClick={() => void mergeFolders()}
-                                    className="px-4 py-2 bg-emerald-500/20 text-emerald-400 text-xs font-black border border-emerald-500/30 hover:bg-emerald-500/30 transition">
-                                    Merge {selectedFolderNames.length}
-                                </button>
-                            )}
-                            <button
-                                onClick={() => { setIsFolderSelectMode(false); setSelectedFolderNames([]); }}
-                                className="px-4 py-2 bg-white/10 text-white text-xs font-black hover:bg-white/15 transition">
-                                Cancel
-                            </button>
                         </div>
                     )}
 
@@ -6330,63 +6205,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                     );
                                                 })}
                                                 {filtered.length === 0 && <p className="text-[10px] text-zinc-600 px-1 py-2">No folders match</p>}
-                                            </div>
-                                        </div>
-                                    );
-                                })()}
-                            </div>
-
-                            {/* MERGE */}
-                            <div>
-                                <button
-                                    type="button"
-                                    className={`w-full flex items-center gap-4 px-6 py-4 text-left transition ${showMerger ? "bg-white/8 text-white" : "text-zinc-300 hover:bg-white/5 hover:text-white active:bg-white/10"}`}
-                                    onClick={() => { const next = !showMerger; setShowMerger(next); setShowSwitcher(false); setShowColorPicker(false); if (next) { setMergeQuery(""); setTimeout(() => mergerSearchRef.current?.focus(), 50); } }}
-                                >
-                                    <DocumentDuplicateIcon className="w-5 h-5 flex-shrink-0" />
-                                    <span className="text-xs font-black tracking-wide flex-1">Merge</span>
-                                    <span className="text-[10px] text-zinc-600 font-bold">append + delete</span>
-                                </button>
-                                {showMerger && (() => {
-                                    const currentId = editingNote?.id ? String(editingNote.id) : null;
-                                    const q = mergeQuery.trim().toLowerCase();
-                                    const allNotes = dbData.filter((r) => !r.is_folder && String(r.id) !== currentId);
-                                    const inFolder = allNotes.filter((r) => r.folder_name === targetFolder);
-                                    const others = allNotes.filter((r) => r.folder_name !== targetFolder);
-                                    // No query: top 3 from current folder only
-                                    // Typing: filter all notes by query (replaces the 3)
-                                    const results = q === ""
-                                        ? inFolder.slice(0, 3)
-                                        : [...inFolder, ...others].filter((r) => String(r.title || "").toLowerCase().includes(q)).slice(0, 6);
-                                    return (
-                                        <div className="px-4 pb-4 flex flex-col gap-1.5">
-                                            <input
-                                                ref={mergerSearchRef}
-                                                type="text"
-                                                value={mergeQuery}
-                                                onChange={(e) => setMergeQuery(e.target.value)}
-                                                onKeyDown={(e) => { if (e.key === "Escape") { setShowMerger(false); setMergeQuery(""); } }}
-                                                placeholder="search notes to merge..."
-                                                className="w-full bg-black border border-white/15 outline-none focus:border-white/40 px-3 py-2 text-xs text-white placeholder:text-zinc-600 font-mono mb-1"
-                                            />
-                                            <div className="flex flex-col gap-1.5 max-h-[200px] overflow-y-auto">
-                                                {results.map((note) => {
-                                                    const nc = note.folder_color || palette12[0];
-                                                    const isCurrentFolder = note.folder_name === targetFolder;
-                                                    return (
-                                                        <button
-                                                            key={note.id}
-                                                            type="button"
-                                                            onClick={() => mergeWithNote({ id: String(note.id), title: String(note.title || ""), content: String(note.content || ""), folder_color: nc })}
-                                                            className="w-full flex items-center gap-3 px-3 py-2.5 text-left border border-white/10 bg-black/30 text-zinc-300 hover:bg-white/5 transition"
-                                                        >
-                                                            <span className="w-[14px] h-[14px] flex-shrink-0 border border-white/25" style={{ backgroundColor: nc }} />
-                                                            <span className="text-[12px] font-bold truncate flex-1">{note.title || "Untitled"}</span>
-                                                            {isCurrentFolder && <span className="text-[9px] text-zinc-600 font-bold flex-shrink-0">here</span>}
-                                                        </button>
-                                                    );
-                                                })}
-                                                {results.length === 0 && <p className="text-[10px] text-zinc-600 px-1 py-2">No notes found</p>}
                                             </div>
                                         </div>
                                     );
