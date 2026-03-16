@@ -1907,12 +1907,11 @@ const fireIntegrations = (trigger: string, note: any) => {
         }
     }, [editingNote?.id]);
 
-    // Auto-clean mermaid frontmatter when a mermaid note opens
+    // Auto-clean mermaid fences + frontmatter when a mermaid note opens
     useEffect(() => {
         if (!editingNote?.id) return;
-        if (editingNote.type !== "mermaid" && !detectMermaid(editingNote.content || "")) return;
         const raw = editingNote.content || "";
-        if (!/---/.test(raw)) return;
+        if (editingNote.type !== "mermaid" && !detectMermaid(raw)) return;
         const cleaned = cleanMermaidContent(raw);
         if (cleaned === raw) return;
         setContent(cleaned);
