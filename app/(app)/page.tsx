@@ -2529,46 +2529,29 @@ const fireIntegrations = (trigger: string, note: any) => {
     // Reset dirty tracker whenever we switch to a different note (or open a new one)
     useEffect(() => { noteEverDirtyRef.current = false; }, [editingNote?.id]);
 
-    // Hashtag easter egg — detect # typed and completed hashtags (plain text + rich text)
+    // Hashtag easter egg — plain text notes only (rich text has WYSIWYG, no need)
     useEffect(() => {
-        if (!editorOpen) { prevContentForHashRef.current = content; return; }
+        if (!editorOpen || content.trimStart().startsWith("{")) { prevContentForHashRef.current = content; return; }
         const prev = prevContentForHashRef.current;
         prevContentForHashRef.current = content;
         if (!prev && !content) return;
 
-        // For rich text (TipTap JSON), extract plain text for comparison
-        const isJson = content.trimStart().startsWith("{");
-        const extractText = (raw: string) => {
-            if (!raw.trimStart().startsWith("{")) return raw;
-            try {
-                const texts: string[] = [];
-                const walk = (node: any) => {
-                    if (node.type === "text" && node.text) texts.push(node.text);
-                    if (node.content) node.content.forEach(walk);
-                };
-                walk(JSON.parse(raw));
-                return texts.join(" ");
-            } catch { return raw; }
-        };
-        const plainCur = isJson ? extractText(content) : content;
-        const plainPrev = isJson ? extractText(prev) : prev;
-
         // Detect newly typed `#`
-        if (plainCur.length === plainPrev.length + 1) {
+        if (content.length === prev.length + 1) {
             let idx = -1;
-            for (let i = 0; i < plainCur.length; i++) {
-                if (plainCur[i] !== plainPrev[i]) { idx = i; break; }
+            for (let i = 0; i < content.length; i++) {
+                if (content[i] !== prev[i]) { idx = i; break; }
             }
-            if (idx === -1) idx = plainCur.length - 1;
-            if (plainCur[idx] === "#") {
+            if (idx === -1) idx = content.length - 1;
+            if (content[idx] === "#") {
                 setHashSymbolFlash(true);
                 setTimeout(() => setHashSymbolFlash(false), 1200);
             }
         }
 
-        // Detect completed hashtag: #word followed by space, enter, or end-of-input
-        const completedMatch = plainCur.match(/(#[a-zA-Z0-9_-]+)(?=\s|$)/g);
-        const prevCompleted = plainPrev.match(/(#[a-zA-Z0-9_-]+)(?=\s|$)/g);
+        // Detect completed hashtag: #word followed by space or end-of-input
+        const completedMatch = content.match(/(#[a-zA-Z0-9_-]+)(?=\s|$)/g);
+        const prevCompleted = prev.match(/(#[a-zA-Z0-9_-]+)(?=\s|$)/g);
         const prevSet = new Set(prevCompleted ?? []);
         const newTag = completedMatch?.find(t => !prevSet.has(t));
         if (newTag) {
@@ -3346,14 +3329,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         const bytes = folderNotes.reduce((acc, r) => acc + enc.encode(r.content || "").byteLength, 0);
         const sizeStr = bytes >= 1_048_576 ? `${(bytes / 1_048_576).toFixed(1)} MB`
             : bytes >= 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${bytes} B`;
-        const latest = folderNotes.reduce((a, b) => (a.updated_at > b.updated_at ? a : b), folderNotes[0]);
-        const lastEdited = latest?.updated_at
-            ? `Last edited ${new Date(latest.updated_at as string).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
-            : null;
-        const imported = latest?.created_at
-            ? `Imported ${new Date(latest.created_at as string).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
-            : null;
-        return [`${folderNotes.length} files`, sizeStr, lastEdited, imported].filter(Boolean) as string[];
+        return [`${folderNotes.length} files`, sizeStr];
     }, [activeFolder, editorOpen, dbData, folders]);
 
     // Note stats for bottom status bar
@@ -5582,13 +5558,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                             />
                         ) : noteType === "rich" ? (
                             <div className="relative flex-1 min-h-0 flex flex-col" style={{ background: "#000000" }}>
-                                {/* Hashtag easter egg overlays for rich text */}
-                                {hashSymbolFlash && (
-                                    <div className="pointer-events-none absolute top-3 right-20 z-20 text-2xl font-black hash-symbol-flash select-none">#</div>
-                                )}
-                                {completedHashtag && (
-                                    <div className="pointer-events-none absolute top-3 right-20 z-20 text-base font-black hashtag-sweep select-none">{completedHashtag}</div>
-                                )}
                                 <RichTextEditor
                                     key={currentNoteId ?? "new"}
                                     noteId={currentNoteId}
@@ -6069,12 +6038,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 const typeBadge = TYPE_BADGE[effectiveType];
                                                 return <div className="flex flex-col items-end flex-shrink-0 gap-1">
                                                     <div className="flex items-center gap-1.5 flex-shrink-0">
-                                                        {typeBadge && (
-                                                            <span className="text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-full"
-                                                                style={{ background: `${typeBadge.color}20`, color: typeBadge.color, border: `1px solid ${typeBadge.color}40` }}>
-                                                                {typeBadge.label}
-                                                            </span>
-                                                        )}
                                                         <span className="text-[11px] text-zinc-500 font-medium whitespace-nowrap">{timeAgo(item.updated_at)}</span>
                                                     </div>
                                                 </div>;
@@ -6225,30 +6188,22 @@ const fireIntegrations = (trigger: string, note: any) => {
                     )}
 
                     {/* STATS BOTTOM BAR */}
-                    <div className="fixed bottom-4 left-4 right-4 z-[120] hidden sm:flex items-center select-none pointer-events-none tabular-nums" style={{ fontSize: 9, opacity: 0.55 }}>
-                        {/* Left: global stats */}
-                        <div className="flex items-center gap-1.5">
-                            <span style={{ color: "#38bdf8" }}>{dbStats.folderCount} folders</span>
-                            <span className="text-zinc-600">·</span>
-                            <span style={{ color: "#fb923c" }}>{dbStats.noteCount} notes</span>
-                            <span className="text-zinc-600">·</span>
-                            <span style={{ color: "#34d399" }}>{dbStats.size}</span>
-                            <span className="text-zinc-600">·</span>
-                            <span className="text-white/50 font-bold">{now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
-                            <span className="text-zinc-700">/</span>
-                            <span className="text-zinc-600 uppercase tracking-wide">{now.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}</span>
-                        </div>
-                        {/* Right: note stats (note open) or folder stats (folder view) */}
-                        {(noteStats ?? folderStats) && (
-                            <div className="ml-auto flex items-center gap-1.5">
-                                {(noteStats ?? folderStats)!.map((chip, i) => (
-                                    <span key={i} className="flex items-center gap-1.5">
-                                        {i > 0 && <span className="text-zinc-600">·</span>}
-                                        <span style={{ color: chip.startsWith("Edited") || chip.startsWith("Last") ? "#a78bfa" : chip.startsWith("Imported") ? "#fb923c" : i === 1 ? "#34d399" : "#94a3b8" }}>{chip}</span>
-                                    </span>
-                                ))}
-                            </div>
-                        )}
+                    <div className="fixed bottom-4 left-0 right-0 z-[120] hidden sm:flex justify-center items-center gap-1.5 select-none pointer-events-none tabular-nums" style={{ fontSize: 9, opacity: 0.55 }}>
+                        <span style={{ color: "#38bdf8" }}>{dbStats.folderCount} folders</span>
+                        <span className="text-zinc-600">·</span>
+                        <span style={{ color: "#fb923c" }}>{dbStats.noteCount} notes</span>
+                        <span className="text-zinc-600">·</span>
+                        <span style={{ color: "#34d399" }}>{dbStats.size}</span>
+                        <span className="text-zinc-600">·</span>
+                        <span className="text-white/50 font-bold">{now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                        <span className="text-zinc-700">/</span>
+                        <span className="text-zinc-600 uppercase tracking-wide">{now.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}</span>
+                        {(noteStats ?? folderStats)?.map((chip, i) => (
+                            <span key={i} className="flex items-center gap-1.5">
+                                <span className="text-zinc-600">·</span>
+                                <span style={{ color: chip.startsWith("Edited") || chip.startsWith("Last") ? "#a78bfa" : chip.startsWith("Imported") ? "#fb923c" : "#94a3b8" }}>{chip}</span>
+                            </span>
+                        ))}
                     </div>
 
                     {/* MULTI-SELECT ACTION BAR */}
