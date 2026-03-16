@@ -1511,11 +1511,7 @@ export default function NotesMaster() {
                     headers: { Authorization: `Bearer ${token}` },
                 }).then((r) => r.ok ? r.json() : { counts: {} }).catch(() => ({ counts: {} })),
             ]);
-            // Filter out known ghost/deleted folder rows that couldn't be DB-deleted
-            const GHOST_IDS = new Set(["5c45ba74-ab91-4417-99e3-d507cd80a6d4"]);
-            const folderItems = (foldersRes.folders ?? [])
-                .filter((f: any) => !GHOST_IDS.has(String(f.id)))
-                .map((f: any) => ({ ...f, is_folder: true }));
+            const folderItems = (foldersRes.folders ?? []).map((f: any) => ({ ...f, is_folder: true }));
             // Preserve any already-loaded notes in dbData (from prior folder navigations)
             setDbData((prev) => {
                 const existingNotes = prev.filter((r: any) => !r.is_folder);
@@ -2433,7 +2429,14 @@ const fireIntegrations = (trigger: string, note: any) => {
                     latestUpdatedAt: latestUpdatedByFolderId.get(rowId) || String(row.updated_at || ""),
                     name: folderName,
                     color: folderColors[folderName] || row.folder_color || palette12[0],
-                    count: folderCountsById[rowId] ?? noteCountByFolderId.get(rowId) ?? folderCounts[folderName] ?? noteCountByFolder.get(folderName) ?? 0,
+                    count: (() => {
+                        // If this is the only folder with this name, name-based count is authoritative
+                        // (captures notes with wrong/missing folder_id)
+                        const nameCount = folderCounts[folderName] ?? noteCountByFolder.get(folderName) ?? 0;
+                        const idCount = folderCountsById[rowId] ?? noteCountByFolderId.get(rowId) ?? 0;
+                        const foldersWithSameName = Array.from(folderRowsById.values()).filter(f => String(f.folder_name) === folderName).length;
+                        return foldersWithSameName === 1 ? Math.max(nameCount, idCount) : idCount;
+                    })(),
                     subfolderCount: subfolderCountByFolder.get(folderName) || 0,
                     icon: folderIcons[folderName] || "",
                     parent_folder_name: row.parent_folder_name || null,
@@ -2632,8 +2635,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         const folderMeta = folders.find((folder) => folder.name === activeFolder);
         if (folderMeta && folderMeta.count > 0) return Number(folderMeta.count);
         // Fall back to server counts before all notes are loaded
-        const activeFolderId = folderMeta?.id;
-        if (activeFolderId && folderCountsById[activeFolderId]) return folderCountsById[activeFolderId];
+        if (folderMeta && folderMeta.count > 0) return Number(folderMeta.count);
         return folderCounts[activeFolder] ?? dbData.filter((row) => !row.is_folder && String(row.folder_name || "") === activeFolder).length;
     }, [activeFolder, folders, dbData, folderCounts, folderCountsById]);
     const canDeleteActiveFolder = Boolean(activeFolder);
