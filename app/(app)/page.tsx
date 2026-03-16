@@ -245,8 +245,8 @@ function detectNoteType(content: string): string {
 /** Extract raw mermaid code — strips ```mermaid fences, YAML frontmatter, and leading/trailing whitespace */
 function extractMermaid(text: string): string {
     let t = text.trim();
-    // Strip ```mermaid ... ``` fences
-    const fenced = t.match(/^```mermaid\s*\n?([\s\S]*?)```\s*$/im);
+    // Strip ```mermaid ... ``` or plain ``` ... ``` fences
+    const fenced = t.match(/^```(?:mermaid)?\s*\n?([\s\S]*?)```\s*$/im);
     if (fenced) t = fenced[1].trim();
     // Strip YAML frontmatter (---\ntitle: ...\n---) and inject title as %% comment
     const frontmatter = t.match(/^---\s*\n([\s\S]*?)\n---\s*\n([\s\S]*)$/m);
@@ -268,11 +268,11 @@ function detectMermaid(text: string): boolean {
     return MERMAID_KEYWORDS.test(extractMermaid(text));
 }
 
-/** Strip ```mermaid fences + YAML frontmatter, inject title as %% comment */
+/** Strip ```mermaid or plain ``` fences + YAML frontmatter */
 function cleanMermaidContent(text: string): string {
     let t = text.trim();
-    // Strip ```mermaid ... ``` fences but keep frontmatter intact
-    const fenced = t.match(/^```mermaid\s*\n?([\s\S]*?)```\s*$/im);
+    // Strip ```mermaid ... ``` or plain ``` ... ``` fences
+    const fenced = t.match(/^```(?:mermaid)?\s*\n?([\s\S]*?)```\s*$/im);
     if (fenced) t = fenced[1].trim();
     return t;
 }
