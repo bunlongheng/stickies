@@ -390,9 +390,10 @@ export function RichTextEditor({ noteId, content, onChange, onBlur, onUploadImag
         },
     });
 
-    // Re-sync content when switching notes
+    // Re-sync content when switching notes OR when content arrives async after remount
     useEffect(() => {
         if (!editor || editor.isDestroyed) return;
+        if (!content) return; // don't wipe editor with empty during initial load
         const parsed = parseContent(content);
         const current = JSON.stringify(editor.getJSON());
         const incoming = isTiptapJson(content) ? content : null;
@@ -400,7 +401,7 @@ export function RichTextEditor({ noteId, content, onChange, onBlur, onUploadImag
             editor.commands.setContent(parsed);
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [noteId]);
+    }, [noteId, content]);
 
     const FONTS = [
         { label: 'Default',    value: '' },
