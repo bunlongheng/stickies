@@ -15,11 +15,12 @@ import "prismjs/components/prism-markup";
 Prism.languages.mermaid = {
     comment:   { pattern: /%%.*$/m, greedy: true },
     string:    { pattern: /"[^"]*"/, greedy: true },
-    keyword:   /\b(?:graph|flowchart|sequenceDiagram|classDiagram|stateDiagram|stateDiagram-v2|erDiagram|gantt|pie|mindmap|timeline|gitGraph|journey)\b/,
-    direction: /\b(?:TB|TD|BT|LR|RL)\b/,
-    arrow:     /--?>|===>?|-.->|--/,
+    keyword:   /\b(?:graph|flowchart|sequenceDiagram|classDiagram|stateDiagram|stateDiagram-v2|erDiagram|gantt|pie|mindmap|timeline|gitGraph|journey|xychart-beta|xychart|quadrantChart|requirementDiagram|block-beta|block|sankey-beta|sankey|packet-beta|packet|kanban|architecture-beta|architecture|radar-beta|radar|treemap|subgraph|end|direction|participant|actor|activate|deactivate|loop|alt|else|opt|par|and|critical|break|rect|note|over|section|title|accTitle|accDescr|style|classDef|click|dateFormat|axisFormat|todayMarker|tickInterval|excludes|includes|milestone|service|junction|edge|group|left|right|top|bottom)\b/,
+    direction: /\b(?:TB|TD|BT|LR|RL|DT)\b/,
+    arrow:     /--?>|===>?|-.->|<--?|<==|\.\.\.?>?|--/,
     bracket:   /[()[\]{}]/,
     label:     /\|[^|\n]*\|/,
+    colon:     { pattern: /:/, alias: "punctuation" },
     number:    /\b\d+(?:\.\d+)?%?\b/,
 };
 
