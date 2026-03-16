@@ -3773,6 +3773,19 @@ const fireIntegrations = (trigger: string, note: any) => {
         [activeFolder],
     );
 
+    const randomizeFolderColors = useCallback(async () => {
+        if (!activeFolder) return;
+        const folderNotes = dbData.filter(r => !r.is_folder && r.folder_name === activeFolder);
+        if (folderNotes.length === 0) return;
+        const picks: Record<string, string> = {};
+        folderNotes.forEach(n => { picks[String(n.id)] = palette12[Math.floor(Math.random() * palette12.length)]; });
+        // Optimistic update
+        setDbData(prev => prev.map(r => picks[String(r.id)] ? { ...r, folder_color: picks[String(r.id)] } : r));
+        showToast(`🎲 ${folderNotes.length} colors randomized`, "#AF52DE");
+        // Persist
+        await Promise.all(folderNotes.map(n => notesApi.update(String(n.id), { folder_color: picks[String(n.id)] })));
+    }, [activeFolder, dbData]);
+
     const renameFolderTo = useCallback(async (newName: string) => {
         if (!activeFolder || !newName.trim() || newName.trim() === activeFolder) return;
         const trimmed = newName.trim();
@@ -6198,6 +6211,15 @@ const fireIntegrations = (trigger: string, note: any) => {
                         <span className="text-white/50 font-bold">{now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
                         <span className="text-zinc-700">/</span>
                         <span className="text-zinc-600 uppercase tracking-wide">{now.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}</span>
+                        {activeFolder && (
+                            <button
+                                type="button"
+                                onClick={() => void randomizeFolderColors()}
+                                title="Randomize note colors in this folder"
+                                className="pointer-events-auto ml-1 opacity-40 hover:opacity-90 transition-opacity active:scale-110"
+                                style={{ fontSize: 11, lineHeight: 1, cursor: "pointer", background: "none", border: "none", padding: "0 2px" }}
+                            >🎲</button>
+                        )}
                         {(noteStats ?? folderStats)?.map((chip, i) => (
                             <span key={i} className="flex items-center gap-1.5">
                                 <span className="text-zinc-600">·</span>
