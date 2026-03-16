@@ -2488,6 +2488,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         return { folderCount, noteCount, size };
     }, [dbData]);
 
+
     const activeFolderNoteCount = useMemo(() => {
         if (!activeFolder) return 0;
         const folderMeta = folders.find((folder) => folder.name === activeFolder);
@@ -3332,6 +3333,51 @@ const fireIntegrations = (trigger: string, note: any) => {
     const noteViewMode = stackMode ? "Stack" : mindmapMode ? "Mindmap" : graphMode ? "Graph" : listMode ? "Checklist" : mermaidMode ? "Mermaid" : voiceNote ? "Voice" : codeMode ? noteType : markdownMode ? "Markdown" : htmlMode ? "HTML" : noteType === "rich" ? "Rich" : "Text";
     // Rich note = TipTap JSON format
     const isRichNote = !listMode && !graphMode && !mindmapMode && !stackMode && noteType === "rich";
+
+    // Folder stats for bottom status bar (active folder view, no note open)
+    const folderStats = useMemo(() => {
+        if (!activeFolder || editorOpen) return null;
+        const folderNotes = dbData.filter(r => !r.is_folder && (
+            r.folder_name === activeFolder ||
+            (r.folder_id && folders.find(f => f.name === activeFolder)?.id && String(r.folder_id) === String(folders.find(f => f.name === activeFolder)?.id))
+        ));
+        if (folderNotes.length === 0) return null;
+        const enc = new TextEncoder();
+        const bytes = folderNotes.reduce((acc, r) => acc + enc.encode(r.content || "").byteLength, 0);
+        const sizeStr = bytes >= 1_048_576 ? `${(bytes / 1_048_576).toFixed(1)} MB`
+            : bytes >= 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${bytes} B`;
+        const latest = folderNotes.reduce((a, b) => (a.updated_at > b.updated_at ? a : b), folderNotes[0]);
+        const lastEdited = latest?.updated_at
+            ? `Last edited ${new Date(latest.updated_at as string).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
+            : null;
+        const imported = latest?.created_at
+            ? `Imported ${new Date(latest.created_at as string).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
+            : null;
+        return [`${folderNotes.length} files`, sizeStr, lastEdited, imported].filter(Boolean) as string[];
+    }, [activeFolder, editorOpen, dbData, folders]);
+
+    // Note stats for bottom status bar
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const noteStats = useMemo(() => {
+        if (!editorOpen) return null;
+        const bytes = new TextEncoder().encode(content).length;
+        const sizeStr = bytes >= 1_048_576 ? `${(bytes / 1_048_576).toFixed(1)} MB`
+            : bytes >= 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${bytes} B`;
+        const editedStr = editingNote?.updated_at
+            ? `Edited ${new Date(editingNote.updated_at as string).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
+            : null;
+        if (noteType !== "rich") return [editedStr, sizeStr].filter(Boolean) as string[];
+        let tiptap: any = null;
+        try { tiptap = JSON.parse(content); } catch {}
+        const topNodes: any[] = tiptap?.content ?? [];
+        let paragraphs = 0, images = 0, codeBlocks = 0, tables = 0;
+        const walk = (nodes: any[]) => { for (const n of nodes) { if (n.type === "paragraph") paragraphs++; else if (n.type === "image") images++; else if (n.type === "codeBlock") codeBlocks++; else if (n.type === "table") tables++; if (n.content) walk(n.content); } };
+        walk(topNodes);
+        return [editedStr, sizeStr, `${topNodes.length} lines`,
+            images > 0 ? `${images} img` : null, codeBlocks > 0 ? `${codeBlocks} code` : null,
+            tables > 0 ? `${tables} tbl` : null, paragraphs > 0 ? `${paragraphs} ¶` : null,
+        ].filter(Boolean) as string[];
+    }, [editorOpen, noteType, content, editingNote?.updated_at]);
 
     const saveFolderIconToDb = useCallback(async (folderName: string, icon: string) => {
         try {
@@ -5564,50 +5610,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     editMode={true}
                                     onDelete={() => void deleteCurrentNote(editingNote, title)}
                                 />
-                                {/* ── Rich text status bar ── */}
-                                {(() => {
-                                    let tiptap: any = null;
-                                    try { tiptap = JSON.parse(content); } catch {}
-                                    const topNodes: any[] = tiptap?.content ?? [];
-                                    let paragraphs = 0, images = 0, codeBlocks = 0, tables = 0;
-                                    const walk = (nodes: any[]) => {
-                                        for (const n of nodes) {
-                                            if (n.type === "paragraph") paragraphs++;
-                                            else if (n.type === "image") images++;
-                                            else if (n.type === "codeBlock") codeBlocks++;
-                                            else if (n.type === "table") tables++;
-                                            if (n.content) walk(n.content);
-                                        }
-                                    };
-                                    walk(topNodes);
-                                    const totalLines = topNodes.length;
-                                    const bytes = new TextEncoder().encode(content).length;
-                                    const sizeStr = bytes >= 1048576 ? `${(bytes / 1048576).toFixed(1)} MB`
-                                        : bytes >= 1024 ? `${(bytes / 1024).toFixed(1)} KB`
-                                        : `${bytes} B`;
-                                    const editedStr = editingNote?.updated_at
-                                        ? `Edited ${new Date(editingNote.updated_at as string).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
-                                        : null;
-                                    const chips = [
-                                        editedStr,
-                                        sizeStr,
-                                        `${totalLines} lines`,
-                                        images > 0 ? `${images} image${images > 1 ? "s" : ""}` : null,
-                                        codeBlocks > 0 ? `${codeBlocks} code block${codeBlocks > 1 ? "s" : ""}` : null,
-                                        tables > 0 ? `${tables} table${tables > 1 ? "s" : ""}` : null,
-                                        paragraphs > 0 ? `${paragraphs} para` : null,
-                                    ].filter(Boolean) as string[];
-                                    return (
-                                        <div style={{ display: "flex", alignItems: "center", gap: 0, padding: "3px 14px", borderTop: "1px solid rgba(255,255,255,0.05)", background: "rgba(0,0,0,0.5)", fontSize: 10.5, color: "rgba(255,255,255,0.28)", userSelect: "none", flexWrap: "wrap", lineHeight: "18px", flexShrink: 0 }}>
-                                            {chips.map((chip, i) => (
-                                                <span key={i} style={{ display: "flex", alignItems: "center" }}>
-                                                    {i > 0 && <span style={{ margin: "0 7px", opacity: 0.4 }}>·</span>}
-                                                    {chip}
-                                                </span>
-                                            ))}
-                                        </div>
-                                    );
-                                })()}
                             </div>
                         ) : (
                             <div className="relative flex-1">
@@ -6222,9 +6224,10 @@ const fireIntegrations = (trigger: string, note: any) => {
                         </div>
                     )}
 
-                    {/* STATS BOTTOM RIGHT */}
-                    {!activeFolder && !search.trim() && (
-                        <div className="fixed bottom-4 right-4 z-[120] hidden sm:flex items-center gap-1.5 select-none pointer-events-none tabular-nums" style={{ fontSize: 9, opacity: 0.55 }}>
+                    {/* STATS BOTTOM BAR */}
+                    <div className="fixed bottom-4 left-4 right-4 z-[120] hidden sm:flex items-center select-none pointer-events-none tabular-nums" style={{ fontSize: 9, opacity: 0.55 }}>
+                        {/* Left: global stats */}
+                        <div className="flex items-center gap-1.5">
                             <span style={{ color: "#38bdf8" }}>{dbStats.folderCount} folders</span>
                             <span className="text-zinc-600">·</span>
                             <span style={{ color: "#fb923c" }}>{dbStats.noteCount} notes</span>
@@ -6235,7 +6238,18 @@ const fireIntegrations = (trigger: string, note: any) => {
                             <span className="text-zinc-700">/</span>
                             <span className="text-zinc-600 uppercase tracking-wide">{now.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}</span>
                         </div>
-                    )}
+                        {/* Right: note stats (note open) or folder stats (folder view) */}
+                        {(noteStats ?? folderStats) && (
+                            <div className="ml-auto flex items-center gap-1.5">
+                                {(noteStats ?? folderStats)!.map((chip, i) => (
+                                    <span key={i} className="flex items-center gap-1.5">
+                                        {i > 0 && <span className="text-zinc-600">·</span>}
+                                        <span style={{ color: chip.startsWith("Edited") || chip.startsWith("Last") ? "#a78bfa" : chip.startsWith("Imported") ? "#fb923c" : i === 1 ? "#34d399" : "#94a3b8" }}>{chip}</span>
+                                    </span>
+                                ))}
+                            </div>
+                        )}
+                    </div>
 
                     {/* MULTI-SELECT ACTION BAR */}
                     {isSelectMode && (
