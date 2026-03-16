@@ -1,9 +1,11 @@
 'use client';
 
-import { useEditor, EditorContent, NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react';
+import { useEditor, EditorContent, NodeViewWrapper, NodeViewContent, ReactNodeViewRenderer } from '@tiptap/react';
 import type { NodeViewProps } from '@tiptap/react';
 import { Node, mergeAttributes } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
+import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
+import { createLowlight, all } from 'lowlight';
 import TipTapImage from '@tiptap/extension-image';
 import Link from '@tiptap/extension-link';
 import TaskList from '@tiptap/extension-task-list';
@@ -14,7 +16,7 @@ import { TableRow } from '@tiptap/extension-table-row';
 import { TableCell } from '@tiptap/extension-table-cell';
 import { TableHeader } from '@tiptap/extension-table-header';
 import { marked } from 'marked';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import type { EditorState, Transaction } from '@tiptap/pm/state';
 
 /** Detect TipTap JSON format */
@@ -142,7 +144,7 @@ const FileAttachmentExtension = Node.create({
 
 // ── Resizable Image ──────────────────────────────────────────────────────────
 
-function ImageNodeView({ node, updateAttributes }: NodeViewProps) {
+function ImageNodeView({ node, updateAttributes, selected }: NodeViewProps) {
     const containerRef = useRef<HTMLDivElement>(null);
     const [resizing, setResizing] = useState(false);
     const [pct, setPct] = useState<number | null>(null);
@@ -190,7 +192,9 @@ function ImageNodeView({ node, updateAttributes }: NodeViewProps) {
                         maxWidth: '100%',
                         display: 'block',
                         borderRadius: 6,
-                        border: '1px solid rgba(255,255,255,0.08)',
+                        border: selected ? '2px solid #a6e22e' : '1px solid rgba(255,255,255,0.08)',
+                        boxShadow: selected ? '0 0 0 3px rgba(166,226,46,0.25)' : 'none',
+                        transition: 'border 0.1s, box-shadow 0.1s',
                     }}
                 />
                 {resizing && pct !== null && (
@@ -243,6 +247,43 @@ interface Props {
     editMode?: boolean;
 }
 
+// ── Code block node view with floating copy button ────────────────────────────
+function CodeBlockView({ node }: NodeViewProps) {
+    const copy = useCallback(() => {
+        const text = node.textContent;
+        const success = () => window.dispatchEvent(new CustomEvent('stickies-toast', { detail: { msg: '📋 Copied!', color: '#34C759' } }));
+        const fail = () => window.dispatchEvent(new CustomEvent('stickies-toast', { detail: { msg: 'Copy failed', color: '#FF3B30' } }));
+        if (navigator.clipboard?.writeText) {
+            navigator.clipboard.writeText(text).then(success).catch(() => {
+                try { const el = Object.assign(document.createElement('textarea'), { value: text }); document.body.appendChild(el); el.select(); document.execCommand('copy'); document.body.removeChild(el); success(); } catch { fail(); }
+            });
+        } else {
+            try { const el = Object.assign(document.createElement('textarea'), { value: text }); document.body.appendChild(el); el.select(); document.execCommand('copy'); document.body.removeChild(el); success(); } catch { fail(); }
+        }
+    }, [node.textContent]);
+    return (
+        <NodeViewWrapper className="relative group">
+            <pre><NodeViewContent as={"code" as any} className={`language-${node.attrs.language || 'bash'}`} /></pre>
+            <button
+                onClick={copy}
+                contentEditable={false}
+                className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity text-xs px-2 py-1 rounded"
+                style={{ background: 'rgba(255,255,255,0.15)', color: '#f8f8f2', border: 'none', cursor: 'pointer', backdropFilter: 'blur(4px)' }}
+            >
+                Copy
+            </button>
+        </NodeViewWrapper>
+    );
+}
+
+const lowlight = createLowlight(all);
+
+const CodeBlockWithCopy = CodeBlockLowlight.extend({
+    addNodeView() {
+        return ReactNodeViewRenderer(CodeBlockView);
+    },
+});
+
 export function RichTextEditor({ noteId, content, onChange, onBlur, onUploadImage, onDelete, accentColor, editMode }: Props) {
     const [uploading, setUploading] = useState(false);
     const [dragPos, setDragPos] = useState<{ x: number; y: number } | null>(null);
@@ -293,7 +334,8 @@ export function RichTextEditor({ noteId, content, onChange, onBlur, onUploadImag
     const editor = useEditor({
         immediatelyRender: false,
         extensions: [
-            StarterKit,
+            StarterKit.configure({ codeBlock: false }),
+            CodeBlockWithCopy.configure({ lowlight, defaultLanguage: 'bash' }),
             ResizableImage.configure({ inline: false, allowBase64: false }),
             FileAttachmentExtension,
             Link.configure({ openOnClick: true, autolink: true, HTMLAttributes: { target: '_blank', rel: 'noopener noreferrer' } }),

@@ -285,6 +285,19 @@ body {
   color: #fff !important;
 }
 
+/* ── Monokai syntax highlighting for rich note code blocks (hljs/lowlight) ── */
+.ProseMirror pre { background: #272822; border-radius: 6px; padding: 12px 16px; overflow-x: auto; }
+.ProseMirror pre code { background: none; color: #f8f8f2; font-family: "Fira Code", "Consolas", monospace; font-size: 13px; line-height: 1.6; }
+.hljs-comment,.hljs-quote { color: #75715e; }
+.hljs-variable,.hljs-template-variable,.hljs-tag,.hljs-name,.hljs-selector-id,.hljs-selector-class,.hljs-regexp,.hljs-deletion { color: #f92672; }
+.hljs-number,.hljs-built_in,.hljs-literal,.hljs-type,.hljs-params,.hljs-meta,.hljs-link { color: #ae81ff; }
+.hljs-attribute { color: #a6e22e; }
+.hljs-string,.hljs-symbol,.hljs-bullet,.hljs-addition { color: #a6e22e; }
+.hljs-title,.hljs-section { color: #e6db74; }
+.hljs-keyword,.hljs-selector-tag { color: #66d9e8; }
+.hljs-emphasis { font-style: italic; }
+.hljs-strong { font-weight: bold; }
+
 @keyframes confettiShoot {
   0%   { transform: translate(0, 0) scale(0); opacity: 1; }
   60%  { transform: translate(var(--cx), var(--cy)) scale(1); opacity: 1; }
