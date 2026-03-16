@@ -6201,29 +6201,34 @@ const fireIntegrations = (trigger: string, note: any) => {
                     )}
 
                     {/* STATS BOTTOM BAR */}
-                    <div className="fixed bottom-4 left-0 right-0 z-[120] hidden sm:flex justify-center items-center gap-1.5 select-none pointer-events-none tabular-nums" style={{ fontSize: 9, opacity: 0.55 }}>
-                        <span style={{ color: "#38bdf8" }}>{dbStats.folderCount} folders</span>
-                        <span className="text-zinc-600">·</span>
-                        <span style={{ color: "#fb923c" }}>{dbStats.noteCount} notes</span>
-                        <span className="text-zinc-600">·</span>
-                        <span style={{ color: "#34d399" }}>{dbStats.size}</span>
-                        <span className="text-zinc-600">·</span>
+                    <div className="fixed bottom-4 left-0 right-0 z-[120] hidden sm:flex justify-center items-center gap-2 select-none pointer-events-none tabular-nums" style={{ fontSize: 9, opacity: 0.6 }}>
+                        {/* Global stats — grey pill */}
+                        <span className="flex items-center gap-1.5 px-2 py-0.5 rounded" style={{ border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.04)" }}>
+                            <span style={{ color: "#38bdf8" }}>{dbStats.folderCount} folders</span>
+                            <span className="text-zinc-600">·</span>
+                            <span style={{ color: "#fb923c" }}>{dbStats.noteCount} notes</span>
+                            <span className="text-zinc-600">·</span>
+                            <span style={{ color: "#34d399" }}>{dbStats.size}</span>
+                        </span>
+                        {/* Clock / date */}
                         <span className="text-white/50 font-bold">{now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
                         <span className="text-zinc-700">/</span>
                         <span className="text-zinc-600 uppercase tracking-wide">{now.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}</span>
+                        {/* Dice — only in a folder */}
                         {activeFolder && (
                             <button
                                 type="button"
                                 onClick={() => void randomizeFolderColors()}
                                 title="Randomize note colors in this folder"
-                                className="pointer-events-auto ml-1 opacity-40 hover:opacity-90 transition-opacity active:scale-110"
-                                style={{ fontSize: 11, lineHeight: 1, cursor: "pointer", background: "none", border: "none", padding: "0 2px" }}
+                                className="pointer-events-auto opacity-35 hover:opacity-90 transition-opacity active:scale-125"
+                                style={{ fontSize: 11, lineHeight: 1, cursor: "pointer", background: "none", border: "none", padding: "0 1px" }}
                             >🎲</button>
                         )}
+                        {/* Folder or note stats */}
                         {(noteStats ?? folderStats)?.map((chip, i) => (
-                            <span key={i} className="flex items-center gap-1.5">
+                            <span key={i} className="flex items-center gap-2">
                                 <span className="text-zinc-600">·</span>
-                                <span style={{ color: chip.startsWith("Edited") || chip.startsWith("Last") ? "#a78bfa" : chip.startsWith("Imported") ? "#fb923c" : "#94a3b8" }}>{chip}</span>
+                                <span style={{ color: chip.startsWith("Edited") ? "#a78bfa" : "#94a3b8" }}>{chip}</span>
                             </span>
                         ))}
                     </div>
