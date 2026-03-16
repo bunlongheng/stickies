@@ -1168,6 +1168,7 @@ export default function NotesMaster() {
     const [editingTaskText, setEditingTaskText] = useState("");
     const editTaskInputRef = useRef<HTMLInputElement | null>(null);
     const addTaskInputRef = useRef<HTMLInputElement | null>(null);
+    const noteEverDirtyRef = useRef(false);
     const graphContainerRef = useRef<HTMLDivElement | null>(null);
     const graphNodesRef = useRef<{ x: number; y: number; vx: number; vy: number }[]>([]);
     const graphAnimRef = useRef<number | null>(null);
@@ -2428,6 +2429,11 @@ const fireIntegrations = (trigger: string, note: any) => {
         return Boolean(title.trim() || content.trim() || nextFolder !== "General");
     }, [editorOpen, title, content, targetFolder, activeFolder, noteColor, editingNote]);
 
+    // Track if the current note was ever dirty (survives auto-save clearing isDraftDirty)
+    useEffect(() => { if (isDraftDirty) noteEverDirtyRef.current = true; }, [isDraftDirty]);
+    // Reset dirty tracker whenever we switch to a different note (or open a new one)
+    useEffect(() => { noteEverDirtyRef.current = false; }, [editingNote?.id]);
+
     // Debounced auto-save while typing — broadcasts to other devices via Pusher
     useEffect(() => {
         if (!editorOpen || !isDraftDirty) return;
@@ -2605,23 +2611,27 @@ const fireIntegrations = (trigger: string, note: any) => {
     );
 
     const closeNoteModal = useCallback(() => {
-        const wasChanged = isDraftDirty;
+        const wasChanged = noteEverDirtyRef.current;
+        noteEverDirtyRef.current = false;
         void saveNote({ silent: true });
         if (wasChanged && title.trim()) {
             const t = title.slice(0, 10) + (title.length > 10 ? "…" : "");
-            showToast(`"${t}" saved`, noteColor || "#34C759");
+            const isNew = !editingNote?.id;
+            showToast(isNew ? `+ "${t}"` : `"${t}" updated`, noteColor || "#34C759", isNew);
         }
         closeEditorTools();
         setEditorOpen(false);
         setImages([]);
-    }, [saveNote, closeEditorTools, isDraftDirty, title, noteColor]);
+    }, [saveNote, closeEditorTools, editingNote?.id, title, noteColor]);
 
     const backToRootFromEditor = useCallback(() => {
-        const wasChanged = isDraftDirty;
+        const wasChanged = noteEverDirtyRef.current;
+        noteEverDirtyRef.current = false;
         void saveNote({ silent: true });
         if (wasChanged && title.trim()) {
             const t = title.slice(0, 10) + (title.length > 10 ? "…" : "");
-            showToast(`"${t}" saved`, noteColor || "#34C759");
+            const isNew = !editingNote?.id;
+            showToast(isNew ? `+ "${t}"` : `"${t}" updated`, noteColor || "#34C759", isNew);
         }
         closeEditorTools();
         setEditorOpen(false);
@@ -2629,7 +2639,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         // Stay in the note's folder; only go to root if no folder
         setActiveFolder(targetFolder || null);
         setSearch("");
-    }, [saveNote, closeEditorTools, isDraftDirty, targetFolder, title, noteColor]);
+    }, [saveNote, closeEditorTools, editingNote?.id, targetFolder, title, noteColor]);
 
     // Pick a random palette color, avoiding the last-used one if possible
     const pickUniqueColor = useCallback(() => {
@@ -2661,6 +2671,7 @@ const fireIntegrations = (trigger: string, note: any) => {
     }, [saveNote, title, noteColor]);
 
     const openNewNote = useCallback((type?: string) => {
+        noteEverDirtyRef.current = false;
         const isStandup = (activeFolder || "").toLowerCase() === "standup";
         const today = new Date();
         const dateStr = `${today.getMonth() + 1}/${today.getDate()}/${String(today.getFullYear()).slice(-2)}`;
