@@ -21,6 +21,13 @@ function saveManifest(manifest) {
   writeFileSync(MANIFEST_FILE, JSON.stringify(manifest, null, 2));
 }
 
+const BRIGHT_COLORS = [
+  '#FF3B30', '#FF6B4E', '#FF9500', '#FFCC00',
+  '#D4E157', '#34C759', '#00C7BE', '#32ADE6',
+  '#007AFF', '#5856D6', '#AF52DE', '#FF2D55',
+];
+const randomColor = () => BRIGHT_COLORS[Math.floor(Math.random() * BRIGHT_COLORS.length)];
+
 const STICKIES_URL = process.env.STICKIES_URL || 'https://bheng.vercel.app/api/stickies';
 const STICKIES_KEY = process.env.STICKIES_KEY;
 const SB_URL = process.env.SUPABASE_URL;
@@ -510,11 +517,12 @@ async function main() {
     console.log(`  → ${tiptap.content.length} blocks, ${imageCount} image(s)`);
 
     // Insert directly into Supabase with correct folder_id
+    const noteColor = randomColor();
     const row = await sbInsert('notes', {
       title: note.title,
       content: JSON.stringify(tiptap),
       folder_name: notebook,
-      folder_color: folderColor,
+      folder_color: noteColor,
       folder_id: notebookId,
       type: 'rich',
       is_folder: false,
@@ -539,7 +547,7 @@ async function main() {
         title: note.title,
         content: JSON.stringify(stripped),
         folder_name: notebook,
-        folder_color: folderColor,
+        folder_color: noteColor,
         folder_id: notebookId,
         type: 'rich',
         is_folder: false,
