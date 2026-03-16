@@ -61,6 +61,25 @@ function getPusher() {
     });
 }
 
+// ── API request broadcast ─────────────────────────────────────────────────────
+function broadcastRequest(req: Request, auth: AuthResult, extra?: Record<string, unknown>) {
+    const url = new URL(req.url);
+    const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
+        ?? req.headers.get("cf-connecting-ip")
+        ?? "unknown";
+    const ua = (req.headers.get("user-agent") ?? "").slice(0, 80);
+    const payload = {
+        method: req.method,
+        path: url.pathname + (url.search || ""),
+        ip,
+        ua,
+        auth: auth.type,
+        at: new Date().toISOString(),
+        ...extra,
+    };
+    getPusher().trigger("stickies", "api-request", payload).catch(() => {});
+}
+
 // ── Hue trigger ──────────────────────────────────────────────────────────────
 // Fires on any non-browser API write (curl / AI / external).
 // Browser requests have a Mozilla User-Agent — skip those.
@@ -187,6 +206,15 @@ export async function POST(req: Request) {
         catch { return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 }); }
     }
 
+    // Broadcast incoming request to all live sessions
+    {
+        const isBatch = Array.isArray(bodyForFolderCheck) || (bodyForFolderCheck as any)?.batch;
+        const summary = isBatch
+            ? `batch(${Array.isArray(bodyForFolderCheck) ? bodyForFolderCheck.length : (bodyForFolderCheck as any).batch?.length ?? "?"})`
+            : (bodyForFolderCheck as any)?.title ?? (bodyForFolderCheck as any)?.name ?? undefined;
+        broadcastRequest(req, auth, summary ? { summary } : {});
+    }
+
     // ── Compact array format ──
     if (Array.isArray(bodyForFolderCheck)) {
         const raw = bodyForFolderCheck as unknown as Array<unknown[]>;
@@ -261,6 +289,16 @@ export async function POST(req: Request) {
         }
 
         const failed = results.filter((r) => r.error);
+
+        // Broadcast each successfully created item to all live sessions
+        const pusher = getPusher();
+        for (const r of results) {
+            if (r.data && !r.error) {
+                const event = r.type === "folder" ? "note-created" : "note-created";
+                pusher.trigger("stickies", event, r.data).catch(() => {});
+            }
+        }
+
         return NextResponse.json({ results, total: results.length, failed: failed.length }, { status: failed.length === results.length ? 500 : 201 });
     }
 
@@ -481,6 +519,8 @@ export async function DELETE(req: Request) {
     const auth = await authenticate(req);
     if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+    broadcastRequest(req, auth);
+
     const table = getTable(auth);
     const userId = auth.type === "user" ? auth.userId : undefined;
     const url = new URL(req.url);
@@ -567,6 +607,8 @@ export async function PATCH(req: Request) {
     let body: Record<string, unknown>;
     try { body = await req.json(); }
     catch { return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 }); }
+
+    broadcastRequest(req, auth, { summary: (body as any)?.rename_note?.title ?? (body as any)?.rename_folder?.from ?? (body as any)?.id ?? undefined });
 
     const sb = getSupabase();
     const now = new Date().toISOString();

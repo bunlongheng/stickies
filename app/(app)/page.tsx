@@ -205,7 +205,7 @@ function syntaxHighlightJson(obj: any): string {
     );
 }
 
-const MERMAID_KEYWORDS = /^(flowchart|graph|sequenceDiagram|classDiagram|stateDiagram(-v2)?|erDiagram|gantt|pie|gitGraph|mindmap|timeline|xychart(-beta)?|quadrantChart|requirementDiagram|zenuml|sankey|block-beta)\b/im;
+const MERMAID_KEYWORDS = /^(flowchart|graph|sequenceDiagram|classDiagram|stateDiagram(-v2)?|erDiagram|gantt|pie|gitGraph|mindmap|timeline|xychart(-beta)?|quadrantChart|requirementDiagram|zenuml|sankey(-beta)?|block(-beta)?|packet(-beta)?|kanban|architecture(-beta)?|c4container|c4component|c4dynamic|c4deployment)\b/im;
 
 const TYPE_BADGE: Record<string, { label: string; color: string }> = {
     javascript: { label: "Javascript",  color: "#f97316" },
@@ -279,15 +279,22 @@ function cleanMermaidContent(text: string): string {
 
 function mermaidSubType(text: string): string {
     const t = extractMermaid(text);
-    const m = t.match(/^(flowchart|graph|sequenceDiagram|classDiagram|stateDiagram|erDiagram|gantt|pie|gitGraph|mindmap|timeline|xychart|quadrantChart|requirementDiagram|zenuml|sankey|block-beta)\b/im);
+    const m = t.match(/^(flowchart|graph|sequenceDiagram|classDiagram|stateDiagram(-v2)?|erDiagram|gantt|pie|gitGraph|mindmap|timeline|xychart(-beta)?|quadrantChart|requirementDiagram|zenuml|sankey(-beta)?|block(-beta)?|packet(-beta)?|kanban|architecture(-beta)?|c4container|c4component|c4dynamic|c4deployment)\b/im);
     if (!m) return "Mermaid";
     const map: Record<string, string> = {
         flowchart: "Flow", graph: "Flow", sequencediagram: "Sequence",
-        classdiagram: "Class", statediagram: "State", erdiagram: "ER",
-        gantt: "Gantt", pie: "Pie", gitgraph: "Git", mindmap: "Mindmap",
-        timeline: "Timeline", xychart: "XY Chart", quadrantchart: "Quadrant",
+        classdiagram: "Class", statediagram: "State", "statediagram-v2": "State",
+        erdiagram: "ER", gantt: "Gantt", pie: "Pie", gitgraph: "Git",
+        mindmap: "Mindmap", timeline: "Timeline", xychart: "XY Chart",
+        "xychart-beta": "XY Chart", quadrantchart: "Quadrant",
         requirementdiagram: "Requirement", zenuml: "ZenUML",
-        sankey: "Sankey", "block-beta": "Block",
+        sankey: "Sankey", "sankey-beta": "Sankey",
+        block: "Block", "block-beta": "Block",
+        packet: "Packet", "packet-beta": "Packet",
+        kanban: "Kanban",
+        architecture: "Architecture", "architecture-beta": "Architecture",
+        c4container: "C4 Container", c4component: "C4 Component",
+        c4dynamic: "C4 Dynamic", c4deployment: "C4 Deployment",
     };
     return map[m[1].toLowerCase()] ?? m[1];
 }
@@ -1114,6 +1121,8 @@ export default function NotesMaster() {
     const [hueGroups, setHueGroups] = useState<{ id: string; name: string; type: string }[]>([]);
     const [hueGroupsLoading, setHueGroupsLoading] = useState(false);
     const [showAutomationsPanel, setShowAutomationsPanel] = useState(false);
+    const [apiLog, setApiLog] = useState<Array<{ method: string; path: string; ip: string; ua: string; auth: string; at: string; summary?: string }>>([]);
+    const [showApiLog, setShowApiLog] = useState(false);
     const [automationsList, setAutomationsList] = useState<Array<{ id: string; name: string; trigger_type: string; condition: Record<string, string>; action_type: string; action_config: Record<string, string>; active: boolean; last_fired: string | null }>>([]);
     const [selectedAutomation, setSelectedAutomation] = useState<{ id: string; name: string } | null>(null);
     const [automationLogs, setAutomationLogs] = useState<Array<{ id: string; triggered_at: string; result: string; detail: string | null; via: string | null }>>([]);
@@ -1824,7 +1833,46 @@ const fireIntegrations = (trigger: string, note: any) => {
             if (data?.url) window.location.href = data.url;
         });
 
+        channel.bind("api-request", (data: any) => {
+            if (!data?.at) return;
+            setApiLog((prev) => [data, ...prev].slice(0, 50));
+            setShowApiLog(true);
+        });
+
         return () => { channel.unbind_all(); pusher.unsubscribe("stickies"); pusher.disconnect(); };
+    }, [mounted]);
+
+    // Supabase Realtime — DB-level so every session sees every write
+    // regardless of API path (batch, curl, external tools, etc.)
+    useEffect(() => {
+        if (!mounted) return;
+        const client = getSupabase();
+        const rt = client
+            .channel("notes-realtime")
+            .on("postgres_changes", { event: "INSERT", schema: "public", table: "notes" }, (payload: any) => {
+                const note = payload.new;
+                if (!note?.id) return;
+                setDbData((prev) => {
+                    if (prev.some((r) => String(r.id) === String(note.id))) return prev;
+                    return [...prev, note];
+                });
+                const color = note.folder_color || "#34C759";
+                showToast(`+ ${note.title || "New note"}`, color);
+                flashQueueRef.current.push({ note, color });
+            })
+            .on("postgres_changes", { event: "UPDATE", schema: "public", table: "notes" }, (payload: any) => {
+                const note = payload.new;
+                if (!note?.id) return;
+                const lastWrite = localWriteRef.current.get(String(note.id));
+                if (lastWrite && Date.now() - lastWrite < 3000) return;
+                setDbData((prev) => prev.map((r) => String(r.id) === String(note.id) ? { ...r, ...note } : r));
+            })
+            .on("postgres_changes", { event: "DELETE", schema: "public", table: "notes" }, (payload: any) => {
+                const id = payload.old?.id;
+                if (id) setDbData((prev) => prev.filter((r) => String(r.id) !== String(id)));
+            })
+            .subscribe();
+        return () => { client.removeChannel(rt); };
     }, [mounted]);
 
     useEffect(() => {
@@ -4339,6 +4387,40 @@ const fireIntegrations = (trigger: string, note: any) => {
                 </div>
             )}
 
+            {/* Live API request log */}
+            {showApiLog && apiLog.length > 0 && (
+                <div style={{
+                    position: "fixed", bottom: 24, right: 24, zIndex: 99999,
+                    width: 420, maxHeight: 320,
+                    background: "#0d0d0d", border: "1px solid #222",
+                    borderRadius: 10, overflow: "hidden",
+                    fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                    fontSize: 11, boxShadow: "0 8px 32px rgba(0,0,0,0.7)",
+                }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 10px", background: "#161616", borderBottom: "1px solid #222" }}>
+                        <span style={{ color: "#666", fontWeight: 700, letterSpacing: "0.08em", fontSize: 10 }}>INCOMING HTTP</span>
+                        <div style={{ display: "flex", gap: 6 }}>
+                            <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#34C759", display: "inline-block", animation: "pulse 1.5s ease-in-out infinite" }} />
+                            <button onClick={() => setShowApiLog(false)} style={{ background: "none", border: "none", color: "#555", cursor: "pointer", fontSize: 12, lineHeight: 1 }}>✕</button>
+                        </div>
+                    </div>
+                    <div style={{ overflowY: "auto", maxHeight: 280 }}>
+                        {apiLog.map((entry, i) => {
+                            const methodColor: Record<string, string> = { POST: "#34C759", DELETE: "#FF3B30", PATCH: "#FF9500", GET: "#32ADE6" };
+                            const color = methodColor[entry.method] ?? "#aaa";
+                            const time = new Date(entry.at).toLocaleTimeString("en-US", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
+                            return (
+                                <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start", padding: "5px 10px", borderBottom: "1px solid #111", background: i === 0 ? "rgba(52,199,89,0.05)" : "transparent" }}>
+                                    <span style={{ color, fontWeight: 700, minWidth: 44, fontSize: 10 }}>{entry.method}</span>
+                                    <span style={{ color: "#ccc", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{entry.path}{entry.summary ? ` · ${entry.summary}` : ""}</span>
+                                    <span style={{ color: "#444", whiteSpace: "nowrap", fontSize: 10 }}>{time}</span>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
+
             {/* Full-screen border flash overlay + centered note card */}
             {pusherFlash && (
                 <>
@@ -4393,6 +4475,10 @@ const fireIntegrations = (trigger: string, note: any) => {
                     90%  { opacity: 0; }
                     96%  { opacity: 1; }
                     100% { opacity: 0; }
+                }
+                @keyframes pulse {
+                    0%, 100% { opacity: 1; }
+                    50% { opacity: 0.2; }
                 }
                 @keyframes noteCardFlash {
                     0%   { opacity: 0; transform: scale(0.85); }
@@ -4868,6 +4954,18 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 style={{ background: `${TYPE_BADGE[noteType].color}20`, color: TYPE_BADGE[noteType].color, border: `1px solid ${TYPE_BADGE[noteType].color}40` }}>
                                 {TYPE_BADGE[noteType].label}
                             </span>
+                        )}
+                        {noteType === "mermaid" && (
+                            <button type="button"
+                                onClick={() => {
+                                    const encoded = LZString.compressToEncodedURIComponent(extractMermaid(content));
+                                    window.open(`https://mermaid-bheng.vercel.app/?data=${encoded}`, "_blank");
+                                }}
+                                className="p-1.5 rounded-full flex-shrink-0 transition"
+                                style={{ background: "rgba(6,182,212,0.15)", color: "#06b6d4", border: "1px solid rgba(6,182,212,0.3)" }}
+                                title="Open in Mermaid editor">
+                                <ArrowTopRightOnSquareIcon className="w-3.5 h-3.5" />
+                            </button>
                         )}
                         <button type="button"
                             onClick={() => toggleListMode()}
