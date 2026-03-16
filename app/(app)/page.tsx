@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback, useDeferredValue } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { createClient as createBrowserClient } from "@/lib/supabase/client";
 import { usePageMeta } from "@/lib/usePageMeta";
@@ -87,6 +87,9 @@ import UserIcon from "@heroicons/react/24/outline/UserIcon";
 import GlobeAmericasIcon from "@heroicons/react/24/outline/GlobeAmericasIcon";
 import ArchiveBoxIcon from "@heroicons/react/24/outline/ArchiveBoxIcon";
 import ChartPieIcon from "@heroicons/react/24/outline/ChartPieIcon";
+import TableCellsIcon from "@heroicons/react/24/outline/TableCellsIcon";
+import PhotoIcon from "@heroicons/react/24/outline/PhotoIcon";
+import LinkIcon from "@heroicons/react/24/outline/LinkIcon";
 import { marked, Renderer } from "marked";
 
 // Custom renderer: wraps code blocks with a copy button
@@ -249,7 +252,6 @@ const TYPE_BADGE: Record<string, { label: string; color: string }> = {
     mermaid:    { label: "Mermaid",     color: "#06b6d4" },
     voice:      { label: "Voice",       color: "#ef4444" },
     checklist:  { label: "Checklist",   color: "#22c55e" },
-    rich:       { label: "Rich Text",   color: "#e879f9" },
 };
 
 /** Client-side fallback type detection — used only when DB type is null (legacy notes) */
@@ -431,6 +433,8 @@ const HTML_MODE_KEY = "stickies:html-mode-notes:v1";
 const MINDMAP_MODE_KEY = "stickies:mindmap-mode-notes:v1";
 const STACK_MODE_KEY = "stickies:stack-mode-notes:v1";
 const DEFAULT_FOLDER_KEY = "stickies:default-folder:v1";
+const DB_CACHE_KEY = "stickies:db-cache:v1";
+const COUNTS_CACHE_KEY = "stickies:counts-cache:v1";
 
 // --- Mindmap ---
 const MIND_COLORS = ["#FF3B30","#FF9500","#FFCC00","#34C759","#00C7BE","#007AFF","#5856D6","#AF52DE","#FF2D55","#FF6B4E"];
@@ -1108,6 +1112,12 @@ export default function NotesMaster() {
     const [isUrlChecking, setIsUrlChecking] = useState(true);
     const [isDataLoaded, setIsDataLoaded] = useState(false);
     const [dbData, setDbData] = useState<any[]>([]);
+    const [folderCounts, setFolderCounts] = useState<Record<string, number>>({});
+    const [folderCountsById, setFolderCountsById] = useState<Record<string, number>>({});
+    const [folderNotesLoading, setFolderNotesLoading] = useState(false);
+    const folderNotesLoadingRef = useRef(false);
+    const folderPaginationRef = useRef<Map<string, { offset: number; total: number }>>(new Map());
+    const notesEndRef = useRef<HTMLDivElement>(null);
     const [ripples, setRipples] = useState<any[]>([]);
     const [folderStack, setFolderStack] = useState<{ id: string; name: string; color: string }[]>([]);
     const activeFolder = folderStack.at(-1)?.name ?? null;
@@ -1306,7 +1316,6 @@ export default function NotesMaster() {
     const [imgPopover, setImgPopover] = useState<{ src: string; alt: string; x: number; y: number } | null>(null);
     const [now, setNow] = useState(() => new Date());
     const [showCmdK, setShowCmdK] = useState(false);
-    const [cmdKQueryRaw, setCmdKQueryRaw] = useState("");
     const [cmdKQuery, setCmdKQuery] = useState("");
     const [cmdKCursor, setCmdKCursor] = useState(0);
     const [cmdKGlobal, setCmdKGlobal] = useState(false);
@@ -1432,14 +1441,63 @@ export default function NotesMaster() {
         [setFolderFabOffsetWithRef, stopFolderFabAnimation],
     );
 
-    // --- CORE SYNC ---
-    const sync = async () => {
+    // --- PAGINATED FOLDER NOTES ---
+    const loadFolderNotes = async (folderName: string, append = false) => {
+        if (folderNotesLoadingRef.current) return;
+        const existing = folderPaginationRef.current.get(folderName);
+        const MAX_NOTES = 100;
+        if (append && existing && (existing.offset >= existing.total || existing.offset >= MAX_NOTES)) return;
+        const offset = append ? (existing?.offset ?? 0) : 0;
+        const limit = append ? 80 : 20;
+        folderNotesLoadingRef.current = true;
+        setFolderNotesLoading(true);
         try {
             const token = await getAuthToken();
-            const [notesRes, foldersRes, iconsResult, integrationsResult] = await Promise.all([
-                fetch("/api/stickies", {
-                    headers: { Authorization: `Bearer ${token}` },
-                }).then((r) => r.ok ? r.json() : { notes: [] }).catch(() => ({ notes: [] })),
+            const res = await fetch(
+                `/api/stickies?folder=${encodeURIComponent(folderName)}&limit=${limit}&offset=${offset}`,
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+            if (!res.ok) return;
+            const { notes = [], total = 0 } = await res.json();
+            folderPaginationRef.current.set(folderName, { offset: offset + notes.length, total });
+            setDbData((prev) => {
+                if (append) {
+                    const existing = new Set(prev.map((r: any) => String(r.id)));
+                    return [...prev, ...notes.filter((n: any) => !existing.has(String(n.id)))];
+                }
+                // Replace notes for this folder, keep folders + notes from other folders
+                const without = prev.filter((r: any) => r.is_folder || r.folder_name !== folderName || r._optimistic);
+                return [...without, ...notes];
+            });
+        } finally {
+            folderNotesLoadingRef.current = false;
+            setFolderNotesLoading(false);
+        }
+    };
+
+    // --- CORE SYNC ---
+    const sync = async () => {
+        // Seed from cache immediately so tiles appear before network response
+        try {
+            const cached = localStorage.getItem(DB_CACHE_KEY);
+            if (cached) {
+                const parsed = JSON.parse(cached);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    setDbData(parsed);
+                    setIsDataLoaded(true);
+                }
+            }
+            const cachedCounts = localStorage.getItem(COUNTS_CACHE_KEY);
+            if (cachedCounts) {
+                const { counts, countsByFolderId } = JSON.parse(cachedCounts);
+                if (counts) setFolderCounts(counts);
+                if (countsByFolderId) setFolderCountsById(countsByFolderId);
+            }
+        } catch { /* ignore */ }
+
+        try {
+            const token = await getAuthToken();
+            const [foldersRes, iconsResult, integrationsResult, countsResult] = await Promise.all([
                 fetch("/api/stickies?folders=1", {
                     headers: { Authorization: `Bearer ${token}` },
                 }).then((r) => r.ok ? r.json() : { folders: [] }).catch(() => ({ folders: [] })),
@@ -1449,12 +1507,29 @@ export default function NotesMaster() {
                 fetch("/api/stickies/integrations", {
                     headers: { Authorization: `Bearer ${token}` },
                 }).then((r) => r.ok ? r.json() : []).catch(() => []),
+                fetch("/api/stickies?counts=1", {
+                    headers: { Authorization: `Bearer ${token}` },
+                }).then((r) => r.ok ? r.json() : { counts: {} }).catch(() => ({ counts: {} })),
             ]);
-            const allItems = [
-                ...(foldersRes.folders ?? []).map((f: any) => ({ ...f, is_folder: true })),
-                ...(notesRes.notes ?? []),
-            ];
-            setDbData(allItems);
+            // Filter out known ghost/deleted folder rows that couldn't be DB-deleted
+            const GHOST_IDS = new Set(["5c45ba74-ab91-4417-99e3-d507cd80a6d4"]);
+            const folderItems = (foldersRes.folders ?? [])
+                .filter((f: any) => !GHOST_IDS.has(String(f.id)))
+                .map((f: any) => ({ ...f, is_folder: true }));
+            // Preserve any already-loaded notes in dbData (from prior folder navigations)
+            setDbData((prev) => {
+                const existingNotes = prev.filter((r: any) => !r.is_folder);
+                return [...folderItems, ...existingNotes];
+            });
+            const freshCounts = countsResult.counts ?? {};
+            const freshCountsById = countsResult.countsByFolderId ?? {};
+            setFolderCounts(freshCounts);
+            setFolderCountsById(freshCountsById);
+            // Persist folders + counts cache for instant next load
+            try {
+                localStorage.setItem(DB_CACHE_KEY, JSON.stringify(folderItems));
+                localStorage.setItem(COUNTS_CACHE_KEY, JSON.stringify({ counts: freshCounts, countsByFolderId: freshCountsById }));
+            } catch { /* quota exceeded — skip */ }
             if (iconsResult.icons && Object.keys(iconsResult.icons).length > 0) {
                 setFolderIcons((prev) => ({ ...prev, ...iconsResult.icons }));
             }
@@ -1468,6 +1543,31 @@ export default function NotesMaster() {
             setIsDataLoaded(true);
         }
     };
+
+    // Load first 15 notes when entering a folder; clear on exit
+    useEffect(() => {
+        if (activeFolder) {
+            folderPaginationRef.current.delete(activeFolder);
+            void loadFolderNotes(activeFolder, false);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [activeFolder]);
+
+    // Infinite scroll — load 100 more when sentinel comes into view
+    useEffect(() => {
+        const el = notesEndRef.current;
+        if (!el || !activeFolder) return;
+        const obs = new IntersectionObserver(([entry]) => {
+            if (!entry.isIntersecting || folderNotesLoadingRef.current) return;
+            const pagination = folderPaginationRef.current.get(activeFolder);
+            if (pagination && pagination.offset < pagination.total && pagination.offset < 100) {
+                void loadFolderNotes(activeFolder, true);
+            }
+        }, { rootMargin: "300px" });
+        obs.observe(el);
+        return () => obs.disconnect();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [activeFolder, folderNotesLoading]);
 
     useEffect(() => {
         const updateCols = () => {
@@ -1487,6 +1587,16 @@ export default function NotesMaster() {
         createBrowserClient().auth.getUser().then(({ data }) => {
             setUserEmail(data.user?.email ?? null);
         });
+    }, []);
+
+    // Auto-enable split view on wide screens if no saved preference yet
+    useEffect(() => {
+        try {
+            const saved = localStorage.getItem(EDIT_MODE_KEY);
+            if (saved === null && window.matchMedia("(min-width: 1024px)").matches) {
+                setEditMode(true);
+            }
+        } catch { /* ignore */ }
     }, []);
 
     useEffect(() => {
@@ -1804,7 +1914,7 @@ export default function NotesMaster() {
                 e.preventDefault();
                 const global = e.shiftKey;
                 setCmdKGlobal(global);
-                setShowCmdK(v => { if (!v) { setCmdKQueryRaw(""); setCmdKQuery(""); setCmdKCursor(0); } return !v; });
+                setShowCmdK(v => { if (!v) { setCmdKQuery(""); setCmdKCursor(0); } return !v; });
             }
             if ((e.metaKey || e.ctrlKey) && e.key === "b") {
                 e.preventDefault();
@@ -1883,6 +1993,21 @@ const fireIntegrations = (trigger: string, note: any) => {
                 if (prev.some((r) => String(r.id) === String(note.id))) return prev;
                 return [...prev, note];
             });
+            // Live-update folder tile count badge
+            if (!note.is_folder && note.folder_name) {
+                setFolderCounts((prev) => {
+                    const next = { ...prev, [note.folder_name]: (prev[note.folder_name] || 0) + 1 };
+                    try {
+                        const cached = localStorage.getItem(COUNTS_CACHE_KEY);
+                        const parsed = cached ? JSON.parse(cached) : {};
+                        localStorage.setItem(COUNTS_CACHE_KEY, JSON.stringify({ ...parsed, counts: next }));
+                    } catch { /* ignore */ }
+                    return next;
+                });
+                if (note.folder_id) {
+                    setFolderCountsById((prev) => ({ ...prev, [String(note.folder_id)]: (prev[String(note.folder_id)] || 0) + 1 }));
+                }
+            }
             const color = note.folder_color || "#34C759";
             showToast(`+ ${note.title || "New note"}`, color);
             flashQueueRef.current.push({ note, color });
@@ -2018,31 +2143,6 @@ const fireIntegrations = (trigger: string, note: any) => {
         void notesApi.update(String(editingNote.id), { content: cleaned });
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [editingNote?.id]);
-
-    useEffect(() => {
-        if (!pendingRestoreNoteId || !isDataLoaded) return;
-        const note = dbData.find((n) => !n.is_folder && String(n.id) === String(pendingRestoreNoteId));
-        if (note) {
-            setActiveFolder(note.folder_name || null);
-            setEditingNote(note);
-            setTitle(note.title || "");
-            setContent((note.type === "mermaid" || detectMermaid(note.content || "")) ? cleanMermaidContent(note.content || "") : (note.content || ""));
-            setImages((note as any).images ?? []);
-            setTargetFolder(note.folder_name || "General");
-            setNoteColor(note.folder_color || palette12[0]);
-            setActiveLine(0);
-            setEditorScrollTop(0);
-            if (note.id && (note.list_mode || note.type === "checklist")) {
-                setListModeNotes((prev) => new Set([...prev, String(note.id)]));
-            }
-            if (note.id && note.mindmap_mode) {
-                setMindmapModeNotes((prev) => new Set([...prev, String(note.id)]));
-            }
-            setEditorOpen(true);
-        }
-        setPendingRestoreNoteId(null);
-        setIsUrlChecking(false);
-    }, [pendingRestoreNoteId, dbData, isDataLoaded]);
 
     // Auto-select the most-recently-updated note when entering edit mode
     useEffect(() => {
@@ -2285,10 +2385,31 @@ const fireIntegrations = (trigger: string, note: any) => {
             });
 
         // Note count per folder_id (UUID-based for accuracy)
+        // Notes without folder_id fall back to name-match, but only counted once
+        // (avoid double-counting when two folders share the same name)
         const noteCountByFolderId = new Map<string, number>();
+        const notesWithoutFolderId = dbData.filter((item) => !item.is_folder && !item.folder_id);
         dbData.filter((item) => !item.is_folder && item.folder_id).forEach((item) => {
             const fid = String(item.folder_id);
             noteCountByFolderId.set(fid, (noteCountByFolderId.get(fid) || 0) + 1);
+        });
+        // For notes without folder_id: find the single best-matching folder by name
+        // and assign to it (prefer folder with matching parent context)
+        notesWithoutFolderId.forEach((item) => {
+            const name = String(item.folder_name || "");
+            const matchingFolders = Array.from(folderRowsById.values()).filter(
+                (f) => String(f.folder_name) === name
+            );
+            if (matchingFolders.length === 1) {
+                const fid = String(matchingFolders[0].id);
+                noteCountByFolderId.set(fid, (noteCountByFolderId.get(fid) || 0) + 1);
+            } else if (matchingFolders.length === 0) {
+                // No folder row — handled by noteCountByFolder fallback
+            } else {
+                // Multiple folders with same name — assign to first one only (no double-count)
+                const fid = String(matchingFolders[0].id);
+                noteCountByFolderId.set(fid, (noteCountByFolderId.get(fid) || 0) + 1);
+            }
         });
 
         // Compute latest note updated_at per folder (by folder_id)
@@ -2312,7 +2433,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                     latestUpdatedAt: latestUpdatedByFolderId.get(rowId) || String(row.updated_at || ""),
                     name: folderName,
                     color: folderColors[folderName] || row.folder_color || palette12[0],
-                    count: noteCountByFolderId.get(rowId) || noteCountByFolder.get(folderName) || 0,
+                    count: folderCountsById[rowId] ?? noteCountByFolderId.get(rowId) ?? folderCounts[folderName] ?? noteCountByFolder.get(folderName) ?? 0,
                     subfolderCount: subfolderCountByFolder.get(folderName) || 0,
                     icon: folderIcons[folderName] || "",
                     parent_folder_name: row.parent_folder_name || null,
@@ -2350,7 +2471,7 @@ const fireIntegrations = (trigger: string, note: any) => {
             return [...sorted.filter(f => !SYSTEM_BOTTOM.includes(f.name)), ...sorted.filter(f => SYSTEM_BOTTOM.includes(f.name))];
         }
         return [...all.filter(f => !SYSTEM_BOTTOM.includes(f.name)), ...all.filter(f => SYSTEM_BOTTOM.includes(f.name))];
-    }, [dbData, folderColors, folderIcons, pendingFolderOrder]);
+    }, [dbData, folderColors, folderIcons, pendingFolderOrder, folderCounts]);
 
     // Folders visible at the current navigation level (root or sub-folder)
     const currentLevelFolders = useMemo(() => {
@@ -2450,11 +2571,8 @@ const fireIntegrations = (trigger: string, note: any) => {
             })),
     [dbData]);
 
-    // Debounce: input updates instantly, search fires 120ms after typing stops
-    useEffect(() => {
-        const t = setTimeout(() => setCmdKQuery(cmdKQueryRaw), 120);
-        return () => clearTimeout(t);
-    }, [cmdKQueryRaw]);
+    // Deferred value: input is always instant; expensive search useMemo runs at lower priority
+    const deferredCmdKQuery = useDeferredValue(cmdKQuery);
 
     const cmdKResults = useMemo(() => {
         // Scope to active folder unless global mode
@@ -2462,10 +2580,10 @@ const fireIntegrations = (trigger: string, note: any) => {
             ? cmdKIndex.filter(e => e.f === activeFolder.toLowerCase())
             : cmdKIndex;
         const byDate = (a: any, b: any) => b.date.localeCompare(a.date);
-        if (!cmdKQuery.trim()) {
+        if (!deferredCmdKQuery.trim()) {
             return scopedIndex.slice().sort(byDate).slice(0, 5).map(x => x._orig);
         }
-        const q = cmdKQuery.toLowerCase();
+        const q = deferredCmdKQuery.toLowerCase();
         // Only show folder results when not scoped to a folder
         const matchingFolders = (activeFolder && !cmdKGlobal) ? [] : folders
             .filter(f => f.name.toLowerCase().includes(q))
@@ -2485,7 +2603,7 @@ const fireIntegrations = (trigger: string, note: any) => {
             .filter(x => x.s < 9)
             .sort((a, b) => a.s !== b.s ? a.s - b.s : b.e.date.localeCompare(a.e.date));
         return [...matchingFolders, ...scored.map(x => x.e._orig)];
-    }, [cmdKIndex, cmdKQuery, pinnedIds, folders, activeFolder, cmdKGlobal]);
+    }, [cmdKIndex, deferredCmdKQuery, pinnedIds, folders, activeFolder, cmdKGlobal]);
 
     const cmdBResults = useMemo(() => {
         if (!cmdBQuery.trim()) return bookmarksData.slice(0, 12);
@@ -2499,20 +2617,25 @@ const fireIntegrations = (trigger: string, note: any) => {
 
     const dbStats = useMemo(() => {
         const folderCount = dbData.filter(r => r.is_folder).length;
-        const noteCount   = dbData.filter(r => !r.is_folder).length;
-        const enc         = new TextEncoder();
-        const bytes       = dbData.reduce((acc, r) => acc + enc.encode(r.title || "").byteLength + enc.encode(r.content || "").byteLength, 0);
-        const size        = bytes >= 1_048_576 ? `${(bytes / 1_048_576).toFixed(1)} MB` : `${(bytes / 1024).toFixed(1)} KB`;
+        // Use server-side counts (from ?counts=1) for accuracy — dbData only has lazily-loaded notes
+        const totalFromCounts = Object.values(folderCounts).reduce((s, c) => s + c, 0);
+        const noteCount = totalFromCounts > 0 ? totalFromCounts : dbData.filter(r => !r.is_folder).length;
+        const enc  = new TextEncoder();
+        const bytes = dbData.reduce((acc, r) => acc + enc.encode(r.title || "").byteLength + enc.encode(r.content || "").byteLength, 0);
+        const size  = bytes >= 1_048_576 ? `${(bytes / 1_048_576).toFixed(1)} MB` : `${(bytes / 1024).toFixed(1)} KB`;
         return { folderCount, noteCount, size };
-    }, [dbData]);
+    }, [dbData, folderCounts]);
 
 
     const activeFolderNoteCount = useMemo(() => {
         if (!activeFolder) return 0;
         const folderMeta = folders.find((folder) => folder.name === activeFolder);
-        if (folderMeta) return Number(folderMeta.count) || 0;
-        return dbData.filter((row) => !row.is_folder && String(row.folder_name || "") === activeFolder).length;
-    }, [activeFolder, folders, dbData]);
+        if (folderMeta && folderMeta.count > 0) return Number(folderMeta.count);
+        // Fall back to server counts before all notes are loaded
+        const activeFolderId = folderMeta?.id;
+        if (activeFolderId && folderCountsById[activeFolderId]) return folderCountsById[activeFolderId];
+        return folderCounts[activeFolder] ?? dbData.filter((row) => !row.is_folder && String(row.folder_name || "") === activeFolder).length;
+    }, [activeFolder, folders, dbData, folderCounts, folderCountsById]);
     const canDeleteActiveFolder = Boolean(activeFolder);
     const isEmptyView = isDataLoaded && !editorOpen && !search.trim() && displayItems.length === 0;
     const folderNames = useMemo(() => {
@@ -3274,16 +3397,12 @@ const fireIntegrations = (trigger: string, note: any) => {
         });
     }, []);
 
-    const openNoteFromCmdK = useCallback((note: any, cmdClick = false) => {
-        setShowCmdK(false);
-        setCmdKQueryRaw(""); setCmdKQuery("");
-        if (note.folder_name) {
-            const fr = dbData.find((r: any) => r.is_folder && r.folder_name === note.folder_name);
-            if (fr) enterFolder({ id: String(fr.id), name: note.folder_name, color: fr.color || fr.folder_color || palette12[0] });
-        }
+    // Lazily fetch full note content if it wasn't loaded in the list sync
+    const openNote = useCallback(async (note: any) => {
+        // Open immediately with available metadata so the editor switches at once
         setEditingNote(note);
-        setTitle(note.title);
-        setContent((note.type === "mermaid" || detectMermaid(note.content || "")) ? cleanMermaidContent(note.content || "") : (note.content || ""));
+        setTitle(note.title || "");
+        setContent("");
         setImages((note as any).images ?? []);
         setTargetFolder(note.folder_name || activeFolder || "General");
         setNoteColor(note.folder_color || folders.find((f: any) => f.name === (note.folder_name || activeFolder))?.color || palette12[0]);
@@ -3291,10 +3410,52 @@ const fireIntegrations = (trigger: string, note: any) => {
         setShowSwitcher(false);
         setActiveLine(0);
         setEditorScrollTop(0);
-        if (note.id && (note.list_mode || note.type === "checklist")) setListModeNotes((p: Set<string>) => new Set([...p, String(note.id)]));
-        if (note.id && note.mindmap_mode) setMindmapModeNotes((p: Set<string>) => new Set([...p, String(note.id)]));
         setEditorOpen(true);
-    }, [dbData, enterFolder, activeFolder, folders]);
+
+        let full = note;
+        if (note.content === undefined || note.content === null) {
+            try {
+                const token = await getAuthToken();
+                const res = await fetch(`/api/stickies?id=${encodeURIComponent(note.id)}`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                });
+                if (res.ok) {
+                    const { note: fetched } = await res.json();
+                    if (fetched) {
+                        full = fetched;
+                        setDbData((prev: any[]) => prev.map((r) => String(r.id) === String(note.id) ? { ...r, ...fetched } : r));
+                    }
+                }
+            } catch { /* use note as-is */ }
+        }
+        // Now patch in the real content
+        setEditingNote(full);
+        setContent((full.type === "mermaid" || detectMermaid(full.content || "")) ? cleanMermaidContent(full.content || "") : (full.content || ""));
+        if (full.id && looksLikeMarkdown(full.content || "")) setMarkdownModeNotes((p: Set<string>) => new Set([...p, String(full.id)]));
+        if (full.id && (full.list_mode || full.type === "checklist")) setListModeNotes((p: Set<string>) => new Set([...p, String(full.id)]));
+        if (full.id && full.mindmap_mode) setMindmapModeNotes((p: Set<string>) => new Set([...p, String(full.id)]));
+    }, [activeFolder, folders]);
+
+    useEffect(() => {
+        if (!pendingRestoreNoteId || !isDataLoaded) return;
+        const note = dbData.find((n: any) => !n.is_folder && String(n.id) === String(pendingRestoreNoteId));
+        if (note) {
+            setActiveFolder(note.folder_name || null);
+            void openNote(note);
+        }
+        setPendingRestoreNoteId(null);
+        setIsUrlChecking(false);
+    }, [pendingRestoreNoteId, dbData, isDataLoaded, openNote]);
+
+    const openNoteFromCmdK = useCallback((note: any, cmdClick = false) => {
+        setShowCmdK(false);
+        setCmdKQuery("");
+        if (note.folder_name) {
+            const fr = dbData.find((r: any) => r.is_folder && r.folder_name === note.folder_name);
+            if (fr) enterFolder({ id: String(fr.id), name: note.folder_name, color: fr.color || fr.folder_color || palette12[0] });
+        }
+        void openNote(note);
+    }, [dbData, enterFolder, openNote]);
 
     const stripBulletSpacing = () => {
         const cleaned = content.replace(/^\s*([0-9]+\.|[-*•+_])\s+/gm, "$1");
@@ -3326,9 +3487,16 @@ const fireIntegrations = (trigger: string, note: any) => {
     // jsonDetect kept for JSON syntax highlight fallback
     const jsonDetect = jsonMode ? detectJson(content) : { ok: false, parsed: null };
 
-    // Checklist toggle: only for rich text notes with fewer than 12 block nodes
-    const richNodeCount = noteType === "rich" ? (() => { try { return (JSON.parse(content)?.content ?? []).length; } catch { return 0; } })() : 0;
-    const canToggleChecklist = noteType === "rich" && richNodeCount < 12;
+    // Checklist toggle: plain-text only, bullet/numbered list ≤12 lines, no blank lines between items
+    const canToggleChecklist = (() => {
+        if (noteType === "rich" || listMode) return false;
+        const lines = content.split("\n").filter(l => l.trim());
+        if (lines.length === 0 || lines.length > 12) return false;
+        // Must have no blank lines between items (all non-empty lines are list items)
+        const rawLines = content.split("\n");
+        const hasBlankBetween = rawLines.some((l, i) => i > 0 && i < rawLines.length - 1 && !l.trim() && rawLines[i - 1].trim());
+        return !hasBlankBetween;
+    })();
 
     // Unified active mode label
     const noteViewMode = stackMode ? "Stack" : mindmapMode ? "Mindmap" : graphMode ? "Graph" : listMode ? "Checklist" : mermaidMode ? "Mermaid" : voiceNote ? "Voice" : codeMode ? noteType : markdownMode ? "Markdown" : htmlMode ? "HTML" : noteType === "rich" ? "Rich" : "Text";
@@ -4788,8 +4956,30 @@ const fireIntegrations = (trigger: string, note: any) => {
                     background-color: color-mix(in srgb, var(--row-color) 12%, transparent) !important;
                 }
                 @keyframes fabIn {
-                    from { opacity: 0; transform: scale(0.5) rotate(-90deg); }
-                    to   { opacity: 1; transform: scale(1)   rotate(0deg);   }
+                    0%   { opacity: 0; transform: scale(0.4) rotate(-120deg); }
+                    60%  { opacity: 1; transform: scale(1.18) rotate(8deg); }
+                    80%  { transform: scale(0.94) rotate(-3deg); }
+                    100% { opacity: 1; transform: scale(1) rotate(0deg); }
+                }
+                @keyframes fabBreath {
+                    0%   { transform: scale(1)    rotate(0deg); }
+                    30%  { transform: scale(1.07) rotate(2deg); }
+                    60%  { transform: scale(0.96) rotate(-1.5deg); }
+                    80%  { transform: scale(1.03) rotate(1deg); }
+                    100% { transform: scale(1)    rotate(0deg); }
+                }
+                .fab-alive {
+                    animation: fabIn 0.55s cubic-bezier(0.16,1,0.3,1) both,
+                               fabBreath 3.8s cubic-bezier(0.4,0,0.6,1) 0.6s infinite;
+                }
+                .fab-alive:hover {
+                    animation: none !important;
+                    transform: scale(1.12) rotate(-4deg) !important;
+                    transition: transform 0.18s cubic-bezier(0.34,1.56,0.64,1) !important;
+                }
+                .fab-alive:active {
+                    animation: none !important;
+                    transform: scale(0.88) rotate(6deg) !important;
                 }
                 @keyframes fabMenuIn {
                     from { opacity: 0; transform: translateY(8px) scale(0.95); }
@@ -5062,7 +5252,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     <button type="button"
                                         onClick={() => { goToIndex(i); void backToRootFromEditor(); }}
                                         className="flex items-center gap-1 font-black tracking-tight text-zinc-400 hover:text-white transition flex-shrink-0 text-xs px-0.5">
-                                        <span className="folder-icon-badge w-6 h-6 flex-shrink-0 flex items-center justify-center text-sm font-black leading-none overflow-hidden" style={{ "--fc": folderColors[frame.name] || frame.color, borderRadius: 0 } as React.CSSProperties}>
+                                        <span className="w-6 h-6 flex-shrink-0 flex items-center justify-center text-sm font-black leading-none overflow-hidden" style={{ background: "#fff", color: folderColors[frame.name] || frame.color, borderRadius: 4 } as React.CSSProperties}>
                                             {frame.name === "CLAUDE"
                                                 ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-0.5" />
                                                 : <FolderIconDisplay value={folderIcons[frame.name] || ""} folderName={frame.name} className="w-3.5 h-3.5" />}
@@ -5736,7 +5926,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 onClick={() => { goToIndex(i); }}
                                                 className={`flex items-center gap-1.5 font-black tracking-tight truncate sm:max-w-[150px] flex-shrink-0 px-0.5 sm:px-1 transition text-xs ${i === folderStack.length - 1 ? "text-white" : "text-zinc-400 hover:text-white"}`}
                                                 title={frame.name}>
-                                                <span className="folder-icon-badge flex-shrink-0 w-6 h-6 flex items-center justify-center text-sm font-black leading-none overflow-hidden" style={{ "--fc": folderColors[frame.name] || frame.color, borderRadius: 0 } as React.CSSProperties}>
+                                                <span className="flex-shrink-0 w-6 h-6 flex items-center justify-center text-sm font-black leading-none overflow-hidden" style={{ background: "#fff", color: folderColors[frame.name] || frame.color, borderRadius: 4 } as React.CSSProperties}>
                                                     {frame.name === "CLAUDE" ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-0.5" /> : <FolderIconDisplay value={folderIcons[frame.name] || ""} folderName={frame.name} className="w-3.5 h-3.5" />}
                                                 </span>
                                                 <span className="hidden sm:inline uppercase">{frame.name}</span>
@@ -5750,7 +5940,7 @@ const fireIntegrations = (trigger: string, note: any) => {
 
                         {!activeFolder ? (
                             <>
-                                <button type="button" onClick={() => { setShowCmdK(true); setCmdKQueryRaw(""); setCmdKQuery(""); setCmdKCursor(0); }}
+                                <button type="button" onClick={() => { setShowCmdK(true); setCmdKQuery(""); setCmdKCursor(0); }}
                                     className={`relative flex items-center transition-all duration-200 text-left ${searchFocused || search.trim() ? "flex-1" : "w-[220px]"} bg-transparent`}>
                                     <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-white/35 w-6 h-6 pointer-events-none" />
                                     <span className="w-full pl-12 pr-3 py-3 text-sm font-black tracking-tight text-white/30">SEARCH</span>
@@ -5885,15 +6075,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                             onDragStart={() => { colDragNoteRef.current = String(note.id); }}
                                                             onDragEnd={() => { colDragNoteRef.current = null; setColDragOver(null); }}
                                                             onClick={() => {
-                                                                setEditingNote(note);
-                                                                setTitle(note.title || "");
-                                                                setContent((note.type === "mermaid" || detectMermaid(note.content || "")) ? cleanMermaidContent(note.content || "") : (note.content || ""));
-                                                                setImages((note as any).images ?? []);
-                                                                setTargetFolder(note.folder_name || "General");
-                                                                setNoteColor(note.folder_color || palette12[0]);
-                                                                setActiveLine(0);
-                                                                setEditorScrollTop(0);
-                                                                setEditorOpen(true);
+                                                                void openNote(note);
                                                             }}
                                                             onMouseEnter={(e) => { playSound("hover"); const rect = e.currentTarget.getBoundingClientRect(); setGlowCard({ id: noteCardId, x: ((e.clientX - rect.left) / rect.width) * 100, y: ((e.clientY - rect.top) / rect.height) * 100 }); }}
                                                             onMouseMove={(e) => { if (glowCard?.id !== noteCardId) return; const rect = e.currentTarget.getBoundingClientRect(); setGlowCard(g => g ? { ...g, x: ((e.clientX - rect.left) / rect.width) * 100, y: ((e.clientY - rect.top) / rect.height) * 100 } : g); }}
@@ -5979,26 +6161,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             enterFolder({ id: String(item.id), name: item.name, color: item.color || palette12[0] });
                                         } else {
                                             playSound("click");
-                                            setEditingNote(item);
-                                            setTitle(item.title);
-                                            setContent(item.content);
-                                            setImages((item as any).images ?? []);
-                                            setTargetFolder(item.folder_name || activeFolder || "General");
-                                            setNoteColor(item.folder_color || folders.find((f) => f.name === (item.folder_name || activeFolder))?.color || palette12[0]);
-                                            setShowColorPicker(false);
-                                            setShowSwitcher(false);
-                                            setActiveLine(0);
-                                            setEditorScrollTop(0);
-                                            if (item.id && looksLikeMarkdown(item.content || "")) {
-                                                setMarkdownModeNotes((prev) => new Set([...prev, String(item.id)]));
-                                            }
-                                            if (item.id && (item.list_mode || item.type === "checklist")) {
-                                                setListModeNotes((prev) => new Set([...prev, String(item.id)]));
-                                            }
-                                            if (item.id && item.mindmap_mode) {
-                                                setMindmapModeNotes((prev) => new Set([...prev, String(item.id)]));
-                                            }
-                                            setEditorOpen(true);
+                                            void openNote(item);
                                         }
                                     }}
                                     style={(() => {
@@ -6069,7 +6232,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             })()}
                                             <div className="flex-1 min-w-0">
                                                 <div className="text-[13px] font-semibold tracking-tight text-white truncate">
-                                                    {item.is_folder ? <><span className="uppercase folder-name-text">{item.name}</span><span className="text-white/30 font-light ml-0.5">/</span></> : item.title}
+                                                    {item.is_folder ? <><span className="uppercase folder-name-text">{item.name}</span><span className="text-white/30 font-light ml-0.5">/</span></> : (item.title?.length > 50 ? item.title.slice(0, 50) + "…" : item.title)}
                                                 </div>
                                                 {!isCompactList && item.is_folder ? (
                                                     <div className="text-[13px] sm:text-[13px] text-zinc-500 font-medium folder-name-text">
@@ -6102,39 +6265,12 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                     })()
                                                 ) : null}
                                             </div>
-                                            {item.is_folder && item.latestUpdatedAt && (
-                                                <span className="text-[13px] sm:text-[13px] text-zinc-500 flex-shrink-0 font-medium">{timeAgo(item.latestUpdatedAt)}</span>
-                                            )}
-                                            {!item.is_folder && item.updated_at && (() => {
-                                                const c = item.content || "";
-                                                const isListModeNote = listModeNotes.has(String(item.id));
-                                                const isChecklist = isListModeNote || (item as any).type === "checklist" || /^\[[ x]\]/im.test(c);
-                                                const lines = c.split("\n").filter((l: string) => l.trim());
-                                                const checked = lines.filter((l: string) => /^\[x\]/i.test(l.trim())).length;
-                                                const effectiveType = (isListModeNote || (item as any).list_mode) ? "checklist" : (item as any).type;
-                                                const typeBadge = TYPE_BADGE[effectiveType];
-                                                return <div className="flex flex-col items-end flex-shrink-0 gap-1">
-                                                    <div className="flex items-center gap-1.5 flex-shrink-0">
-                                                        <span className="text-[11px] text-zinc-500 font-medium whitespace-nowrap">{timeAgo(item.updated_at)}</span>
-                                                    </div>
-                                                </div>;
-                                            })()}
                                             {!item.is_folder && looksLikeUrl(item.content || "") && !isSelectMode && (item.folder_name || activeFolder) !== "TEAM" && (
                                                 <button
                                                     type="button"
                                                     onClick={(e) => {
                                                         e.stopPropagation();
-                                                        setEditingNote(item);
-                                                        setTitle(item.title);
-                                                        setContent(item.content);
-                                                        setImages((item as any).images ?? []);
-                                                        setTargetFolder(item.folder_name || activeFolder || "General");
-                                                        setNoteColor(item.folder_color || folders.find((f) => f.name === (item.folder_name || activeFolder))?.color || palette12[0]);
-                                                        setShowColorPicker(false);
-                                                        setShowSwitcher(false);
-                                                        setActiveLine(0);
-                                                        setEditorScrollTop(0);
-                                                        setEditorOpen(true);
+                                                        void openNote(item);
                                                     }}
                                                     className="p-1 opacity-0 group-hover:opacity-100 transition text-zinc-400 hover:text-white flex-shrink-0"
                                                     title="Edit bookmark"
@@ -6142,6 +6278,38 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                     <PencilSquareIcon className="w-4 h-4" />
                                                 </button>
                                             )}
+                                            {/* Content indicator icons — fixed 20% column */}
+                                            {!item.is_folder && (() => {
+                                                const c = item.content || "";
+                                                const isRich = c.trimStart().startsWith("{");
+                                                // Rich text notes don't show content badges
+                                                if (isRich) return <div style={{ width: "20%", flexShrink: 0 }} />;
+                                                // Table detection
+                                                const hasTable = isRich
+                                                    ? c.includes('"type":"table"')
+                                                    : /^\|.+\|/m.test(c);
+                                                // Image detection — stored images array or markdown ![]() or lh3/storage URLs in rich text
+                                                const imgArr = (item as any).images;
+                                                const storedImgCount = Array.isArray(imgArr) ? imgArr.filter((x: any) => x && (x.url || x)).length : 0;
+                                                const mdImgCount = (c.match(/!\[/g) || []).length;
+                                                const richImgCount = isRich ? (c.match(/"type"\s*:\s*"image"/g) || []).length : 0;
+                                                const imgCount = storedImgCount || mdImgCount || richImgCount;
+                                                // Link detection
+                                                const linkMatches = c.match(/https?:\/\/[^\s)>\]"]+/g) || [];
+                                                const linkCount = new Set(linkMatches).size;
+                                                if (!hasTable && !imgCount && !linkCount) return <div style={{ width: "20%", flexShrink: 0 }} />;
+                                                return <div className="flex items-center justify-end gap-1.5" style={{ width: "20%", flexShrink: 0 }}>
+                                                    {hasTable && <TableCellsIcon className="w-3.5 h-3.5 text-white/40" title="Contains table" />}
+                                                    {imgCount > 0 && <span className="relative flex-shrink-0" title={`${imgCount} image${imgCount > 1 ? "s" : ""}`}>
+                                                        <PhotoIcon className="w-3.5 h-3.5 text-white/40" />
+                                                        {imgCount > 1 && <span className="absolute -top-1 -right-1 text-[8px] font-black text-white/60 leading-none">+</span>}
+                                                    </span>}
+                                                    {linkCount > 0 && <span className="relative flex-shrink-0" title={`${linkCount} link${linkCount > 1 ? "s" : ""}`}>
+                                                        <LinkIcon className="w-3.5 h-3.5 text-white/40" />
+                                                        {linkCount > 1 && <span className="absolute -top-1 -right-1 text-[8px] font-black text-white/60 leading-none">+</span>}
+                                                    </span>}
+                                                </div>;
+                                            })()}
                                             {!item.is_folder && (item as any).flag && (
                                                 <span className="flex-shrink-0 text-base leading-none" title={(item as any).flag}>{(item as any).flag}</span>
                                             )}
@@ -6149,6 +6317,17 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 <HeartSolidIcon className="w-3.5 h-3.5 text-white flex-shrink-0" />
                                             )}
                                             {item.is_folder && <ArrowRightIcon className="w-4 h-4 text-zinc-600 flex-shrink-0" />}
+                                            {/* Date — always furthest right, fixed 15% column */}
+                                            {!item.is_folder && item.updated_at && (
+                                                <div className="flex items-center justify-end" style={{ width: "15%", flexShrink: 0 }}>
+                                                    <span className="text-[11px] text-zinc-500 font-medium whitespace-nowrap">{timeAgo(item.updated_at)}</span>
+                                                </div>
+                                            )}
+                                            {item.is_folder && item.latestUpdatedAt && (
+                                                <div className="flex items-center justify-end" style={{ width: "15%", flexShrink: 0 }}>
+                                                    <span className="text-[11px] text-zinc-500 font-medium whitespace-nowrap">{timeAgo(item.latestUpdatedAt)}</span>
+                                                </div>
+                                            )}
                                         </>
                                     ) : (
                                         <>
@@ -6167,17 +6346,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                             type="button"
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
-                                                                setEditingNote(item);
-                                                                setTitle(item.title);
-                                                                setContent(item.content);
-                                                                setImages((item as any).images ?? []);
-                                                                setTargetFolder(item.folder_name || activeFolder || "General");
-                                                                setNoteColor(item.folder_color || folders.find((f) => f.name === (item.folder_name || activeFolder))?.color || palette12[0]);
-                                                                setShowColorPicker(false);
-                                                                setShowSwitcher(false);
-                                                                setActiveLine(0);
-                                                                setEditorScrollTop(0);
-                                                                setEditorOpen(true);
+                                                                void openNote(item);
                                                             }}
                                                             className="absolute top-1 right-1 z-10 p-1 opacity-0 group-hover:opacity-100 transition text-white/60 hover:text-white"
                                                             title="Edit bookmark"
@@ -6196,7 +6365,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                                 ? <div style={{ fontSize: item.icon.startsWith("__hero:") ? undefined : (isCompactThumb ? "1.2rem" : "2.8rem"), lineHeight: 1 }} className="relative z-10 flex items-center justify-center">
                                                                     <FolderIconDisplay value={item.icon} folderName={item.name || "F"} className={isCompactThumb ? "w-5 h-5" : "w-12 h-12"} />
                                                                   </div>
-                                                                : <div style={{ fontSize: isCompactThumb ? "1.2rem" : "3rem", lineHeight: 1, color: item.color || item.folder_color || palette12[0] }} className="font-black relative z-10">{meaningfulInitial(item.name, "F")}</div>
+                                                                : <div style={{ fontSize: isCompactThumb ? "1.2rem" : "3rem", lineHeight: 1, color: item.color || item.folder_color || palette12[0] }} className="folder-grid-initial font-black relative z-10">{meaningfulInitial(item.name, "F")}</div>
                                                         }
                                                         <div className={`folder-grid-name mt-0.5 font-bold line-clamp-1 w-full text-center relative z-10 ${isCompactThumb ? "text-[7px]" : "text-[11px]"}`} style={{ color: item.name === "CLAUDE" ? "#000" : (item.color || item.folder_color || palette12[0]) }}>
                                                             <span className="uppercase">{item.name}</span> <span className="opacity-50 font-normal text-[10px]">({(item.subfolderCount || 0) + (item.count || 0)})</span>
@@ -6217,6 +6386,22 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 </div>
                             );
                         })}
+                        {/* Infinite scroll sentinel + loading indicator */}
+                        {activeFolder && !kanbanMode && (
+                            <div
+                                ref={notesEndRef}
+                                style={!isListMode ? { gridColumn: "1 / -1" } : undefined}
+                                className="h-4 w-full"
+                            />
+                        )}
+                        {activeFolder && folderNotesLoading && (
+                            <div
+                                style={!isListMode ? { gridColumn: "1 / -1" } : undefined}
+                                className="py-4 text-center text-[10px] tracking-widest text-white/20 uppercase"
+                            >
+                                Loading…
+                            </div>
+                        )}
 {isEmptyView && (
                             <div className="absolute inset-0 z-20 pointer-events-none flex items-center justify-center px-6 sm:px-10">
                                 <div key={quoteIndex} className="empty-quote-anim max-w-[760px] text-center">
@@ -6241,28 +6426,35 @@ const fireIntegrations = (trigger: string, note: any) => {
                     </main>
 
                     {/* FAB — floating + button bottom right */}
-                    {!isSelectMode && (
-                        <div className="absolute bottom-5 right-4 z-[130]" style={{ filter: "drop-shadow(0 4px 16px rgba(0,0,0,0.5))" }}>
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    if (activeFolder) {
-                                        setShowNoteTypePicker(true);
-                                    } else {
-                                        openCreateFolder();
-                                    }
-                                }}
-                                className="w-12 h-12 rounded-full flex items-center justify-center text-black active:scale-90"
-                                style={{
-                                    background: activeFolder ? (activeFolderColor || "#ffffff") : "#ffffff",
-                                    boxShadow: `0 0 0 2px rgba(0,0,0,0.3), 0 6px 20px ${activeFolder ? (activeFolderColor || "#ffffff") : "#ffffff"}66`,
-                                    animation: "fabIn 0.35s cubic-bezier(0.16,1,0.3,1) both",
-                                    transition: "transform 0.2s cubic-bezier(0.16,1,0.3,1), box-shadow 0.2s",
-                                }}>
-                                <PlusIcon className="w-6 h-6" />
-                            </button>
-                        </div>
-                    )}
+                    {!isSelectMode && (() => {
+                        const depth = folderStack.length; // 0=root, 1=L1, 2=L2, 3+=L3
+                        const baseSize = 48;
+                        const fabSize = depth > 0 ? Math.round(baseSize * 1.2) : baseSize;
+                        const iconSize = depth > 0 ? Math.round(24 * 1.2) : 24;
+                        return (
+                            <div className="absolute bottom-5 right-4 z-[130]" style={{ filter: "drop-shadow(0 6px 20px rgba(0,0,0,0.55))" }}>
+                                <button
+                                    key={`fab-${depth}`}
+                                    type="button"
+                                    onClick={() => {
+                                        if (activeFolder) {
+                                            setShowNoteTypePicker(true);
+                                        } else {
+                                            openCreateFolder();
+                                        }
+                                    }}
+                                    className="fab-alive rounded-full flex items-center justify-center text-black"
+                                    style={{
+                                        width: fabSize,
+                                        height: fabSize,
+                                        background: "#ffffff",
+                                        boxShadow: "0 0 0 2px rgba(0,0,0,0.25), 0 8px 28px rgba(255,255,255,0.35)",
+                                    }}>
+                                    <PlusIcon style={{ width: iconSize, height: iconSize }} />
+                                </button>
+                            </div>
+                        );
+                    })()}
 
                     {/* STATS BOTTOM BAR */}
                     <div className="fixed bottom-4 left-0 right-0 z-[120] hidden sm:flex justify-center items-center gap-2 select-none pointer-events-none tabular-nums" style={{ fontSize: 9, opacity: 0.6 }}>
@@ -7235,10 +7427,10 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             <RectangleStackIcon className="w-4 h-4" />
                                             <span className="text-[9px] font-black uppercase tracking-wide">Compact Thumb</span>
                                         </button>
-                                        <button type="button" onClick={() => { setKanbanMode(true); setMainListMode("thumb"); }}
-                                            className={`hidden sm:flex py-1.5 rounded flex-col items-center gap-0.5 transition ${kanbanMode ? "bg-white text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"}`}>
+                                        <button type="button" onClick={() => { setEditMode(v => !v); setShowFolderActions(false); }}
+                                            className={`py-1.5 rounded flex flex-col items-center gap-0.5 transition ${editMode ? "bg-white text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"}`}>
                                             <ViewColumnsIcon className="w-4 h-4" />
-                                            <span className="text-[9px] font-black uppercase tracking-wide">Kanban</span>
+                                            <span className="text-[9px] font-black uppercase tracking-wide">Split</span>
                                         </button>
                                         <button type="button" onClick={() => { setShowFolderActions(false); setShowGlobalGraph(true); }}
                                             className="hidden sm:flex py-1.5 rounded flex-col items-center gap-0.5 transition bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200">
@@ -7308,8 +7500,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                             <input
                                 ref={cmdKInputRef}
                                 autoFocus
-                                value={cmdKQueryRaw}
-                                onChange={(e) => { setCmdKQueryRaw(e.target.value); setCmdKCursor(0); }}
+                                value={cmdKQuery}
+                                onChange={(e) => { setCmdKQuery(e.target.value); setCmdKCursor(0); }}
                                 placeholder="SEARCH NOTES…"
                                 className="flex-1 bg-transparent text-sm text-white outline-none placeholder-zinc-600 font-medium"
                             />
@@ -7343,7 +7535,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                     <button key={`f-${folder.id}`} type="button"
                                                         onMouseEnter={() => setCmdKCursor(i)}
                                                         onClick={() => {
-                                                            setShowCmdK(false); setCmdKQueryRaw(""); setCmdKQuery("");
+                                                            setShowCmdK(false); setCmdKQuery("");
                                                             const fr = dbData.find((r: any) => r.is_folder && (r.folder_name === folder.name || r.name === folder.name));
                                                             enterFolder({ id: fr ? String(fr.id) : `virtual-${folder.name}`, name: folder.name, color: folder.color || palette12[0] });
                                                         }}
