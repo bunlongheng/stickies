@@ -4949,24 +4949,24 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 </button>
                             </div>
                         )}
-                        {TYPE_BADGE[noteType] && (
-                            <span className="inline-flex text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-full flex-shrink-0"
-                                style={{ background: `${TYPE_BADGE[noteType].color}20`, color: TYPE_BADGE[noteType].color, border: `1px solid ${TYPE_BADGE[noteType].color}40` }}>
-                                {TYPE_BADGE[noteType].label}
-                            </span>
-                        )}
-                        {noteType === "mermaid" && (
+                        {noteType === "mermaid" ? (
                             <button type="button"
                                 onClick={() => {
                                     const encoded = LZString.compressToEncodedURIComponent(extractMermaid(content));
                                     window.open(`https://mermaid-bheng.vercel.app/?data=${encoded}`, "_blank");
                                 }}
-                                className="p-1.5 rounded-full flex-shrink-0 transition"
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full flex-shrink-0 transition text-[9px] font-black uppercase tracking-wide hover:opacity-80"
                                 style={{ background: "rgba(6,182,212,0.15)", color: "#06b6d4", border: "1px solid rgba(6,182,212,0.3)" }}
                                 title="Open in Mermaid editor">
-                                <ArrowTopRightOnSquareIcon className="w-3.5 h-3.5" />
+                                {mermaidSubType(content)}
+                                <ArrowTopRightOnSquareIcon className="w-3 h-3" />
                             </button>
-                        )}
+                        ) : TYPE_BADGE[noteType] ? (
+                            <span className="inline-flex text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-full flex-shrink-0"
+                                style={{ background: `${TYPE_BADGE[noteType].color}20`, color: TYPE_BADGE[noteType].color, border: `1px solid ${TYPE_BADGE[noteType].color}40` }}>
+                                {TYPE_BADGE[noteType].label}
+                            </span>
+                        ) : null}
                         <button type="button"
                             onClick={() => toggleListMode()}
                             className="p-2 sm:p-3 transition flex-shrink-0"
