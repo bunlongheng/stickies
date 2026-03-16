@@ -3224,7 +3224,7 @@ const fireIntegrations = (trigger: string, note: any) => {
 
     // Derived booleans — clean, no detection chains
     const baseMode = !listMode && !graphMode && !mindmapMode && !stackMode;
-    const mermaidMode  = process.env.NODE_ENV === "development" && baseMode && noteType === "mermaid";
+    const mermaidMode  = baseMode && noteType === "mermaid";
     const markdownMode = baseMode && noteType === "markdown";
     const htmlMode     = baseMode && (noteType === "html" || (!!currentNoteId && htmlModeNotes.has(currentNoteId)));
     const jsonMode     = baseMode && noteType === "json" && !mermaidMode;
@@ -3236,9 +3236,9 @@ const fireIntegrations = (trigger: string, note: any) => {
     // jsonDetect kept for JSON syntax highlight fallback
     const jsonDetect = jsonMode ? detectJson(content) : { ok: false, parsed: null };
 
-    // Checklist toggle: text always ok; markdown only if it's a simple list (no headers/code/tables)
-    const canToggleChecklist = noteType === "text" ||
-        (noteType === "markdown" && !/^#{1,6}\s|^```|^\|/m.test(content));
+    // Checklist toggle: only for rich text notes with fewer than 12 block nodes
+    const richNodeCount = noteType === "rich" ? (() => { try { return (JSON.parse(content)?.content ?? []).length; } catch { return 0; } })() : 0;
+    const canToggleChecklist = noteType === "rich" && richNodeCount < 12;
 
     // Unified active mode label
     const noteViewMode = stackMode ? "Stack" : mindmapMode ? "Mindmap" : graphMode ? "Graph" : listMode ? "Checklist" : mermaidMode ? "Mermaid" : voiceNote ? "Voice" : codeMode ? noteType : markdownMode ? "Markdown" : htmlMode ? "HTML" : noteType === "rich" ? "Rich" : "Text";
@@ -4966,6 +4966,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 {TYPE_BADGE[noteType].label}
                             </span>
                         ) : null}
+                        {canToggleChecklist && (
                         <button type="button"
                             onClick={() => toggleListMode()}
                             className="p-2 sm:p-3 transition flex-shrink-0"
@@ -4973,6 +4974,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                             title="Toggle checklist">
                             <ClipboardDocumentListIcon className="w-[26px] h-[26px] sm:w-6 sm:h-6" />
                         </button>
+                        )}
                         <button type="button"
                             onClick={() => { setShowNoteActions(true); closeEditorTools(); }}
                             className="p-2 sm:p-3 text-zinc-300 hover:text-white active:text-white transition flex-shrink-0">
