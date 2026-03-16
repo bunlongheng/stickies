@@ -2868,10 +2868,14 @@ const fireIntegrations = (trigger: string, note: any) => {
         closeEditorTools();
         setEditorOpen(false);
         setImages([]);
-        // Stay in the note's folder; only go to root if no folder
-        setActiveFolder(targetFolder || null);
+        // Only navigate to the note's folder if we're not already there (preserves parent folder stack)
+        if (targetFolder && targetFolder !== activeFolder) {
+            setActiveFolder(targetFolder);
+        } else if (!targetFolder) {
+            setActiveFolder(null);
+        }
         setSearch("");
-    }, [saveNote, closeEditorTools, editingNote?.id, targetFolder, title, noteColor]);
+    }, [saveNote, closeEditorTools, editingNote?.id, targetFolder, activeFolder, title, noteColor]);
 
     // Pick a random palette color, avoiding the last-used one if possible
     const pickUniqueColor = useCallback(() => {
@@ -3444,10 +3448,15 @@ const fireIntegrations = (trigger: string, note: any) => {
         if (note) {
             setActiveFolder(note.folder_name || null);
             void openNote(note);
+            setPendingRestoreNoteId(null);
+            setIsUrlChecking(false);
+        } else if (!folderNotesLoading) {
+            // Notes done loading and note still not found — give up
+            setPendingRestoreNoteId(null);
+            setIsUrlChecking(false);
         }
-        setPendingRestoreNoteId(null);
-        setIsUrlChecking(false);
-    }, [pendingRestoreNoteId, dbData, isDataLoaded, openNote]);
+        // If folderNotesLoading, wait — effect re-fires when dbData changes
+    }, [pendingRestoreNoteId, dbData, isDataLoaded, folderNotesLoading, openNote]);
 
     const openNoteFromCmdK = useCallback((note: any, cmdClick = false) => {
         setShowCmdK(false);

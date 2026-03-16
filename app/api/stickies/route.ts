@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import Pusher from "pusher";
 import crypto from "crypto";
+import { query, queryOne, execute } from "@/lib/db";
 
 const palette12 = [
     "#FF3B30", "#FF6B4E", "#FF9500", "#FFCC00",
@@ -10,45 +11,12 @@ const palette12 = [
     "#B0B0B8", "#555560", "#8B1A2E", "#6B7A1E", "#0D2B6B", "#FFFFFF",
 ];
 
-function getSupabase() {
+// ── Auth (Supabase JWT only — no DB) ─────────────────────────────────────────
+function getSupabaseAuth() {
     return createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
-}
-
-// ── Folder path resolver ─────────────────────────────────────────────────────
-// "work/team" → finds "team" whose parent is "work", returns { folder_name, folder_id }
-// Plain "CLAUDE" → returns { folder_name: "CLAUDE", folder_id: null }
-async function resolveFolderPath(raw: string, table: string): Promise<{ folder_name: string; folder_id: string | null }> {
-    const parts = raw.split("/").map((p) => p.trim()).filter(Boolean);
-    if (parts.length <= 1) return { folder_name: raw.trim() || "CLAUDE", folder_id: null };
-
-    const sb = getSupabase();
-    const { data: folders } = await sb.from(table).select("id, folder_name, parent_folder_name").eq("is_folder", true);
-    const all = folders ?? [];
-
-    let parentName: string | null = null;
-    let resolved: { id: string; folder_name: string } | null = null;
-
-    for (const segment of parts) {
-        const match = all.find((f) =>
-            f.folder_name.toLowerCase() === segment.toLowerCase() &&
-            (parentName === null
-                ? !f.parent_folder_name
-                : f.parent_folder_name?.toLowerCase() === parentName.toLowerCase())
-        );
-        if (!match) {
-            // Folder segment not found — fall back to last segment as folder_name
-            return { folder_name: parts[parts.length - 1], folder_id: null };
-        }
-        resolved = { id: String(match.id), folder_name: match.folder_name };
-        parentName = match.folder_name;
-    }
-
-    return resolved
-        ? { folder_name: resolved.folder_name, folder_id: resolved.id }
-        : { folder_name: parts[parts.length - 1], folder_id: null };
 }
 
 function getPusher() {
@@ -81,11 +49,9 @@ function broadcastRequest(req: Request, auth: AuthResult, extra?: Record<string,
 }
 
 // ── Hue trigger ──────────────────────────────────────────────────────────────
-// Fires on any non-browser API write (curl / AI / external).
-// Browser requests have a Mozilla User-Agent — skip those.
 function triggerHue(req: Request, color: string) {
     const ua = req.headers.get("user-agent") ?? "";
-    if (/mozilla/i.test(ua)) return; // browser — skip
+    if (/mozilla/i.test(ua)) return;
     const base = (process.env.NEXT_PUBLIC_APP_BASE_URL ?? "http://localhost:4444").replace(/\/$/, "");
     fetch(`${base}/api/hue/trigger`, {
         method: "POST",
@@ -102,7 +68,7 @@ async function authenticate(req: Request): Promise<AuthResult | null> {
     const bearer = auth.startsWith("Bearer ") ? auth.slice(7) : "";
     if (!bearer) return null;
 
-    // Static API key → owner (reads/writes to `notes` table, unchanged)
+    // Static API key → owner
     const apiKey = process.env.STICKIES_API_KEY;
     if (apiKey) {
         const expected = `Bearer ${apiKey}`;
@@ -115,8 +81,8 @@ async function authenticate(req: Request): Promise<AuthResult | null> {
         }
     }
 
-    // Supabase JWT → check if owner (by user ID or email), else regular user
-    const { data: { user } } = await getSupabase().auth.getUser(bearer);
+    // Supabase JWT → verify via auth service (not database)
+    const { data: { user } } = await getSupabaseAuth().auth.getUser(bearer);
     if (user) {
         const ownerUserId = process.env.OWNER_USER_ID?.trim();
         const ownerEmail  = process.env.OWNER_EMAIL?.trim();
@@ -130,10 +96,77 @@ async function authenticate(req: Request): Promise<AuthResult | null> {
     return null;
 }
 
-// Owner → "notes" (existing table, untouched)
-// Users → "users_stickies" (new per-user table)
 function getTable(auth: AuthResult): string {
     return auth.type === "user" ? "users_stickies" : "notes";
+}
+
+// ── Color helpers ────────────────────────────────────────────────────────────
+async function pickLeastUsedColor(table: string, rawColor?: string): Promise<string> {
+    const c = String(rawColor ?? "").trim().toUpperCase();
+    if (/^#[0-9A-F]{6}$/.test(c)) return c;
+
+    const rows = await query<{ folder_color: string }>(`SELECT folder_color FROM "${table}" WHERE is_folder = false`);
+    const counts = new Map<string, number>(palette12.map((p) => [p, 0]));
+    rows.forEach((r) => {
+        const col = String(r.folder_color ?? "").toUpperCase();
+        if (counts.has(col)) counts.set(col, (counts.get(col) ?? 0) + 1);
+    });
+    return palette12.reduce((a, b) => (counts.get(b)! < counts.get(a)! ? b : a), palette12[0]);
+}
+
+async function pickLeastUsedFolderColor(table: string, rawColor?: string): Promise<string> {
+    const c = String(rawColor ?? "").trim().toUpperCase();
+    if (/^#[0-9A-F]{6}$/.test(c)) return c;
+
+    const rows = await query<{ folder_color: string }>(`SELECT folder_color FROM "${table}" WHERE is_folder = true`);
+    const counts = new Map<string, number>(palette12.map((p) => [p, 0]));
+    rows.forEach((r) => {
+        const col = String(r.folder_color ?? "").toUpperCase();
+        if (counts.has(col)) counts.set(col, (counts.get(col) ?? 0) + 1);
+    });
+    return palette12.reduce((a, b) => (counts.get(b)! < counts.get(a)! ? b : a), palette12[0]);
+}
+
+async function getNextOrder(table: string, isFolderOnly = false): Promise<number> {
+    const whereClause = isFolderOnly ? "WHERE is_folder = true" : "WHERE is_folder = false";
+    const row = await queryOne<{ order: number }>(`SELECT "order" FROM "${table}" ${whereClause} ORDER BY "order" DESC LIMIT 1`);
+    return typeof row?.order === "number" ? row.order + 1 : 0;
+}
+
+// Build scope WHERE clause for user isolation
+function scopeWhere(userId?: string, existing = ""): { sql: string; params: unknown[]; paramIndex: number } {
+    if (!userId) return { sql: existing, params: [], paramIndex: 1 };
+    const prefix = existing ? `${existing} AND` : "WHERE";
+    return { sql: `${prefix} user_id = $1`, params: [userId], paramIndex: 2 };
+}
+
+// ── Folder path resolver ─────────────────────────────────────────────────────
+async function resolveFolderPath(raw: string, table: string): Promise<{ folder_name: string; folder_id: string | null }> {
+    const parts = raw.split("/").map((p) => p.trim()).filter(Boolean);
+    if (parts.length <= 1) return { folder_name: raw.trim() || "CLAUDE", folder_id: null };
+
+    const folders = await query<{ id: string; folder_name: string; parent_folder_name: string | null }>(
+        `SELECT id::text, folder_name, parent_folder_name FROM "${table}" WHERE is_folder = true`
+    );
+
+    let parentName: string | null = null;
+    let resolved: { id: string; folder_name: string } | null = null;
+
+    for (const segment of parts) {
+        const match = folders.find((f) =>
+            f.folder_name.toLowerCase() === segment.toLowerCase() &&
+            (parentName === null
+                ? !f.parent_folder_name
+                : f.parent_folder_name?.toLowerCase() === parentName.toLowerCase())
+        );
+        if (!match) return { folder_name: parts[parts.length - 1], folder_id: null };
+        resolved = { id: String(match.id), folder_name: match.folder_name };
+        parentName = match.folder_name;
+    }
+
+    return resolved
+        ? { folder_name: resolved.folder_name, folder_id: resolved.id }
+        : { folder_name: parts[parts.length - 1], folder_id: null };
 }
 
 // ── GET ─────────────────────────────────────────────────────────────────────
@@ -148,36 +181,34 @@ export async function GET(req: Request) {
     const folderFilter = url.searchParams.get("folder");
     const q = url.searchParams.get("q")?.trim();
     const route = url.searchParams.get("route")?.trim();
-    const sb = getSupabase();
 
-    const scope = (query: any): any => userId ? query.eq("user_id", userId) : query;
+    const userScope = userId ? `AND user_id = '${userId}'` : "";
 
     if (route) {
         const routeFolder = folderFilter ?? "BHENG";
-        const { data, error } = await scope(
-            sb.from(table).select("*").eq("is_folder", false).eq("folder_name", routeFolder).eq("title", route)
-        ).maybeSingle();
-        if (error) return NextResponse.json({ error: "Database error" }, { status: 500 });
+        const data = await queryOne(
+            `SELECT * FROM "${table}" WHERE is_folder = false AND folder_name = $1 AND title = $2 ${userScope} LIMIT 1`,
+            [routeFolder, route]
+        );
         return NextResponse.json({ sticky: data ?? null });
     }
 
     if (foldersOnly) {
-        const { data, error } = await scope(
-            sb.from(table).select("id, folder_name, folder_color, parent_folder_name, order, updated_at").eq("is_folder", true).order("order", { ascending: true }).limit(2000)
+        const rows = await query(
+            `SELECT id, folder_name, folder_color, parent_folder_name, "order", updated_at FROM "${table}" WHERE is_folder = true ${userScope} ORDER BY "order" ASC LIMIT 2000`
         );
-        if (error) return NextResponse.json({ error: "Database error" }, { status: 500 });
-        return NextResponse.json({ folders: data ?? [] });
+        return NextResponse.json({ folders: rows });
     }
 
-    // Lightweight per-folder note counts — avoids loading all notes just for tile badges
     if (url.searchParams.get("counts") === "1") {
-        // RPC: GROUP BY on DB side — returns ~N folder rows instead of all notes
-        const { data, error } = await sb.rpc("get_note_counts");
-        if (error) return NextResponse.json({ error: "Database error" }, { status: 500 });
+        // Equivalent of sb.rpc("get_note_counts")
+        const rows = await query<{ folder_name: string; folder_id: string | null; cnt: string }>(
+            `SELECT folder_name, folder_id::text AS folder_id, COUNT(*) AS cnt FROM "${table}" WHERE is_folder = false GROUP BY folder_name, folder_id`
+        );
         const byName: Record<string, number> = {};
         const byId: Record<string, number> = {};
         let total = 0;
-        for (const row of (data as any[]) ?? []) {
+        for (const row of rows) {
             const n = Number(row.cnt ?? 0);
             if (row.folder_name) byName[row.folder_name] = (byName[row.folder_name] || 0) + n;
             if (row.folder_id) byId[String(row.folder_id)] = (byId[String(row.folder_id)] || 0) + n;
@@ -187,59 +218,60 @@ export async function GET(req: Request) {
     }
 
     if (folderFilter) {
-        const FOLDER_COLS = "id,title,folder_name,folder_color,folder_id,parent_folder_name,order,updated_at,created_at,type,is_folder";
+        const FOLDER_COLS = `id, title, folder_name, folder_color, folder_id, parent_folder_name, "order", updated_at, created_at, type, is_folder`;
         const limitParam = parseInt(url.searchParams.get("limit") ?? "0");
         const offsetParam = parseInt(url.searchParams.get("offset") ?? "0");
-        let query = scope(
-            sb.from(table)
-                .select(FOLDER_COLS, { count: "exact" })
-                .eq("is_folder", false)
-                .eq("folder_name", folderFilter)
-                .order("updated_at", { ascending: false })
+
+        const params: unknown[] = [folderFilter];
+        let paginationSql = "";
+        if (limitParam > 0) {
+            params.push(limitParam, offsetParam);
+            paginationSql = `LIMIT $${params.length - 1} OFFSET $${params.length}`;
+        }
+
+        const rows = await query(
+            `SELECT ${FOLDER_COLS} FROM "${table}" WHERE is_folder = false AND folder_name = $1 ${userScope} ORDER BY updated_at DESC ${paginationSql}`,
+            params
         );
-        if (limitParam > 0) query = (query as any).range(offsetParam, offsetParam + limitParam - 1);
-        const { data, error, count } = await (query as any);
-        if (error) return NextResponse.json({ error: "Database error" }, { status: 500 });
-        return NextResponse.json({ notes: data ?? [], total: count ?? 0 });
+        // Count separately
+        const countRow = await queryOne<{ count: string }>(
+            `SELECT COUNT(*) AS count FROM "${table}" WHERE is_folder = false AND folder_name = $1 ${userScope}`,
+            [folderFilter]
+        );
+        return NextResponse.json({ notes: rows, total: Number(countRow?.count ?? 0) });
     }
 
     if (q) {
-        // Metadata-only search — skip content to avoid large payloads
-        const SEARCH_COLS = "id,title,folder_name,folder_color,folder_id,parent_folder_name,order,updated_at,created_at,type,is_folder";
-        const { data, error } = await scope(
-            sb.from(table).select(SEARCH_COLS).eq("is_folder", false).or(`title.ilike.%${q}%,content.ilike.%${q}%`).order("updated_at", { ascending: false }).limit(50)
+        const SEARCH_COLS = `id, title, folder_name, folder_color, folder_id, parent_folder_name, "order", updated_at, created_at, type, is_folder`;
+        const rows = await query(
+            `SELECT ${SEARCH_COLS} FROM "${table}" WHERE is_folder = false AND (title ILIKE $1 OR content ILIKE $1) ${userScope} ORDER BY updated_at DESC LIMIT 50`,
+            [`%${q}%`]
         );
-        if (error) return NextResponse.json({ error: "Database error" }, { status: 500 });
-        return NextResponse.json({ notes: data ?? [], query: q });
+        return NextResponse.json({ notes: rows, query: q });
     }
 
-    // Single note by id (full content)
     const idParam = url.searchParams.get("id")?.trim();
     if (idParam) {
-        const { data, error } = await scope(
-            sb.from(table).select("*").eq("is_folder", false).eq("id", idParam)
-        ).maybeSingle();
-        if (error) return NextResponse.json({ error: "Database error" }, { status: 500 });
+        const data = await queryOne(
+            `SELECT * FROM "${table}" WHERE is_folder = false AND id = $1 ${userScope} LIMIT 1`,
+            [idParam]
+        );
         return NextResponse.json({ note: data ?? null });
     }
 
-    // Full export (for migration) — includes content
     const exportAll = url.searchParams.get("export") === "1";
     if (exportAll) {
-        const { data, error } = await scope(
-            sb.from(table).select("*").eq("is_folder", false).order("updated_at", { ascending: false }).limit(10000)
+        const rows = await query(
+            `SELECT * FROM "${table}" WHERE is_folder = false ${userScope} ORDER BY updated_at DESC LIMIT 10000`
         );
-        if (error) return NextResponse.json({ error: "Database error" }, { status: 500 });
-        return NextResponse.json({ notes: data ?? [], total: (data ?? []).length });
+        return NextResponse.json({ notes: rows, total: rows.length });
     }
 
-    // List — metadata only, no content (saves ~95% bandwidth)
-    const LIST_COLS = "id,title,folder_name,folder_color,folder_id,parent_folder_name,order,updated_at,created_at,type,is_folder";
-    const { data, error } = await scope(
-        sb.from(table).select(LIST_COLS).eq("is_folder", false).order("order", { ascending: true }).limit(10000)
+    const LIST_COLS = `id, title, folder_name, folder_color, folder_id, parent_folder_name, "order", updated_at, created_at, type, is_folder`;
+    const rows = await query(
+        `SELECT ${LIST_COLS} FROM "${table}" WHERE is_folder = false ${userScope} ORDER BY "order" ASC LIMIT 10000`
     );
-    if (error) return NextResponse.json({ error: "Database error" }, { status: 500 });
-    return NextResponse.json({ notes: data ?? [] });
+    return NextResponse.json({ notes: rows });
 }
 
 // ── POST ────────────────────────────────────────────────────────────────────
@@ -249,7 +281,7 @@ export async function POST(req: Request) {
 
     const table = getTable(auth);
     const userId = auth.type === "user" ? auth.userId : undefined;
-    const userField = userId ? { user_id: userId } : {};
+    const userField: Record<string, unknown> = userId ? { user_id: userId } : {};
 
     const url = new URL(req.url);
     const isJsonBody = /application\/json/i.test(req.headers.get("content-type") ?? "");
@@ -284,12 +316,12 @@ export async function POST(req: Request) {
     // ── Batch mode ──
     if (bodyForFolderCheck && Array.isArray((bodyForFolderCheck as any).batch)) {
         const items = (bodyForFolderCheck as any).batch as Array<Record<string, unknown>>;
-        const sb = getSupabase();
         const now = new Date().toISOString();
 
-        const { data: colorRows } = await sb.from(table).select("folder_color").eq("is_folder", false);
+        // Load existing color counts once
+        const colorRows = await query<{ folder_color: string }>(`SELECT folder_color FROM "${table}" WHERE is_folder = false`);
         const colorCounts = new Map<string, number>(palette12.map((c) => [c, 0]));
-        (colorRows ?? []).forEach((r: any) => {
+        colorRows.forEach((r) => {
             const c = String(r.folder_color ?? "").toUpperCase();
             if (colorCounts.has(c)) colorCounts.set(c, (colorCounts.get(c) ?? 0) + 1);
         });
@@ -301,7 +333,7 @@ export async function POST(req: Request) {
             return least;
         };
 
-        const { data: maxOrderRow } = await sb.from(table).select("order").order("order", { ascending: false }).limit(1).single();
+        const maxOrderRow = await queryOne<{ order: number }>(`SELECT "order" FROM "${table}" ORDER BY "order" DESC LIMIT 1`);
         let nextOrder = typeof maxOrderRow?.order === "number" ? maxOrderRow.order + 1 : 0;
         const results: Array<{ type: string; data: Record<string, unknown> | null; error?: string }> = [];
 
@@ -312,14 +344,16 @@ export async function POST(req: Request) {
                 if (type === "folder") {
                     const name = String(item.name ?? "").trim();
                     if (!name) { results.push({ type: "folder", data: null, error: "name required" }); continue; }
-                    const { data, error } = await sb.from(table).insert([{
-                        is_folder: true, folder_name: name, title: name, content: "",
-                        folder_color: pickColor(item.color as string),
-                        parent_folder_name: String(item.parent_folder ?? "").trim() || null,
-                        order: nextOrder++, created_at: now, updated_at: now, ...userField,
-                    }]).select().single();
-                    if (error) { results.push({ type: "folder", data: null, error: error.message }); continue; }
-                    results.push({ type: "folder", data: data as Record<string, unknown> });
+                    const folder_color = pickColor(item.color as string);
+                    const parent_folder_name = String(item.parent_folder ?? "").trim() || null;
+                    const row = await queryOne(
+                        `INSERT INTO "${table}" (is_folder, folder_name, title, content, folder_color, parent_folder_name, "order", created_at, updated_at${userId ? ", user_id" : ""})
+                         VALUES (true, $1, $2, '', $3, $4, $5, $6, $7${userId ? ", $8" : ""}) RETURNING *`,
+                        userId
+                            ? [name, name, folder_color, parent_folder_name, nextOrder++, now, now, userId]
+                            : [name, name, folder_color, parent_folder_name, nextOrder++, now, now]
+                    );
+                    results.push({ type: "folder", data: row as Record<string, unknown> });
                 } else {
                     const title = String(item.title ?? "").trim();
                     if (!title) { results.push({ type: "note", data: null, error: "title required" }); continue; }
@@ -329,13 +363,15 @@ export async function POST(req: Request) {
                         ? (String(item.folder ?? "").trim() || (() => { throw new Error("folder cannot be empty"); })())
                         : "CLAUDE";
                     const batchType = (typeof item.type === "string" && VALID_TYPES.has(item.type)) ? item.type : detectType(content, title);
-                    const { data, error } = await sb.from(table).insert([{
-                        is_folder: false, title, content, folder_name, type: batchType,
-                        folder_color: pickColor(item.color as string),
-                        order: nextOrder++, created_at: now, updated_at: now, ...userField,
-                    }]).select().single();
-                    if (error) { results.push({ type: "note", data: null, error: error.message }); continue; }
-                    results.push({ type: "note", data: data as Record<string, unknown> });
+                    const folder_color = pickColor(item.color as string);
+                    const row = await queryOne(
+                        `INSERT INTO "${table}" (is_folder, title, content, folder_name, type, folder_color, "order", created_at, updated_at${userId ? ", user_id" : ""})
+                         VALUES (false, $1, $2, $3, $4, $5, $6, $7, $8${userId ? ", $9" : ""}) RETURNING *`,
+                        userId
+                            ? [title, content, folder_name, batchType, folder_color, nextOrder++, now, now, userId]
+                            : [title, content, folder_name, batchType, folder_color, nextOrder++, now, now]
+                    );
+                    results.push({ type: "note", data: row as Record<string, unknown> });
                 }
             } catch (err: any) {
                 results.push({ type, data: null, error: err?.message ?? "unknown error" });
@@ -343,13 +379,10 @@ export async function POST(req: Request) {
         }
 
         const failed = results.filter((r) => r.error);
-
-        // Broadcast each successfully created item to all live sessions
         const pusher = getPusher();
         for (const r of results) {
             if (r.data && !r.error) {
-                const event = r.type === "folder" ? "note-created" : "note-created";
-                pusher.trigger("stickies", event, r.data).catch(() => {});
+                pusher.trigger("stickies", "note-created", r.data).catch(() => {});
             }
         }
 
@@ -362,28 +395,20 @@ export async function POST(req: Request) {
         const name = String(url.searchParams.get("name") || (bodyForFolderCheck?.name as string) || "").trim();
         if (!name) return NextResponse.json({ error: "name is required for folder" }, { status: 400 });
 
-        const rawColor = String(url.searchParams.get("color") || (bodyForFolderCheck?.color as string) || "").trim().toUpperCase();
+        const rawColor = String(url.searchParams.get("color") || (bodyForFolderCheck?.color as string) || "").trim();
         const parentFolder = String(url.searchParams.get("parent") || (bodyForFolderCheck?.parent_folder as string) || "").trim() || null;
-        const sb = getSupabase();
-
-        let folder_color = rawColor;
-        if (!/^#[0-9A-F]{6}$/.test(folder_color)) {
-            const { data: colorRows } = await sb.from(table).select("folder_color").eq("is_folder", true);
-            const counts = new Map<string, number>(palette12.map((c) => [c, 0]));
-            (colorRows ?? []).forEach((r: any) => { const c = String(r.folder_color ?? "").toUpperCase(); if (counts.has(c)) counts.set(c, (counts.get(c) ?? 0) + 1); });
-            folder_color = palette12.reduce((least, c) => (counts.get(c)! < counts.get(least)! ? c : least), palette12[0]);
-        }
-
-        const { data: maxRow } = await sb.from(table).select("order").eq("is_folder", true).order("order", { ascending: false }).limit(1).single();
-        const nextOrder = typeof maxRow?.order === "number" ? maxRow.order + 1 : 0;
+        const folder_color = await pickLeastUsedFolderColor(table, rawColor);
+        const nextOrder = await getNextOrder(table, true);
         const now = new Date().toISOString();
 
-        const { data, error } = await sb.from(table).insert([{
-            is_folder: true, folder_name: name, title: name, content: "",
-            folder_color, parent_folder_name: parentFolder, order: nextOrder, created_at: now, updated_at: now, ...userField,
-        }]).select().single();
+        const data = await queryOne(
+            `INSERT INTO "${table}" (is_folder, folder_name, title, content, folder_color, parent_folder_name, "order", created_at, updated_at${userId ? ", user_id" : ""})
+             VALUES (true, $1, $2, '', $3, $4, $5, $6, $7${userId ? ", $8" : ""}) RETURNING *`,
+            userId ? [name, name, folder_color, parentFolder, nextOrder, now, now, userId]
+                   : [name, name, folder_color, parentFolder, nextOrder, now, now]
+        );
 
-        if (error) { console.error("[stickies POST folder]", error); return NextResponse.json({ error: "Database error" }, { status: 500 }); }
+        if (!data) { return NextResponse.json({ error: "Database error" }, { status: 500 }); }
         try { await getPusher().trigger("stickies", "note-created", data); } catch {}
         return NextResponse.json({ folder: data }, { status: 201 });
     }
@@ -394,10 +419,15 @@ export async function POST(req: Request) {
         try { payload = bodyForFolderCheck ?? await req.json(); }
         catch { return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 }); }
         const now = new Date().toISOString();
-        const { data, error } = await getSupabase().from(table).insert([{
-            ...payload, updated_at: now, created_at: payload.created_at ?? now, ...userField,
-        }]).select().single();
-        if (error) { console.error("[stickies POST raw]", error); return NextResponse.json({ error: "Database error" }, { status: 500 }); }
+        const insertPayload = { ...payload, updated_at: now, created_at: payload.created_at ?? now, ...userField };
+        const cols = Object.keys(insertPayload).map((k) => `"${k}"`).join(", ");
+        const vals = Object.values(insertPayload);
+        const placeholders = vals.map((_, i) => `$${i + 1}`).join(", ");
+        const data = await queryOne(
+            `INSERT INTO "${table}" (${cols}) VALUES (${placeholders}) RETURNING *`,
+            vals
+        );
+        if (!data) { return NextResponse.json({ error: "Database error" }, { status: 500 }); }
         try { await getPusher().trigger("stickies", "note-created", data); } catch {}
         return NextResponse.json({ note: data }, { status: 201 });
     }
@@ -445,30 +475,28 @@ export async function POST(req: Request) {
     if (folder_name !== null && !folder_name?.trim()) return NextResponse.json({ error: "folder cannot be empty" }, { status: 400 });
     if (!folder_name?.trim()) folder_name = "CLAUDE";
 
-    const sb = getSupabase();
-
     // ── Non-browser API calls: enforce CLAUDE as parent for unknown simple folders ──
     const isExternalCall = !/mozilla/i.test(req.headers.get("user-agent") ?? "");
     if (isExternalCall && !folder_name!.includes("/")) {
-        // Check if this is a known root-level folder
-        const { data: rootFolders } = await sb.from(table).select("folder_name").eq("is_folder", true).is("parent_folder_name", null);
-        const rootNames = (rootFolders ?? []).map((f: any) => f.folder_name.toLowerCase());
+        const rootFolders = await query<{ folder_name: string }>(
+            `SELECT folder_name FROM "${table}" WHERE is_folder = true AND parent_folder_name IS NULL`
+        );
+        const rootNames = rootFolders.map((f) => f.folder_name.toLowerCase());
         if (!rootNames.includes(folder_name!.toLowerCase())) {
-            // Not a root folder — nest under CLAUDE
             folder_name = `CLAUDE/${folder_name}`;
         }
     }
 
-    // Resolve folder via slash-path (e.g. "claude/skills") or simple name
+    // Resolve folder via slash-path
     let resolved_folder_id: string | null = null;
     let resolved_folder_name: string = folder_name!;
 
     const folderPathParts = folder_name!.split("/").map((p) => p.trim()).filter(Boolean);
 
     if (folderPathParts.length > 1) {
-        // Walk path, find or create each segment
-        const { data: allFolderRows } = await sb.from(table).select("id, folder_name, parent_folder_name").eq("is_folder", true);
-        const allFolders: Array<{ id: string; folder_name: string; parent_folder_name: string | null }> = (allFolderRows ?? []) as any;
+        const allFolders = await query<{ id: string; folder_name: string; parent_folder_name: string | null }>(
+            `SELECT id::text, folder_name, parent_folder_name FROM "${table}" WHERE is_folder = true`
+        );
 
         let parentName: string | null = null;
         let parentId: string | null = null;
@@ -483,24 +511,23 @@ export async function POST(req: Request) {
                 parentName = match.folder_name;
                 parentId = String(match.id);
             } else {
-                // Never auto-create root-level folders — require a parent
                 if (parentName === null) {
                     return NextResponse.json({ error: `Root folder "${segment}" does not exist. Create it manually or use an existing folder.` }, { status: 400 });
                 }
-                // Create missing sub-folder in chain
-                const { data: maxFolderRow } = await sb.from(table).select("order").eq("is_folder", true).order("order", { ascending: false }).limit(1).single();
-                const folderOrder = typeof maxFolderRow?.order === "number" ? maxFolderRow.order + 1 : 0;
-                const { data: newFolder } = await sb.from(table).insert([{
-                    is_folder: true, folder_name: segment, title: segment, content: "",
-                    folder_color: palette12[8], // #007AFF default
-                    parent_folder_name: parentName,
-                    order: folderOrder, created_at: nowTs, updated_at: nowTs, ...userField,
-                }]).select().single();
+                // Create missing sub-folder
+                const folderOrder = await getNextOrder(table, true);
+                const newFolder = await queryOne(
+                    `INSERT INTO "${table}" (is_folder, folder_name, title, content, folder_color, parent_folder_name, "order", created_at, updated_at${userId ? ", user_id" : ""})
+                     VALUES (true, $1, $2, '', $3, $4, $5, $6, $7${userId ? ", $8" : ""}) RETURNING *`,
+                    userId
+                        ? [segment, segment, palette12[8], parentName, folderOrder, nowTs, nowTs, userId]
+                        : [segment, segment, palette12[8], parentName, folderOrder, nowTs, nowTs]
+                );
                 if (newFolder) {
                     try { await getPusher().trigger("stickies", "note-created", newFolder); } catch {}
-                    allFolders.push({ id: String(newFolder.id), folder_name: segment, parent_folder_name: parentName });
+                    allFolders.push({ id: String((newFolder as any).id), folder_name: segment, parent_folder_name: parentName });
                     parentName = segment;
-                    parentId = String(newFolder.id);
+                    parentId = String((newFolder as any).id);
                 } else {
                     parentName = segment;
                 }
@@ -509,56 +536,59 @@ export async function POST(req: Request) {
         resolved_folder_name = folderPathParts[folderPathParts.length - 1];
         resolved_folder_id = parentId;
     } else {
-        // Simple folder name — look up existing folder row
-        const { data: folderRows } = await sb.from(table).select("id, folder_name, parent_folder_name").eq("is_folder", true).eq("folder_name", folder_name!);
-        if (folderRows && folderRows.length > 0) {
+        // Simple folder — look up existing
+        const folderRows = await query<{ id: string; folder_name: string; parent_folder_name: string | null }>(
+            `SELECT id::text, folder_name, parent_folder_name FROM "${table}" WHERE is_folder = true AND folder_name = $1`,
+            [folder_name!]
+        );
+        if (folderRows.length > 0) {
             const match = parentFolderHint
-                ? folderRows.find((r: any) => r.parent_folder_name?.toLowerCase() === parentFolderHint!.toLowerCase())
+                ? folderRows.find((r) => r.parent_folder_name?.toLowerCase() === parentFolderHint!.toLowerCase())
                 : folderRows[0];
             if (match) resolved_folder_id = String(match.id);
         }
         resolved_folder_name = folder_name!;
     }
 
-    let folder_color = rawColor;
-    if (!/^#[0-9A-F]{6}$/.test(folder_color)) {
-        const { data: colorRows } = await sb.from(table).select("folder_color").eq("is_folder", false);
-        const counts = new Map<string, number>(palette12.map((c) => [c, 0]));
-        (colorRows ?? []).forEach((r: any) => { const c = String(r.folder_color ?? "").toUpperCase(); if (counts.has(c)) counts.set(c, (counts.get(c) ?? 0) + 1); });
-        folder_color = palette12.reduce((least, c) => (counts.get(c)! < counts.get(least)! ? c : least), palette12[0]);
-    }
-
+    const folder_color = await pickLeastUsedColor(table, rawColor);
     const now = new Date().toISOString();
 
-    // Upsert: check if note with same title already exists in this folder
-    const existingQuery = resolved_folder_id
-        ? sb.from(table).select("id").eq("is_folder", false).eq("folder_name", resolved_folder_name).eq("title", title).limit(1)
-        : sb.from(table).select("id").eq("is_folder", false).eq("folder_name", resolved_folder_name).eq("title", title).limit(1);
-    const { data: existingRows } = await existingQuery;
-    const existingNote = existingRows && existingRows.length > 0 ? existingRows[0] : null;
-
-    let data: any, error: any;
+    // Upsert: check if note with same title exists in this folder
+    const existingNote = await queryOne<{ id: string }>(
+        `SELECT id::text AS id FROM "${table}" WHERE is_folder = false AND folder_name = $1 AND title = $2 ${userId ? `AND user_id = '${userId}'` : ""} LIMIT 1`,
+        [resolved_folder_name, title]
+    );
 
     const noteType = explicitType ?? detectType(content, title);
+    let data: Record<string, unknown> | null;
 
     if (existingNote?.id) {
-        // Update existing note
-        ({ data, error } = await sb.from(table)
-            .update({ content, folder_color, type: noteType, updated_at: now })
-            .eq("id", existingNote.id)
-            .select().single());
+        data = await queryOne(
+            `UPDATE "${table}" SET content = $1, folder_color = $2, type = $3, updated_at = $4 WHERE id = $5 RETURNING *`,
+            [content, folder_color, noteType, now, existingNote.id]
+        );
     } else {
-        // Insert new note
-        const { data: maxRow } = await sb.from(table).select("order").eq("is_folder", false).order("order", { ascending: false }).limit(1).single();
-        const nextOrder = typeof maxRow?.order === "number" ? maxRow.order + 1 : 0;
-        ({ data, error } = await sb.from(table).insert([{
-            title, content, folder_name: resolved_folder_name, folder_color, is_folder: false, type: noteType,
-            ...(resolved_folder_id ? { folder_id: resolved_folder_id } : {}),
-            order: nextOrder, created_at: now, updated_at: now, ...userField,
-        }]).select().single());
+        const nextOrder = await getNextOrder(table, false);
+        const folderIdClause = resolved_folder_id ? `, folder_id` : "";
+        const folderIdVal = resolved_folder_id ? `, $${userId ? 9 : 8}` : "";
+        const extraParams: unknown[] = resolved_folder_id ? [resolved_folder_id] : [];
+
+        if (userId) {
+            data = await queryOne(
+                `INSERT INTO "${table}" (title, content, folder_name, folder_color, is_folder, type, "order", created_at, updated_at, user_id${folderIdClause})
+                 VALUES ($1, $2, $3, $4, false, $5, $6, $7, $8, $9${folderIdVal}) RETURNING *`,
+                [title, content, resolved_folder_name, folder_color, noteType, nextOrder, now, now, userId, ...extraParams]
+            );
+        } else {
+            data = await queryOne(
+                `INSERT INTO "${table}" (title, content, folder_name, folder_color, is_folder, type, "order", created_at, updated_at${folderIdClause})
+                 VALUES ($1, $2, $3, $4, false, $5, $6, $7, $8${folderIdVal}) RETURNING *`,
+                [title, content, resolved_folder_name, folder_color, noteType, nextOrder, now, now, ...extraParams]
+            );
+        }
     }
 
-    if (error) { console.error("[stickies POST]", error); return NextResponse.json({ error: "Database error" }, { status: 500 }); }
+    if (!data) { return NextResponse.json({ error: "Database error" }, { status: 500 }); }
 
     if (auth.type === "apikey") {
         try { await getPusher().trigger("stickies", existingNote?.id ? "note-updated" : "note-created", data); } catch {}
@@ -580,21 +610,17 @@ export async function DELETE(req: Request) {
     const url = new URL(req.url);
     const noteId = url.searchParams.get("id")?.trim();
     const folderName = url.searchParams.get("folder_name")?.trim();
-    const sb = getSupabase();
-
-    const scope = (q: any) => userId ? q.eq("user_id", userId) : q;
+    const userScope = userId ? `AND user_id = '${userId}'` : "";
 
     if (noteId) {
-        const { error } = await scope(sb.from(table).delete().eq("id", noteId));
-        if (error) { console.error("[stickies DELETE note]", error); return NextResponse.json({ error: "Database error" }, { status: 500 }); }
+        await execute(`DELETE FROM "${table}" WHERE id = $1 ${userScope}`, [noteId]);
         try { await getPusher().trigger("stickies", "note-deleted", { id: noteId }); } catch {}
         return NextResponse.json({ ok: true, deleted_note: noteId });
     }
 
     if (!folderName) return NextResponse.json({ error: "id or folder_name is required" }, { status: 400 });
 
-    const { error } = await scope(sb.from(table).delete().eq("folder_name", folderName));
-    if (error) { console.error("[stickies DELETE folder]", error); return NextResponse.json({ error: "Database error" }, { status: 500 }); }
+    await execute(`DELETE FROM "${table}" WHERE folder_name = $1 ${userScope}`, [folderName]);
     try { await getPusher().trigger("stickies", "note-deleted", { folder_name: folderName }); } catch {}
     return NextResponse.json({ ok: true, deleted_folder: folderName });
 }
@@ -606,17 +632,12 @@ export function detectType(content: string, title?: string): string {
     const t = content.trim();
     if (!t) return "text";
 
-    // Voice note (JSON blob)
     if (t.startsWith('{"_type":"voice"')) {
         try { if (JSON.parse(t)?._type === "voice") return "voice"; } catch {}
     }
-    // Fenced mermaid block
     if (/^```(?:mermaid)?\s*\n[\s\S]*?```\s*$/im.test(t)) return "mermaid";
-    // Bare mermaid keyword
     if (/^(flowchart|graph|sequenceDiagram|classDiagram|stateDiagram(-v2)?|erDiagram|gantt|pie|gitGraph|mindmap|timeline|xychart(-beta)?|quadrantChart|requirementDiagram|zenuml|sankey|block-beta)\b/im.test(t)) return "mermaid";
-    // JSON
     if ((t.startsWith("{") || t.startsWith("[")) && (() => { try { JSON.parse(t); return true; } catch { return false; } })()) return "json";
-    // Code by title extension
     if (title) {
         const ext = title.split(".").pop()?.toLowerCase() ?? "";
         if (ext === "js")   return "javascript";
@@ -630,11 +651,8 @@ export function detectType(content: string, title?: string): string {
         if (ext === "json") return "json";
         if (ext === "mermaid" || ext === "mmd") return "mermaid";
     }
-    // HTML document
     if (/^\s*<!DOCTYPE\s+html/i.test(t) || /^\s*<html[\s>]/i.test(t)) return "html";
-    // Checklist: any line with [ ], [x], [X], or [] pattern
     if (/^\s*\[[ xX]?\]/m.test(t)) return "checklist";
-    // Markdown heuristic
     if (/^#{1,6}\s|^[-*]\s|\*\*|^>\s|^```/m.test(t)) return "markdown";
 
     return "text";
@@ -656,7 +674,7 @@ export async function PATCH(req: Request) {
 
     const table = getTable(auth);
     const userId = auth.type === "user" ? auth.userId : undefined;
-    const scope = (q: any) => userId ? q.eq("user_id", userId) : q;
+    const userScope = userId ? `AND user_id = '${userId}'` : "";
 
     let body: Record<string, unknown>;
     try { body = await req.json(); }
@@ -664,14 +682,15 @@ export async function PATCH(req: Request) {
 
     broadcastRequest(req, auth, { summary: (body as any)?.rename_note?.title ?? (body as any)?.rename_folder?.from ?? (body as any)?.id ?? undefined });
 
-    const sb = getSupabase();
     const now = new Date().toISOString();
 
     if (body.rename_note) {
         const { id, title } = body.rename_note as { id: string; title: string };
         if (!id?.trim() || !title?.trim()) return NextResponse.json({ error: "rename_note requires id and title" }, { status: 400 });
-        const { data, error } = await scope(sb.from(table).update({ title: title.trim(), updated_at: now }).eq("id", id.trim())).select().single();
-        if (error) { console.error("[stickies PATCH rename_note]", error); return NextResponse.json({ error: "Database error" }, { status: 500 }); }
+        const data = await queryOne(
+            `UPDATE "${table}" SET title = $1, updated_at = $2 WHERE id = $3 ${userScope} RETURNING *`,
+            [title.trim(), now, id.trim()]
+        );
         return NextResponse.json({ ok: true, note: data });
     }
 
@@ -679,71 +698,82 @@ export async function PATCH(req: Request) {
         const { from, to } = body.rename_folder as { from: string; to: string };
         if (!from?.trim() || !to?.trim()) return NextResponse.json({ error: "rename_folder requires from and to" }, { status: 400 });
         const toTrimmed = to.trim();
-        const { error: folderErr } = await scope(sb.from(table).update({ folder_name: toTrimmed, title: toTrimmed, updated_at: now }).eq("is_folder", true).eq("folder_name", from.trim()));
-        if (folderErr) { console.error("[stickies PATCH rename_folder]", folderErr); return NextResponse.json({ error: "Database error" }, { status: 500 }); }
-        const { error: notesErr } = await scope(sb.from(table).update({ folder_name: toTrimmed, updated_at: now }).eq("is_folder", false).eq("folder_name", from.trim()));
-        if (notesErr) { console.error("[stickies PATCH rename_folder notes]", notesErr); return NextResponse.json({ error: "Database error" }, { status: 500 }); }
+        await execute(
+            `UPDATE "${table}" SET folder_name = $1, title = $2, updated_at = $3 WHERE is_folder = true AND folder_name = $4 ${userScope}`,
+            [toTrimmed, toTrimmed, now, from.trim()]
+        );
+        await execute(
+            `UPDATE "${table}" SET folder_name = $1, updated_at = $2 WHERE is_folder = false AND folder_name = $3 ${userScope}`,
+            [toTrimmed, now, from.trim()]
+        );
         return NextResponse.json({ ok: true, renamed: { from, to: toTrimmed } });
     }
 
     if (body.merge_folder) {
         const { from, to } = body.merge_folder as { from: string; to: string };
         if (!from?.trim() || !to?.trim()) return NextResponse.json({ error: "merge_folder requires from and to" }, { status: 400 });
-        const { data: movedRows, error: moveErr } = await scope(sb.from(table).update({ folder_name: to.trim(), updated_at: now }).eq("is_folder", false).eq("folder_name", from.trim())).select("id");
-        if (moveErr) { console.error("[stickies PATCH merge_folder]", moveErr); return NextResponse.json({ error: "Database error" }, { status: 500 }); }
-        const { error: delErr } = await scope(sb.from(table).delete().eq("is_folder", true).eq("folder_name", from.trim()));
-        if (delErr) { console.error("[stickies PATCH merge_folder delete]", delErr); return NextResponse.json({ error: "Database error" }, { status: 500 }); }
-        return NextResponse.json({ ok: true, merged: { from, to: to.trim(), moved: movedRows?.length ?? 0 } });
+        const movedRows = await query<{ id: string }>(
+            `UPDATE "${table}" SET folder_name = $1, updated_at = $2 WHERE is_folder = false AND folder_name = $3 ${userScope} RETURNING id`,
+            [to.trim(), now, from.trim()]
+        );
+        await execute(
+            `DELETE FROM "${table}" WHERE is_folder = true AND folder_name = $1 ${userScope}`,
+            [from.trim()]
+        );
+        return NextResponse.json({ ok: true, merged: { from, to: to.trim(), moved: movedRows.length } });
     }
 
     if (body.fix_html_content) {
-        const { data: allNotes, error: fetchErr } = await scope(
-            sb.from(table).select("id, content").eq("is_folder", false).eq("folder_name", "TEAM")
+        const allNotes = await query<{ id: string; content: string }>(
+            `SELECT id::text AS id, content FROM "${table}" WHERE is_folder = false AND folder_name = 'TEAM' ${userScope}`
         );
-        if (fetchErr) return NextResponse.json({ error: "Fetch failed" }, { status: 500 });
-        // Only strip HTML from TEAM notes — never touch intentional HTML notes in other folders
-        const toFix = (allNotes ?? []).filter((n: any) => /<[a-z][^>]*>/i.test(n.content || "") && !/<!DOCTYPE\s+html/i.test(n.content || ""));
+        const toFix = allNotes.filter((n) => /<[a-z][^>]*>/i.test(n.content || "") && !/<!DOCTYPE\s+html/i.test(n.content || ""));
         if (toFix.length === 0) return NextResponse.json({ ok: true, fixed: 0 });
-        const results = await Promise.all(toFix.map((n: any) =>
-            scope(sb.from(table).update({ content: htmlToPlainLines(n.content), updated_at: now }).eq("id", n.id))
+        await Promise.all(toFix.map((n) =>
+            execute(`UPDATE "${table}" SET content = $1, updated_at = $2 WHERE id = $3`, [htmlToPlainLines(n.content), now, n.id])
         ));
-        const failed = results.filter((r: any) => r.error);
-        if (failed.length > 0) return NextResponse.json({ error: "Partial failure", fixed: toFix.length - failed.length }, { status: 500 });
         return NextResponse.json({ ok: true, fixed: toFix.length });
     }
 
     if (body.fix_team_checklist) {
-        // One-time fix: set list_mode=true on all TEAM notes, strip HTML content
-        const { data: teamNotes, error: fetchErr } = await scope(
-            sb.from(table).select("id, content, list_mode").eq("is_folder", false).eq("folder_name", "TEAM")
+        const teamNotes = await query<{ id: string; content: string; list_mode: boolean }>(
+            `SELECT id::text AS id, content, list_mode FROM "${table}" WHERE is_folder = false AND folder_name = 'TEAM' ${userScope}`
         );
-        if (fetchErr) return NextResponse.json({ error: "Fetch failed" }, { status: 500 });
-        const toFix = (teamNotes ?? []).filter((n: any) => !n.list_mode);
+        const toFix = teamNotes.filter((n) => !n.list_mode);
         if (toFix.length === 0) return NextResponse.json({ ok: true, fixed: 0 });
-        const results = await Promise.all(toFix.map((n: any) => {
+        await Promise.all(toFix.map((n) => {
             const cleanContent = /<[a-z][^>]*>/i.test(n.content || "") ? htmlToPlainLines(n.content) : n.content;
-            return scope(sb.from(table).update({ list_mode: true, content: cleanContent, updated_at: now }).eq("id", n.id));
+            return execute(`UPDATE "${table}" SET list_mode = true, content = $1, updated_at = $2 WHERE id = $3`, [cleanContent, now, n.id]);
         }));
-        const failed = results.filter((r: any) => r.error);
-        if (failed.length > 0) return NextResponse.json({ error: "Partial failure", fixed: toFix.length - failed.length }, { status: 500 });
         return NextResponse.json({ ok: true, fixed: toFix.length });
     }
 
     if (Array.isArray(body.updates)) {
         const updates = body.updates as Array<{ id: string; [key: string]: unknown }>;
-        const results = await Promise.all(
-            updates.map(({ id, ...fields }) => scope(sb.from(table).update({ ...fields, updated_at: now }).eq("id", id)))
-        );
-        const failed = results.filter((r) => r.error);
-        if (failed.length > 0) { console.error("[stickies PATCH bulk]", failed[0].error); return NextResponse.json({ error: "Partial failure" }, { status: 500 }); }
+        await Promise.all(updates.map(({ id, ...fields }) => {
+            const setEntries = Object.entries({ ...fields, updated_at: now });
+            const setClauses = setEntries.map(([k], i) => `"${k}" = $${i + 1}`).join(", ");
+            const vals = setEntries.map(([, v]) => v);
+            vals.push(id);
+            return execute(`UPDATE "${table}" SET ${setClauses} WHERE id = $${vals.length} ${userScope}`, vals);
+        }));
         return NextResponse.json({ ok: true });
     }
 
     const { id, ...fields } = body;
     if (!id || typeof id !== "string") return NextResponse.json({ error: "id is required" }, { status: 400 });
 
-    const { data, error } = await scope(sb.from(table).update({ ...fields, updated_at: now }).eq("id", id)).select().single();
-    if (error) { console.error("[stickies PATCH]", error); return NextResponse.json({ error: "Database error" }, { status: 500 }); }
+    const setEntries = Object.entries({ ...fields, updated_at: now });
+    const setClauses = setEntries.map(([k], i) => `"${k}" = $${i + 1}`).join(", ");
+    const vals = setEntries.map(([, v]) => v);
+    vals.push(id);
+
+    const data = await queryOne(
+        `UPDATE "${table}" SET ${setClauses} WHERE id = $${vals.length} ${userScope} RETURNING *`,
+        vals
+    );
+
+    if (!data) { return NextResponse.json({ error: "Database error" }, { status: 500 }); }
 
     try { await getPusher().trigger("stickies", "note-updated", data); } catch {}
     return NextResponse.json({ note: data });
