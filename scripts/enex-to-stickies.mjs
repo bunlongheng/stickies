@@ -471,17 +471,25 @@ async function main() {
   const blocks = await streamNoteBlocks(enexFile);
   console.log(`Found ${blocks.length} notes total`);
 
-  // Quick key extraction (no base64 decode) to count pending without OOM
-  let skippedCount = 0;
-  let pendingCount = 0;
-  for (const block of blocks) {
-    const title = decodeHtmlEntities(block.match(/<title>([\s\S]*?)<\/title>/)?.[1]?.trim() || 'Untitled');
+  // Quick metadata extraction (no base64 decode)
+  const meta = blocks.map((block, idx) => {
+    const title   = decodeHtmlEntities(block.match(/<title>([\s\S]*?)<\/title>/)?.[1]?.trim() || 'Untitled');
     const created = block.match(/<created>([\s\S]*?)<\/created>/)?.[1]?.trim() || '';
-    const key = `${title}::${created}`;
-    if (manifest[key]) skippedCount++; else pendingCount++;
-  }
-  const toImport = limit ? Math.min(limit, pendingCount) : pendingCount;
-  console.log(`${skippedCount} already imported, ${pendingCount} pending — importing ${toImport}`);
+    const updated = block.match(/<updated>([\s\S]*?)<\/updated>/)?.[1]?.trim() || created;
+    return { idx, title, created, updated, key: `${title}::${created}` };
+  });
+
+  // Sort by updated desc (most recently edited first) if --sort=recent
+  const sortRecent = process.argv.includes('--sort=recent');
+  if (sortRecent) meta.sort((a, b) => b.updated.localeCompare(a.updated));
+
+  const skippedCount = meta.filter(m => manifest[m.key]).length;
+  const pendingMeta  = meta.filter(m => !manifest[m.key]);
+  const toImport     = limit ? Math.min(limit, pendingMeta.length) : pendingMeta.length;
+  console.log(`${skippedCount} already imported, ${pendingMeta.length} pending — importing ${toImport}${sortRecent ? ' (sorted: most recent first)' : ''}`);
+
+  // Build ordered block list from sorted/filtered metadata
+  const orderedBlocks = pendingMeta.map(m => blocks[m.idx]);
 
   // Ensure EVERNOTE folder exists under Integrations
   let evernoteId = await getFolderId('EVERNOTE', 'Integrations');
@@ -513,14 +521,8 @@ async function main() {
   let nextOrder = (Array.isArray(orderRows) && orderRows[0]?.order ? orderRows[0].order : 2000) + 1;
 
   let importedCount = 0;
-  for (const block of blocks) {
-    // Quick key check first — no base64 decode yet
-    const quickTitle = decodeHtmlEntities(block.match(/<title>([\s\S]*?)<\/title>/)?.[1]?.trim() || 'Untitled');
-    const quickCreated = block.match(/<created>([\s\S]*?)<\/created>/)?.[1]?.trim() || '';
-    const quickKey = `${quickTitle}::${quickCreated}`;
-
-    if (manifest[quickKey]) continue;
-    if (limit && importedCount >= limit) continue;
+  for (const block of orderedBlocks) {
+    if (limit && importedCount >= limit) break;
 
     // Now fully parse this single block (base64 decode only for this note)
     const note = parseNoteBlock(block);

@@ -391,12 +391,9 @@ function timeAgo(dateStr: string): string {
     if (min < 60) return `${min}m ago`;
     const hr = Math.floor(min / 60);
     if (hr < 24) return `${hr}h ago`;
-    const days = Math.floor(hr / 24);
-    if (days === 1) return "yesterday";
-    if (days < 7) return `${days}d ago`;
-    if (days < 30) return `${Math.floor(days / 7)}w ago`;
-    if (days < 365) return `${Math.floor(days / 30)}mo ago`;
-    return `${Math.floor(days / 365)}y ago`;
+    // Anything older than today: show "Feb 9" or "Feb 9, 2023" if different year
+    const sameYear = d.getFullYear() === now.getFullYear();
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric", ...(!sameYear && { year: "numeric" }) });
 }
 
 function shortDate(dateStr: string): string {
