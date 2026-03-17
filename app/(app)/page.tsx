@@ -1281,10 +1281,7 @@ export default function NotesMaster() {
     const graphNodesRef = useRef<{ x: number; y: number; vx: number; vy: number }[]>([]);
     const graphAnimRef = useRef<number | null>(null);
     const [graphTick, setGraphTick] = useState(0);
-    const globalGraphContainerRef = useRef<HTMLDivElement | null>(null);
-    const globalGraphAnimRef = useRef<number | null>(null);
-    const globalGraphNodesRef = useRef<{ id: string; type: "folder" | "note"; label: string; color: string; folderName?: string; r: number; x: number; y: number; vx: number; vy: number }[]>([]);
-    const [globalGraphTick, setGlobalGraphTick] = useState(0);
+
     const [showFolderActions, setShowFolderActions] = useState(false);
     const [lightMode, setLightMode] = useState<"off" | "flash" | "ambient">("flash");
     const [isEditingFolderTitle, setIsEditingFolderTitle] = useState(false);
@@ -1296,8 +1293,7 @@ export default function NotesMaster() {
     const [showFolderMovePicker, setShowFolderMovePicker] = useState(false);
     const [folderMoveQuery, setFolderMoveQuery] = useState("");
     const folderMoveSearchRef = useRef<HTMLInputElement | null>(null);
-    const [showGlobalGraph, setShowGlobalGraph] = useState(false);
-    const [selectedGraphFolder, setSelectedGraphFolder] = useState<string | null>(null);
+
     const [quoteIndex, setQuoteIndex] = useState(0);
     const [folderFabOffset, setFolderFabOffset] = useState({ x: 0, y: 0 });
     const [isFolderFabDragging, setIsFolderFabDragging] = useState(false);
@@ -3945,83 +3941,6 @@ const fireIntegrations = (trigger: string, note: any) => {
         return () => { if (graphAnimRef.current) { cancelAnimationFrame(graphAnimRef.current); graphAnimRef.current = null; } };
     }, [graphMode, parsedTasks.length]);
 
-    // --- Global graph (all folders + notes) ---
-    useEffect(() => {
-        if (!showGlobalGraph) {
-            if (globalGraphAnimRef.current) { cancelAnimationFrame(globalGraphAnimRef.current); globalGraphAnimRef.current = null; }
-            globalGraphNodesRef.current = [];
-            return;
-        }
-        const timer = setTimeout(() => {
-            const container = globalGraphContainerRef.current;
-            if (!container) return;
-            const W = container.clientWidth, H = container.clientHeight;
-            const folderList = folders;
-            const noteList = dbData.filter((r: any) => !r.is_folder);
-            const folderR = Math.min(26, Math.max(12, Math.min(W, H) / (folderList.length * 2 + 4)));
-            const noteR = Math.max(6, folderR * 0.38);
-            const nodes: typeof globalGraphNodesRef.current = [];
-            folderList.forEach((f, i) => {
-                const angle = (i / Math.max(folderList.length, 1)) * Math.PI * 2;
-                const spread = Math.min(W, H) * 0.18;
-                nodes.push({ id: `f:${f.name}`, type: "folder", label: f.icon || f.name.charAt(0), color: f.color, r: folderR, x: W / 2 + Math.cos(angle) * spread, y: H / 2 + Math.sin(angle) * spread, vx: 0, vy: 0 });
-            });
-            noteList.forEach((n: any) => {
-                const fi = nodes.findIndex((nd) => nd.id === `f:${n.folder_name}`);
-                const fx = fi >= 0 ? nodes[fi].x : W / 2;
-                const fy = fi >= 0 ? nodes[fi].y : H / 2;
-                const a = Math.random() * Math.PI * 2;
-                nodes.push({ id: `n:${n.id}`, type: "note", label: (n.title || "N").charAt(0).toUpperCase(), color: n.folder_color || "#555", folderName: String(n.folder_name || ""), r: noteR, x: fx + Math.cos(a) * folderR * 1.5 + (Math.random() - 0.5) * 20, y: fy + Math.sin(a) * folderR * 1.5 + (Math.random() - 0.5) * 20, vx: 0, vy: 0 });
-            });
-            globalGraphNodesRef.current = nodes;
-            let settled = 0;
-            const step = () => {
-                const ns = globalGraphNodesRef.current;
-                for (let i = 0; i < ns.length; i++) {
-                    const n = ns[i];
-                    n.vx += (W / 2 - n.x) * 0.001;
-                    n.vy += (H / 2 - n.y) * 0.001;
-                    for (let j = i + 1; j < ns.length; j++) {
-                        const o = ns[j];
-                        let dx = n.x - o.x, dy = n.y - o.y;
-                        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-                        const minD = (n.r + o.r) * 2.0;
-                        if (dist < minD) { const f = (minD - dist) / dist * 0.35; n.vx += dx * f; n.vy += dy * f; o.vx -= dx * f; o.vy -= dy * f; }
-                    }
-                    if (n.type === "note" && n.folderName) {
-                        const fi = ns.findIndex((f) => f.id === `f:${n.folderName}`);
-                        if (fi >= 0) {
-                            const f = ns[fi];
-                            const dx = f.x - n.x, dy = f.y - n.y;
-                            const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-                            const ideal = f.r * 1.8;
-                            const force = (dist - ideal) / dist * 0.07;
-                            n.vx += dx * force; n.vy += dy * force;
-                            f.vx -= dx * force * 0.08; f.vy -= dy * force * 0.08;
-                        }
-                    }
-                }
-                let totalV = 0;
-                for (const n of ns) {
-                    n.vx *= 0.78; n.vy *= 0.78;
-                    n.x += n.vx; n.y += n.vy;
-                    const pad = n.r + 6;
-                    if (n.x < pad) { n.x = pad; n.vx *= -0.3; }
-                    if (n.x > W - pad) { n.x = W - pad; n.vx *= -0.3; }
-                    if (n.y < pad) { n.y = pad; n.vy *= -0.3; }
-                    if (n.y > H - pad) { n.y = H - pad; n.vy *= -0.3; }
-                    totalV += Math.abs(n.vx) + Math.abs(n.vy);
-                }
-                setGlobalGraphTick((t) => t + 1);
-                if (totalV > 0.25 && settled < 250) { settled++; globalGraphAnimRef.current = requestAnimationFrame(step); }
-                else globalGraphAnimRef.current = null;
-            };
-            settled = 0;
-            globalGraphAnimRef.current = requestAnimationFrame(step);
-        }, 60);
-        return () => { clearTimeout(timer); if (globalGraphAnimRef.current) { cancelAnimationFrame(globalGraphAnimRef.current); globalGraphAnimRef.current = null; } };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [showGlobalGraph, folders.length, dbData.length]);
 
     const pickRandomPaletteColor = useCallback(() => palette12[Math.floor(Math.random() * palette12.length)], []);
 
@@ -4596,7 +4515,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                 closeEditorTools();
                 setShowNoteActions(false);
                 setShowFolderActions(false);
-                setShowGlobalGraph(false);
                 if (!editorOpen) goBack();
             }
             if ((event.metaKey || event.ctrlKey) && event.key === "z" && taskContentHistory.current.length > 0) {
@@ -6108,7 +6026,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                             };
                             reader.readAsText(file);
                         }}
-                        className={`ios-mobile-main relative flex-1 ${kanbanMode && isFolderGridView ? "overflow-x-auto overflow-y-hidden touch-pan-x" : "overflow-x-hidden overflow-y-auto touch-pan-y"} overscroll-none bg-black ${(!showGlobalGraph) && !(kanbanMode && isFolderGridView) ? "pb-24 sm:pb-32" : ""} ${!isListMode && !(kanbanMode && isFolderGridView) ? "p-1.5 sm:p-2" : ""}`}
+                        className={`ios-mobile-main relative flex-1 ${kanbanMode && isFolderGridView ? "overflow-x-auto overflow-y-hidden touch-pan-x" : "overflow-x-hidden overflow-y-auto touch-pan-y"} overscroll-none bg-black ${!(kanbanMode && isFolderGridView) ? "pb-24 sm:pb-32" : ""} ${!isListMode && !(kanbanMode && isFolderGridView) ? "p-1.5 sm:p-2" : ""}`}
                         style={kanbanMode && isFolderGridView
                             ? { display: "flex", flexDirection: "column", height: "100%", overflowX: "auto", overflowY: "hidden" }
                             : isListMode
@@ -7520,7 +7438,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 {/* VIEW MODE */}
                                 <div className="px-6 py-2 border-b border-white/[0.06]">
                                     <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-1.5">View Mode</p>
-                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                                    <div className="grid grid-cols-3 gap-1.5">
                                         <button type="button" onClick={() => { setMainListMode("list"); setKanbanMode(false); }}
                                             className={`py-1.5 rounded flex flex-col items-center gap-0.5 transition ${mainListMode === "list" && !kanbanMode ? "bg-white text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"}`}>
                                             <Bars3Icon className="w-4 h-4" />
@@ -7535,11 +7453,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             className={`py-1.5 rounded flex flex-col items-center gap-0.5 transition ${editMode ? "bg-white text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"}`}>
                                             <ViewColumnsIcon className="w-4 h-4" />
                                             <span className="text-[9px] font-black uppercase tracking-wide">Split</span>
-                                        </button>
-                                        <button type="button" onClick={() => { setShowFolderActions(false); setShowGlobalGraph(true); }}
-                                            className="hidden sm:flex py-1.5 rounded flex-col items-center gap-0.5 transition bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200">
-                                            <CubeTransparentIcon className="w-4 h-4" />
-                                            <span className="text-[9px] font-black uppercase tracking-wide">Graph</span>
                                         </button>
                                     </div>
                                 </div>
@@ -7796,59 +7709,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                 </div>
             )}
 
-            {/* GLOBAL GRAPH OVERLAY */}
-            {showGlobalGraph && (
-                <div className="fixed inset-0 z-[600] bg-black flex flex-col" onClick={() => { setShowGlobalGraph(false); setSelectedGraphFolder(null); }}>
-                    <div className="flex items-center justify-between px-5 py-3 border-b border-white/10 shrink-0" onClick={(e) => e.stopPropagation()}>
-                        <span className="text-xs font-black uppercase tracking-widest text-white">All Notes Graph</span>
-                        <button type="button" onClick={() => { setShowGlobalGraph(false); setSelectedGraphFolder(null); }} className="text-zinc-400 hover:text-white transition text-xs font-black uppercase tracking-wide px-3 py-1 border border-white/15 hover:border-white/40">Close</button>
-                    </div>
-                    <div ref={globalGraphContainerRef} className="relative flex-1 overflow-hidden" onClick={(e) => { e.stopPropagation(); setSelectedGraphFolder(null); }}>
-                        {/* eslint-disable-next-line @typescript-eslint/no-unused-vars */}
-                        {globalGraphTick >= 0 && (() => {
-                            const ns = globalGraphNodesRef.current;
-                            const folderNodes = ns.filter((n) => n.type === "folder");
-                            const noteNodes = ns.filter((n) => n.type === "note");
-                            const hasSel = selectedGraphFolder !== null;
-                            return (
-                                <>
-                                    <svg className="absolute inset-0 w-full h-full pointer-events-none">
-                                        {noteNodes.map((n) => {
-                                            const f = ns.find((nd) => nd.id === `f:${n.folderName}`);
-                                            if (!f) return null;
-                                            const active = !hasSel || selectedGraphFolder === f.id;
-                                            return <line key={n.id} x1={n.x} y1={n.y} x2={f.x} y2={f.y} stroke={f.color} strokeWidth={active ? "1.5" : "0.5"} strokeOpacity={active ? 0.55 : 0.1} />;
-                                        })}
-                                    </svg>
-                                    {noteNodes.map((n) => {
-                                        const active = !hasSel || selectedGraphFolder === `f:${n.folderName}`;
-                                        return (
-                                            <div key={n.id} className="absolute flex items-center justify-center font-black text-white text-[9px] uppercase transition-none select-none"
-                                                style={{ left: n.x - n.r, top: n.y - n.r, width: n.r * 2, height: n.r * 2, backgroundColor: n.color, borderRadius: "50%", opacity: active ? 0.9 : 0.2 }}>
-                                                {n.label}
-                                            </div>
-                                        );
-                                    })}
-                                    {folderNodes.map((n) => {
-                                        const isSelected = selectedGraphFolder === n.id;
-                                        const dimmed = hasSel && !isSelected;
-                                        return (
-                                            <div key={n.id} className="absolute flex flex-col items-center justify-center font-black text-white uppercase transition-none select-none cursor-pointer"
-                                                onClick={(e) => { e.stopPropagation(); setSelectedGraphFolder(isSelected ? null : n.id); }}
-                                                style={{ left: n.x - n.r, top: n.y - n.r, width: n.r * 2, height: n.r * 2, backgroundColor: n.color, borderRadius: "50%", opacity: dimmed ? 0.3 : 1, boxShadow: isSelected ? `0 0 0 3px #fff, 0 0 12px ${n.color}` : "none" }}>
-                                                <span className="text-xl leading-none">{n.label}</span>
-                                            </div>
-                                        );
-                                    })}
-                                </>
-                            );
-                        })()}
-                        {globalGraphNodesRef.current.length === 0 && (
-                            <div className="absolute inset-0 flex items-center justify-center text-zinc-600 text-sm font-bold uppercase">Loading...</div>
-                        )}
-                    </div>
-                </div>
-            )}
 
             {qrModalOpen && (
                 <div className="fixed inset-0 z-[520] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => { setQrModalOpen(false); setQrLinkCopied(false); }}>
