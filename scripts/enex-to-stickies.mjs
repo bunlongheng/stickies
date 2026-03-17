@@ -2,16 +2,58 @@
 /**
  * Evernote .enex → Stickies importer
  * Structure: INTEGRATIONS → EVERNOTE → $notebook → $note
+ * Uses Supabase Management API — bypasses PostgREST quota entirely.
  */
+// Allow Pusher HTTPS on macOS where system certs aren't in Node's bundle
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
 import { readFileSync, writeFileSync, existsSync, createReadStream } from 'fs';
-import { basename, dirname } from 'path';
-import { createHmac, createHash } from 'crypto';
+import { basename, dirname, join } from 'path';
+import { createHash } from 'crypto';
 import { fileURLToPath } from 'url';
 import sharp from 'sharp';
+import Pusher from 'pusher';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const MANIFEST_FILE = `${__dirname}/.import-manifest.json`;
+
+// Load .env.local
+const envPath = join(__dirname, '../.env.local');
+if (existsSync(envPath)) {
+  readFileSync(envPath, 'utf8').split('\n').forEach((line) => {
+    const m = line.match(/^([^#=]+)=(.*)/);
+    if (m) process.env[m[1].trim()] = m[2].trim();
+  });
+}
+
+// Supabase Management API — same db/dbOne interface as pg, no connection string needed
+const SB_REF   = process.env.SUPABASE_PROJECT_REF;
+const SB_TOKEN = process.env.SUPABASE_MANAGEMENT_TOKEN;
+
+async function sbQuery(sql) {
+  const res = await fetch(`https://api.supabase.com/v1/projects/${SB_REF}/database/query`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${SB_TOKEN}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query: sql }),
+  });
+  if (!res.ok) { const t = await res.text(); throw new Error(`Supabase SQL error (${res.status}): ${t}`); }
+  const data = await res.json();
+  return Array.isArray(data) ? data : [];
+}
+
+/** Inline $1,$2,… params safely into SQL literals for the Management API */
+function fmt(sql, params = []) {
+  return sql.replace(/\$(\d+)/g, (_, n) => {
+    const v = params[parseInt(n, 10) - 1];
+    if (v === null || v === undefined) return 'NULL';
+    if (typeof v === 'number') return String(v);
+    if (typeof v === 'boolean') return v ? 'true' : 'false';
+    return `'${String(v).replace(/'/g, "''")}'`;
+  });
+}
+
+const db    = (sql, p) => sbQuery(fmt(sql, p));
+const dbOne = (sql, p) => sbQuery(fmt(sql, p)).then(r => r[0] ?? null);
 
 function loadManifest() {
   if (!existsSync(MANIFEST_FILE)) return {};
@@ -29,10 +71,55 @@ const BRIGHT_COLORS = [
 ];
 const randomColor = () => BRIGHT_COLORS[Math.floor(Math.random() * BRIGHT_COLORS.length)];
 
-const STICKIES_URL = process.env.STICKIES_URL || 'https://bheng.vercel.app/api/stickies';
-const STICKIES_KEY = process.env.STICKIES_KEY;
-const SB_URL = process.env.SUPABASE_URL;
-const SB_KEY = process.env.SUPABASE_SERVICE_KEY;
+// ── Terminal UI ───────────────────────────────────────────────────────────────
+/** Convert #RRGGBB → ANSI truecolor escape */
+function hex(color) {
+  const c = color.replace('#', '');
+  const r = parseInt(c.slice(0, 2), 16);
+  const g = parseInt(c.slice(2, 4), 16);
+  const b = parseInt(c.slice(4, 6), 16);
+  return `\x1b[38;2;${r};${g};${b}m`;
+}
+const RESET  = '\x1b[0m';
+const BOLD   = '\x1b[1m';
+const DIM    = '\x1b[2m';
+const CLEAR  = '\x1b[2K\x1b[1G'; // clear line + move to col 1
+
+const SPINNER_FRAMES = ['⠋','⠙','⠹','⠸','⠼','⠴','⠦','⠧','⠇','⠏'];
+// Rainbow cycle for the spinner itself
+const RAINBOW = ['#FF3B30','#FF9500','#FFCC00','#34C759','#007AFF','#5856D6','#AF52DE'];
+let _spinFrame = 0;
+let _spinTimer = null;
+let _spinLabel = '';
+
+function spinStart(label) {
+  _spinLabel = label;
+  _spinFrame = 0;
+  process.stdout.write('\x1b[?25l'); // hide cursor
+  _spinTimer = setInterval(() => {
+    const frame  = SPINNER_FRAMES[_spinFrame % SPINNER_FRAMES.length];
+    const color  = RAINBOW[_spinFrame % RAINBOW.length];
+    process.stdout.write(`${CLEAR}${hex(color)}${frame}${RESET} ${_spinLabel}`);
+    _spinFrame++;
+  }, 80);
+}
+
+function spinStop() {
+  if (_spinTimer) { clearInterval(_spinTimer); _spinTimer = null; }
+  process.stdout.write(`${CLEAR}\x1b[?25h`); // restore cursor
+}
+
+function spinLabel(label) { _spinLabel = label; }
+
+/** Render a colorful progress bar */
+function progressBar(done, total, color, width = 28) {
+  const pct   = total > 0 ? done / total : 0;
+  const filled = Math.round(pct * width);
+  const bar   = hex(color) + '█'.repeat(filled) + DIM + '░'.repeat(width - filled) + RESET;
+  const pctStr = `${Math.round(pct * 100)}%`.padStart(4);
+  return `[${bar}] ${hex(color)}${BOLD}${pctStr}${RESET}`;
+}
+
 const PUSHER = {
   appId:   process.env.PUSHER_APP_ID,
   key:     process.env.PUSHER_KEY,
@@ -40,17 +127,25 @@ const PUSHER = {
   cluster: process.env.PUSHER_CLUSTER || 'us2',
 };
 
-if (!SB_URL || !SB_KEY) { console.error('Missing SUPABASE_URL / SUPABASE_SERVICE_KEY env vars'); process.exit(1); }
+if (!process.env.SUPABASE_PROJECT_REF || !process.env.SUPABASE_MANAGEMENT_TOKEN) {
+  console.error('Missing SUPABASE_PROJECT_REF or SUPABASE_MANAGEMENT_TOKEN env var');
+  process.exit(1);
+}
 
 const enexFile = process.argv[2];
-const notebook = process.argv[3];
 const limitArg = process.argv.find(a => a.startsWith('--limit='));
 const limit = limitArg ? parseInt(limitArg.split('=')[1]) : null;
 
-if (!enexFile || !notebook) {
-  console.error('Usage: node enex-to-stickies.mjs <file.enex> <NotebookName> [--limit=N]');
+if (!enexFile) {
+  console.error('Usage: node enex-to-stickies.mjs <file.enex> [--limit=N]');
   process.exit(1);
 }
+
+// Derive notebook name from filename: "My Notebook.enex" → "MY NOTEBOOK"
+const notebook = (process.argv[3] && !process.argv[3].startsWith('--'))
+  ? process.argv[3]
+  : basename(enexFile, '.enex').toUpperCase();
+console.log(`Notebook: "${notebook}" (from ${process.argv[3] && !process.argv[3].startsWith('--') ? 'arg' : 'filename'})`);
 
 // ── Stream-parse .enex → note blocks ─────────────────────────────────────────
 async function streamNoteBlocks(filePath) {
@@ -472,31 +567,12 @@ function parseNoteBlock(block) {
   return { title, created, enml, resources, key, createdAt, updatedAt };
 }
 
-// ── Supabase helpers ──────────────────────────────────────────────────────────
-async function sbGet(path) {
-  const res = await fetch(`${SB_URL}/rest/v1/${path}`, {
-    headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` },
-  });
-  return res.json();
-}
-
-async function sbPatch(table, filter, data) {
-  const res = await fetch(`${SB_URL}/rest/v1/${table}?${filter}`, {
-    method: 'PATCH',
-    headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
-    body: JSON.stringify(data),
-  });
-  return res.ok;
-}
-
+// ── pg helpers ────────────────────────────────────────────────────────────────
 async function sbInsert(table, data) {
-  const res = await fetch(`${SB_URL}/rest/v1/${table}`, {
-    method: 'POST',
-    headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, 'Content-Type': 'application/json', Prefer: 'return=representation' },
-    body: JSON.stringify(data),
-  });
-  const result = await res.json();
-  return Array.isArray(result) ? result[0] : result;
+  const cols = Object.keys(data).map(k => `"${k}"`).join(', ');
+  const vals = Object.values(data);
+  const placeholders = vals.map((_, i) => `$${i + 1}`).join(', ');
+  return dbOne(`INSERT INTO "${table}" (${cols}) VALUES (${placeholders}) RETURNING *`, vals);
 }
 
 // Strip base64 image data from TipTap JSON (replace with placeholder paragraph)
@@ -513,30 +589,26 @@ function stripImagesFromTiptap(tiptap) {
 
 // Look up folder UUID by name + parent_folder_name
 async function getFolderId(folderName, parentName) {
-  const filter = `is_folder=eq.true&folder_name=eq.${encodeURIComponent(folderName)}`;
-  const rows = await sbGet(`notes?${filter}&select=id,parent_folder_name`);
-  if (!Array.isArray(rows)) return null;
-  const match = rows.find(r =>
-    parentName ? r.parent_folder_name?.toLowerCase() === parentName.toLowerCase() : !r.parent_folder_name
+  const row = await dbOne(
+    `SELECT id FROM stickies WHERE is_folder = true AND lower(folder_name) = lower($1) AND lower(parent_folder_name) = lower($2) LIMIT 1`,
+    [folderName, parentName]
   );
-  return match?.id || null;
+  return row?.id ? String(row.id) : null;
+}
+
+// Load existing note titles from DB to skip duplicates
+async function loadExistingTitles(folderName) {
+  const rows = await db(`SELECT lower(title) AS t FROM stickies WHERE is_folder = false AND folder_name = $1`, [folderName]);
+  return new Set(rows.map(r => r.t));
 }
 
 // ── Pusher trigger ────────────────────────────────────────────────────────────
+const pusherClient = new Pusher({
+  appId: PUSHER.appId, key: PUSHER.key, secret: PUSHER.secret, cluster: PUSHER.cluster, useTLS: true,
+});
+
 async function pusherTrigger(event, data) {
-  const { appId, key, secret, cluster } = PUSHER;
-  const channel = 'stickies';
-  const ts = Math.floor(Date.now() / 1000).toString();
-  const body = JSON.stringify(data);
-  const md5 = createHmac('md5', '').update(body).digest('hex'); // body_md5
-  const toSign = `POST\n/apps/${appId}/events\nauth_key=${key}&auth_timestamp=${ts}&auth_version=1.0&body_md5=${md5}&channels%5B%5D=${channel}&name=${event}`;
-  const sig = createHmac('sha256', secret).update(toSign).digest('hex');
-  const url = `https://api-${cluster}.pusher.com/apps/${appId}/events?auth_key=${key}&auth_timestamp=${ts}&auth_version=1.0&body_md5=${md5}&auth_signature=${sig}`;
-  await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: event, channels: [channel], data: JSON.stringify(data) }),
-  }).catch(() => {});
+  await pusherClient.trigger('stickies', event, data).catch(() => {});
 }
 
 // Post to Stickies API (for folder creation)
@@ -580,8 +652,15 @@ async function main() {
   let evernoteId = await getFolderId('EVERNOTE', 'Integrations');
   if (!evernoteId) {
     console.log('Creating EVERNOTE folder...');
-    await post({ type: 'folder', name: 'EVERNOTE', parent_folder: 'Integrations' });
-    evernoteId = await getFolderId('EVERNOTE', 'Integrations');
+    const maxOrd = await dbOne(`SELECT MAX("order") AS m FROM stickies WHERE is_folder = true`);
+    const intRow = await dbOne(`SELECT id FROM stickies WHERE is_folder = true AND lower(folder_name) = 'integrations' LIMIT 1`);
+    const now = new Date().toISOString();
+    const f = await sbInsert('stickies', {
+      is_folder: true, folder_name: 'EVERNOTE', title: 'EVERNOTE', content: '',
+      folder_color: '#B0B0B8', parent_folder_name: 'Integrations',
+      folder_id: intRow?.id ?? null, order: (maxOrd?.m ?? 2000) + 1, created_at: now, updated_at: now,
+    });
+    evernoteId = f?.id ? String(f.id) : null;
   }
   console.log(`EVERNOTE folder id: ${evernoteId}`);
 
@@ -589,36 +668,59 @@ async function main() {
   let notebookId = await getFolderId(notebook, 'EVERNOTE');
   if (!notebookId) {
     console.log(`Creating ${notebook} folder...`);
-    await post({ type: 'folder', name: notebook, parent_folder: 'EVERNOTE' });
-    notebookId = await getFolderId(notebook, 'EVERNOTE');
-    if (notebookId) {
-      await sbPatch('notes', `id=eq.${notebookId}`, { parent_folder_name: 'EVERNOTE', folder_id: evernoteId });
-    }
+    const maxOrd = await dbOne(`SELECT MAX("order") AS m FROM stickies WHERE is_folder = true`);
+    const now = new Date().toISOString();
+    const f = await sbInsert('stickies', {
+      is_folder: true, folder_name: notebook, title: notebook, content: '',
+      folder_color: randomColor(), parent_folder_name: 'EVERNOTE',
+      folder_id: evernoteId, order: (maxOrd?.m ?? 2000) + 1, created_at: now, updated_at: now,
+    });
+    notebookId = f?.id ? String(f.id) : null;
   }
   console.log(`${notebook} folder id: ${notebookId}`);
 
   // Get notebook folder_color
-  const notebookRows = await sbGet(`notes?id=eq.${notebookId}&select=folder_color`);
-  const folderColor = (Array.isArray(notebookRows) && notebookRows[0]?.folder_color) || '#555560';
+  const notebookRow = await dbOne(`SELECT folder_color FROM stickies WHERE id = $1`, [notebookId]);
+  const folderColor = notebookRow?.folder_color || '#555560';
 
   // Get max order
-  const orderRows = await sbGet('notes?select=order&order=order.desc&limit=1');
-  let nextOrder = (Array.isArray(orderRows) && orderRows[0]?.order ? orderRows[0].order : 2000) + 1;
+  const maxOrdRow = await dbOne(`SELECT MAX("order") AS m FROM stickies WHERE is_folder = false`);
+  let nextOrder = (maxOrdRow?.m ?? 2000) + 1;
+
+  // Load existing titles from DB to skip duplicates
+  const existingTitles = await loadExistingTitles(notebook);
+  if (existingTitles.size > 0)
+    console.log(`${DIM}↩  ${existingTitles.size} already in DB — will skip${RESET}`);
 
   let importedCount = 0;
+  let failedNotes   = [];
+  let skippedCount  = 0;
+
+  // Print a blank line before the live block
+  console.log('');
+
   for (const block of orderedBlocks) {
     if (limit && importedCount >= limit) break;
 
-    // Now fully parse this single block (base64 decode only for this note)
     const note = parseNoteBlock(block);
-    console.log(`Converting: ${note.title}`);
+
+    if (existingTitles.has(note.title.toLowerCase())) {
+      skippedCount++;
+      continue;
+    }
+
+    const noteColor = randomColor();
+    const shortTitle = note.title.length > 42 ? note.title.slice(0, 41) + '…' : note.title;
+
+    // ── Spinner: converting ──
+    spinStart(`${DIM}converting${RESET}  ${hex(noteColor)}${BOLD}${shortTitle}${RESET}`);
     const tiptap = await enmlToTiptap(note.enml, note.resources);
     const imageCount = JSON.stringify(tiptap).match(/"type":"image"/g)?.length || 0;
-    console.log(`  → ${tiptap.content.length} blocks, ${imageCount} image(s)`);
+    spinStop();
 
-    // Insert directly into Supabase with correct folder_id
-    const noteColor = randomColor();
-    const row = await sbInsert('notes', {
+    // ── Spinner: uploading ──
+    spinStart(`${DIM}uploading${RESET}   ${hex(noteColor)}${BOLD}${shortTitle}${RESET}`);
+    const row = await sbInsert('stickies', {
       title: note.title,
       content: JSON.stringify(tiptap),
       folder_name: notebook,
@@ -632,18 +734,27 @@ async function main() {
       created_at: note.createdAt,
       updated_at: note.updatedAt,
     });
+    spinStop();
 
     if (row?.id) {
       manifest[note.key] = { id: row.id, title: row.title, importedAt: new Date().toISOString() };
       saveManifest(manifest);
-      console.log(`  ✓ Inserted: ${row.title} (id: ${row.id})`);
-      await pusherTrigger('note-created', row);
+      existingTitles.add(note.title.toLowerCase());
       importedCount++;
-    } else if (row?.code === '54000' || row?.message?.includes('tsvector')) {
-      // Content too large for full-text index — retry without images
-      console.warn(`  ⚠ tsvector limit hit, retrying without images...`);
+      await pusherTrigger('note-created', row);
+
+      const imgs  = imageCount > 0 ? `  ${DIM}${imageCount} img${RESET}` : '';
+      const bar   = progressBar(importedCount, toImport, noteColor);
+      console.log(
+        `${hex(noteColor)}${BOLD}✓${RESET} ` +
+        `${hex(noteColor)}[${String(importedCount).padStart(3)}/${toImport}]${RESET} ` +
+        `${bar}${imgs}\n  ${DIM}${shortTitle}${RESET}`
+      );
+    } else {
+      // Retry without images
+      spinStart(`${hex('#FF9500')}retrying${RESET} (no images)  ${DIM}${shortTitle}${RESET}`);
       const stripped = stripImagesFromTiptap(tiptap);
-      const row2 = await sbInsert('notes', {
+      const row2 = await sbInsert('stickies', {
         title: note.title,
         content: JSON.stringify(stripped),
         folder_name: notebook,
@@ -653,25 +764,156 @@ async function main() {
         is_folder: false,
         list_mode: false,
         parent_folder_name: null,
-        order: nextOrder - 1, // reuse same order slot
+        order: nextOrder - 1,
         created_at: note.createdAt,
         updated_at: note.updatedAt,
       });
+      spinStop();
+
       if (row2?.id) {
         manifest[note.key] = { id: row2.id, title: row2.title, importedAt: new Date().toISOString(), imagesStripped: true };
         saveManifest(manifest);
-        console.log(`  ✓ Inserted (no images): ${row2.title} (id: ${row2.id})`);
-        await pusherTrigger('note-created', row2);
+        existingTitles.add(note.title.toLowerCase());
         importedCount++;
+        await pusherTrigger('note-created', row2);
+        console.log(
+          `${hex('#FF9500')}${BOLD}✓${RESET} ` +
+          `${hex('#FF9500')}[${String(importedCount).padStart(3)}/${toImport}]${RESET} ` +
+          `${progressBar(importedCount, toImport, '#FF9500')}  ${DIM}(imgs stripped) ${shortTitle}${RESET}`
+        );
       } else {
-        console.error(`  ✗ Failed even without images:`, row2);
+        failedNotes.push(note.title);
+        console.log(`${hex('#FF3B30')}${BOLD}✗${RESET} ${DIM}failed:${RESET} ${shortTitle}`);
       }
-    } else {
-      console.error(`  ✗ Failed:`, row);
     }
   }
+  console.log('');
 
-  console.log('\nDone.');
+  // ── Post-import quality audit ────────────────────────────────────────────────
+  const auditRows = await db(
+    `SELECT id, title, content, created_at FROM stickies WHERE is_folder = false AND folder_name = $1 ORDER BY "order" ASC`,
+    [notebook]
+  );
+
+  let totalImages = 0;
+  let totalLines = 0;
+  let totalTables = 0;
+  let totalBytes = 0;
+  let notesWithImages = 0;
+  let notesWithTables = 0;
+  let strippedNotes = [];
+  let emptyNotes = [];
+  let largestNote = { title: '', bytes: 0 };
+
+  for (const r of auditRows) {
+    const contentStr = typeof r.content === 'string' ? r.content : JSON.stringify(r.content);
+    const bytes = Buffer.byteLength(contentStr, 'utf8');
+    totalBytes += bytes;
+
+    if (bytes > largestNote.bytes) largestNote = { title: r.title, bytes };
+
+    const imgMatches = contentStr.match(/"type":"image"/g);
+    const imgs = imgMatches ? imgMatches.length : 0;
+    totalImages += imgs;
+    if (imgs > 0) notesWithImages++;
+
+    if (contentStr.includes('Image \u2014 too large to import')) strippedNotes.push(r.title);
+
+    const tableMatches = contentStr.match(/"type":"table"/g);
+    const tables = tableMatches ? tableMatches.length : 0;
+    totalTables += tables;
+    if (tables > 0) notesWithTables++;
+
+    const lineMatches = contentStr.match(/"type":"(paragraph|heading|listItem|bulletList|orderedList)"/g);
+    totalLines += lineMatches ? lineMatches.length : 0;
+
+    // Detect empty/blank notes (content has no text nodes with actual content)
+    const textMatches = contentStr.match(/"text":"([^"]+)"/g);
+    if (!textMatches || textMatches.length === 0) emptyNotes.push(r.title);
+  }
+
+  const totalKB = (totalBytes / 1024).toFixed(1);
+  const totalMB = (totalBytes / 1024 / 1024).toFixed(2);
+  const avgKB   = auditRows.length ? (totalBytes / auditRows.length / 1024).toFixed(1) : '0';
+
+  // ── Colors for the report table ──
+  const C = {
+    border:   hex('#5856D6'),
+    head:     hex('#AF52DE'),
+    label:    hex('#32ADE6'),
+    green:    hex('#34C759'),
+    yellow:   hex('#FFCC00'),
+    orange:   hex('#FF9500'),
+    red:      hex('#FF3B30'),
+    dim:      DIM,
+  };
+
+  const W = 52; // inner content width (between │ and │)
+  const row = (label, value, valColor = RESET) => {
+    const lbl = `${C.label}${label}${RESET}`;
+    const val = `${valColor}${BOLD}${value}${RESET}`;
+    // strip ANSI for length calc
+    const lblLen = label.length;
+    const valLen = String(value).length;
+    const gap = Math.max(1, W - lblLen - valLen - 2);
+    return `${C.border}│${RESET}  ${lbl}${' '.repeat(gap)}${val}  ${C.border}│${RESET}`;
+  };
+  const divider = (l, m, r) => `${C.border}${l}${'─'.repeat(W + 2)}${r}${RESET}`;
+  const blank   = () => `${C.border}│${' '.repeat(W + 2)}│${RESET}`;
+
+  const successColor = failedNotes.length > 0 ? C.orange : C.green;
+  const skippedStr   = skippedCount > 0 ? ` ${C.dim}(${skippedCount} skipped)${RESET}` : '';
+
+  console.log(`\n${divider('╔','═','╗'.replace('─','═'))}`);
+  const title = 'REPORT';
+  const titlePad = Math.max(0, W - title.length);
+  const titleColored = [...title].map((ch, i) => `${hex(RAINBOW[i % RAINBOW.length])}${ch}`).join('') + RESET;
+  console.log(`${C.border}│${RESET}  ${BOLD}${titleColored}${' '.repeat(titlePad)}  ${C.border}│${RESET}`);
+  console.log(divider('╠','─','╣'));
+
+  console.log(row('Notebook',            notebook, C.head));
+  console.log(divider('├','─','┤'));
+  console.log(row('Inserted this run',  importedCount + skippedStr, successColor));
+  console.log(row('Failed',             failedNotes.length, failedNotes.length > 0 ? C.red : C.green));
+  console.log(row('Total in notebook',  auditRows.length, C.green));
+  console.log(divider('├','─','┤'));
+
+  console.log(row('Content size',       `${totalKB} KB  (${totalMB} MB)`, C.yellow));
+  console.log(row('Avg note size',      `${avgKB} KB`, C.dim));
+  console.log(row('Largest note',       `${largestNote.title.slice(0,22)}  ${(largestNote.bytes/1024).toFixed(1)} KB`, C.dim));
+  console.log(divider('├','─','┤'));
+
+  console.log(row('Lines',              totalLines, C.label));
+  console.log(row('Images',             `${totalImages}  in ${notesWithImages} notes`, totalImages > 0 ? C.yellow : C.dim));
+  console.log(row('Tables',             `${totalTables}  in ${notesWithTables} notes`, totalTables > 0 ? C.yellow : C.dim));
+
+  if (emptyNotes.length > 0) {
+    console.log(divider('├','─','┤'));
+    console.log(row('⚠  Empty notes', emptyNotes.length, C.orange));
+    emptyNotes.slice(0, 4).forEach(t =>
+      console.log(`${C.border}│${RESET}    ${C.dim}· ${t.slice(0, W - 4)}${RESET}${' '.repeat(Math.max(0, W - 2 - t.slice(0,W-4).length))}  ${C.border}│${RESET}`)
+    );
+    if (emptyNotes.length > 4) console.log(`${C.border}│${RESET}    ${C.dim}· …and ${emptyNotes.length - 4} more${RESET}${' '.repeat(Math.max(0, W - 14 - String(emptyNotes.length-4).length))}  ${C.border}│${RESET}`);
+  }
+
+  if (strippedNotes.length > 0) {
+    console.log(divider('├','─','┤'));
+    console.log(row('⚠  Images stripped', strippedNotes.length, C.orange));
+    strippedNotes.slice(0, 4).forEach(t =>
+      console.log(`${C.border}│${RESET}    ${C.dim}· ${t.slice(0, W - 4)}${RESET}${' '.repeat(Math.max(0, W - 2 - t.slice(0,W-4).length))}  ${C.border}│${RESET}`)
+    );
+    if (strippedNotes.length > 4) console.log(`${C.border}│${RESET}    ${C.dim}· …and ${strippedNotes.length - 4} more${RESET}${' '.repeat(Math.max(0, W - 14 - String(strippedNotes.length-4).length))}  ${C.border}│${RESET}`);
+  }
+
+  if (failedNotes.length > 0) {
+    console.log(divider('├','─','┤'));
+    console.log(row('✗  Failed notes', failedNotes.length, C.red));
+    failedNotes.slice(0, 4).forEach(t =>
+      console.log(`${C.border}│${RESET}    ${C.red}· ${t.slice(0, W - 4)}${RESET}${' '.repeat(Math.max(0, W - 2 - t.slice(0,W-4).length))}  ${C.border}│${RESET}`)
+    );
+  }
+
+  console.log(divider('╚','═','╝'));
 }
 
 main().catch(console.error);
