@@ -3673,25 +3673,23 @@ const fireIntegrations = (trigger: string, note: any) => {
 
     const togglePlainMode = useCallback(() => {
         if (!currentNoteId) return;
-        setPlainModeNotes((prev) => {
-            const next = new Set(prev);
-            const turningOn = !next.has(currentNoteId);
-            if (turningOn) {
-                // Convert TipTap JSON → plain text so the user sees clean content
-                try {
-                    const parsed = JSON.parse(content);
-                    if (parsed?.type === "doc" && Array.isArray(parsed.content)) {
-                        const plain = tiptapToPlainText(parsed).replace(/\n{3,}/g, "\n\n").trim();
-                        setContent(plain);
-                    }
-                } catch {}
-                next.add(currentNoteId);
-            } else {
-                next.delete(currentNoteId);
-            }
-            return next;
-        });
-    }, [currentNoteId, content]);
+        // Cancel any pending autosave to prevent stale-closure saves during mode switch
+        if (autoSaveTimerRef.current) { clearTimeout(autoSaveTimerRef.current); autoSaveTimerRef.current = null; }
+        const turningOn = !plainModeNotes.has(currentNoteId);
+        if (turningOn) {
+            // Convert TipTap JSON → plain text so the user sees clean content
+            try {
+                const parsed = JSON.parse(content);
+                if (parsed?.type === "doc" && Array.isArray(parsed.content)) {
+                    const plain = tiptapToPlainText(parsed).replace(/\n{3,}/g, "\n\n").trim();
+                    setContent(plain);
+                }
+            } catch {}
+            setPlainModeNotes((prev) => new Set([...prev, currentNoteId]));
+        } else {
+            setPlainModeNotes((prev) => { const next = new Set(prev); next.delete(currentNoteId); return next; });
+        }
+    }, [currentNoteId, content, plainModeNotes]);
 
     const toggleMarkdownMode = useCallback(() => {
         if (!currentNoteId) return;
@@ -5893,7 +5891,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             language={detectedLang ?? "javascript"}
                                             editing={true}
                                             onChange={(val) => setContent(val)}
-                                            onBlur={() => void saveNote({ silent: true })}
+                                            onBlur={() => { if (currentNoteId) void saveNote({ silent: true }); }}
                                         />
                                         </>
                                     );
