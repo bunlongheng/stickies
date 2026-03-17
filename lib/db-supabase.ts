@@ -5,7 +5,7 @@
  * Auth: Bearer SUPABASE_MANAGEMENT_TOKEN  (personal access token, NOT the service role key)
  *
  * Required env vars:
- *   SUPABASE_PROJECT_REF       — e.g. "esziekejpiuquyjfquye"
+ *   SUPABASE_PROJECT_REF       — e.g. "erhdiqjagmqbtmjblpbo"
  *   SUPABASE_MANAGEMENT_TOKEN  — personal access token from supabase.com/dashboard/account/tokens
  *
  * Same query / queryOne / execute interface as lib/db.ts so the rest of the

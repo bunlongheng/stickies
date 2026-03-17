@@ -41,32 +41,32 @@ const steps = [
     },
     {
         label: "GIN trigram index on title (fast ILIKE search)",
-        sql: `CREATE INDEX CONCURRENTLY IF NOT EXISTS notes_title_trgm
+        sql: `CREATE INDEX CONCURRENTLY IF NOT EXISTS stickies_title_trgm
               ON stickies USING GIN (title gin_trgm_ops)`,
     },
     {
         label: "Index on folder_name for notes (folder view queries)",
-        sql: `CREATE INDEX CONCURRENTLY IF NOT EXISTS notes_folder_name_idx
+        sql: `CREATE INDEX CONCURRENTLY IF NOT EXISTS stickies_folder_name_idx
               ON stickies (folder_name) WHERE is_folder = false`,
     },
     {
         label: "Index on folder_id (folder drill-down)",
-        sql: `CREATE INDEX CONCURRENTLY IF NOT EXISTS notes_folder_id_idx
+        sql: `CREATE INDEX CONCURRENTLY IF NOT EXISTS stickies_folder_id_idx
               ON stickies (folder_id) WHERE folder_id IS NOT NULL AND is_folder = false`,
     },
     {
         label: "Index on updated_at DESC for ordering",
-        sql: `CREATE INDEX CONCURRENTLY IF NOT EXISTS notes_updated_at_idx
+        sql: `CREATE INDEX CONCURRENTLY IF NOT EXISTS stickies_updated_at_idx
               ON stickies (updated_at DESC) WHERE is_folder = false`,
     },
     {
         label: "Index on \"order\" for list ordering",
-        sql: `CREATE INDEX CONCURRENTLY IF NOT EXISTS notes_order_idx
+        sql: `CREATE INDEX CONCURRENTLY IF NOT EXISTS stickies_order_idx
               ON stickies ("order")`,
     },
     {
         label: "Index on is_folder + folder_name (folder list queries)",
-        sql: `CREATE INDEX CONCURRENTLY IF NOT EXISTS notes_is_folder_name_idx
+        sql: `CREATE INDEX CONCURRENTLY IF NOT EXISTS stickies_is_folder_name_idx
               ON stickies (is_folder, folder_name)`,
     },
 ];
