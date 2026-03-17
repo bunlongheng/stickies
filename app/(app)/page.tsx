@@ -254,6 +254,16 @@ const TYPE_BADGE: Record<string, { label: string; color: string }> = {
     checklist:  { label: "Checklist",   color: "#22c55e" },
 };
 
+/** Convert TipTap JSON doc to plain text — used when entering plain mode */
+function tiptapToPlainText(node: any): string {
+    if (!node) return "";
+    if (node.type === "text") return node.text ?? "";
+    const children: any[] = node.content ?? [];
+    const inner = children.map(tiptapToPlainText).join("");
+    const block = ["paragraph","heading","blockquote","listItem","codeBlock","bulletList","orderedList"];
+    return block.includes(node.type) ? inner + "\n" : inner;
+}
+
 /** Client-side fallback type detection — used only when DB type is null (legacy notes) */
 function detectNoteType(content: string): string {
     const t = content.trim();
@@ -3665,11 +3675,23 @@ const fireIntegrations = (trigger: string, note: any) => {
         if (!currentNoteId) return;
         setPlainModeNotes((prev) => {
             const next = new Set(prev);
-            if (next.has(currentNoteId)) next.delete(currentNoteId);
-            else next.add(currentNoteId);
+            const turningOn = !next.has(currentNoteId);
+            if (turningOn) {
+                // Convert TipTap JSON → plain text so the user sees clean content
+                try {
+                    const parsed = JSON.parse(content);
+                    if (parsed?.type === "doc" && Array.isArray(parsed.content)) {
+                        const plain = tiptapToPlainText(parsed).replace(/\n{3,}/g, "\n\n").trim();
+                        setContent(plain);
+                    }
+                } catch {}
+                next.add(currentNoteId);
+            } else {
+                next.delete(currentNoteId);
+            }
             return next;
         });
-    }, [currentNoteId]);
+    }, [currentNoteId, content]);
 
     const toggleMarkdownMode = useCallback(() => {
         if (!currentNoteId) return;

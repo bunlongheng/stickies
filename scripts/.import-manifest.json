@@ -3408,5 +3408,845 @@
     "id": "0fb7aa82-720b-40a7-85d6-64ab6cd1ff49",
     "title": "🪄 ThryvAI - R&D ⭐️",
     "importedAt": "2026-03-16T19:36:23.516Z"
+  },
+  "25-Steps (2026)::20260108T174127Z": {
+    "id": "94b3d983-42e3-468b-b06a-b8410d197840",
+    "title": "25-Steps (2026)",
+    "importedAt": "2026-03-17T17:27:47.269Z"
+  },
+  "3 PI - KT Plans (Neha)::20250805T202129Z": {
+    "id": "8569e97e-2714-43d6-8512-7b1c3ff21f36",
+    "title": "3 PI - KT Plans (Neha)",
+    "importedAt": "2026-03-17T17:27:47.836Z"
+  },
+  "30-60-90 Day Plan for Software Engineering Manager::20250807T213320Z": {
+    "id": "65bce6b5-a330-480c-9c6a-4c08fe93ddf4",
+    "title": "30-60-90 Day Plan for Software Engineering Manager",
+    "importedAt": "2026-03-17T17:27:48.252Z"
+  },
+  "3PI::20250722T204901Z": {
+    "id": "a8cefcd6-4576-406f-aa0e-937fc1b89a7b",
+    "title": "3PI",
+    "importedAt": "2026-03-17T17:27:50.270Z"
+  },
+  "3PI - ALPHA::20251210T173100Z": {
+    "id": "e9c91ef9-8c1c-4fa9-bb48-946f54de156d",
+    "title": "3PI - ALPHA",
+    "importedAt": "2026-03-17T17:27:51.797Z"
+  },
+  "3PI - C4::20250819T151032Z": {
+    "id": "394b39d1-dc45-4ecb-a405-edc858a8ef95",
+    "title": "3PI - C4",
+    "importedAt": "2026-03-17T17:27:53.106Z"
+  },
+  "3PI - Coding Standard::20251112T180128Z": {
+    "id": "873bb26e-fb62-4d6d-8681-9333d13ff300",
+    "title": "3PI - Coding Standard",
+    "importedAt": "2026-03-17T17:27:54.013Z"
+  },
+  "3PI - Database::20250909T161658Z": {
+    "id": "57b916eb-aefe-4251-8bcb-ddd1948f1417",
+    "title": "3PI - Database",
+    "importedAt": "2026-03-17T17:27:54.531Z"
+  },
+  "3PI - High Level Refinement::20251113T183437Z": {
+    "id": "6f5cd37a-a0b0-499a-9dc6-268825794bf4",
+    "title": "3PI - High Level Refinement",
+    "importedAt": "2026-03-17T17:27:54.793Z"
+  },
+  "3PI - Integration Service (BE)::20251120T171303Z": {
+    "id": "10e3af3f-f2c6-4fdd-9da8-dfe24f2f5998",
+    "title": "3PI - Integration Service (BE)",
+    "importedAt": "2026-03-17T17:27:55.883Z"
+  },
+  "3PI - Integration Service (BE) - File Structure::20251120T205144Z": {
+    "id": "140a5539-ccbf-4311-adab-dc3bea2a3547",
+    "title": "3PI - Integration Service (BE) - File Structure",
+    "importedAt": "2026-03-17T17:27:56.659Z"
+  },
+  "3PI - Interview::20250909T181208Z": {
+    "id": "6f4cf4c7-ebbe-4bd4-bd09-8035d4be78d6",
+    "title": "3PI - Interview",
+    "importedAt": "2026-03-17T17:27:57.513Z"
+  },
+  "3PI - Milestone 4 - Updated connection flow::20251202T194422Z": {
+    "id": "2feaf38a-08a7-4c1d-8ef5-6ec26ecd9e98",
+    "title": "3PI - Milestone 4 - Updated connection flow",
+    "importedAt": "2026-03-17T17:27:58.518Z"
+  },
+  "3PI - On call::20251111T170421Z": {
+    "id": "9b3c1147-e932-4512-92eb-ed37e3feaf1d",
+    "title": "3PI - On call",
+    "importedAt": "2026-03-17T17:27:59.021Z"
+  },
+  "3PI - QA::20250916T183629Z": {
+    "id": "ff7d4031-6fa3-4580-b016-0ca816e490d1",
+    "title": "3PI - QA",
+    "importedAt": "2026-03-17T17:27:59.891Z"
+  },
+  "3PI - Topics to discuss::20251112T191939Z": {
+    "id": "ec5e7ac4-4e9f-4bd5-9db5-e307f22f51fc",
+    "title": "3PI - Topics to discuss",
+    "importedAt": "2026-03-17T17:28:00.457Z"
+  },
+  "3PI : Dependency Mapping::20251113T200439Z": {
+    "id": "8b8d98d7-85dc-449f-bc9f-11f64f301d0d",
+    "title": "3PI : Dependency Mapping",
+    "importedAt": "2026-03-17T17:28:01.151Z"
+  },
+  "3PI : JMH, Benchmark, Performance/Load Test::20251105T194104Z": {
+    "id": "9faad975-78a3-47a2-a086-d04e209cdbbe",
+    "title": "3PI : JMH, Benchmark, Performance/Load Test",
+    "importedAt": "2026-03-17T17:28:03.283Z"
+  },
+  "3PI : Phase1 (Review Tickets)::20250908T171739Z": {
+    "id": "c20c09a0-c7c3-4729-ab7a-f489bc5e5894",
+    "title": "3PI : Phase1 (Review Tickets)",
+    "importedAt": "2026-03-17T17:28:03.969Z"
+  },
+  "3PI : Security/Auth State::20250819T172711Z": {
+    "id": "aa3bee57-59d4-41b2-8cfa-20a2f2fa99e3",
+    "title": "3PI : Security/Auth State",
+    "importedAt": "2026-03-17T17:28:04.255Z"
+  },
+  "3PI Claude::20260106T171506Z": {
+    "id": "15087219-85a1-4988-8b7c-74d15ac8e8fa",
+    "title": "3PI Claude",
+    "importedAt": "2026-03-17T17:28:04.498Z"
+  },
+  "3PI Competitor::20250905T171740Z": {
+    "id": "b9111e27-3277-44dd-b119-efef09b8f4b2",
+    "title": "3PI Competitor",
+    "importedAt": "2026-03-17T17:28:04.772Z"
+  },
+  "3PI Demo::20250915T175328Z": {
+    "id": "251e3f89-106e-427a-9f52-80957b24d092",
+    "title": "3PI Demo",
+    "importedAt": "2026-03-17T17:28:05.342Z"
+  },
+  "3PI grooming::20250820T190243Z": {
+    "id": "49e93fe2-ceb5-4dc6-baa1-48f84b164168",
+    "title": "3PI grooming",
+    "importedAt": "2026-03-17T17:28:05.808Z"
+  },
+  "3PI Integrations::20250905T171240Z": {
+    "id": "74d62e78-68f3-495e-8f9f-235b9150d63d",
+    "title": "3PI Integrations",
+    "importedAt": "2026-03-17T17:28:06.546Z"
+  },
+  "3PI Links ✨::20250819T155058Z": {
+    "id": "9d20baae-0bff-4156-9e5f-94203278a96a",
+    "title": "3PI Links ✨",
+    "importedAt": "2026-03-17T17:28:07.532Z"
+  },
+  "3PI Roadmap::20250922T154554Z": {
+    "id": "cf2d5134-90b0-4844-802e-b7080d2f9c87",
+    "title": "3PI Roadmap",
+    "importedAt": "2026-03-17T17:28:08.763Z"
+  },
+  "3PI Status Check::20251105T211013Z": {
+    "id": "cb463b39-cce1-43b0-b800-74bfbcee58df",
+    "title": "3PI Status Check",
+    "importedAt": "2026-03-17T17:28:09.726Z"
+  },
+  "3PI Swagger::20251119T201351Z": {
+    "id": "91346a15-1ab4-4bfe-8707-4bfc8c6b882b",
+    "title": "3PI Swagger",
+    "importedAt": "2026-03-17T17:28:10.223Z"
+  },
+  "3PI Tasks::20250909T161913Z": {
+    "id": "23409b04-85b4-4109-97c6-bed1f0393d3f",
+    "title": "3PI Tasks",
+    "importedAt": "2026-03-17T17:28:10.852Z"
+  },
+  "3PI Team::20250827T145418Z": {
+    "id": "8508231a-dd7c-4ab4-b761-42ac26919f5a",
+    "title": "3PI Team",
+    "importedAt": "2026-03-17T17:28:11.120Z"
+  },
+  "3PI Tech debts::20250820T205133Z": {
+    "id": "82b90a4f-3a2a-438e-89b1-9a9fdd9f3845",
+    "title": "3PI Tech debts",
+    "importedAt": "2026-03-17T17:28:11.813Z"
+  },
+  "3PI UI::20250905T173110Z": {
+    "id": "2fbac92b-1f4a-4b7a-868b-740ecfb7a222",
+    "title": "3PI UI",
+    "importedAt": "2026-03-17T17:28:12.795Z"
+  },
+  "9/19::20250825T181247Z": {
+    "id": "ed3781b1-cc63-43fe-947b-d978c2788c30",
+    "title": "9/19",
+    "importedAt": "2026-03-17T17:28:13.796Z"
+  },
+  "[BE] Implement Delete Tenant Config endpoint::20250902T185209Z": {
+    "id": "a0ef810d-e87f-4b76-a146-76a8bbb6395f",
+    "title": "[BE] Implement Delete Tenant Config endpoint",
+    "importedAt": "2026-03-17T17:28:14.262Z"
+  },
+  "[BE] Setup GCP billing policies for integration-service::20251120T214920Z": {
+    "id": "ad774a09-905b-4c2e-a0f2-9dca939124b1",
+    "title": "[BE] Setup GCP billing policies for integration-service",
+    "importedAt": "2026-03-17T17:28:15.783Z"
+  },
+  "Account Central::20251120T195019Z": {
+    "id": "c1093f76-278e-4e1d-892f-0e0542f6f31a",
+    "title": "Account Central",
+    "importedAt": "2026-03-17T17:28:16.551Z"
+  },
+  "Alerts::20251124T170802Z": {
+    "id": "dcbbe025-d0db-4f3e-8961-7c7be7fcda9f",
+    "title": "Alerts",
+    "importedAt": "2026-03-17T17:28:17.066Z"
+  },
+  "API - Angi::20250915T180257Z": {
+    "id": "8a94b262-3cd0-4856-a38e-ca47dc245682",
+    "title": "API - Angi",
+    "importedAt": "2026-03-17T17:28:19.124Z"
+  },
+  "API Test::20251203T151704Z": {
+    "id": "69e9e01b-8639-4505-b941-36a746187758",
+    "title": "API Test",
+    "importedAt": "2026-03-17T17:28:20.026Z"
+  },
+  "AR Approval::20250929T201123Z": {
+    "id": "6cacb690-4895-4d3b-939d-f6b1e42ca1c8",
+    "title": "AR Approval",
+    "importedAt": "2026-03-17T17:28:20.554Z"
+  },
+  "Auth Service API::20251219T191524Z": {
+    "id": "3c7ba8d6-a9ab-4662-801e-44280074a6b9",
+    "title": "Auth Service API",
+    "importedAt": "2026-03-17T17:28:21.974Z"
+  },
+  "Automation Builder::20250911T184357Z": {
+    "id": "ca1379e7-f83c-4315-aff8-59bda6a0d978",
+    "title": "Automation Builder",
+    "importedAt": "2026-03-17T17:28:22.818Z"
+  },
+  "Automation Builder (Integration Services)::20250825T163054Z": {
+    "id": "5308b0c8-5ad0-4f84-96a3-59d8bb08c24b",
+    "title": "Automation Builder (Integration Services)",
+    "importedAt": "2026-03-17T17:28:23.166Z"
+  },
+  "Automation Engine::20260209T191610Z": {
+    "id": "cffbec1e-2f79-49db-a9eb-345357956c75",
+    "title": "Automation Engine",
+    "importedAt": "2026-03-17T17:28:23.732Z"
+  },
+  "Bad Data?::20251202T223121Z": {
+    "id": "015c4819-852a-4313-9c7a-bdde063b078c",
+    "title": "Bad Data?",
+    "importedAt": "2026-03-17T17:28:24.930Z"
+  },
+  "bheng.2026.sql::20260109T101837Z": {
+    "id": "2c8a3b85-eb53-44a0-b561-ff8ef6d04df1",
+    "title": "bheng.2026.sql",
+    "importedAt": "2026-03-17T17:28:25.456Z"
+  },
+  "Bi-Weekly Sync::20251202T204828Z": {
+    "id": "602e2714-9d41-4dd2-b828-f39115cf673a",
+    "title": "Bi-Weekly Sync",
+    "importedAt": "2026-03-17T17:28:25.982Z"
+  },
+  "Bryan::20250820T195411Z": {
+    "id": "11810b79-8211-4c6f-980f-6c1c4ebfea1c",
+    "title": "Bryan",
+    "importedAt": "2026-03-17T17:28:26.449Z"
+  },
+  "Bryan Jesé Díaz::20250827T172647Z": {
+    "id": "eb457e9b-46ba-4bdd-89fe-f176c0b987f0",
+    "title": "Bryan Jesé Díaz",
+    "importedAt": "2026-03-17T17:28:26.775Z"
+  },
+  "Bryan N::20250909T161434Z": {
+    "id": "13f9651e-b31c-4074-9b58-903c35592ec2",
+    "title": "Bryan N",
+    "importedAt": "2026-03-17T17:28:27.312Z"
+  },
+  "bs-41445P (price and size) is not showing::20250930T170447Z": {
+    "id": "ef3d628f-a8ad-45e5-ba49-3e922221304f",
+    "title": "bs-41445P (price and size) is not showing",
+    "importedAt": "2026-03-17T17:28:27.826Z"
+  },
+  "Budgeting::20251106T215816Z": {
+    "id": "2745a0c6-1112-4a05-955c-659d97bb8922",
+    "title": "Budgeting",
+    "importedAt": "2026-03-17T17:28:28.543Z"
+  },
+  "Bulk Edit in JIRA::20250908T204018Z": {
+    "id": "875ec2a8-bbb5-47e7-b069-9f25bdee5a64",
+    "title": "Bulk Edit in JIRA",
+    "importedAt": "2026-03-17T17:28:29.412Z"
+  },
+  "Bulk List Triggers::20251203T094924Z": {
+    "id": "c4a14e5f-f301-44bd-9da3-a6b158da4463",
+    "title": "Bulk List Triggers",
+    "importedAt": "2026-03-17T17:28:29.922Z"
+  },
+  "Bunlong’s Trade-in device::20250930T175744Z": {
+    "id": "805a50b6-a22f-42d4-9d20-4e4c36a2700c",
+    "title": "Bunlong’s Trade-in device",
+    "importedAt": "2026-03-17T17:28:30.518Z"
+  },
+  "Capex::20251001T215349Z": {
+    "id": "4fb0b1d3-7923-492c-a837-7ce95b457270",
+    "title": "Capex",
+    "importedAt": "2026-03-17T17:28:31.378Z"
+  },
+  "CircleCI ( .circleci/config.yml )::20250902T191559Z": {
+    "id": "6564b8be-cd04-4305-9e93-6e40b87826d3",
+    "title": "CircleCI ( .circleci/config.yml )",
+    "importedAt": "2026-03-17T17:28:31.823Z"
+  },
+  "Clean up Storage::20251217T144454Z": {
+    "id": "461294b8-02ea-4f17-9c31-912db28a941f",
+    "title": "Clean up Storage",
+    "importedAt": "2026-03-17T17:28:32.173Z"
+  },
+  "Coaching Portal::20250915T170059Z": {
+    "id": "3cea3392-d4a8-4ba5-9934-bb868d078b36",
+    "title": "Coaching Portal",
+    "importedAt": "2026-03-17T17:28:33.192Z"
+  },
+  "Commits::20250911T161540Z": {
+    "id": "2ca7a3ea-73ce-4b2d-b6d4-b9ca629bbf04",
+    "title": "Commits",
+    "importedAt": "2026-03-17T17:28:34.172Z"
+  },
+  "Complete Web App Testing Checklist 2025::20251107T211629Z": {
+    "id": "e0febc04-8e69-41f3-92da-602c0eaca7ca",
+    "title": "Complete Web App Testing Checklist 2025",
+    "importedAt": "2026-03-17T17:28:34.638Z"
+  },
+  "Connection Flow::20251205T150330Z": {
+    "id": "270fbe4e-63b1-4f94-9ad8-586e9f5636b0",
+    "title": "Connection Flow",
+    "importedAt": "2026-03-17T17:28:36.802Z"
+  },
+  "Cycle Planning Meetings::20251209T180611Z": {
+    "id": "ce3b4287-1c5a-4613-9a94-c2e1e15b9612",
+    "title": "Cycle Planning Meetings",
+    "importedAt": "2026-03-17T17:28:37.793Z"
+  },
+  "Da::20260206T175800Z": {
+    "id": "802c50b2-ca59-4fa8-a504-14a792c1abbf",
+    "title": "Da",
+    "importedAt": "2026-03-17T17:28:38.198Z"
+  },
+  "Decision Diamond.::20251202T210116Z": {
+    "id": "34e561d2-ef38-4cee-a85e-22a407073604",
+    "title": "Decision Diamond.",
+    "importedAt": "2026-03-17T17:28:38.758Z"
+  },
+  "Deployment::20251124T174049Z": {
+    "id": "8c917adf-41a1-490e-90f6-f6579428b4c2",
+    "title": "Deployment",
+    "importedAt": "2026-03-17T17:28:39.944Z"
+  },
+  "Dev++::20250918T185747Z": {
+    "id": "cfe11812-8e5f-48ae-9466-c1f25009943d",
+    "title": "Dev++",
+    "importedAt": "2026-03-17T17:28:40.476Z"
+  },
+  "Easy Automation::20250908T190404Z": {
+    "id": "6226f6da-c7bc-4e87-bd1d-d37da6db5179",
+    "title": "Easy Automation",
+    "importedAt": "2026-03-17T17:28:41.313Z"
+  },
+  "Edge : Goals::20251217T160320Z": {
+    "id": "fd7d7e0c-8b13-4e39-90a1-88484d9251eb",
+    "title": "Edge : Goals",
+    "importedAt": "2026-03-17T17:28:41.776Z"
+  },
+  "Edson, 10y::20260122T153253Z": {
+    "id": "e601eee8-3bbc-41d1-afcb-76546c7087ea",
+    "title": "Edson, 10y",
+    "importedAt": "2026-03-17T17:28:42.150Z"
+  },
+  "Eng Manager Coaching::20250926T193839Z": {
+    "id": "320fc5ac-ad38-4082-a5b5-c66ee8c0191f",
+    "title": "Eng Manager Coaching",
+    "importedAt": "2026-03-17T17:28:43.774Z"
+  },
+  "Engineering Excellence::20250827T203500Z": {
+    "id": "2dc11fe2-4d2a-4d26-8f3e-9ee64553a279",
+    "title": "Engineering Excellence",
+    "importedAt": "2026-03-17T17:28:47.845Z"
+  },
+  "Engineering Excellences 🔥::20250923T180652Z": {
+    "id": "242c6ba0-2521-4dd7-9c58-4949c0aa1121",
+    "title": "Engineering Excellences 🔥",
+    "importedAt": "2026-03-17T17:28:49.425Z"
+  },
+  "Enoch / Bunlong::20260128T233812Z": {
+    "id": "f44e1b54-ecd4-42c8-8738-da4911b8ac2d",
+    "title": "Enoch / Bunlong",
+    "importedAt": "2026-03-17T17:28:50.700Z"
+  },
+  "Faros::20260122T195936Z": {
+    "id": "69733f44-369f-4d0d-8327-6bf601238f71",
+    "title": "Faros",
+    "importedAt": "2026-03-17T17:28:51.485Z"
+  },
+  "FE KT::20250929T180311Z": {
+    "id": "ef85b3ba-86d6-43e5-a015-e2b76762b899",
+    "title": "FE KT",
+    "importedAt": "2026-03-17T17:28:52.854Z"
+  },
+  "Go over RS with Mike and Ryan later this week::20250903T163557Z": {
+    "id": "f33c8c57-e2c9-458b-948d-24e4cb56dcf8",
+    "title": "Go over RS with Mike and Ryan later this week",
+    "importedAt": "2026-03-17T17:28:54.157Z"
+  },
+  "GOALs : TODO::20251218T201945Z": {
+    "id": "4c68a068-8d0a-4a28-9266-8aa1de92b795",
+    "title": "GOALs : TODO",
+    "importedAt": "2026-03-17T17:28:54.564Z"
+  },
+  "Hey Ryan,::20250920T111031Z": {
+    "id": "07b8906b-84a7-4ad5-8c89-5e2606fedde4",
+    "title": "Hey Ryan,",
+    "importedAt": "2026-03-17T17:28:54.864Z"
+  },
+  "How to connect to databases?::20251125T181940Z": {
+    "id": "de8c7b4f-2eb6-42fd-8eb7-b97c1a948cd7",
+    "title": "How to connect to databases?",
+    "importedAt": "2026-03-17T17:28:55.786Z"
+  },
+  "How to test in (keap-web) integration ?::20250925T153616Z": {
+    "id": "f15b9b40-8fb4-4104-9a7e-f544391a3038",
+    "title": "How to test in (keap-web) integration ?",
+    "importedAt": "2026-03-17T17:28:56.307Z"
+  },
+  "Implement Terraform & CircleCi for STGE::20250902T190659Z": {
+    "id": "28a994cd-a9d0-4b25-9b1d-3000e8095dac",
+    "title": "Implement Terraform & CircleCi for STGE",
+    "importedAt": "2026-03-17T17:28:57.225Z"
+  },
+  "Insurances::20251224T155624Z": {
+    "id": "aa9cd432-d19c-42a6-ac6b-8efcecbd1116",
+    "title": "Insurances",
+    "importedAt": "2026-03-17T17:28:58.395Z"
+  },
+  "Integration Stradegy::20250905T190947Z": {
+    "id": "85d6a94a-1172-4722-82b3-d9a8ae49d13c",
+    "title": "Integration Stradegy",
+    "importedAt": "2026-03-17T17:28:59.977Z"
+  },
+  "integration-service-main.zip::20250825T185230Z": {
+    "id": "c88b1a2e-d34d-4e7d-81c6-01eee5733fb8",
+    "title": "integration-service-main.zip",
+    "importedAt": "2026-03-17T17:29:01.070Z"
+  },
+  "Java SDK::20251120T205910Z": {
+    "id": "9cd17274-d316-43d7-9c0c-f3f94cb2feca",
+    "title": "Java SDK",
+    "importedAt": "2026-03-17T17:29:02.626Z"
+  },
+  "JIRA : 3PI::20250916T143156Z": {
+    "id": "89996d64-7f2d-4fc5-8090-ce311e0de907",
+    "title": "JIRA : 3PI",
+    "importedAt": "2026-03-17T17:29:03.667Z"
+  },
+  "Jira Report Progress;::20251202T204604Z": {
+    "id": "7d0ab6b4-4597-45f5-a39a-a6cb536514eb",
+    "title": "Jira Report Progress;",
+    "importedAt": "2026-03-17T17:29:04.751Z"
+  },
+  "Keap Engineering Management::20250929T205049Z": {
+    "id": "8664950f-a00f-402e-b83e-7350bb101675",
+    "title": "Keap Engineering Management",
+    "importedAt": "2026-03-17T17:29:05.765Z"
+  },
+  "Keap Family::20250902T183508Z": {
+    "id": "c8119ec1-2ead-45bb-9521-5086654178f3",
+    "title": "Keap Family",
+    "importedAt": "2026-03-17T17:29:06.634Z"
+  },
+  "Keap Partners::20250915T183836Z": {
+    "id": "bda945fb-190e-4ac8-bc1a-a3399dada0b2",
+    "title": "Keap Partners",
+    "importedAt": "2026-03-17T17:29:07.341Z"
+  },
+  "Keap REST API::20251219T192045Z": {
+    "id": "1834aae2-fa6d-4abd-b0dd-20f7234f5705",
+    "title": "Keap REST API",
+    "importedAt": "2026-03-17T17:29:09.251Z"
+  },
+  "Keap Web UI 101::20250825T204026Z": {
+    "id": "16b84cbb-4fed-4576-b0d0-820fc24b32fd",
+    "title": "Keap Web UI 101",
+    "importedAt": "2026-03-17T17:29:11.036Z"
+  },
+  "Keap X 2025 Cycle6::20250908T200916Z": {
+    "id": "f0fe66b4-ca6d-4e4e-99a3-9161037dfe4e",
+    "title": "Keap X 2025 Cycle6",
+    "importedAt": "2026-03-17T17:29:11.773Z"
+  },
+  "Layouts::20260209T152121Z": {
+    "id": "8bb19a88-06cf-4d2c-8ddc-2ec0ef6ebce7",
+    "title": "Layouts",
+    "importedAt": "2026-03-17T17:29:12.389Z"
+  },
+  "Luis test so far::20260109T175407Z": {
+    "id": "9587be0c-c7b4-4c89-9d9d-ddb8e6350250",
+    "title": "Luis test so far",
+    "importedAt": "2026-03-17T17:29:12.990Z"
+  },
+  "Manager Sync::20250905T162837Z": {
+    "id": "5cb8c5c6-3f08-49df-953a-87d1b2fa3852",
+    "title": "Manager Sync",
+    "importedAt": "2026-03-17T17:29:13.850Z"
+  },
+  "Manager updates::20250929T164309Z": {
+    "id": "5e0e4b97-1a7c-4e54-b639-8dfbd10072e1",
+    "title": "Manager updates",
+    "importedAt": "2026-03-17T17:29:14.484Z"
+  },
+  "MCP server::20250905T192613Z": {
+    "id": "5598e04a-a7c0-4f12-abd1-767ead9aa5f2",
+    "title": "MCP server",
+    "importedAt": "2026-03-17T17:29:15.014Z"
+  },
+  "mcp-server::20250825T193352Z": {
+    "id": "bfa20186-52c2-42ee-bacf-c81ab3563ed4",
+    "title": "mcp-server",
+    "importedAt": "2026-03-17T17:29:15.381Z"
+  },
+  "Mermaid - Color Flow with numbers::20251223T161508Z": {
+    "id": "69f15ad7-2117-4161-9ee6-a37d6826711d",
+    "title": "Mermaid - Color Flow with numbers",
+    "importedAt": "2026-03-17T17:29:15.732Z"
+  },
+  "Mike WIP::20250903T163550Z": {
+    "id": "e6391462-bc1e-4935-adcb-4d194683e1de",
+    "title": "Mike WIP",
+    "importedAt": "2026-03-17T17:29:16.147Z"
+  },
+  "Monitoring Dashboard::20260128T190421Z": {
+    "id": "b65ab27d-2992-4bc7-b943-ddb44072a360",
+    "title": "Monitoring Dashboard",
+    "importedAt": "2026-03-17T17:29:16.883Z"
+  },
+  "My first ticket (hot)::20250911T170958Z": {
+    "id": "2df2d42a-8124-466f-9943-9072777b06ca",
+    "title": "My first ticket (hot)",
+    "importedAt": "2026-03-17T17:29:17.299Z"
+  },
+  "My updates::20250926T141349Z": {
+    "id": "8cd0617b-6035-4f91-b710-8f5e884f4c8f",
+    "title": "My updates",
+    "importedAt": "2026-03-17T17:29:17.629Z"
+  },
+  "Next.js (shared scripts)::20260114T195731Z": {
+    "id": "dcc69d9d-e20b-4d11-b207-a4cac9592768",
+    "title": "Next.js (shared scripts)",
+    "importedAt": "2026-03-17T17:29:17.874Z"
+  },
+  "Nice Interview Process::20250922T141534Z": {
+    "id": "a3d8a77b-2fb6-4154-9d6b-b9e5067d08d1",
+    "title": "Nice Interview Process",
+    "importedAt": "2026-03-17T17:29:18.405Z"
+  },
+  "Nice UI Designs::20260123T164620Z": {
+    "id": "5369d85a-9d6a-4066-8a3f-24ee6bff7fb5",
+    "title": "Nice UI Designs",
+    "importedAt": "2026-03-17T17:29:19.090Z"
+  },
+  "NIHITO = Nothing Important Happens In The Office::20250825T203521Z": {
+    "id": "59cc4e11-0dca-4cc8-923e-586067ad522f",
+    "title": "NIHITO = Nothing Important Happens In The Office",
+    "importedAt": "2026-03-17T17:29:19.476Z"
+  },
+  "Note - Sep 19, 9:06 AM::20250919T130639Z": {
+    "id": "468a704c-f44b-4a26-aeda-1aaa34d6b601",
+    "title": "Note - Sep 19, 9:06 AM",
+    "importedAt": "2026-03-17T17:29:20.276Z"
+  },
+  "OKR::20251211T203427Z": {
+    "id": "69707f07-50d7-4c2e-8599-d1dd9f11c3a9",
+    "title": "OKR",
+    "importedAt": "2026-03-17T17:29:20.811Z"
+  },
+  "On Call::20250915T172303Z": {
+    "id": "525b8b33-bd85-44aa-a073-5dfe2d96606c",
+    "title": "On Call",
+    "importedAt": "2026-03-17T17:29:21.579Z"
+  },
+  "Onion Architect::20251211T202829Z": {
+    "id": "b7ad7e07-106b-4f8d-8cf5-fc263b45a7b8",
+    "title": "Onion Architect",
+    "importedAt": "2026-03-17T17:29:22.077Z"
+  },
+  "Onion Architecture (API → DB)::20251120T221301Z": {
+    "id": "ae166978-d1f4-4bf2-a4e8-521e9711da90",
+    "title": "Onion Architecture (API → DB)",
+    "importedAt": "2026-03-17T17:29:22.754Z"
+  },
+  "Partner Hub (report)::20250915T162350Z": {
+    "id": "c1c2ac28-1564-424b-830a-780b14f1e5f9",
+    "title": "Partner Hub (report)",
+    "importedAt": "2026-03-17T17:29:23.725Z"
+  },
+  "PCI requirements::20250929T204545Z": {
+    "id": "dd1457f0-c27a-4727-9e39-a680fac889a6",
+    "title": "PCI requirements",
+    "importedAt": "2026-03-17T17:29:24.203Z"
+  },
+  "PD Cycle Schedule - Keap X::20250825T205545Z": {
+    "id": "54ef8e06-bff8-428b-bf1f-ceff6366b46d",
+    "title": "PD Cycle Schedule - Keap X",
+    "importedAt": "2026-03-17T17:29:24.874Z"
+  },
+  "Performance Review::20260106T170631Z": {
+    "id": "77d268ac-5c11-487d-abc8-6db06355d308",
+    "title": "Performance Review",
+    "importedAt": "2026-03-17T17:29:25.799Z"
+  },
+  "Phase 1 (tickets)::20250930T190501Z": {
+    "id": "684303b7-29f9-4195-a10d-23509d141f98",
+    "title": "Phase 1 (tickets)",
+    "importedAt": "2026-03-17T17:29:26.803Z"
+  },
+  "Phase1 - Refinement::20250910T150409Z": {
+    "id": "3f528596-9f6f-467f-83b8-ab279ed33bd2",
+    "title": "Phase1 - Refinement",
+    "importedAt": "2026-03-17T17:29:27.322Z"
+  },
+  "PR Issues::20251118T172019Z": {
+    "id": "43409391-1ce4-488f-9f45-d50d3abdf7f8",
+    "title": "PR Issues",
+    "importedAt": "2026-03-17T17:29:27.590Z"
+  },
+  "pre-refinement::20250911T204519Z": {
+    "id": "f2bcd254-3e5a-4247-a3b1-e8ca747d85d5",
+    "title": "pre-refinement",
+    "importedAt": "2026-03-17T17:29:27.870Z"
+  },
+  "Proposed 2026 Goals for VP Software::20251215T204549Z": {
+    "id": "f60c8f11-08d6-483e-b3b7-8366934a120a",
+    "title": "Proposed 2026 Goals for VP Software",
+    "importedAt": "2026-03-17T17:29:28.396Z"
+  },
+  "Pub/Sub (Subscriber → Domain → DB)::20251120T221512Z": {
+    "id": "86b13df9-64f9-41b0-85cf-22f79488aefa",
+    "title": "Pub/Sub (Subscriber → Domain → DB)",
+    "importedAt": "2026-03-17T17:29:29.433Z"
+  },
+  "Pushpendra plans::20251112T191509Z": {
+    "id": "5135cbc5-b931-41d4-835a-46f71d653885",
+    "title": "Pushpendra plans",
+    "importedAt": "2026-03-17T17:29:29.952Z"
+  },
+  "QE: jump in::20250825T202038Z": {
+    "id": "2e2594cb-148d-457d-b08c-f8b39ab7a829",
+    "title": "QE: jump in",
+    "importedAt": "2026-03-17T17:29:30.241Z"
+  },
+  "Quantum Leap Walk Sync up::20250918T153741Z": {
+    "id": "d16dd500-e37a-4886-8e1c-382bd03003dc",
+    "title": "Quantum Leap Walk Sync up",
+    "importedAt": "2026-03-17T17:29:30.585Z"
+  },
+  "Questions::20251222T200403Z": {
+    "id": "9504be46-d15b-44a6-9a01-76da9a9680b1",
+    "title": "Questions",
+    "importedAt": "2026-03-17T17:29:30.950Z"
+  },
+  "Questions for Neha::20250820T163009Z": {
+    "id": "dd7b2982-71e2-4935-89bd-9e9d01da5506",
+    "title": "Questions for Neha",
+    "importedAt": "2026-03-17T17:29:31.289Z"
+  },
+  "React TODO::20260106T175756Z": {
+    "id": "fdc8d3ee-b4dd-4c21-b3bd-0eb030e8f082",
+    "title": "React TODO",
+    "importedAt": "2026-03-17T17:29:32.127Z"
+  },
+  "Ready to work!::20251202T204152Z": {
+    "id": "c435b1a1-ed91-4891-a4ad-5264a4f10b03",
+    "title": "Ready to work!",
+    "importedAt": "2026-03-17T17:29:32.904Z"
+  },
+  "Remove endpoint::20250827T162211Z": {
+    "id": "3031814c-8d28-44a8-824c-ca863a9f1ec4",
+    "title": "Remove endpoint",
+    "importedAt": "2026-03-17T17:29:33.650Z"
+  },
+  "Research Spike vs. Architecture::20250902T190217Z": {
+    "id": "cb0be2c9-754e-48ee-ba37-a72cc463cb6b",
+    "title": "Research Spike vs. Architecture",
+    "importedAt": "2026-03-17T17:29:34.413Z"
+  },
+  "Review more Phase1 Tickets ++::20250908T204845Z": {
+    "id": "3f66f050-45bc-4c2d-bbce-a7f31e300750",
+    "title": "Review more Phase1 Tickets ++",
+    "importedAt": "2026-03-17T17:29:34.929Z"
+  },
+  "Review tickets::20250827T171240Z": {
+    "id": "c30d4de7-bdb5-4583-bae8-d2cd88b20b2a",
+    "title": "Review tickets",
+    "importedAt": "2026-03-17T17:29:35.492Z"
+  },
+  "Rich&apos;s Keap Roadmap Now/Next/Later::20251209T200906Z": {
+    "id": "fe0bc9da-cf66-455d-b492-28970421ea8f",
+    "title": "Rich&apos;s Keap Roadmap Now/Next/Later",
+    "importedAt": "2026-03-17T17:29:36.309Z"
+  },
+  "Rod -  Integration_Strategy::20251211T154651Z": {
+    "id": "0edd7b86-bc76-4f27-8157-e96af7825722",
+    "title": "Rod -  Integration_Strategy",
+    "importedAt": "2026-03-17T17:29:36.881Z"
+  },
+  "RS : Review prod readiness checklist against service and identify stories::20250902T185426Z": {
+    "id": "cc152f2e-e7e7-4571-b044-628ff53d5128",
+    "title": "RS : Review prod readiness checklist against service and identify stories",
+    "importedAt": "2026-03-17T17:29:37.221Z"
+  },
+  "Ryan::20260120T154544Z": {
+    "id": "079efe02-fd6c-420c-adfa-2d3ce16a4017",
+    "title": "Ryan",
+    "importedAt": "2026-03-17T17:29:37.548Z"
+  },
+  "Ryan Swagger::20250930T200822Z": {
+    "id": "1b96b946-1e38-477d-9d68-e144d16d0843",
+    "title": "Ryan Swagger",
+    "importedAt": "2026-03-17T17:29:38.108Z"
+  },
+  "Sample Epic with Child Items (tasks)::20250902T184416Z": {
+    "id": "23ff505a-bc1e-44f4-ac73-e571210c8671",
+    "title": "Sample Epic with Child Items (tasks)",
+    "importedAt": "2026-03-17T17:29:38.879Z"
+  },
+  "Sandra::20251212T160216Z": {
+    "id": "61849be4-83b4-4098-afdb-fc8744b31ff2",
+    "title": "Sandra",
+    "importedAt": "2026-03-17T17:29:39.414Z"
+  },
+  "Simple check boxes::20250825T203335Z": {
+    "id": "39c3464e-9500-4abb-9960-4080727198c4",
+    "title": "Simple check boxes",
+    "importedAt": "2026-03-17T17:29:39.881Z"
+  },
+  "Solution Launchpad::20250915T170052Z": {
+    "id": "631c09eb-fb3d-4fbe-8117-77588b2c2e1e",
+    "title": "Solution Launchpad",
+    "importedAt": "2026-03-17T17:29:41.595Z"
+  },
+  "Stand up today::20250829T115906Z": {
+    "id": "f829f4a4-717b-45b4-ba97-092ec9a8fedb",
+    "title": "Stand up today",
+    "importedAt": "2026-03-17T17:29:42.153Z"
+  },
+  "Stand up updates::20250828T163350Z": {
+    "id": "c8dc2a87-794b-492e-8287-c4f023a2db7d",
+    "title": "Stand up updates",
+    "importedAt": "2026-03-17T17:29:42.830Z"
+  },
+  "Swagger Links::20251202T222601Z": {
+    "id": "cc33a8e2-2b6d-4a7e-977b-bab64d41d20d",
+    "title": "Swagger Links",
+    "importedAt": "2026-03-17T17:29:43.227Z"
+  },
+  "System Design : Chat::20251105T212302Z": {
+    "id": "f329ed90-acd8-4474-bc8c-97cf6b41c8b5",
+    "title": "System Design : Chat",
+    "importedAt": "2026-03-17T17:29:43.710Z"
+  },
+  "System Design : URL Shortener::20251105T212842Z": {
+    "id": "f95a18f4-51ba-432d-97a1-a4d40d83cf5a",
+    "title": "System Design : URL Shortener",
+    "importedAt": "2026-03-17T17:29:44.045Z"
+  },
+  "Team Breakdown::20250820T213339Z": {
+    "id": "bf92fa30-05a3-443d-a91b-e6691960b898",
+    "title": "Team Breakdown",
+    "importedAt": "2026-03-17T17:29:44.981Z"
+  },
+  "Tech Stack Extract::20250825T201955Z": {
+    "id": "55279b51-6b8e-4a30-bc14-69798edebb96",
+    "title": "Tech Stack Extract",
+    "importedAt": "2026-03-17T17:29:45.454Z"
+  },
+  "Tempo Team::20251204T152924Z": {
+    "id": "7b438c36-d700-442f-a8cd-2ec11920b747",
+    "title": "Tempo Team",
+    "importedAt": "2026-03-17T17:29:45.936Z"
+  },
+  "The Flash ⚡️::20250909T143914Z": {
+    "id": "9afa328b-76f0-4fb3-a888-424cf522b665",
+    "title": "The Flash ⚡️",
+    "importedAt": "2026-03-17T17:29:46.261Z"
+  },
+  "Trigger Event Fields::20251209T202626Z": {
+    "id": "8a4e8464-f78a-4a3e-8024-11d830505311",
+    "title": "Trigger Event Fields",
+    "importedAt": "2026-03-17T17:29:46.473Z"
+  },
+  "UKG for me/Ryan FTE (US)::20251112T191543Z": {
+    "id": "6a7c5f0e-43a2-4be4-b359-159f0619af78",
+    "title": "UKG for me/Ryan FTE (US)",
+    "importedAt": "2026-03-17T17:29:48.226Z"
+  },
+  "Untitled::20250825T183131Z": {
+    "id": "177865d8-df41-4b84-91ea-36d994c9ce11",
+    "title": "Untitled",
+    "importedAt": "2026-03-17T17:29:48.917Z"
+  },
+  "Update from June::20251111T154745Z": {
+    "id": "e819727f-864f-4c2e-b826-27db4e2bc999",
+    "title": "Update from June",
+    "importedAt": "2026-03-17T17:29:49.277Z"
+  },
+  "URL Shortener::20251209T201330Z": {
+    "id": "a3eb8f5a-0838-4bae-819a-33f62e5b938e",
+    "title": "URL Shortener",
+    "importedAt": "2026-03-17T17:29:50.246Z"
+  },
+  "Waffle Switcher::20251209T193056Z": {
+    "id": "79f19b6c-38e7-4506-88ae-a1daa0bd8f85",
+    "title": "Waffle Switcher",
+    "importedAt": "2026-03-17T17:29:51.056Z"
+  },
+  "WE ARE HERE 🔥::20251202T221507Z": {
+    "id": "c31d70e0-77a8-4538-841b-84881822bc35",
+    "title": "WE ARE HERE 🔥",
+    "importedAt": "2026-03-17T17:29:54.358Z"
+  },
+  "When/Then Architect (Research)::20250909T162544Z": {
+    "id": "a2752b48-7606-424e-9f57-81bb6db5372c",
+    "title": "When/Then Architect (Research)",
+    "importedAt": "2026-03-17T17:29:56.264Z"
+  },
+  "WhoamI ?::20251203T144509Z": {
+    "id": "41a298f4-25a3-4821-8568-d77524cb85f3",
+    "title": "WhoamI ?",
+    "importedAt": "2026-03-17T17:29:57.320Z"
+  },
+  "wickedreports.com::20250915T182620Z": {
+    "id": "ae687d08-879d-4cb8-8c68-383b7df3b096",
+    "title": "wickedreports.com",
+    "importedAt": "2026-03-17T17:29:58.188Z"
+  },
+  "Zapier::20250915T183319Z": {
+    "id": "72c61058-27c7-4625-aaf6-533c20847f12",
+    "title": "Zapier",
+    "importedAt": "2026-03-17T17:30:00.242Z"
+  },
+  "Zeta Refinement::20250903T170531Z": {
+    "id": "0ab29af2-4d94-4541-b195-d73a449c0af8",
+    "title": "Zeta Refinement",
+    "importedAt": "2026-03-17T17:30:01.246Z"
+  },
+  "🎫 Review Tickets::20250902T184846Z": {
+    "id": "e61819d5-794c-4c0b-b60d-a19a0205c98f",
+    "title": "🎫 Review Tickets",
+    "importedAt": "2026-03-17T17:30:01.756Z"
+  },
+  "🔄 Full Flow from Dev Push to Deploy (based on your config)::20250902T192303Z": {
+    "id": "55e220ab-36a8-4cbb-b738-ce55be7644a6",
+    "title": "🔄 Full Flow from Dev Push to Deploy (based on your config)",
+    "importedAt": "2026-03-17T17:30:02.321Z"
   }
 }
