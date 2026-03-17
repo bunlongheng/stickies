@@ -692,9 +692,10 @@ async function main() {
   if (existingTitles.size > 0)
     console.log(`${DIM}↩  ${existingTitles.size} already in DB — will skip${RESET}`);
 
-  let importedCount = 0;
-  let failedNotes   = [];
+  let importedCount  = 0;
+  let failedNotes    = [];
   let dbSkippedCount = 0;
+  const skipLog      = []; // { title, reason }
 
   // Print a blank line before the live block
   console.log('');
@@ -706,6 +707,22 @@ async function main() {
 
     if (existingTitles.has(note.title.toLowerCase())) {
       dbSkippedCount++;
+      continue;
+    }
+
+    // ── Skip: untitled
+    const isUntitled = /^untitled(\s+note)?$/i.test(note.title.trim());
+    if (isUntitled) {
+      skipLog.push({ title: note.title, reason: 'untitled' });
+      console.log(`${hex('#555560')}⊘${RESET} ${DIM}skip (untitled):  ${note.title}${RESET}`);
+      continue;
+    }
+
+    // ── Skip: empty ENML content
+    const enmlText = (note.enml || '').replace(/<[^>]+>/g, '').trim();
+    if (!enmlText && !note.enml?.includes('<en-media')) {
+      skipLog.push({ title: note.title, reason: 'empty content' });
+      console.log(`${hex('#555560')}⊘${RESET} ${DIM}skip (empty):      ${note.title}${RESET}`);
       continue;
     }
 
@@ -903,6 +920,24 @@ async function main() {
       console.log(`${C.border}│${RESET}    ${C.dim}· ${t.slice(0, W - 4)}${RESET}${' '.repeat(Math.max(0, W - 2 - t.slice(0,W-4).length))}  ${C.border}│${RESET}`)
     );
     if (strippedNotes.length > 4) console.log(`${C.border}│${RESET}    ${C.dim}· …and ${strippedNotes.length - 4} more${RESET}${' '.repeat(Math.max(0, W - 14 - String(strippedNotes.length-4).length))}  ${C.border}│${RESET}`);
+  }
+
+  if (skipLog.length > 0) {
+    console.log(divider('├','─','┤'));
+    const untitled = skipLog.filter(s => s.reason === 'untitled');
+    const empty    = skipLog.filter(s => s.reason === 'empty content');
+    if (untitled.length) {
+      console.log(row('⊘  Skipped (untitled)', untitled.length, C.dim));
+      untitled.slice(0, 3).forEach(s =>
+        console.log(`${C.border}│${RESET}    ${DIM}· ${s.title.slice(0, W - 4)}${RESET}${' '.repeat(Math.max(0, W - 2 - s.title.slice(0,W-4).length))}  ${C.border}│${RESET}`)
+      );
+    }
+    if (empty.length) {
+      console.log(row('⊘  Skipped (empty)', empty.length, C.dim));
+      empty.slice(0, 3).forEach(s =>
+        console.log(`${C.border}│${RESET}    ${DIM}· ${s.title.slice(0, W - 4)}${RESET}${' '.repeat(Math.max(0, W - 2 - s.title.slice(0,W-4).length))}  ${C.border}│${RESET}`)
+      );
+    }
   }
 
   if (failedNotes.length > 0) {
