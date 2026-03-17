@@ -108,6 +108,19 @@ function getTable(auth: AuthResult): string {
     return auth.type === "user" ? "users_stickies" : "stickies";
 }
 
+// ── User scope helper ────────────────────────────────────────────────────────
+// Fix #1: parameterized user isolation — never string-interpolate userId into SQL.
+function withUser(sql: string, params: unknown[], userId?: string): { sql: string; params: unknown[] } {
+    if (!userId) return { sql, params: [...params] };
+    return { sql: `${sql} AND user_id = $${params.length + 1}`, params: [...params, userId] };
+}
+
+// ── Allowed columns for raw insert (Fix #2) ──────────────────────────────────
+const RAW_INSERT_ALLOWED_COLS = new Set([
+    "title", "content", "folder_name", "folder_color", "is_folder", "type",
+    "order", "created_at", "updated_at", "parent_folder_name", "folder_id", "list_mode",
+]);
+
 // ── Color helpers ────────────────────────────────────────────────────────────
 async function pickLeastUsedColor(table: string, rawColor?: string): Promise<string> {
     const c = String(rawColor ?? "").trim().toUpperCase();
@@ -139,13 +152,6 @@ async function getNextOrder(table: string, isFolderOnly = false): Promise<number
     const whereClause = isFolderOnly ? "WHERE is_folder = true" : "WHERE is_folder = false";
     const row = await queryOne<{ order: number }>(`SELECT "order" FROM "${table}" ${whereClause} ORDER BY "order" DESC LIMIT 1`);
     return typeof row?.order === "number" ? row.order + 1 : 0;
-}
-
-// Build scope WHERE clause for user isolation
-function scopeWhere(userId?: string, existing = ""): { sql: string; params: unknown[]; paramIndex: number } {
-    if (!userId) return { sql: existing, params: [], paramIndex: 1 };
-    const prefix = existing ? `${existing} AND` : "WHERE";
-    return { sql: `${prefix} user_id = $1`, params: [userId], paramIndex: 2 };
 }
 
 // ── Folder path resolver ─────────────────────────────────────────────────────
@@ -190,26 +196,28 @@ export async function GET(req: Request) {
     const q = url.searchParams.get("q")?.trim();
     const route = url.searchParams.get("route")?.trim();
 
-    const userScope = userId ? `AND user_id = '${userId}'` : "";
-
     if (route) {
         const routeFolder = folderFilter ?? "BHENG";
-        const data = await queryOne(
-            `SELECT * FROM "${table}" WHERE is_folder = false AND folder_name = $1 AND title = $2 ${userScope} LIMIT 1`,
-            [routeFolder, route]
+        const { sql, params } = withUser(
+            `SELECT * FROM "${table}" WHERE is_folder = false AND folder_name = $1 AND title = $2`,
+            [routeFolder, route],
+            userId
         );
+        const data = await queryOne(`${sql} LIMIT 1`, params);
         return NextResponse.json({ sticky: data ?? null });
     }
 
     if (foldersOnly) {
-        const rows = await query(
-            `SELECT id, folder_name, folder_color, parent_folder_name, "order", updated_at FROM "${table}" WHERE is_folder = true ${userScope} ORDER BY "order" ASC LIMIT 2000`
+        const { sql, params } = withUser(
+            `SELECT id, folder_name, folder_color, parent_folder_name, "order", updated_at FROM "${table}" WHERE is_folder = true`,
+            [],
+            userId
         );
+        const rows = await query(`${sql} ORDER BY "order" ASC LIMIT 2000`, params);
         return NextResponse.json({ folders: rows });
     }
 
     if (url.searchParams.get("counts") === "1") {
-        // Equivalent of sb.rpc("get_note_counts")
         const rows = await query<{ folder_name: string; folder_id: string | null; cnt: string }>(
             `SELECT folder_name, folder_id::text AS folder_id, COUNT(*) AS cnt FROM "${table}" WHERE is_folder = false GROUP BY folder_name, folder_id`
         );
@@ -230,55 +238,69 @@ export async function GET(req: Request) {
         const limitParam = parseInt(url.searchParams.get("limit") ?? "0");
         const offsetParam = parseInt(url.searchParams.get("offset") ?? "0");
 
-        const params: unknown[] = [folderFilter];
+        const { sql: whereSql, params: whereParams } = withUser(
+            `WHERE is_folder = false AND folder_name = $1`,
+            [folderFilter],
+            userId
+        );
         let paginationSql = "";
         if (limitParam > 0) {
-            params.push(limitParam, offsetParam);
-            paginationSql = `LIMIT $${params.length - 1} OFFSET $${params.length}`;
+            whereParams.push(limitParam, offsetParam);
+            paginationSql = `LIMIT $${whereParams.length - 1} OFFSET $${whereParams.length}`;
         }
-
         const rows = await query(
-            `SELECT ${FOLDER_COLS} FROM "${table}" WHERE is_folder = false AND folder_name = $1 ${userScope} ORDER BY updated_at DESC ${paginationSql}`,
-            params
+            `SELECT ${FOLDER_COLS} FROM "${table}" ${whereSql} ORDER BY updated_at DESC ${paginationSql}`,
+            whereParams
         );
-        // Count separately
-        const countRow = await queryOne<{ count: string }>(
-            `SELECT COUNT(*) AS count FROM "${table}" WHERE is_folder = false AND folder_name = $1 ${userScope}`,
-            [folderFilter]
+        const { sql: countSql, params: countParams } = withUser(
+            `SELECT COUNT(*) AS count FROM "${table}" WHERE is_folder = false AND folder_name = $1`,
+            [folderFilter],
+            userId
         );
+        const countRow = await queryOne<{ count: string }>(countSql, countParams);
         return NextResponse.json({ notes: rows, total: Number(countRow?.count ?? 0) });
     }
 
     if (q) {
         const SEARCH_COLS = `id, title, folder_name, folder_color, folder_id, parent_folder_name, "order", updated_at, created_at, type, is_folder`;
-        const rows = await query(
-            `SELECT ${SEARCH_COLS} FROM "${table}" WHERE is_folder = false AND (title ILIKE $1 OR content ILIKE $1) ${userScope} ORDER BY updated_at DESC LIMIT 50`,
-            [`%${q}%`]
+        const { sql, params } = withUser(
+            `SELECT ${SEARCH_COLS} FROM "${table}" WHERE is_folder = false AND (title ILIKE $1 OR content ILIKE $1)`,
+            [`%${q}%`],
+            userId
         );
+        const rows = await query(`${sql} ORDER BY updated_at DESC LIMIT 50`, params);
         return NextResponse.json({ notes: rows, query: q });
     }
 
     const idParam = url.searchParams.get("id")?.trim();
     if (idParam) {
-        const data = await queryOne(
-            `SELECT * FROM "${table}" WHERE is_folder = false AND id = $1 ${userScope} LIMIT 1`,
-            [idParam]
+        const { sql, params } = withUser(
+            `SELECT * FROM "${table}" WHERE is_folder = false AND id = $1`,
+            [idParam],
+            userId
         );
+        const data = await queryOne(`${sql} LIMIT 1`, params);
         return NextResponse.json({ note: data ?? null });
     }
 
     const exportAll = url.searchParams.get("export") === "1";
     if (exportAll) {
-        const rows = await query(
-            `SELECT * FROM "${table}" WHERE is_folder = false ${userScope} ORDER BY updated_at DESC LIMIT 10000`
+        const { sql, params } = withUser(
+            `SELECT * FROM "${table}" WHERE is_folder = false`,
+            [],
+            userId
         );
+        const rows = await query(`${sql} ORDER BY updated_at DESC LIMIT 10000`, params);
         return NextResponse.json({ notes: rows, total: rows.length });
     }
 
     const LIST_COLS = `id, title, folder_name, folder_color, folder_id, parent_folder_name, "order", updated_at, created_at, type, is_folder`;
-    const rows = await query(
-        `SELECT ${LIST_COLS} FROM "${table}" WHERE is_folder = false ${userScope} ORDER BY "order" ASC LIMIT 10000`
+    const { sql, params } = withUser(
+        `SELECT ${LIST_COLS} FROM "${table}" WHERE is_folder = false`,
+        [],
+        userId
     );
+    const rows = await query(`${sql} ORDER BY "order" ASC LIMIT 10000`, params);
     return NextResponse.json({ notes: rows });
 }
 
@@ -312,6 +334,10 @@ export async function POST(req: Request) {
     // ── Compact array format ──
     if (Array.isArray(bodyForFolderCheck)) {
         const raw = bodyForFolderCheck as unknown as Array<unknown[]>;
+        // Fix #3: batch size limit
+        if (raw.length > 500) {
+            return NextResponse.json({ error: "Batch limit is 500 items per request" }, { status: 400 });
+        }
         const normalized = raw.map((row) => {
             const [type, ...rest] = row as [string, ...unknown[]];
             if (type === "folder") return { type: "folder", name: rest[0], color: rest[1], parent_folder: rest[2] };
@@ -324,6 +350,10 @@ export async function POST(req: Request) {
     // ── Batch mode ──
     if (bodyForFolderCheck && Array.isArray((bodyForFolderCheck as any).batch)) {
         const items = (bodyForFolderCheck as any).batch as Array<Record<string, unknown>>;
+        // Fix #3: batch size limit
+        if (items.length > 500) {
+            return NextResponse.json({ error: "Batch limit is 500 items per request" }, { status: 400 });
+        }
         const now = new Date().toISOString();
 
         // Load existing color counts once
@@ -428,8 +458,15 @@ export async function POST(req: Request) {
         catch { return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 }); }
         const now = new Date().toISOString();
         const insertPayload = { ...payload, updated_at: now, created_at: payload.created_at ?? now, ...userField };
-        const cols = Object.keys(insertPayload).map((k) => `"${k}"`).join(", ");
-        const vals = Object.values(insertPayload);
+        // Fix #2: whitelist allowed columns — reject arbitrary user-supplied column names
+        const filteredPayload = Object.fromEntries(
+            Object.entries(insertPayload).filter(([k]) => RAW_INSERT_ALLOWED_COLS.has(k) || k === "user_id")
+        );
+        if (Object.keys(filteredPayload).length === 0) {
+            return NextResponse.json({ error: "No valid columns provided" }, { status: 400 });
+        }
+        const cols = Object.keys(filteredPayload).map((k) => `"${k}"`).join(", ");
+        const vals = Object.values(filteredPayload);
         const placeholders = vals.map((_, i) => `$${i + 1}`).join(", ");
         const data = await queryOne(
             `INSERT INTO "${table}" (${cols}) VALUES (${placeholders}) RETURNING *`,
@@ -562,10 +599,13 @@ export async function POST(req: Request) {
     const now = new Date().toISOString();
 
     // Upsert: check if note with same title exists in this folder
-    const existingNote = await queryOne<{ id: string }>(
-        `SELECT id::text AS id FROM "${table}" WHERE is_folder = false AND folder_name = $1 AND title = $2 ${userId ? `AND user_id = '${userId}'` : ""} LIMIT 1`,
-        [resolved_folder_name, title]
+    // Fix #1: userId as parameterized $N, not string-interpolated
+    const { sql: upsertSql, params: upsertParams } = withUser(
+        `SELECT id::text AS id FROM "${table}" WHERE is_folder = false AND folder_name = $1 AND title = $2`,
+        [resolved_folder_name, title],
+        userId
     );
+    const existingNote = await queryOne<{ id: string }>(`${upsertSql} LIMIT 1`, upsertParams);
 
     const noteType = explicitType ?? detectType(content, title);
     let data: Record<string, unknown> | null;
@@ -618,17 +658,18 @@ export async function DELETE(req: Request) {
     const url = new URL(req.url);
     const noteId = url.searchParams.get("id")?.trim();
     const folderName = url.searchParams.get("folder_name")?.trim();
-    const userScope = userId ? `AND user_id = '${userId}'` : "";
 
     if (noteId) {
-        await execute(`DELETE FROM "${table}" WHERE id = $1 ${userScope}`, [noteId]);
+        const { sql, params } = withUser(`DELETE FROM "${table}" WHERE id = $1`, [noteId], userId);
+        await execute(sql, params);
         try { await getPusher().trigger("stickies", "note-deleted", { id: noteId }); } catch {}
         return NextResponse.json({ ok: true, deleted_note: noteId });
     }
 
     if (!folderName) return NextResponse.json({ error: "id or folder_name is required" }, { status: 400 });
 
-    await execute(`DELETE FROM "${table}" WHERE folder_name = $1 ${userScope}`, [folderName]);
+    const { sql, params } = withUser(`DELETE FROM "${table}" WHERE folder_name = $1`, [folderName], userId);
+    await execute(sql, params);
     try { await getPusher().trigger("stickies", "note-deleted", { folder_name: folderName }); } catch {}
     return NextResponse.json({ ok: true, deleted_folder: folderName });
 }
@@ -682,7 +723,6 @@ export async function PATCH(req: Request) {
 
     const table = getTable(auth);
     const userId = auth.type === "user" ? auth.userId : undefined;
-    const userScope = userId ? `AND user_id = '${userId}'` : "";
 
     let body: Record<string, unknown>;
     try { body = await req.json(); }
@@ -695,10 +735,12 @@ export async function PATCH(req: Request) {
     if (body.rename_note) {
         const { id, title } = body.rename_note as { id: string; title: string };
         if (!id?.trim() || !title?.trim()) return NextResponse.json({ error: "rename_note requires id and title" }, { status: 400 });
-        const data = await queryOne(
-            `UPDATE "${table}" SET title = $1, updated_at = $2 WHERE id = $3 ${userScope} RETURNING *`,
-            [title.trim(), now, id.trim()]
+        const { sql, params } = withUser(
+            `UPDATE "${table}" SET title = $1, updated_at = $2 WHERE id = $3`,
+            [title.trim(), now, id.trim()],
+            userId
         );
+        const data = await queryOne(`${sql} RETURNING *`, params);
         return NextResponse.json({ ok: true, note: data });
     }
 
@@ -706,35 +748,46 @@ export async function PATCH(req: Request) {
         const { from, to } = body.rename_folder as { from: string; to: string };
         if (!from?.trim() || !to?.trim()) return NextResponse.json({ error: "rename_folder requires from and to" }, { status: 400 });
         const toTrimmed = to.trim();
-        await execute(
-            `UPDATE "${table}" SET folder_name = $1, title = $2, updated_at = $3 WHERE is_folder = true AND folder_name = $4 ${userScope}`,
-            [toTrimmed, toTrimmed, now, from.trim()]
+        const { sql: sql1, params: params1 } = withUser(
+            `UPDATE "${table}" SET folder_name = $1, title = $2, updated_at = $3 WHERE is_folder = true AND folder_name = $4`,
+            [toTrimmed, toTrimmed, now, from.trim()],
+            userId
         );
-        await execute(
-            `UPDATE "${table}" SET folder_name = $1, updated_at = $2 WHERE is_folder = false AND folder_name = $3 ${userScope}`,
-            [toTrimmed, now, from.trim()]
+        await execute(sql1, params1);
+        const { sql: sql2, params: params2 } = withUser(
+            `UPDATE "${table}" SET folder_name = $1, updated_at = $2 WHERE is_folder = false AND folder_name = $3`,
+            [toTrimmed, now, from.trim()],
+            userId
         );
+        await execute(sql2, params2);
         return NextResponse.json({ ok: true, renamed: { from, to: toTrimmed } });
     }
 
     if (body.merge_folder) {
         const { from, to } = body.merge_folder as { from: string; to: string };
         if (!from?.trim() || !to?.trim()) return NextResponse.json({ error: "merge_folder requires from and to" }, { status: 400 });
-        const movedRows = await query<{ id: string }>(
-            `UPDATE "${table}" SET folder_name = $1, updated_at = $2 WHERE is_folder = false AND folder_name = $3 ${userScope} RETURNING id`,
-            [to.trim(), now, from.trim()]
+        const { sql: sql1, params: params1 } = withUser(
+            `UPDATE "${table}" SET folder_name = $1, updated_at = $2 WHERE is_folder = false AND folder_name = $3`,
+            [to.trim(), now, from.trim()],
+            userId
         );
-        await execute(
-            `DELETE FROM "${table}" WHERE is_folder = true AND folder_name = $1 ${userScope}`,
-            [from.trim()]
+        const movedRows = await query<{ id: string }>(`${sql1} RETURNING id`, params1);
+        const { sql: sql2, params: params2 } = withUser(
+            `DELETE FROM "${table}" WHERE is_folder = true AND folder_name = $1`,
+            [from.trim()],
+            userId
         );
+        await execute(sql2, params2);
         return NextResponse.json({ ok: true, merged: { from, to: to.trim(), moved: movedRows.length } });
     }
 
     if (body.fix_html_content) {
-        const allNotes = await query<{ id: string; content: string }>(
-            `SELECT id::text AS id, content FROM "${table}" WHERE is_folder = false AND folder_name = 'TEAM' ${userScope}`
+        const { sql, params } = withUser(
+            `SELECT id::text AS id, content FROM "${table}" WHERE is_folder = false AND folder_name = 'TEAM'`,
+            [],
+            userId
         );
+        const allNotes = await query<{ id: string; content: string }>(sql, params);
         const toFix = allNotes.filter((n) => /<[a-z][^>]*>/i.test(n.content || "") && !/<!DOCTYPE\s+html/i.test(n.content || ""));
         if (toFix.length === 0) return NextResponse.json({ ok: true, fixed: 0 });
         await Promise.all(toFix.map((n) =>
@@ -744,9 +797,12 @@ export async function PATCH(req: Request) {
     }
 
     if (body.fix_team_checklist) {
-        const teamNotes = await query<{ id: string; content: string; list_mode: boolean }>(
-            `SELECT id::text AS id, content, list_mode FROM "${table}" WHERE is_folder = false AND folder_name = 'TEAM' ${userScope}`
+        const { sql, params } = withUser(
+            `SELECT id::text AS id, content, list_mode FROM "${table}" WHERE is_folder = false AND folder_name = 'TEAM'`,
+            [],
+            userId
         );
+        const teamNotes = await query<{ id: string; content: string; list_mode: boolean }>(sql, params);
         const toFix = teamNotes.filter((n) => !n.list_mode);
         if (toFix.length === 0) return NextResponse.json({ ok: true, fixed: 0 });
         await Promise.all(toFix.map((n) => {
@@ -761,9 +817,14 @@ export async function PATCH(req: Request) {
         await Promise.all(updates.map(({ id, ...fields }) => {
             const setEntries = Object.entries({ ...fields, updated_at: now });
             const setClauses = setEntries.map(([k], i) => `"${k}" = $${i + 1}`).join(", ");
-            const vals = setEntries.map(([, v]) => v);
-            vals.push(id);
-            return execute(`UPDATE "${table}" SET ${setClauses} WHERE id = $${vals.length} ${userScope}`, vals);
+            const setVals: unknown[] = setEntries.map(([, v]) => v);
+            setVals.push(id);
+            const { sql, params } = withUser(
+                `UPDATE "${table}" SET ${setClauses} WHERE id = $${setVals.length}`,
+                setVals,
+                userId
+            );
+            return execute(sql, params);
         }));
         return NextResponse.json({ ok: true });
     }
@@ -773,13 +834,14 @@ export async function PATCH(req: Request) {
 
     const setEntries = Object.entries({ ...fields, updated_at: now });
     const setClauses = setEntries.map(([k], i) => `"${k}" = $${i + 1}`).join(", ");
-    const vals = setEntries.map(([, v]) => v);
+    const vals: unknown[] = setEntries.map(([, v]) => v);
     vals.push(id);
-
-    const data = await queryOne(
-        `UPDATE "${table}" SET ${setClauses} WHERE id = $${vals.length} ${userScope} RETURNING *`,
-        vals
+    const { sql, params } = withUser(
+        `UPDATE "${table}" SET ${setClauses} WHERE id = $${vals.length}`,
+        vals,
+        userId
     );
+    const data = await queryOne(`${sql} RETURNING *`, params);
 
     if (!data) { return NextResponse.json({ error: "Database error" }, { status: 500 }); }
 

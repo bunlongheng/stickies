@@ -203,7 +203,7 @@ async function main() {
   const dbNotes = [];
   for (let i = 0; i < dbIds.length; i += 100) {
     const chunk = dbIds.slice(i, i + 100);
-    const rows = await sbFetch(`/notes?id=in.(${chunk.join(',')})&select=id,title,content,folder_name,folder_color,created_at,updated_at`);
+    const rows = await sbFetch(`/stickies?id=in.(${chunk.join(',')})&select=id,title,content,folder_name,folder_color,created_at,updated_at`);
     dbNotes.push(...rows);
   }
   const dbById = {};
