@@ -57,5 +57,5 @@ async function backfill(table) {
     console.log(`Done: ${updated} updated, ${failed} failed.`);
 }
 
-await backfill("notes");
+await backfill("stickies");
 await backfill("users_stickies");

@@ -93,10 +93,10 @@ export async function POST(req: Request) {
     const sb = getSupabase();
     const now = new Date().toISOString();
 
-    const { data: maxRow } = await sb.from("notes").select("order").eq("is_folder", false).order("order", { ascending: false }).limit(1).single();
+    const { data: maxRow } = await sb.from("stickies").select("order").eq("is_folder", false).order("order", { ascending: false }).limit(1).single();
     const nextOrder = typeof maxRow?.order === "number" ? maxRow.order + 1 : 0;
 
-    const { data, error } = await sb.from("notes").insert([{
+    const { data, error } = await sb.from("stickies").insert([{
         title, content, folder_name, is_folder: false,
         folder_color: color,
         order: nextOrder, created_at: now, updated_at: now,

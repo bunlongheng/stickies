@@ -6,7 +6,7 @@ const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABA
 
 const MERMAID_FIRST = /^(flowchart|graph|sequenceDiagram|classDiagram|stateDiagram(-v2)?|erDiagram|gantt|pie|gitGraph|mindmap|timeline|xychart|quadrantChart|requirementDiagram|zenuml|sankey|block-beta)\b/i;
 
-const { data } = await sb.from("notes").select("id, title, content").eq("type","mermaid").eq("is_folder", false);
+const { data } = await sb.from("stickies").select("id, title, content").eq("type","mermaid").eq("is_folder", false);
 
 let fixed = 0, skipped = 0;
 for (const n of data) {
@@ -18,7 +18,7 @@ for (const n of data) {
     const cleanTitle = (n.title ?? "").replace(/^\p{Emoji_Presentation}+\s*/u, "").trim();
     const newContent = `---\ntitle: ${cleanTitle}\n---\n${c}`;
 
-    const { error } = await sb.from("notes").update({ content: newContent }).eq("id", n.id);
+    const { error } = await sb.from("stickies").update({ content: newContent }).eq("id", n.id);
     if (error) console.error(`  ✗ "${n.title}": ${error.message}`);
     else { console.log(`  ✓ "${n.title}"`); fixed++; }
 }

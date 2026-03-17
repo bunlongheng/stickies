@@ -510,7 +510,7 @@ function stripImagesFromTiptap(tiptap) {
 // Look up folder UUID by name + parent_folder_name
 async function getFolderId(folderName, parentName) {
   const row = await dbOne(
-    `SELECT id FROM notes WHERE is_folder = true AND lower(folder_name) = lower($1) AND lower(parent_folder_name) = lower($2) LIMIT 1`,
+    `SELECT id FROM stickies WHERE is_folder = true AND lower(folder_name) = lower($1) AND lower(parent_folder_name) = lower($2) LIMIT 1`,
     [folderName, parentName]
   );
   return row?.id ? String(row.id) : null;
@@ -518,7 +518,7 @@ async function getFolderId(folderName, parentName) {
 
 // Load existing note titles from DB to skip duplicates
 async function loadExistingTitles(folderName) {
-  const rows = await db(`SELECT lower(title) AS t FROM notes WHERE is_folder = false AND folder_name = $1`, [folderName]);
+  const rows = await db(`SELECT lower(title) AS t FROM stickies WHERE is_folder = false AND folder_name = $1`, [folderName]);
   return new Set(rows.map(r => r.t));
 }
 
@@ -572,8 +572,8 @@ async function main() {
   let evernoteId = await getFolderId('EVERNOTE', 'Integrations');
   if (!evernoteId) {
     console.log('Creating EVERNOTE folder...');
-    const maxOrd = await dbOne(`SELECT MAX("order") AS m FROM notes WHERE is_folder = true`);
-    const intRow = await dbOne(`SELECT id FROM notes WHERE is_folder = true AND lower(folder_name) = 'integrations' LIMIT 1`);
+    const maxOrd = await dbOne(`SELECT MAX("order") AS m FROM stickies WHERE is_folder = true`);
+    const intRow = await dbOne(`SELECT id FROM stickies WHERE is_folder = true AND lower(folder_name) = 'integrations' LIMIT 1`);
     const now = new Date().toISOString();
     const f = await sbInsert('notes', {
       is_folder: true, folder_name: 'EVERNOTE', title: 'EVERNOTE', content: '',
@@ -588,7 +588,7 @@ async function main() {
   let notebookId = await getFolderId(notebook, 'EVERNOTE');
   if (!notebookId) {
     console.log(`Creating ${notebook} folder...`);
-    const maxOrd = await dbOne(`SELECT MAX("order") AS m FROM notes WHERE is_folder = true`);
+    const maxOrd = await dbOne(`SELECT MAX("order") AS m FROM stickies WHERE is_folder = true`);
     const now = new Date().toISOString();
     const f = await sbInsert('notes', {
       is_folder: true, folder_name: notebook, title: notebook, content: '',
@@ -600,11 +600,11 @@ async function main() {
   console.log(`${notebook} folder id: ${notebookId}`);
 
   // Get notebook folder_color
-  const notebookRow = await dbOne(`SELECT folder_color FROM notes WHERE id = $1`, [notebookId]);
+  const notebookRow = await dbOne(`SELECT folder_color FROM stickies WHERE id = $1`, [notebookId]);
   const folderColor = notebookRow?.folder_color || '#555560';
 
   // Get max order
-  const maxOrdRow = await dbOne(`SELECT MAX("order") AS m FROM notes WHERE is_folder = false`);
+  const maxOrdRow = await dbOne(`SELECT MAX("order") AS m FROM stickies WHERE is_folder = false`);
   let nextOrder = (maxOrdRow?.m ?? 2000) + 1;
 
   // Load existing titles from DB to skip duplicates

@@ -291,6 +291,7 @@ export function RichTextEditor({ noteId, content, onChange, onBlur, onUploadImag
     const [dragPos, setDragPos] = useState<{ x: number; y: number } | null>(null);
     const [fontOpen, setFontOpen] = useState(false);
     const fontRef = useRef<HTMLDivElement>(null);
+    const isProgrammaticUpdate = useRef(false);
 
     const uploadAndCompress = async (file: File) => onUploadImage(await compressImage(file));
 
@@ -354,7 +355,7 @@ export function RichTextEditor({ noteId, content, onChange, onBlur, onUploadImag
             TableCell,
         ],
         content: parseContent(content),
-        onUpdate: ({ editor }) => onChange(JSON.stringify(editor.getJSON())),
+        onUpdate: ({ editor }) => { if (!isProgrammaticUpdate.current) onChange(JSON.stringify(editor.getJSON())); },
         onBlur: () => onBlur(),
         editorProps: {
             handlePaste(view, event) {
@@ -398,7 +399,10 @@ export function RichTextEditor({ noteId, content, onChange, onBlur, onUploadImag
         const current = JSON.stringify(editor.getJSON());
         const incoming = isTiptapJson(content) ? content : null;
         if (incoming ? current !== incoming : true) {
+            // Suppress onUpdate during programmatic sync to prevent spurious isDraftDirty
+            isProgrammaticUpdate.current = true;
             editor.commands.setContent(parsed);
+            isProgrammaticUpdate.current = false;
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [noteId, content]);

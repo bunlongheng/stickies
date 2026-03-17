@@ -41,5 +41,5 @@ async function fixTable(table) {
     if (!fixed) console.log("  (nothing to fix)");
 }
 
-await fixTable("notes");
+await fixTable("stickies");
 await fixTable("users_stickies");

@@ -31,7 +31,7 @@ export async function GET(req: Request) {
     const format = new URL(req.url).searchParams.get("format");
     const supabase = getSupabase();
     const { data, error } = await supabase
-        .from("notes")
+        .from("stickies")
         .select("*")
         .order("order", { ascending: true });
 
@@ -65,14 +65,14 @@ export async function GET(req: Request) {
         `-- stickies backup — ${now}`,
         `-- ${rows.length} rows`,
         ``,
-        `TRUNCATE TABLE notes RESTART IDENTITY CASCADE;`,
+        `TRUNCATE TABLE stickies RESTART IDENTITY CASCADE;`,
         ``,
     ];
 
     for (const row of rows) {
         const cols = Object.keys(row).join(", ");
         const vals = Object.values(row).map(escape).join(", ");
-        lines.push(`INSERT INTO notes (${cols}) VALUES (${vals});`);
+        lines.push(`INSERT INTO stickies (${cols}) VALUES (${vals});`);
     }
 
     const sql = lines.join("\n") + "\n";

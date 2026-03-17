@@ -29,7 +29,7 @@ function isEmpty(content) {
 }
 
 // ── 1. Empty notes ────────────────────────────────────────────────────────────
-const { data: allNotes } = await sb.from("notes")
+const { data: allNotes } = await sb.from("stickies")
     .select("id, title, folder_name, content")
     .eq("is_folder", false);
 
@@ -51,21 +51,21 @@ for (const n of emptyNotes) {
 
 if (!DRY_RUN && emptyNotes.length > 0) {
     const ids = emptyNotes.map(n => n.id);
-    const { error } = await sb.from("notes").delete().in("id", ids);
+    const { error } = await sb.from("stickies").delete().in("id", ids);
     if (error) console.error("❌ Error deleting notes:", error.message);
     else console.log(`✅ Deleted ${ids.length} empty notes`);
 }
 
 // ── 2. Empty folders ──────────────────────────────────────────────────────────
-const { data: allFolders } = await sb.from("notes")
+const { data: allFolders } = await sb.from("stickies")
     .select("id, folder_name, parent_folder_name")
     .eq("is_folder", true);
 
-const { data: noteRows } = await sb.from("notes")
+const { data: noteRows } = await sb.from("stickies")
     .select("folder_name")
     .eq("is_folder", false);
 
-const { data: subFolderRows } = await sb.from("notes")
+const { data: subFolderRows } = await sb.from("stickies")
     .select("parent_folder_name")
     .eq("is_folder", true)
     .not("parent_folder_name", "is", null);
@@ -86,7 +86,7 @@ for (const f of emptyFolders) {
 
 if (!DRY_RUN && emptyFolders.length > 0) {
     const ids = emptyFolders.map(f => f.id);
-    const { error } = await sb.from("notes").delete().in("id", ids);
+    const { error } = await sb.from("stickies").delete().in("id", ids);
     if (error) console.error("❌ Error deleting folders:", error.message);
     else console.log(`✅ Deleted ${ids.length} empty folders`);
 }

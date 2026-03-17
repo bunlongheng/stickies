@@ -165,12 +165,12 @@ const notesApi = {
     },
     updateByFolder: async (filter: { folder_name?: string; parent_folder_name?: string }, fields: Record<string, unknown>) => {
         // Bulk-rename: fetch matching IDs then batch-update
-        const q = getSupabase().from("notes").select("id");
+        const q = getSupabase().from("stickies").select("id");
         if (filter.folder_name !== undefined) void (q as any).eq("folder_name", filter.folder_name);
         if (filter.parent_folder_name !== undefined) void (q as any).eq("parent_folder_name", filter.parent_folder_name);
         const { data } = await (filter.folder_name !== undefined
-            ? getSupabase().from("notes").select("id").eq("folder_name", filter.folder_name!)
-            : getSupabase().from("notes").select("id").eq("parent_folder_name", filter.parent_folder_name!));
+            ? getSupabase().from("stickies").select("id").eq("folder_name", filter.folder_name!)
+            : getSupabase().from("stickies").select("id").eq("parent_folder_name", filter.parent_folder_name!));
         if (!data || data.length === 0) return;
         await notesApi.bulkUpdate(data.map((r: any) => ({ id: String(r.id), ...fields })));
     },
@@ -1294,7 +1294,7 @@ export default function NotesMaster() {
     const [botColor, setBotColor] = useState({ primary: "#7c3aed", secondary: "#a78bfa", light: "#c4b5fd" });
     const [userEmail, setUserEmail] = useState<string | null>(null);
     const isAdmin = userEmail === "bheng.code@gmail.com";
-    const [mainListMode, setMainListMode] = useState<"thumb" | "list" | "compact-list" | "compact-thumb">("thumb");
+    const [mainListMode, setMainListMode] = useState<"thumb" | "list">("thumb");
     const [defaultFolder, setDefaultFolder] = useState<string>("CLAUDE");
     const [showDefaultFolderPicker, setShowDefaultFolderPicker] = useState(false);
     const [navMode, setNavMode] = useState<"folders-and-files" | "files-only">("folders-and-files");
@@ -1749,7 +1749,7 @@ export default function NotesMaster() {
             const rawMainList = localStorage.getItem(MAIN_LIST_MODE_KEY);
             if (rawMainList) {
                 const v = rawMainList === "true" ? "list" : rawMainList === "false" ? "thumb" : rawMainList;
-                if (v === "list" || v === "compact-list" || v === "compact-thumb" || v === "thumb") setMainListMode(v as any);
+                if (v === "list" || v === "thumb") setMainListMode(v as any);
             }
         } catch { /* ignore */ }
         try {
@@ -2068,7 +2068,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         const client = getSupabase();
         const rt = client
             .channel("notes-realtime")
-            .on("postgres_changes", { event: "INSERT", schema: "public", table: "notes" }, (payload: any) => {
+            .on("postgres_changes", { event: "INSERT", schema: "public", table: "stickies" }, (payload: any) => {
                 const note = payload.new;
                 if (!note?.id) return;
                 setDbData((prev) => {
@@ -2079,14 +2079,14 @@ const fireIntegrations = (trigger: string, note: any) => {
                 showToast(`+ ${note.title || "New note"}`, color);
                 flashQueueRef.current.push({ note, color });
             })
-            .on("postgres_changes", { event: "UPDATE", schema: "public", table: "notes" }, (payload: any) => {
+            .on("postgres_changes", { event: "UPDATE", schema: "public", table: "stickies" }, (payload: any) => {
                 const note = payload.new;
                 if (!note?.id) return;
                 const lastWrite = localWriteRef.current.get(String(note.id));
                 if (lastWrite && Date.now() - lastWrite < 3000) return;
                 setDbData((prev) => prev.map((r) => String(r.id) === String(note.id) ? { ...r, ...note } : r));
             })
-            .on("postgres_changes", { event: "DELETE", schema: "public", table: "notes" }, (payload: any) => {
+            .on("postgres_changes", { event: "DELETE", schema: "public", table: "stickies" }, (payload: any) => {
                 const id = payload.old?.id;
                 if (id) setDbData((prev) => prev.filter((r) => String(r.id) !== String(id)));
             })
@@ -3982,7 +3982,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         // Persist — direct Supabase update so updated_at is NOT touched
         const sb = createBrowserClient();
         await Promise.all(folderNotes.map(n =>
-            sb.from("notes").update({ folder_color: picks[String(n.id)] }).eq("id", n.id)
+            sb.from("stickies").update({ folder_color: picks[String(n.id)] }).eq("id", n.id)
         ));
     }, [activeFolder, dbData]);
 
@@ -4197,9 +4197,7 @@ const fireIntegrations = (trigger: string, note: any) => {
     );
 
     const isFolderGridView = !search.trim() && ((!activeFolder) || (kanbanMode && dbData.some(r => r.is_folder && r.parent_folder_name === activeFolder)));
-    const isListMode = editMode || mainListMode === "list" || mainListMode === "compact-list";
-    const isCompactList = mainListMode === "compact-list";
-    const isCompactThumb = mainListMode === "compact-thumb";
+    const isListMode = editMode || mainListMode === "list";
 
     // Compute exact square cell size via ResizeObserver → set as CSS var on grid container
     useEffect(() => {
@@ -4207,8 +4205,8 @@ const fireIntegrations = (trigger: string, note: any) => {
         if (!el) return;
         const update = () => {
             if (isListMode) { el.style.removeProperty('--cell-size'); return; }
-            const cols = isCompactThumb ? gridCols * 2 : gridCols;
-            const gap = isCompactThumb ? 3 : 6;
+            const cols = gridCols;
+            const gap = 6;
             const cs = getComputedStyle(el);
             const px = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
             const cellSize = Math.floor((el.clientWidth - px - (cols - 1) * gap) / cols);
@@ -4219,7 +4217,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         ro.observe(el);
         return () => ro.disconnect();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isListMode, isCompactThumb, gridCols]);
+    }, [isListMode, gridCols]);
     const isNoteGridView = Boolean(activeFolder) && !search.trim();
     const fitAllMode = (isFolderGridView || isNoteGridView) && displayItems.length > 12;
     const fitCols = fitAllMode ? Math.ceil(Math.sqrt(displayItems.length)) : 0;
@@ -5957,7 +5955,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     <span className="w-full pl-12 pr-3 py-3 text-sm font-black tracking-tight text-white/30">SEARCH</span>
                                 </button>
                                 <div className="ml-auto flex items-center gap-1">
-                                    <HeaderIconBtn icon={mainListMode === "list" ? Bars3Icon : mainListMode === "compact-list" ? ListBulletIcon : mainListMode === "compact-thumb" ? RectangleStackIcon : Squares2X2Icon} label={mainListMode === "list" ? "List" : mainListMode === "compact-list" ? "Compact List" : mainListMode === "compact-thumb" ? "Compact Thumb" : "Thumb"} active={!kanbanMode} onClick={() => { setMainListMode(v => v === "thumb" ? "list" : v === "list" ? "compact-list" : v === "compact-list" ? "compact-thumb" : "thumb"); setKanbanMode(false); }} />
+                                    <HeaderIconBtn icon={mainListMode === "list" ? Bars3Icon : Squares2X2Icon} label={mainListMode === "list" ? "List" : "Thumb"} active={!kanbanMode} onClick={() => { setMainListMode(v => v === "thumb" ? "list" : "thumb"); setKanbanMode(false); }} />
                                     <HeaderIconBtn icon={Cog6ToothIcon} label="Settings" onClick={() => { const hueInt = integrationsRef.current.find(ig => ig.type === "hue"); setLightMode((hueInt?.config?.mode as any) ?? "flash"); setShowFolderActions(true); }} />
                                 </div>
                             </>
@@ -5974,7 +5972,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     </div>
                                 ) : (
                                     <>
-                                        <HeaderIconBtn icon={mainListMode === "list" ? Bars3Icon : mainListMode === "compact-list" ? ListBulletIcon : mainListMode === "compact-thumb" ? RectangleStackIcon : Squares2X2Icon} label={mainListMode === "list" ? "List" : mainListMode === "compact-list" ? "Compact List" : mainListMode === "compact-thumb" ? "Compact Thumb" : "Thumb"} active={!kanbanMode} onClick={() => { setMainListMode(v => v === "thumb" ? "list" : v === "list" ? "compact-list" : v === "compact-list" ? "compact-thumb" : "thumb"); setKanbanMode(false); }} />
+                                        <HeaderIconBtn icon={mainListMode === "list" ? Bars3Icon : Squares2X2Icon} label={mainListMode === "list" ? "List" : "Thumb"} active={!kanbanMode} onClick={() => { setMainListMode(v => v === "thumb" ? "list" : "thumb"); setKanbanMode(false); }} />
                                         <HeaderIconBtn icon={Cog6ToothIcon} label="Settings" onClick={() => { const hueInt = integrationsRef.current.find(ig => ig.type === "hue"); setLightMode((hueInt?.config?.mode as any) ?? "flash"); setShowFolderActions(true); setShowFolderColorPicker(false); setShowFolderIconPicker(false); setShowFolderMovePicker(false); }} />
                                     </>
                                 )}
@@ -6008,7 +6006,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                             ? { display: "flex", flexDirection: "column", height: "100%", overflowX: "auto", overflowY: "hidden" }
                             : isListMode
                                 ? { display: "block" }
-                                : { display: "grid", gridTemplateColumns: `repeat(${isCompactThumb ? gridCols * 2 : gridCols}, 1fr)`, gap: isCompactThumb ? "3px" : "6px", alignContent: "start", alignItems: "start" }}
+                                : { display: "grid", gridTemplateColumns: `repeat(${gridCols}, 1fr)`, gap: "6px", alignContent: "start", alignItems: "start" }}
                     >
                         {kanbanMode && isFolderGridView && (
                             <div className="flex gap-0 h-full" style={{ minWidth: `${currentLevelFolders.length * 220}px` }}>
@@ -6185,7 +6183,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             : { isolation: "isolate", backgroundColor: c, borderRadius: "3px 3px 3px 14px" };
                                     })()}
                                     className={`${isListMode
-                                        ? `group list-row-hover flex items-center gap-3 ${isCompactList ? "px-3 py-1" : "px-4 py-3"} border-b border-white/5 cursor-pointer select-none transition-colors active:bg-white/10 overflow-hidden ${isDragging ? "opacity-30" : dt?.mode === "into" ? "bg-cyan-950/60 ring-1 ring-inset ring-cyan-400" : ""} ${isSelectMode && !item.is_folder && selectedIds.has(String(item.id)) ? "bg-blue-950/50" : ""}`
+                                        ? `group list-row-hover flex items-center gap-3 px-4 py-3 border-b border-white/5 cursor-pointer select-none transition-colors active:bg-white/10 overflow-hidden ${isDragging ? "opacity-30" : dt?.mode === "into" ? "bg-cyan-950/60 ring-1 ring-inset ring-cyan-400" : ""} ${isSelectMode && !item.is_folder && selectedIds.has(String(item.id)) ? "bg-blue-950/50" : ""}`
                                         : `grid-square-tile min-w-0 cursor-pointer transition-all group ${item.is_folder ? "folder-grid-tile" : ""} ${isDragging ? "opacity-30 scale-95" : dt?.mode === "into" ? "ring-4 ring-cyan-400 ring-inset z-10" : ""}`}`}>
                                     {/* Cursor spotlight glow */}
                                     {isListMode && glowCard?.id === tileId && (() => {
@@ -6213,13 +6211,12 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             )}
                                             {item.is_folder && (() => {
                                                 const c = item.color || item.folder_color || palette12[0];
-                                                const sz = isCompactList ? "w-6 h-6" : "w-[54px] h-[54px] sm:w-[46px] sm:h-[46px]";
                                                 return (
-                                                    <div className={`folder-icon-badge flex-shrink-0 ${sz} flex items-center justify-center font-black overflow-hidden`}
-                                                        style={{ fontSize: isCompactList ? 12 : 22, "--fc": c, boxShadow: isCompactList ? "none" : `2px 3px 8px ${c}55` } as React.CSSProperties}>
+                                                    <div className="folder-icon-badge flex-shrink-0 w-[54px] h-[54px] sm:w-[46px] sm:h-[46px] flex items-center justify-center font-black overflow-hidden"
+                                                        style={{ fontSize: 22, "--fc": c, boxShadow: `2px 3px 8px ${c}55` } as React.CSSProperties}>
                                                         {item.name === "CLAUDE"
                                                             ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-0.5" />
-                                                            : <FolderIconDisplay value={item.icon || ""} folderName={item.name || "F"} className={isCompactList ? "w-3 h-3" : "w-6 h-6"} />}
+                                                            : <FolderIconDisplay value={item.icon || ""} folderName={item.name || "F"} className="w-6 h-6" />}
                                                     </div>
                                                 );
                                             })()}
@@ -6227,15 +6224,14 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 const isChecklistItem = (item as any).type === "checklist" || listModeNotes.has(String(item.id));
                                                 const nc = (item as any).color || (item as any).folder_color || "#71717a";
                                                 const initial = meaningfulInitial(item.title || "", "N");
-                                                const sz = isCompactList ? "w-6 h-6" : "w-[54px] h-[54px] sm:w-[46px] sm:h-[46px]";
                                                 return (
-                                                    <div className={`flex-shrink-0 ${sz} flex items-center justify-center font-black overflow-hidden relative`}
+                                                    <div className="flex-shrink-0 w-[54px] h-[54px] sm:w-[46px] sm:h-[46px] flex items-center justify-center font-black overflow-hidden relative"
                                                         style={{
-                                                            fontSize: isCompactList ? 10 : 22,
+                                                            fontSize: 22,
                                                             backgroundColor: nc,
                                                             color: "#fff",
-                                                            borderRadius: isCompactList ? "2px 2px 2px 6px" : "3px 3px 3px 14px",
-                                                            boxShadow: isCompactList ? "none" : `2px 3px 8px ${nc}55`,
+                                                            borderRadius: "3px 3px 3px 14px",
+                                                            boxShadow: `2px 3px 8px ${nc}55`,
                                                         }}>
                                                         {initial}
                                                     </div>
@@ -6245,12 +6241,12 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 <div className="text-[13px] font-semibold tracking-tight text-white truncate">
                                                     {item.is_folder ? <><span className="uppercase folder-name-text">{item.name}</span><span className="text-white/30 font-light ml-0.5">/</span></> : (item.title?.length > 50 ? item.title.slice(0, 50) + "…" : item.title)}
                                                 </div>
-                                                {!isCompactList && item.is_folder ? (
+                                                {item.is_folder ? (
                                                     <div className="text-[13px] sm:text-[13px] text-zinc-500 font-medium folder-name-text">
                                                         {item.subfolderCount > 0 && <span>{item.subfolderCount} folder{item.subfolderCount !== 1 ? "s" : ""}{item.count > 0 ? " · " : ""}</span>}
                                                         {item.count > 0 && <span>{item.count} note{item.count !== 1 ? "s" : ""}</span>}
                                                     </div>
-                                                ) : !isCompactList ? (
+                                                ) : (
                                                     (() => {
                                                         const c = item.content || "";
                                                         const isListModeNote = listModeNotes.has(String(item.id));
@@ -6274,7 +6270,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                         }
                                                         return null;
                                                     })()
-                                                ) : null}
+                                                )}
                                             </div>
                                             {!item.is_folder && looksLikeUrl(item.content || "") && !isSelectMode && (item.folder_name || activeFolder) !== "TEAM" && (
                                                 <button
@@ -6373,12 +6369,12 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                         {item.name === "CLAUDE"
                                                             ? <img src="/claude-icon.png" alt="Claude" className="w-14 h-14 object-contain relative z-10" />
                                                             : item.icon
-                                                                ? <div style={{ fontSize: item.icon.startsWith("__hero:") ? undefined : (isCompactThumb ? "1.2rem" : "2.8rem"), lineHeight: 1 }} className="relative z-10 flex items-center justify-center">
-                                                                    <FolderIconDisplay value={item.icon} folderName={item.name || "F"} className={isCompactThumb ? "w-5 h-5" : "w-12 h-12"} />
+                                                                ? <div style={{ fontSize: item.icon.startsWith("__hero:") ? undefined : "2.8rem", lineHeight: 1 }} className="relative z-10 flex items-center justify-center">
+                                                                    <FolderIconDisplay value={item.icon} folderName={item.name || "F"} className="w-12 h-12" />
                                                                   </div>
-                                                                : <div style={{ fontSize: isCompactThumb ? "1.2rem" : "3rem", lineHeight: 1, color: item.color || item.folder_color || palette12[0] }} className="folder-grid-initial font-black relative z-10">{meaningfulInitial(item.name, "F")}</div>
+                                                                : <div style={{ fontSize: "3rem", lineHeight: 1, color: item.color || item.folder_color || palette12[0] }} className="folder-grid-initial font-black relative z-10">{meaningfulInitial(item.name, "F")}</div>
                                                         }
-                                                        <div className={`folder-grid-name mt-0.5 font-bold line-clamp-1 w-full text-center relative z-10 ${isCompactThumb ? "text-[7px]" : "text-[11px]"}`} style={{ color: item.name === "CLAUDE" ? "#000" : (item.color || item.folder_color || palette12[0]) }}>
+                                                        <div className="folder-grid-name mt-0.5 font-bold line-clamp-1 w-full text-center relative z-10 text-[11px]" style={{ color: item.name === "CLAUDE" ? "#000" : (item.color || item.folder_color || palette12[0]) }}>
                                                             <span className="uppercase">{item.name}</span> <span className="opacity-50 font-normal text-[10px]">({(item.subfolderCount || 0) + (item.count || 0)})</span>
                                                         </div>
                                                     </>
@@ -6387,8 +6383,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                         {(item as any).flag && (
                                                             <span className="absolute top-1 left-1 text-sm leading-none">{(item as any).flag}</span>
                                                         )}
-                                                        <div style={{ fontSize: isCompactThumb ? "1.2rem" : "3rem", lineHeight: 1 }} className="font-black text-white relative z-10">{meaningfulInitial(item.title || "", "N")}</div>
-                                                        <div className={`font-semibold text-white leading-tight mt-0.5 line-clamp-2 w-full ${isCompactThumb ? "text-[6px]" : "text-[8px]"}`}>{item.title}</div>
+                                                        <div style={{ fontSize: "3rem", lineHeight: 1 }} className="font-black text-white relative z-10">{meaningfulInitial(item.title || "", "N")}</div>
+                                                        <div className="font-semibold text-white leading-tight mt-0.5 line-clamp-2 w-full text-[8px]">{item.title}</div>
                                                     </>
                                                 )}
                                             </div>
@@ -7423,20 +7419,10 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             <Bars3Icon className="w-4 h-4" />
                                             <span className="text-[9px] font-black uppercase tracking-wide">List</span>
                                         </button>
-                                        <button type="button" onClick={() => { setMainListMode("compact-list"); setKanbanMode(false); }}
-                                            className={`py-1.5 rounded flex flex-col items-center gap-0.5 transition ${mainListMode === "compact-list" && !kanbanMode ? "bg-white text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"}`}>
-                                            <ListBulletIcon className="w-4 h-4" />
-                                            <span className="text-[9px] font-black uppercase tracking-wide">Compact List</span>
-                                        </button>
                                         <button type="button" onClick={() => { setMainListMode("thumb"); setKanbanMode(false); }}
                                             className={`py-1.5 rounded flex flex-col items-center gap-0.5 transition ${mainListMode === "thumb" && !kanbanMode ? "bg-white text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"}`}>
                                             <Squares2X2Icon className="w-4 h-4" />
                                             <span className="text-[9px] font-black uppercase tracking-wide">Thumb</span>
-                                        </button>
-                                        <button type="button" onClick={() => { setMainListMode("compact-thumb"); setKanbanMode(false); }}
-                                            className={`py-1.5 rounded flex flex-col items-center gap-0.5 transition ${mainListMode === "compact-thumb" && !kanbanMode ? "bg-white text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"}`}>
-                                            <RectangleStackIcon className="w-4 h-4" />
-                                            <span className="text-[9px] font-black uppercase tracking-wide">Compact Thumb</span>
                                         </button>
                                         <button type="button" onClick={() => { setEditMode(v => !v); setShowFolderActions(false); }}
                                             className={`py-1.5 rounded flex flex-col items-center gap-0.5 transition ${editMode ? "bg-white text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"}`}>

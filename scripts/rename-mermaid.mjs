@@ -12,7 +12,7 @@ const renames = [
 ];
 
 for (const { id, title } of renames) {
-    const { error } = await sb.from("notes").update({ title }).eq("id", id);
+    const { error } = await sb.from("stickies").update({ title }).eq("id", id);
     if (error) console.error(`✗ ${id}: ${error.message}`);
     else console.log(`✓ ${id} → "${title}"`);
 }
