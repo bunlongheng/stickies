@@ -107,8 +107,8 @@ const getSupabase = () => createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, pr
 const supabase = { from: (...a: Parameters<ReturnType<typeof getSupabase>["from"]>) => getSupabase().from(...a) } as ReturnType<typeof getSupabase>;
 
 async function getAuthToken(): Promise<string> {
-    if (process.env.NODE_ENV === 'development') {
-        return process.env.NEXT_PUBLIC_STICKIES_API_KEY ?? "";
+    if (process.env.NEXT_PUBLIC_STICKIES_API_KEY) {
+        return process.env.NEXT_PUBLIC_STICKIES_API_KEY;
     }
     // Use the SSR-aware browser client — reads session from cookies (set by @supabase/ssr)
     const sb = createBrowserClient();
