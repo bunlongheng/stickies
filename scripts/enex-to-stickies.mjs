@@ -694,7 +694,7 @@ async function main() {
 
   let importedCount = 0;
   let failedNotes   = [];
-  let skippedCount  = 0;
+  let dbSkippedCount = 0;
 
   // Print a blank line before the live block
   console.log('');
@@ -705,7 +705,7 @@ async function main() {
     const note = parseNoteBlock(block);
 
     if (existingTitles.has(note.title.toLowerCase())) {
-      skippedCount++;
+      dbSkippedCount++;
       continue;
     }
 
@@ -862,7 +862,7 @@ async function main() {
   const blank   = () => `${C.border}│${' '.repeat(W + 2)}│${RESET}`;
 
   const successColor = failedNotes.length > 0 ? C.orange : C.green;
-  const skippedStr   = skippedCount > 0 ? ` ${C.dim}(${skippedCount} skipped)${RESET}` : '';
+  const skippedStr   = (skippedCount + dbSkippedCount) > 0 ? ` ${C.dim}(${skippedCount + dbSkippedCount} skipped)${RESET}` : '';
 
   console.log(`\n${divider('╔','═','╗'.replace('─','═'))}`);
   const title = 'REPORT';
