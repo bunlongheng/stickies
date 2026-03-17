@@ -713,7 +713,8 @@ async function main() {
     // ── Skip: untitled
     const isUntitled = /^untitled(\s+note)?$/i.test(note.title.trim());
     if (isUntitled) {
-      skipLog.push({ title: note.title, reason: 'untitled' });
+      const preview = (note.enml || '').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim().slice(0, 300);
+      skipLog.push({ title: note.title, reason: 'untitled', preview, createdAt: note.createdAt });
       console.log(`${hex('#555560')}⊘${RESET} ${DIM}skip (untitled):  ${note.title}${RESET}`);
       continue;
     }
@@ -721,7 +722,7 @@ async function main() {
     // ── Skip: empty ENML content
     const enmlText = (note.enml || '').replace(/<[^>]+>/g, '').trim();
     if (!enmlText && !note.enml?.includes('<en-media')) {
-      skipLog.push({ title: note.title, reason: 'empty content' });
+      skipLog.push({ title: note.title, reason: 'empty content', preview: '', createdAt: note.createdAt });
       console.log(`${hex('#555560')}⊘${RESET} ${DIM}skip (empty):      ${note.title}${RESET}`);
       continue;
     }
@@ -805,6 +806,31 @@ async function main() {
     }
   }
   console.log('');
+
+  // ── Write skip review file ────────────────────────────────────────────────────
+  if (skipLog.length > 0) {
+    const reviewFile = `${__dirname}/.skip-review-${notebook.replace(/[^a-z0-9]/gi, '_')}.md`;
+    const lines = [
+      `# Skipped Notes — ${notebook}`,
+      `> Generated ${new Date().toLocaleString()}  ·  ${skipLog.length} notes skipped`,
+      '',
+    ];
+    for (const s of skipLog) {
+      lines.push(`---`);
+      lines.push(`## ${s.title}`);
+      lines.push(`**Reason:** ${s.reason}  |  **Created:** ${s.createdAt || 'unknown'}`);
+      lines.push('');
+      if (s.preview) {
+        lines.push(s.preview);
+        lines.push('');
+      } else {
+        lines.push('_(no text content)_');
+        lines.push('');
+      }
+    }
+    writeFileSync(reviewFile, lines.join('\n'));
+    console.log(`${hex('#32ADE6')}📋 Skip review saved →${RESET} ${DIM}${reviewFile}${RESET}\n`);
+  }
 
   // ── Post-import quality audit ────────────────────────────────────────────────
   const auditRows = await db(
