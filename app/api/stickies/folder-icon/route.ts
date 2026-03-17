@@ -36,7 +36,7 @@ async function authenticate(req: Request): Promise<AuthResult | null> {
 }
 
 function getTable(auth: { type: string }): string {
-    return auth.type === "user" ? "users_stickies" : "notes";
+    return auth.type === "user" ? "users_stickies" : "stickies";
 }
 
 // GET /api/stickies/folder-icon — read all folder icons { [folderName]: emoji }

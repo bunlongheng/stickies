@@ -2,7 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import Pusher from "pusher";
 import crypto from "crypto";
-import { query, queryOne, execute } from "@/lib/db";
+import { query, queryOne, execute } from "@/lib/db-driver";
 
 const palette12 = [
     "#FF3B30", "#FF6B4E", "#FF9500", "#FFCC00",
@@ -11,22 +11,30 @@ const palette12 = [
     "#B0B0B8", "#555560", "#8B1A2E", "#6B7A1E", "#0D2B6B", "#FFFFFF",
 ];
 
-// ── Auth (Supabase JWT only — no DB) ─────────────────────────────────────────
+// ── Singletons ───────────────────────────────────────────────────────────────
+let _supabaseAuth: ReturnType<typeof createClient> | null = null;
 function getSupabaseAuth() {
-    return createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY!
-    );
+    if (!_supabaseAuth) {
+        _supabaseAuth = createClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.SUPABASE_SERVICE_ROLE_KEY!
+        );
+    }
+    return _supabaseAuth;
 }
 
+let _pusher: Pusher | null = null;
 function getPusher() {
-    return new Pusher({
-        appId: process.env.PUSHER_APP_ID!,
-        key: process.env.PUSHER_KEY!,
-        secret: process.env.PUSHER_SECRET!,
-        cluster: process.env.PUSHER_CLUSTER!,
-        useTLS: true,
-    });
+    if (!_pusher) {
+        _pusher = new Pusher({
+            appId: process.env.PUSHER_APP_ID!,
+            key: process.env.PUSHER_KEY!,
+            secret: process.env.PUSHER_SECRET!,
+            cluster: process.env.PUSHER_CLUSTER!,
+            useTLS: true,
+        });
+    }
+    return _pusher;
 }
 
 // ── API request broadcast ─────────────────────────────────────────────────────
@@ -97,7 +105,7 @@ async function authenticate(req: Request): Promise<AuthResult | null> {
 }
 
 function getTable(auth: AuthResult): string {
-    return auth.type === "user" ? "users_stickies" : "notes";
+    return auth.type === "user" ? "users_stickies" : "stickies";
 }
 
 // ── Color helpers ────────────────────────────────────────────────────────────
@@ -105,7 +113,7 @@ async function pickLeastUsedColor(table: string, rawColor?: string): Promise<str
     const c = String(rawColor ?? "").trim().toUpperCase();
     if (/^#[0-9A-F]{6}$/.test(c)) return c;
 
-    const rows = await query<{ folder_color: string }>(`SELECT folder_color FROM "${table}" WHERE is_folder = false`);
+    const rows = await query<{ folder_color: string }>(`SELECT folder_color FROM "${table}" WHERE is_folder = false LIMIT 500`);
     const counts = new Map<string, number>(palette12.map((p) => [p, 0]));
     rows.forEach((r) => {
         const col = String(r.folder_color ?? "").toUpperCase();
@@ -118,7 +126,7 @@ async function pickLeastUsedFolderColor(table: string, rawColor?: string): Promi
     const c = String(rawColor ?? "").trim().toUpperCase();
     if (/^#[0-9A-F]{6}$/.test(c)) return c;
 
-    const rows = await query<{ folder_color: string }>(`SELECT folder_color FROM "${table}" WHERE is_folder = true`);
+    const rows = await query<{ folder_color: string }>(`SELECT folder_color FROM "${table}" WHERE is_folder = true LIMIT 500`);
     const counts = new Map<string, number>(palette12.map((p) => [p, 0]));
     rows.forEach((r) => {
         const col = String(r.folder_color ?? "").toUpperCase();

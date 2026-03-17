@@ -67,7 +67,7 @@ function stripTiptapHtml(html) {
 async function main() {
     console.log("Fetching notes from Supabase…");
     const { data: notes, error } = await sb
-        .from("notes")
+        .from("stickies")
         .select("id, title, content, folder_name, type, updated_at")
         .eq("is_folder", false)
         .order("folder_name", { ascending: true })
