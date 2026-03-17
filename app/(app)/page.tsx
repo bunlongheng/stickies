@@ -7437,8 +7437,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 </div>
                                 {/* VIEW MODE */}
                                 <div className="px-6 py-2 border-b border-white/[0.06]">
-                                    <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-1.5">View Mode</p>
-                                    <div className="grid grid-cols-3 gap-1.5">
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-1.5">View</p>
+                                    <div className="grid grid-cols-2 gap-1.5">
                                         <button type="button" onClick={() => { setMainListMode("list"); setKanbanMode(false); }}
                                             className={`py-1.5 rounded flex flex-col items-center gap-0.5 transition ${mainListMode === "list" && !kanbanMode ? "bg-white text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"}`}>
                                             <Bars3Icon className="w-4 h-4" />
@@ -7449,12 +7449,20 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             <Squares2X2Icon className="w-4 h-4" />
                                             <span className="text-[9px] font-black uppercase tracking-wide">Thumb</span>
                                         </button>
-                                        <button type="button" onClick={() => { setEditMode(v => !v); setShowFolderActions(false); }}
-                                            className={`py-1.5 rounded flex flex-col items-center gap-0.5 transition ${editMode ? "bg-white text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"}`}>
-                                            <ViewColumnsIcon className="w-4 h-4" />
-                                            <span className="text-[9px] font-black uppercase tracking-wide">Split</span>
-                                        </button>
                                     </div>
+                                </div>
+                                {/* SPLIT LAYOUT TOGGLE */}
+                                <div className="px-6 py-2 border-b border-white/[0.06]">
+                                    <button type="button" onClick={() => { setEditMode(v => !v); setShowFolderActions(false); }}
+                                        className="w-full flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <ViewColumnsIcon className="w-4 h-4 text-zinc-400" />
+                                            <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Split</span>
+                                        </div>
+                                        <div className={`w-9 h-5 rounded-full transition-colors relative ${editMode ? "bg-white" : "bg-white/10"}`}>
+                                            <div className={`absolute top-0.5 w-4 h-4 rounded-full transition-all ${editMode ? "left-[18px] bg-black" : "left-0.5 bg-zinc-500"}`} />
+                                        </div>
+                                    </button>
                                 </div>
                                 {/* THEME */}
                                 <div className="px-6 py-2 border-b border-white/[0.06]">
