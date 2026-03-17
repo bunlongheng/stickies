@@ -2743,6 +2743,8 @@ const fireIntegrations = (trigger: string, note: any) => {
             if (!isDraftDirty) return true;
             if (isSavingRef.current) return true;
             isSavingRef.current = true;
+            // DEBUG: log create vs update
+            console.log("[saveNote] editingNote.id=", editingNote?.id, "| isDraftDirty=", isDraftDirty);
 
             // Auto-clean mermaid junk (trailing fences, --- blocks) on every save
             let saveContent = content;
