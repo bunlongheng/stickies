@@ -843,8 +843,9 @@ export async function PATCH(req: Request) {
     );
     const data = await queryOne(`${sql} RETURNING *`, params);
 
-    if (!data) { return NextResponse.json({ error: "Database error" }, { status: 500 }); }
-
-    try { await getPusher().trigger("stickies", "note-updated", data); } catch {}
-    return NextResponse.json({ note: data });
+    // data can be null when the Management API returns empty rows even though
+    // the UPDATE executed successfully — treat as success so the client doesn't
+    // show a false "Save Failed" toast.
+    try { await getPusher().trigger("stickies", "note-updated", data ?? { id }); } catch {}
+    return NextResponse.json({ note: data ?? { id } });
 }

@@ -432,6 +432,7 @@ const MARKDOWN_MODE_KEY = "stickies:markdown-mode-notes:v1";
 const HTML_MODE_KEY = "stickies:html-mode-notes:v1";
 const MINDMAP_MODE_KEY = "stickies:mindmap-mode-notes:v1";
 const STACK_MODE_KEY = "stickies:stack-mode-notes:v1";
+const PLAIN_MODE_KEY  = "stickies:plain-mode-notes:v1";
 const DEFAULT_FOLDER_KEY = "stickies:default-folder:v1";
 const DB_CACHE_KEY = "stickies:db-cache:v1";
 const COUNTS_CACHE_KEY = "stickies:counts-cache:v1";
@@ -1241,6 +1242,7 @@ export default function NotesMaster() {
     const [htmlModeNotes, setHtmlModeNotes] = useState<Set<string>>(new Set());
     const [mindmapModeNotes, setMindmapModeNotes] = useState<Set<string>>(new Set());
     const [stackModeNotes, setStackModeNotes] = useState<Set<string>>(new Set());
+    const [plainModeNotes, setPlainModeNotes] = useState<Set<string>>(new Set());
     const [copiedContent, setCopiedContent] = useState(false);
     const [showAddTask, setShowAddTask] = useState(false);
     const [newTaskText, setNewTaskText] = useState("");
@@ -1746,6 +1748,10 @@ export default function NotesMaster() {
             if (rawStack) { const arr = JSON.parse(rawStack); if (Array.isArray(arr)) setStackModeNotes(new Set(arr)); }
         } catch { /* ignore */ }
         try {
+            const rawPlain = localStorage.getItem(PLAIN_MODE_KEY);
+            if (rawPlain) { const arr = JSON.parse(rawPlain); if (Array.isArray(arr)) setPlainModeNotes(new Set(arr)); }
+        } catch { /* ignore */ }
+        try {
             const rawMainList = localStorage.getItem(MAIN_LIST_MODE_KEY);
             if (rawMainList) {
                 const v = rawMainList === "true" ? "list" : rawMainList === "false" ? "thumb" : rawMainList;
@@ -1855,6 +1861,12 @@ export default function NotesMaster() {
             localStorage.setItem(MINDMAP_MODE_KEY, JSON.stringify([...mindmapModeNotes]));
         } catch { /* ignore */ }
     }, [mindmapModeNotes]);
+
+    useEffect(() => {
+        try {
+            localStorage.setItem(PLAIN_MODE_KEY, JSON.stringify([...plainModeNotes]));
+        } catch { /* ignore */ }
+    }, [plainModeNotes]);
 
     useEffect(() => {
         try {
@@ -3060,6 +3072,26 @@ const fireIntegrations = (trigger: string, note: any) => {
         }
     }
 
+    function handlePlainModePaste(e: React.ClipboardEvent) {
+        const text = e.clipboardData.getData("text/plain");
+        if (!text) return;
+        // Auto-format JSON
+        try {
+            const parsed = JSON.parse(text);
+            e.preventDefault();
+            const formatted = JSON.stringify(parsed, null, 2);
+            setContent(formatted);
+            setPendingNoteType("json");
+            showToast("JSON formatted ✦", "#34C759", true);
+            return;
+        } catch {}
+        // Auto-detect and tag language
+        const detected = detectNoteType(text);
+        if (detected && detected !== "text" && detected !== "rich") {
+            setPendingNoteType(detected);
+        }
+    }
+
     const handleCursorUpdate = (e: any) => {
         const target = e.target as HTMLTextAreaElement;
         const styles = window.getComputedStyle(target);
@@ -3491,6 +3523,7 @@ const fireIntegrations = (trigger: string, note: any) => {
     const htmlMode     = baseMode && (noteType === "html" || (!!currentNoteId && htmlModeNotes.has(currentNoteId)));
     const jsonMode     = baseMode && noteType === "json" && !mermaidMode;
     const codeMode     = baseMode && ["javascript","typescript","python","css","sql","bash"].includes(noteType);
+    const plainMode    = baseMode && !!currentNoteId && plainModeNotes.has(currentNoteId) && noteType === "rich";
     type VoiceEntry = { _type: "voice"; audioUrl: string; transcript: string; summary: string; duration: number; recordedAt: string };
     const voiceNote = baseMode && noteType === "voice"
         ? (() => { try { const p = JSON.parse(content); return (Array.isArray(p) ? p : [p]) as VoiceEntry[]; } catch { return null; } })()
@@ -3627,6 +3660,16 @@ const fireIntegrations = (trigger: string, note: any) => {
             return next;
         });
     }, [currentNoteId, listModeNotes]);
+
+    const togglePlainMode = useCallback(() => {
+        if (!currentNoteId) return;
+        setPlainModeNotes((prev) => {
+            const next = new Set(prev);
+            if (next.has(currentNoteId)) next.delete(currentNoteId);
+            else next.add(currentNoteId);
+            return next;
+        });
+    }, [currentNoteId]);
 
     const toggleMarkdownMode = useCallback(() => {
         if (!currentNoteId) return;
@@ -5361,6 +5404,21 @@ const fireIntegrations = (trigger: string, note: any) => {
                             <ClipboardDocumentListIcon className="w-[26px] h-[26px] sm:w-6 sm:h-6" />
                         </button>
                         )}
+                        {/* Plain mode toggle — only on rich notes */}
+                        {noteType === "rich" && currentNoteId && (
+                            <button
+                                type="button"
+                                onClick={togglePlainMode}
+                                title={plainMode ? "Switch to Rich editor" : "Switch to Plain / Code editor"}
+                                className="flex items-center gap-1 px-2 py-0.5 rounded flex-shrink-0 transition text-[9px] font-black uppercase tracking-wide"
+                                style={{
+                                    background: plainMode ? "rgba(255,255,255,0.12)" : "transparent",
+                                    color: plainMode ? "#fff" : "rgba(255,255,255,0.35)",
+                                    border: `1px solid ${plainMode ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.1)"}`,
+                                }}>
+                                {plainMode ? "< / >" : "< / >"}
+                            </button>
+                        )}
                         <button type="button"
                             onClick={() => { setShowNoteActions(true); closeEditorTools(); }}
                             className="p-2 sm:p-3 text-zinc-300 hover:text-white active:text-white transition flex-shrink-0">
@@ -5792,6 +5850,33 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 onBlur={() => { setCodeEditMode(false); void saveNote({ silent: true }); }}
                                 onClick={() => setCodeEditMode(true)}
                             />
+                        ) : plainMode ? (
+                            <div onPaste={handlePlainModePaste} className="flex-1 flex flex-col min-h-0">
+                                {(() => {
+                                    const rawDetected = detectNoteType(content);
+                                    const detectedLang = (rawDetected !== "text" && rawDetected !== "rich") ? rawDetected : null;
+                                    return (
+                                        <>
+                                        {detectedLang && TYPE_BADGE[detectedLang] && (
+                                            <div className="flex items-center gap-2 px-3 py-1.5 border-b border-white/5" style={{ background: "#1a1a1a" }}>
+                                                <span className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-full"
+                                                    style={{ background: `${TYPE_BADGE[detectedLang].color}20`, color: TYPE_BADGE[detectedLang].color, border: `1px solid ${TYPE_BADGE[detectedLang].color}40` }}>
+                                                    {TYPE_BADGE[detectedLang].label}
+                                                </span>
+                                                <span className="text-[9px] text-zinc-600 uppercase tracking-widest">detected — paste to replace or type freely</span>
+                                            </div>
+                                        )}
+                                        <CodeViewer
+                                            code={content}
+                                            language={detectedLang ?? "javascript"}
+                                            editing={true}
+                                            onChange={(val) => setContent(val)}
+                                            onBlur={() => void saveNote({ silent: true })}
+                                        />
+                                        </>
+                                    );
+                                })()}
+                            </div>
                         ) : noteType === "rich" ? (
                             <div className="relative flex-1 min-h-0 flex flex-col" style={{ background: "#000000" }}>
                                 <RichTextEditor
