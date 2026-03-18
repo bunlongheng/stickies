@@ -81,14 +81,15 @@ interface Props {
     code: string;
     language: string;
     editing: boolean;
+    autoFocus?: boolean;
     wordWrap?: boolean;
     onChange?: (val: string) => void;
     onBlur?: () => void;
     onClick?: () => void;
 }
 
-export function CodeViewer({ code, language, editing, wordWrap = false, onChange, onBlur, onClick }: Props) {
-    const lang = LANG_MAP[language] ?? "javascript";
+export function CodeViewer({ code, language, editing, autoFocus = true, wordWrap = false, onChange, onBlur, onClick }: Props) {
+    const lang = language === "text" ? "text" : (LANG_MAP[language] ?? "javascript");
     const lines = (code || "").split("\n");
     const lineCount = lines.length;
     const [activeLine, setActiveLine] = useState<number | null>(null);
@@ -169,7 +170,9 @@ export function CodeViewer({ code, language, editing, wordWrap = false, onChange
     }, [editing, readActiveLine]);
 
     const highlight = (val: string) =>
-        Prism.highlight(val, Prism.languages[lang] ?? Prism.languages.javascript, lang);
+        lang === "text"
+            ? val.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+            : Prism.highlight(val, Prism.languages[lang] ?? Prism.languages.javascript, lang);
 
     const highlightTop = activeLine !== null
         ? PAD_TOP + activeLine * LINE_HEIGHT
@@ -248,7 +251,7 @@ export function CodeViewer({ code, language, editing, wordWrap = false, onChange
                     onValueChange={editing ? (onChange ?? (() => {})) : () => {}}
                     highlight={highlight}
                     readOnly={!editing}
-                    autoFocus={editing}
+                    autoFocus={editing && autoFocus}
                     onBlur={() => { setActiveLine(null); onBlur?.(); }}
                     padding={{ top: PAD_TOP, bottom: PAD_BOTTOM, left: 20, right: 24 }}
                     style={{

@@ -121,6 +121,12 @@ const RAW_INSERT_ALLOWED_COLS = new Set([
     "order", "created_at", "updated_at", "parent_folder_name", "folder_id", "list_mode",
 ]);
 
+// ── Allowed columns for PATCH updates ────────────────────────────────────────
+const PATCH_ALLOWED_COLS = new Set([
+    "title", "content", "folder_name", "folder_color", "is_folder", "type",
+    "order", "updated_at", "parent_folder_name", "folder_id", "list_mode", "tags",
+]);
+
 // ── Color helpers ────────────────────────────────────────────────────────────
 async function pickLeastUsedColor(table: string, rawColor?: string): Promise<string> {
     const c = String(rawColor ?? "").trim().toUpperCase();
@@ -832,7 +838,10 @@ export async function PATCH(req: Request) {
     const { id, ...fields } = body;
     if (!id || typeof id !== "string") return NextResponse.json({ error: "id is required" }, { status: 400 });
 
-    const setEntries = Object.entries({ ...fields, updated_at: now });
+    const filteredFields = Object.fromEntries(Object.entries(fields).filter(([k]) => PATCH_ALLOWED_COLS.has(k)));
+    const setEntries = Object.entries({ ...filteredFields, updated_at: now });
+    if (setEntries.length === 0) return NextResponse.json({ note: { id } });
+
     const setClauses = setEntries.map(([k], i) => `"${k}" = $${i + 1}`).join(", ");
     const vals: unknown[] = setEntries.map(([, v]) => v);
     vals.push(id);
@@ -841,7 +850,14 @@ export async function PATCH(req: Request) {
         vals,
         userId
     );
-    const data = await queryOne(`${sql} RETURNING *`, params);
+
+    let data: Record<string, unknown> | null;
+    try {
+        data = await queryOne(`${sql} RETURNING *`, params);
+    } catch (err: any) {
+        console.error("[PATCH] DB error:", err.message, "| SQL:", sql, "| vals:", vals);
+        return NextResponse.json({ error: err.message ?? "db error" }, { status: 500 });
+    }
 
     // data can be null when the Management API returns empty rows even though
     // the UPDATE executed successfully — treat as success so the client doesn't

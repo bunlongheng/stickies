@@ -1188,6 +1188,7 @@ export default function NotesMaster() {
 
     const [editorOpen, setEditorOpen] = useState(false);
     const [editingNote, setEditingNote] = useState<any | null>(null);
+    const [showFloatCopy, setShowFloatCopy] = useState(true);
     const [title, setTitle] = useState("");
     const [content, setContent] = useState("");
     const [activeLine, setActiveLine] = useState(0);
@@ -1276,6 +1277,8 @@ export default function NotesMaster() {
     const addTaskInputRef = useRef<HTMLInputElement | null>(null);
     const noteEverDirtyRef = useRef(false);
     const prevContentForHashRef = useRef("");
+    const lastCelebratedTagRef = useRef<string | null>(null);
+    const celebrateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [hashSymbolFlash, setHashSymbolFlash] = useState(false);
     const [completedHashtag, setCompletedHashtag] = useState<string | null>(null);
     const graphContainerRef = useRef<HTMLDivElement | null>(null);
@@ -1914,6 +1917,14 @@ export default function NotesMaster() {
         setCodeEditMode(false);
     }, [editorOpen, editingNote?.id]);
 
+    // Float copy: show on note open, hide after 10s of editing
+    useEffect(() => {
+        if (!editorOpen || !editingNote?.id) return;
+        setShowFloatCopy(true);
+        const t = setTimeout(() => setShowFloatCopy(false), 10000);
+        return () => clearTimeout(t);
+    }, [editorOpen, editingNote?.id]);
+
     // Load pinned note IDs from localStorage
     useEffect(() => {
         try {
@@ -2074,7 +2085,6 @@ const fireIntegrations = (trigger: string, note: any) => {
             // Only show when an external API key created notes (not the user's own browser session)
             if (data.auth !== "apikey" || data.method !== "POST") return;
             setApiLog((prev) => [data, ...prev].slice(0, 50));
-            setShowApiLog(true);
         });
 
         return () => { channel.unbind_all(); pusher.unsubscribe("stickies"); pusher.disconnect(); };
@@ -2686,6 +2696,10 @@ const fireIntegrations = (trigger: string, note: any) => {
         return Boolean(title.trim() || content.trim() || nextFolder !== "General");
     }, [editorOpen, title, content, targetFolder, activeFolder, noteColor, editingNote]);
 
+    // Keep a ref so timers can check isDraftDirty without stale closures
+    const isDraftDirtyRef = useRef(isDraftDirty);
+    useEffect(() => { isDraftDirtyRef.current = isDraftDirty; }, [isDraftDirty]);
+
     // Track if the current note was ever dirty (survives auto-save clearing isDraftDirty)
     useEffect(() => { if (isDraftDirty) noteEverDirtyRef.current = true; }, [isDraftDirty]);
     // Reset dirty tracker whenever we switch to a different note (or open a new one)
@@ -2693,7 +2707,7 @@ const fireIntegrations = (trigger: string, note: any) => {
 
     // Hashtag easter egg — plain text notes only (rich text has WYSIWYG, no need)
     useEffect(() => {
-        if (!editorOpen || content.trimStart().startsWith("{")) { prevContentForHashRef.current = content; return; }
+        if (!editorOpen) { prevContentForHashRef.current = content; return; }
         const prev = prevContentForHashRef.current;
         prevContentForHashRef.current = content;
         if (!prev && !content) return;
@@ -2711,15 +2725,19 @@ const fireIntegrations = (trigger: string, note: any) => {
             }
         }
 
-        // Detect completed hashtag: #word followed by space or end-of-input
-        const completedMatch = content.match(/(#[a-zA-Z0-9_-]+)(?=\s|$)/g);
-        const prevCompleted = prev.match(/(#[a-zA-Z0-9_-]+)(?=\s|$)/g);
+        // Detect completed hashtag: only fires when tag is followed by a space (truly finished)
+        const completedMatch = content.match(/(#[a-zA-Z0-9_-]+)(?=\s)/g);
+        const prevCompleted = prev.match(/(#[a-zA-Z0-9_-]+)(?=\s)/g);
         const prevSet = new Set(prevCompleted ?? []);
-        const newTag = completedMatch?.find(t => !prevSet.has(t));
+        const newTag = completedMatch?.find(t => !prevSet.has(t) && t !== lastCelebratedTagRef.current);
         if (newTag) {
+            lastCelebratedTagRef.current = newTag;
+            if (celebrateTimerRef.current) clearTimeout(celebrateTimerRef.current);
             setCompletedHashtag(newTag);
-            showToast(newTag, "#FF9500", false);
-            setTimeout(() => setCompletedHashtag(null), 1800);
+            celebrateTimerRef.current = setTimeout(() => {
+                setCompletedHashtag(null);
+                lastCelebratedTagRef.current = null;
+            }, 3000);
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [content, editorOpen]);
@@ -2728,7 +2746,7 @@ const fireIntegrations = (trigger: string, note: any) => {
     useEffect(() => {
         if (!editorOpen || !isDraftDirty) return;
         if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
-        autoSaveTimerRef.current = setTimeout(() => { void saveNote({ silent: true }); }, 2000);
+        autoSaveTimerRef.current = setTimeout(() => { if (isDraftDirtyRef.current) void saveNote({ silent: true }); }, 2000);
         return () => { if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [content, title, editorOpen]);
@@ -2740,9 +2758,6 @@ const fireIntegrations = (trigger: string, note: any) => {
             if (!isDraftDirty) return true;
             if (isSavingRef.current) return true;
             isSavingRef.current = true;
-            // DEBUG: log create vs update
-            console.log("[saveNote] editingNote.id=", editingNote?.id, "| isDraftDirty=", isDraftDirty);
-
             // Auto-clean mermaid junk (trailing fences, --- blocks) on every save
             let saveContent = content;
             const isMermaidNote = (editingNote as any)?.type === "mermaid" || detectMermaid(content);
@@ -2766,7 +2781,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                 folder_color: noteColor || folders.find((f) => f.name === folderName)?.color || editingNote?.folder_color || palette12[0],
                 is_folder: false,
                 type: pendingNoteType ?? (editingNote as any)?.type ?? detectNoteType(saveContent),
-                tags: extractedTags,
+                ...(extractedTags.length > 0 ? { tags: extractedTags } : {}),
                 updated_at: new Date().toISOString(),
                 ...(folderId ? { folder_id: folderId } : {}),
             };
@@ -2804,16 +2819,19 @@ const fireIntegrations = (trigger: string, note: any) => {
                     }
                 }
                 localStorage.removeItem(ACTIVE_DRAFT_KEY);
+                // Cancel any pending auto-save timer — prevents stale closure from firing a second INSERT
+                if (autoSaveTimerRef.current) { clearTimeout(autoSaveTimerRef.current); autoSaveTimerRef.current = null; }
                 if (!silent) { const t = (payload.title || "Untitled").slice(0, 10) + ((payload.title || "").length > 10 ? "…" : ""); const isFirst = !existingNoteIdStr && dbData.filter(n => !n.is_folder && !n._optimistic).length <= 1; showToast(existingNoteIdStr ? `"${t}" updated` : `+ "${t}"`, payload.folder_color || "#34C759", isFirst); }
                 return true;
             } catch (err) {
-                console.error("Save Error:", err);
+                const msg = err instanceof Error ? err.message : String(err);
+                console.error("Save Error:", msg);
                 if (existingNoteIdStr && existingSnapshot) {
                     setDbData((prev) => prev.map((n) => (String(n.id) === existingNoteIdStr ? existingSnapshot : n)));
                 } else if (!existingNoteIdStr) {
                     setDbData((prev) => prev.filter((n) => String(n.id) !== optimisticId));
                 }
-                showToast("Save Failed");
+                showToast(`Save Failed: ${msg.slice(0, 40)}`, "#FF3B30");
                 return false;
             } finally {
                 isSavingRef.current = false;
@@ -3747,6 +3765,46 @@ const fireIntegrations = (trigger: string, note: any) => {
             setPlainModeNotes((prev) => { const next = new Set(prev); next.delete(currentNoteId); return next; });
         }
     }, [currentNoteId, content, plainModeNotes]);
+
+    const switchToPlain = useCallback(() => {
+        const plainContent = (() => {
+            try {
+                const parsed = JSON.parse(content);
+                if (parsed?.type === "doc") return tiptapToPlainText(parsed).replace(/\n{3,}/g, "\n\n").trim();
+            } catch {}
+            return content;
+        })();
+        if (autoSaveTimerRef.current) { clearTimeout(autoSaveTimerRef.current); autoSaveTimerRef.current = null; }
+        setContent(plainContent);
+        setPendingNoteType("text");
+        setPlainModeNotes((prev) => { const next = new Set(prev); if (currentNoteId) next.delete(currentNoteId); return next; });
+        if (currentNoteId) {
+            void notesApi.update(currentNoteId, { type: "text", content: plainContent });
+            setDbData((prev) => prev.map((n) => String(n.id) === currentNoteId ? { ...n, type: "text", content: plainContent } : n));
+            setEditingNote((prev: any) => prev ? { ...prev, type: "text", content: plainContent } : prev);
+        }
+    }, [currentNoteId, content]);
+
+    const switchToRich = useCallback(() => {
+        // Convert plain text → TipTap JSON paragraphs
+        const richContent = JSON.stringify({
+            type: "doc",
+            content: content.trim()
+                ? content.split("\n").map(line => ({
+                    type: "paragraph",
+                    content: line.trim() ? [{ type: "text", text: line }] : [],
+                }))
+                : [{ type: "paragraph" }],
+        });
+        if (autoSaveTimerRef.current) { clearTimeout(autoSaveTimerRef.current); autoSaveTimerRef.current = null; }
+        setContent(richContent);
+        setPendingNoteType("rich");
+        if (currentNoteId) {
+            void notesApi.update(currentNoteId, { type: "rich", content: richContent });
+            setDbData((prev) => prev.map((n) => String(n.id) === currentNoteId ? { ...n, type: "rich", content: richContent } : n));
+            setEditingNote((prev: any) => prev ? { ...prev, type: "rich", content: richContent } : prev);
+        }
+    }, [currentNoteId, content]);
 
     const toggleMarkdownMode = useCallback(() => {
         if (!currentNoteId) return;
@@ -5093,6 +5151,29 @@ const fireIntegrations = (trigger: string, note: any) => {
                     stroke-dashoffset: 0;
                     animation: snakeAround 1.5s linear 1 forwards;
                 }
+                @keyframes rainbowLoop {
+                    0%   { background-position: 0% 50%; }
+                    100% { background-position: 300% 50%; }
+                }
+                .hashtag-celebrate {
+                    background: linear-gradient(90deg, #ff0080, #ff8c00, #ffe600, #00ff85, #00cfff, #b44aff, #ff0080, #ff8c00, #ffe600);
+                    background-size: 300% 100%;
+                    animation: rainbowLoop 1.2s linear infinite, hashtagPopIn 0.35s cubic-bezier(0.34,1.56,0.64,1) both;
+                    -webkit-background-clip: text;
+                    background-clip: text;
+                    -webkit-text-fill-color: transparent;
+                    display: inline-block;
+                    font-weight: 900;
+                }
+                @keyframes hashtagPopIn {
+                    0%   { opacity: 0; transform: scale(0.5) translateY(8px); }
+                    100% { opacity: 1; transform: scale(1) translateY(0); }
+                }
+                @keyframes hashtagFadeOut {
+                    0%   { opacity: 1; transform: scale(1); }
+                    80%  { opacity: 1; transform: scale(1); }
+                    100% { opacity: 0; transform: scale(0.85) translateY(-6px); }
+                }
                 @keyframes rainbowPulse {
                     0%   { background-position: 0% 50%; opacity: 0.85; transform: scale(1); }
                     50%  { background-position: 100% 50%; opacity: 1; transform: scale(1.18); }
@@ -5197,14 +5278,49 @@ const fireIntegrations = (trigger: string, note: any) => {
                 ))}
             </div>
 
+            {/* Hashtag celebration overlay */}
+            {completedHashtag && (() => {
+                const cx = typeof window !== "undefined" ? window.innerWidth / 2 : 200;
+                const cy = typeof window !== "undefined" ? window.innerHeight / 2 : 300;
+                return (
+                    <>
+                        {/* Confetti burst */}
+                        {Array.from({ length: 20 }).map((_, i) => {
+                            const angle = (i / 20) * 360;
+                            const dist = 55 + (i % 5) * 20;
+                            const size = 5 + (i % 4);
+                            const tx = Math.round(cx + Math.cos(angle * Math.PI / 180) * dist);
+                            const ty = Math.round(cy + Math.sin(angle * Math.PI / 180) * dist);
+                            const cols = ["#ff0080","#ff8c00","#ffe600","#00ff85","#00cfff","#b44aff","#fff","#f472b6"];
+                            return (
+                                <div key={i} className="fixed z-[100005] pointer-events-none rounded-sm"
+                                    style={{
+                                        width: size, height: size,
+                                        left: cx, top: cy,
+                                        background: cols[i % cols.length],
+                                        animation: `confettiShoot 1.6s cubic-bezier(0.2,1,0.3,1) ${i * 30}ms both`,
+                                        ["--cx" as any]: `${tx - cx}px`,
+                                        ["--cy" as any]: `${ty - cy}px`,
+                                    }} />
+                            );
+                        })}
+                        {/* Tag text */}
+                        <div className="fixed z-[100004] pointer-events-none left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
+                            style={{ animation: "hashtagFadeOut 3s ease forwards" }}>
+                            <span className="hashtag-celebrate text-3xl sm:text-4xl tracking-tight">{completedHashtag}</span>
+                        </div>
+                    </>
+                );
+            })()}
+
             {toast && (() => {
                 const isError = toastColor === "#ef4444" || toastColor === "#FF3B30";
                 const cx = typeof window !== "undefined" ? window.innerWidth / 2 : 200;
                 const cy = 28;
                 return (
                     <>
-                        {/* Confetti — mini on every toast, bigger when explicitly requested */}
-                        {Array.from({ length: toastConfetti ? 18 : 10 }).map((_, i) => {
+                        {/* Confetti (non-error toasts only) — mini on every toast, bigger when explicitly requested */}
+                        {!isError && Array.from({ length: toastConfetti ? 18 : 10 }).map((_, i) => {
                             const count = toastConfetti ? 18 : 10;
                             const angle = (i / count) * 360;
                             const dist = toastConfetti ? 44 + (i % 5) * 14 : 24 + (i % 4) * 7;
@@ -5224,15 +5340,35 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     }} />
                             );
                         })}
+                        {/* Fire particles (error toasts only) */}
+                        {isError && Array.from({ length: 8 }).map((_, i) => {
+                            const angle = (i / 8) * 360;
+                            const dist = 20 + (i % 4) * 8;
+                            const tx = Math.round(cx + Math.cos(angle * Math.PI / 180) * dist);
+                            const ty = Math.round(cy + Math.sin(angle * Math.PI / 180) * dist);
+                            return (
+                                <div key={i} className="fixed z-[100003] pointer-events-none text-sm"
+                                    style={{
+                                        left: cx, top: cy,
+                                        animation: `confettiShoot 1.4s cubic-bezier(0.2,1,0.3,1) ${i * 60}ms both`,
+                                        ["--cx" as any]: `${tx - cx}px`,
+                                        ["--cy" as any]: `${ty - cy}px`,
+                                    }}>🔥</div>
+                            );
+                        })}
                         {/* Toast pill */}
-                        <div className="fixed left-1/2 -translate-x-1/2 z-[100002] pointer-events-none"
-                            style={{ top: "calc(env(safe-area-inset-top, 0px) + 6px)", animation: "islandToastInOut 3s cubic-bezier(0.16, 1, 0.3, 1) forwards" }}>
-                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-white" style={{
+                        <div className="fixed left-1/2 -translate-x-1/2 z-[100002] pointer-events-auto"
+                            style={{ top: "calc(env(safe-area-inset-top, 0px) + 6px)", animation: "islandToastInOut 3s cubic-bezier(0.16, 1, 0.3, 1) forwards" }}
+                            onClick={() => void secureCopy(toast).then(() => { if (!isError) showToast("Copied!"); })}>
+                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-white cursor-pointer active:scale-95 transition-transform" style={{
                                 background: toastColor,
                                 border: `1px solid ${toastColor}99`,
                                 boxShadow: `0 8px 26px ${toastColor}66`,
                             }}>
-                                <span style={{ width: 10, height: 10, borderRadius: "50%", border: "1.5px solid rgba(255,255,255,0.35)", borderTopColor: "#fff", display: "inline-block", flexShrink: 0, animation: "toastSpin 0.7s linear infinite" }} />
+                                {isError
+                                    ? <span style={{ flexShrink: 0, fontSize: 10, lineHeight: 1 }}>🔥</span>
+                                    : <span style={{ width: 10, height: 10, borderRadius: "50%", border: "1.5px solid rgba(255,255,255,0.35)", borderTopColor: "#fff", display: "inline-block", flexShrink: 0, animation: "toastSpin 0.7s linear infinite" }} />
+                                }
                                 <span className="font-black uppercase tracking-wide text-[7px] sm:text-[8px] leading-snug max-w-[220px] break-words text-center">{toast}</span>
                             </div>
                         </div>
@@ -5289,7 +5425,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                         {/* Back button — hidden on desktop or in edit mode (left panel always visible) */}
                         <button
                             onClick={(e) => { e.stopPropagation(); void backToRootFromEditor(); }}
-                            className={`${editMode ? "hidden" : "flex"} p-2 text-blue-500 hover:bg-white/10 transition flex-shrink-0`}
+                            className={`${editMode ? "hidden" : "flex"} p-2 text-zinc-400 hover:bg-white/10 transition flex-shrink-0`}
                             title={`Back to ${targetFolder || "folders"}`}
                             aria-label={`Back to ${targetFolder || "folders"}`}>
                             <ArrowLeftIcon className="w-[38px] h-[38px]" />
@@ -5382,29 +5518,14 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 {TYPE_BADGE[noteType].label}
                             </span>
                         ) : null}
-                        {canToggleChecklist && (
-                        <button type="button"
-                            onClick={() => toggleListMode()}
-                            className="p-2 sm:p-3 transition flex-shrink-0"
-                            style={{ color: listMode ? activeAccentColor : "rgba(255,255,255,0.4)" }}
-                            title="Toggle checklist">
-                            <ClipboardDocumentListIcon className="w-[26px] h-[26px] sm:w-6 sm:h-6" />
-                        </button>
-                        )}
-                        {/* Plain mode toggle — only on rich notes */}
-                        {noteType === "rich" && currentNoteId && (
-                            <button
-                                type="button"
-                                onClick={togglePlainMode}
-                                title={plainMode ? "Switch to Rich editor" : "Switch to Plain / Code editor"}
-                                className="flex items-center gap-1 px-2 py-0.5 rounded flex-shrink-0 transition text-[9px] font-black uppercase tracking-wide"
-                                style={{
-                                    background: plainMode ? "rgba(255,255,255,0.12)" : "transparent",
-                                    color: plainMode ? "#fff" : "rgba(255,255,255,0.35)",
-                                    border: `1px solid ${plainMode ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.1)"}`,
-                                }}>
-                                {plainMode ? "< / >" : "< / >"}
-                            </button>
+                        {/* Plain / Rich mode toggle */}
+                        {(noteType === "text" || noteType === "rich") && (
+                            <HeaderIconBtn
+                                icon={PencilSquareIcon}
+                                label={noteType === "rich" ? "Switch to Plain text" : "Switch to Rich editor"}
+                                active={noteType === "rich"}
+                                onClick={noteType === "text" ? switchToRich : switchToPlain}
+                            />
                         )}
                         <button type="button"
                             onClick={() => { setShowNoteActions(true); closeEditorTools(); }}
@@ -5413,8 +5534,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                         </button>
                     </div>
                     <div className="relative flex-1 flex overflow-hidden bg-black font-mono">
-                        {/* ── Unified pill bar — always visible top-right ── */}
-                        {!showNoteActions && content.trim() && !listMode && !graphMode && !mindmapMode && !stackMode && !voiceNote && noteType !== "rich" && noteType !== "html" && (
+                        {/* ── Float copy pill — fades after 10s of editing ── */}
+                        {showFloatCopy && !showNoteActions && content.trim() && !listMode && !graphMode && !mindmapMode && !stackMode && !voiceNote && noteType !== "rich" && noteType !== "html" && (
                         <div className="absolute top-3 right-3 z-[2147483647] pointer-events-auto">
                             <button type="button"
                                 onClick={() => {
@@ -5927,28 +6048,42 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 })()}
                             </div>
                         ) : (
-                            <div className="relative flex-1">
+                            <div className="flex-1 flex overflow-auto" style={{ background: "#000" }}>
+                                {/* Line number gutter */}
+                                <div aria-hidden style={{
+                                    width: 48, minWidth: 48, paddingTop: 8, paddingBottom: 24,
+                                    borderRight: "1px solid rgba(255,255,255,0.06)",
+                                    textAlign: "right", userSelect: "none", pointerEvents: "none",
+                                    lineHeight: "19px", fontSize: 13,
+                                    fontFamily: "ui-monospace,'Fira Code',monospace",
+                                    color: "#3f3f3f", flexShrink: 0,
+                                }}>
+                                    {(content || "").split("\n").map((_, i) => (
+                                        <div key={i} style={{ paddingRight: 10 }}>{i + 1}</div>
+                                    ))}
+                                </div>
+                                {/* Native textarea — no cursor jump */}
                                 <textarea
                                     ref={editorTextRef}
                                     value={content}
                                     onChange={(e) => { setContent(e.target.value); handleCursorUpdate(e); }}
                                     onKeyUp={handleCursorUpdate}
                                     onClick={(e) => { closeEditorTools(); handleCursorUpdate(e); }}
-                                    onScroll={handleEditorScroll}
                                     onFocus={(e) => { closeEditorTools(); handleCursorUpdate(e); }}
                                     onBlur={() => void saveNote({ silent: true })}
                                     onPaste={handleEditorPaste}
-                                    className="note-textarea ios-editor-scroll relative z-10 w-full h-full bg-black pt-2 px-3 pb-3 outline-none resize-none font-mono leading-5 overflow-x-hidden overscroll-none touch-pan-y"
-                                    style={{ paddingRight: "80px" }}
+                                    className="ios-editor-scroll overscroll-none touch-pan-y"
+                                    style={{
+                                        flex: 1, background: "transparent", color: "#f8f8f2",
+                                        fontFamily: "ui-monospace,'Fira Code','Cascadia Code',monospace",
+                                        fontSize: 13, lineHeight: "19px",
+                                        paddingTop: 8, paddingBottom: 24, paddingLeft: 16, paddingRight: 24,
+                                        outline: "none", resize: "none", caretColor: "#f8f8f2",
+                                        whiteSpace: "pre", overflowWrap: "normal", wordBreak: "normal",
+                                        minHeight: "100%", overflow: "hidden",
+                                    }}
                                     placeholder="START TYPING..."
                                 />
-                                {/* Hashtag easter egg overlays */}
-                                {hashSymbolFlash && (
-                                    <div className="pointer-events-none absolute top-3 right-20 z-20 text-2xl font-black hash-symbol-flash select-none">#</div>
-                                )}
-                                {completedHashtag && (
-                                    <div className="pointer-events-none absolute top-3 right-20 z-20 text-base font-black hashtag-sweep select-none">{completedHashtag}</div>
-                                )}
                             </div>
                         )}
                     </div>
@@ -5996,7 +6131,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                             <>
                                 <button
                                     onClick={() => { goBack(); }}
-                                    className="p-3 text-blue-500 hover:bg-white/10 transition flex-shrink-0">
+                                    className="p-3 text-zinc-400 hover:bg-white/10 transition flex-shrink-0">
                                     <ArrowLeftIcon className="w-8 h-8" />
                                 </button>
                                 <div className="flex items-center gap-1 min-w-0 overflow-hidden">
@@ -6611,7 +6746,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                             {/* TYPE ball → rich editor */}
                             <button
                                 type="button"
-                                onClick={() => { setShowNoteTypePicker(false); openNewNote("rich"); }}
+                                onClick={() => { setShowNoteTypePicker(false); openNewNote(); }}
                                 className="flex flex-col items-center gap-3 group"
                             >
                                 <div className="w-28 h-28 rounded-full flex items-center justify-center transition-transform active:scale-95 group-hover:scale-105"
@@ -6816,8 +6951,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     <span className="text-xs font-black tracking-wide flex-1 text-zinc-300">View</span>
                                     <span className="text-[10px] font-black uppercase tracking-widest px-1.5 py-0.5" style={{ background: `${noteColor}25`, color: noteColor }}>{noteViewMode}</span>
                                 </div>
-                                <div className="grid grid-cols-3 gap-1.5">
-                                    {(["Text", "Checklist", "Graph", "Mindmap", "Stack"] as const).map((mode) => {
+                                <div className="grid grid-cols-2 gap-1.5">
+                                    {(["Text", "Graph", "Mindmap", "Stack"] as const).map((mode) => {
                                         const active = noteViewMode === mode;
                                         const icon = mode === "Text" ? (
                                             <Bars3Icon className="w-4 h-4" />
@@ -7492,7 +7627,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 {/* VIEW MODE */}
                                 <div className="px-6 py-2 border-b border-white/[0.06]">
                                     <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-1.5">View</p>
-                                    <div className="grid grid-cols-2 gap-1.5">
+                                    <div className="grid grid-cols-3 gap-1.5">
                                         <button type="button" onClick={() => { setMainListMode("list"); setKanbanMode(false); }}
                                             className={`py-1.5 rounded flex flex-col items-center gap-0.5 transition ${mainListMode === "list" && !kanbanMode ? "bg-white text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"}`}>
                                             <Bars3Icon className="w-4 h-4" />
@@ -7502,6 +7637,11 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             className={`py-1.5 rounded flex flex-col items-center gap-0.5 transition ${mainListMode === "thumb" && !kanbanMode ? "bg-white text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"}`}>
                                             <Squares2X2Icon className="w-4 h-4" />
                                             <span className="text-[9px] font-black uppercase tracking-wide">Thumb</span>
+                                        </button>
+                                        <button type="button" onClick={() => { if (listMode) toggleListMode(); else { if (graphMode) toggleGraphMode(); if (mindmapMode) toggleMindmapMode(); if (stackMode) toggleStackMode(); toggleListMode(); } setShowFolderActions(false); }}
+                                            className={`py-1.5 rounded flex flex-col items-center gap-0.5 transition ${listMode ? "bg-white text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"}`}>
+                                            <ListBulletIcon className="w-4 h-4" />
+                                            <span className="text-[9px] font-black uppercase tracking-wide">Todo</span>
                                         </button>
                                     </div>
                                 </div>
