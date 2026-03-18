@@ -96,6 +96,39 @@ describe("detectNoteType", () => {
         const doc = JSON.stringify({ type: "doc", content: [{ type: "paragraph" }] });
         expect(detectNoteType(doc)).toBe("rich");
     });
+
+    // Code types (javascript, typescript, python, css, sql, bash) are set explicitly
+    // via pendingNoteType or stored in DB — detectNoteType does NOT auto-detect them.
+    // These should all fall back to "text" unless the content happens to match another rule.
+    it("code types are not auto-detected — javascript falls back to text", () => {
+        expect(detectNoteType("function hello() {\n  return 'world';\n}")).toBe("text");
+    });
+
+    it("code types are not auto-detected — typescript falls back to text", () => {
+        expect(detectNoteType("const x: number = 42;\ninterface Foo { bar: string; }")).toBe("text");
+    });
+
+    it("code types are not auto-detected — python falls back to text", () => {
+        expect(detectNoteType("def hello():\n    return 'world'")).toBe("text");
+    });
+
+    it("code types are not auto-detected — css falls back to text", () => {
+        expect(detectNoteType(".foo {\n  color: red;\n  font-size: 14px;\n}")).toBe("text");
+    });
+
+    it("code types are not auto-detected — sql falls back to text", () => {
+        expect(detectNoteType("SELECT id, title FROM notes WHERE folder_name = 'Work'")).toBe("text");
+    });
+
+    it("code types are not auto-detected — bash falls back to text", () => {
+        expect(detectNoteType("#!/bin/bash\necho hello world\ncd /tmp")).toBe("text");
+    });
+
+    // Edge: a JS file with a markdown heading would detect as markdown (not JS)
+    // This confirms detection priority: mermaid > json > html > markdown > text
+    it("detection priority: markdown wins over plain code-like text with # heading", () => {
+        expect(detectNoteType("# My Script\nconst x = 1;")).toBe("markdown");
+    });
 });
 
 // ── extractMermaid ────────────────────────────────────────────────────────────
@@ -168,6 +201,33 @@ describe("mermaidSubType", () => {
     ];
 
     it.each(cases)("detects %s → %s", (input, expected) => {
+        expect(mermaidSubType(input)).toBe(expected);
+    });
+
+    // Missing diagram types — full coverage of all supported subtypes
+    const missingCases: [string, string][] = [
+        ["stateDiagram\n  [*] --> A",        "State"],
+        ["stateDiagram-v2\n  [*] --> A",     "State"],
+        ["xychart-beta\n  title Sales",      "XY Chart"],
+        ["xychart\n  title Sales",           "XY Chart"],
+        ["quadrantChart\n  title Q",         "Quadrant"],
+        ["requirementDiagram\n  req A",      "Requirement"],
+        ["zenuml\n  A->B: msg",              "ZenUML"],
+        ["sankey-beta\n  A,B,10",            "Sankey"],
+        ["sankey\n  A,B,10",                 "Sankey"],
+        ["block-beta\n  A",                  "Block"],
+        ["block\n  A",                       "Block"],
+        ["packet-beta\n  field1 8",          "Packet"],
+        ["packet\n  field1 8",               "Packet"],
+        ["architecture-beta\n  service A",   "Architecture"],
+        ["architecture\n  service A",        "Architecture"],
+        ["c4container\n  title Sys",         "C4 Container"],
+        ["c4component\n  title Comp",        "C4 Component"],
+        ["c4dynamic\n  title Dyn",           "C4 Dynamic"],
+        ["c4deployment\n  title Dep",        "C4 Deployment"],
+    ];
+
+    it.each(missingCases)("detects %s → %s", (input, expected) => {
         expect(mermaidSubType(input)).toBe(expected);
     });
 
