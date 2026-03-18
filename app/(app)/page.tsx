@@ -1180,6 +1180,7 @@ export default function NotesMaster() {
     const [toastColor, setToastColor] = useState("#34C759");
     const [toastConfetti, setToastConfetti] = useState(false);
     const [toastIsError, setToastIsError] = useState(false);
+    const [toastRainbow, setToastRainbow] = useState(false);
     const [undoDeleteTask, setUndoDeleteTask] = useState<{ text: string; lineIdx: number } | null>(null);
     const taskContentHistory = useRef<string[]>([]);
     const pendingDeleteRef = useRef<{ note: any; title: string; content: string; noteColor: string; targetFolder: string; timeoutId: ReturnType<typeof setTimeout> } | null>(null);
@@ -2703,7 +2704,7 @@ const fireIntegrations = (trigger: string, note: any) => {
     // Track if the current note was ever dirty (survives auto-save clearing isDraftDirty)
     useEffect(() => { if (isDraftDirty) noteEverDirtyRef.current = true; }, [isDraftDirty]);
     // Reset dirty tracker whenever we switch to a different note (or open a new one)
-    useEffect(() => { noteEverDirtyRef.current = false; }, [editingNote?.id]);
+    useEffect(() => { noteEverDirtyRef.current = false; prevContentForHashRef.current = content; }, [editingNote?.id]);
 
     // Hashtag easter egg — plain text notes only (rich text has WYSIWYG, no need)
     useEffect(() => {
@@ -2733,8 +2734,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         if (newTag) {
             lastCelebratedTagRef.current = newTag;
             if (celebrateTimerRef.current) clearTimeout(celebrateTimerRef.current);
-            const rainbowCols = ["#ff0080","#ff8c00","#ffe600","#00ff85","#00cfff","#b44aff"];
-            showToast(newTag, rainbowCols[Math.floor(Math.random() * rainbowCols.length)], true);
+            showRainbowToast(newTag);
             celebrateTimerRef.current = setTimeout(() => {
                 lastCelebratedTagRef.current = null;
             }, 3000);
@@ -2995,7 +2995,16 @@ const fireIntegrations = (trigger: string, note: any) => {
         setToast(msg);
         setToastConfetti(confetti);
         setToastIsError(false);
-        setTimeout(() => { setToast(""); setToastConfetti(false); setToastIsError(false); }, 3000);
+        setToastRainbow(false);
+        setTimeout(() => { setToast(""); setToastConfetti(false); setToastIsError(false); setToastRainbow(false); }, 3000);
+        playSound("toast");
+    };
+    const showRainbowToast = (msg: string) => {
+        setToast(msg);
+        setToastConfetti(true);
+        setToastIsError(false);
+        setToastRainbow(true);
+        setTimeout(() => { setToast(""); setToastConfetti(false); setToastRainbow(false); }, 3000);
         playSound("toast");
     };
     const showError = (msg: string) => {
@@ -5302,7 +5311,9 @@ const fireIntegrations = (trigger: string, note: any) => {
                             const size = toastConfetti ? 4 + (i % 4) : 2 + (i % 3);
                             const tx = Math.round(cx + Math.cos(angle * Math.PI / 180) * dist);
                             const ty = Math.round(cy + Math.sin(angle * Math.PI / 180) * dist);
-                            const cols = [toastColor, "#ffffff", "#FFD700", "#a78bfa", "#34d399", "#f472b6"];
+                            const cols = toastRainbow
+                                ? ["#ff0080","#ff8c00","#ffe600","#00ff85","#00cfff","#b44aff","#fff","#f472b6"]
+                                : [toastColor, "#ffffff", "#FFD700", "#a78bfa", "#34d399", "#f472b6"];
                             return (
                                 <div key={i} className="fixed z-[100003] pointer-events-none rounded-sm"
                                     style={{
@@ -5336,9 +5347,15 @@ const fireIntegrations = (trigger: string, note: any) => {
                             style={{ top: "calc(env(safe-area-inset-top, 0px) + 6px)", animation: "islandToastInOut 3s cubic-bezier(0.16, 1, 0.3, 1) forwards" }}
                             onClick={() => void secureCopy(toast).then(() => { if (!isError) showToast("Copied!"); })}>
                             <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-white cursor-pointer active:scale-95 transition-transform" style={{
-                                background: toastColor,
-                                border: `1px solid ${toastColor}99`,
-                                boxShadow: `0 8px 26px ${toastColor}66`,
+                                background: toastRainbow
+                                    ? "linear-gradient(90deg,#ff0080,#ff8c00,#ffe600,#00ff85,#00cfff,#b44aff,#ff0080)"
+                                    : toastColor,
+                                backgroundSize: toastRainbow ? "200% 100%" : undefined,
+                                animation: toastRainbow
+                                    ? "islandToastInOut 3s cubic-bezier(0.16,1,0.3,1) forwards, rainbowLoop 1.5s linear infinite"
+                                    : undefined,
+                                border: toastRainbow ? "1px solid rgba(255,255,255,0.3)" : `1px solid ${toastColor}99`,
+                                boxShadow: toastRainbow ? "0 8px 26px rgba(180,74,255,0.5)" : `0 8px 26px ${toastColor}66`,
                             }}>
                                 {isError
                                     ? <span style={{ flexShrink: 0, fontSize: 10, lineHeight: 1 }}>🔥</span>
