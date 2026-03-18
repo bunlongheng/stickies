@@ -1179,6 +1179,7 @@ export default function NotesMaster() {
     const [toast, setToast] = useState("");
     const [toastColor, setToastColor] = useState("#34C759");
     const [toastConfetti, setToastConfetti] = useState(false);
+    const [toastIsError, setToastIsError] = useState(false);
     const [undoDeleteTask, setUndoDeleteTask] = useState<{ text: string; lineIdx: number } | null>(null);
     const taskContentHistory = useRef<string[]>([]);
     const pendingDeleteRef = useRef<{ note: any; title: string; content: string; noteColor: string; targetFolder: string; timeoutId: ReturnType<typeof setTimeout> } | null>(null);
@@ -1280,7 +1281,6 @@ export default function NotesMaster() {
     const lastCelebratedTagRef = useRef<string | null>(null);
     const celebrateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [hashSymbolFlash, setHashSymbolFlash] = useState(false);
-    const [completedHashtag, setCompletedHashtag] = useState<string | null>(null);
     const graphContainerRef = useRef<HTMLDivElement | null>(null);
     const graphNodesRef = useRef<{ x: number; y: number; vx: number; vy: number }[]>([]);
     const graphAnimRef = useRef<number | null>(null);
@@ -2733,9 +2733,9 @@ const fireIntegrations = (trigger: string, note: any) => {
         if (newTag) {
             lastCelebratedTagRef.current = newTag;
             if (celebrateTimerRef.current) clearTimeout(celebrateTimerRef.current);
-            setCompletedHashtag(newTag);
+            const rainbowCols = ["#ff0080","#ff8c00","#ffe600","#00ff85","#00cfff","#b44aff"];
+            showToast(newTag, rainbowCols[Math.floor(Math.random() * rainbowCols.length)], true);
             celebrateTimerRef.current = setTimeout(() => {
-                setCompletedHashtag(null);
                 lastCelebratedTagRef.current = null;
             }, 3000);
         }
@@ -2831,7 +2831,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                 } else if (!existingNoteIdStr) {
                     setDbData((prev) => prev.filter((n) => String(n.id) !== optimisticId));
                 }
-                showToast(`Save Failed: ${msg.slice(0, 40)}`, "#FF3B30");
+                showError(`Save Failed: ${msg.slice(0, 40)}`);
                 return false;
             } finally {
                 isSavingRef.current = false;
@@ -2994,8 +2994,17 @@ const fireIntegrations = (trigger: string, note: any) => {
         setToastColor(color);
         setToast(msg);
         setToastConfetti(confetti);
-        setTimeout(() => { setToast(""); setToastConfetti(false); }, 3000);
-        playSound(color === "#FF3B30" ? "toast-error" : "toast");
+        setToastIsError(false);
+        setTimeout(() => { setToast(""); setToastConfetti(false); setToastIsError(false); }, 3000);
+        playSound("toast");
+    };
+    const showError = (msg: string) => {
+        setToastColor("#FF3B30");
+        setToast(msg);
+        setToastConfetti(false);
+        setToastIsError(true);
+        setTimeout(() => { setToast(""); setToastIsError(false); }, 3000);
+        playSound("toast-error");
     };
 
     useEffect(() => {
@@ -3032,7 +3041,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                 return updated;
             });
         } catch {
-            showToast("Upload failed", "#FF3B30");
+            showError("Upload failed");
         } finally {
             setUploadingImages(false);
         }
@@ -3074,7 +3083,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                 showToast("Rich text pasted ✓", "#34C759");
             } catch (err) {
                 console.error("Rich paste failed:", err);
-                showToast("Paste failed", "#FF3B30");
+                showError("Paste failed");
             }
             return;
         }
@@ -3119,7 +3128,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                 if (nid) setMarkdownModeNotes(prev => { const next = new Set(prev); next.delete(nid); return next; });
                 showToast("Image pasted ✓", "#34C759");
             } catch {
-                showToast("Image paste failed", "#FF3B30");
+                showError("Image paste failed");
             }
         }
     }
@@ -3259,7 +3268,7 @@ const fireIntegrations = (trigger: string, note: any) => {
             });
             showToast("Sent to mobile ✓", "#34C759");
         } catch {
-            showToast("Send failed", "#FF3B30");
+            showError("Send failed");
         }
     }, [editingNote, title, targetFolder, activeFolder]);
 
@@ -3420,7 +3429,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                 showToast(`"${label}" deleted`, resolvedColor);
             } catch (err) {
                 console.error("Delete note failed:", err);
-                showToast("Delete Failed", "#FF3B30");
+                showError("Delete Failed");
             }
         },
         [closeEditorTools],
@@ -3486,7 +3495,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                 showToast(`folder "${folderName}", deleted!`, folderColor);
             } catch (err) {
                 console.error("Delete folder failed:", err);
-                showToast("Delete Failed", "#FF3B30");
+                showError("Delete Failed");
             }
         },
         [closeEditorTools, goBack],
@@ -3505,7 +3514,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                 showToast(`Deleted ${ids.length} note${ids.length !== 1 ? "s" : ""}`);
             } catch (err) {
                 console.error("Bulk delete failed:", err);
-                showToast("Delete Failed", "#FF3B30");
+                showError("Delete Failed");
             }
         },
         [selectedIds],
@@ -3947,7 +3956,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         setConfirmDeleteTask(null);
         playSound("delete");
         if (deletedText !== undefined) setUndoDeleteTask({ text: deletedText, lineIdx });
-        if (label) showToast(`"${label.length > 10 ? label.slice(0, 10) + "…" : label}" deleted`, color || "#FF3B30");
+        if (label) showToast(`"${label.length > 10 ? label.slice(0, 10) + "…" : label}" deleted`, color || "#71717a");
     }, [content, pushTaskHistory]);
 
     const renameTask = useCallback((lineIdx: number, newText: string) => {
@@ -5278,43 +5287,9 @@ const fireIntegrations = (trigger: string, note: any) => {
                 ))}
             </div>
 
-            {/* Hashtag celebration overlay */}
-            {completedHashtag && (() => {
-                const cx = typeof window !== "undefined" ? window.innerWidth / 2 : 200;
-                const cy = typeof window !== "undefined" ? window.innerHeight / 2 : 300;
-                return (
-                    <>
-                        {/* Confetti burst */}
-                        {Array.from({ length: 20 }).map((_, i) => {
-                            const angle = (i / 20) * 360;
-                            const dist = 55 + (i % 5) * 20;
-                            const size = 5 + (i % 4);
-                            const tx = Math.round(cx + Math.cos(angle * Math.PI / 180) * dist);
-                            const ty = Math.round(cy + Math.sin(angle * Math.PI / 180) * dist);
-                            const cols = ["#ff0080","#ff8c00","#ffe600","#00ff85","#00cfff","#b44aff","#fff","#f472b6"];
-                            return (
-                                <div key={i} className="fixed z-[100005] pointer-events-none rounded-sm"
-                                    style={{
-                                        width: size, height: size,
-                                        left: cx, top: cy,
-                                        background: cols[i % cols.length],
-                                        animation: `confettiShoot 1.6s cubic-bezier(0.2,1,0.3,1) ${i * 30}ms both`,
-                                        ["--cx" as any]: `${tx - cx}px`,
-                                        ["--cy" as any]: `${ty - cy}px`,
-                                    }} />
-                            );
-                        })}
-                        {/* Tag text */}
-                        <div className="fixed z-[100004] pointer-events-none left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
-                            style={{ animation: "hashtagFadeOut 3s ease forwards" }}>
-                            <span className="hashtag-celebrate text-3xl sm:text-4xl tracking-tight">{completedHashtag}</span>
-                        </div>
-                    </>
-                );
-            })()}
 
             {toast && (() => {
-                const isError = toastColor === "#ef4444" || toastColor === "#FF3B30";
+                const isError = toastIsError;
                 const cx = typeof window !== "undefined" ? window.innerWidth / 2 : 200;
                 const cy = 28;
                 return (
@@ -5927,7 +5902,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         }}
                                         onDelete={() => {
                                             const updated = voiceNote.filter((_, i) => i !== idx);
-                                            showToast(`Recording #${idx + 1} deleted`, "#ef4444");
+                                            showError(`Recording #${idx + 1} deleted`);
                                             if (updated.length === 0) {
                                                 setContent("");
                                                 setShowNoteTypePicker(true);
