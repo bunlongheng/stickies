@@ -1496,7 +1496,12 @@ export default function NotesMaster() {
             if (cached) {
                 const parsed = JSON.parse(cached);
                 if (Array.isArray(parsed) && parsed.length > 0) {
-                    setDbData(parsed);
+                    // Merge cache (folders) with any already-loaded notes — don't wipe notes
+                    setDbData((prev) => {
+                        const existingNotes = prev.filter((r: any) => !r.is_folder);
+                        const cachefolders = parsed.filter((r: any) => r.is_folder);
+                        return [...cachefolders, ...existingNotes];
+                    });
                     setIsDataLoaded(true);
                 }
             }
@@ -2815,7 +2820,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                     localWriteRef.current.set(String(existingNoteId), Date.now());
                     await notesApi.update(String(existingNoteId), payload);
                     setEditingNote((prev: any) => (prev ? { ...prev, ...payload } : prev));
-                    void sync();
                 } else {
                     const { note: data } = await notesApi.insert(payload);
                     if (data) {
