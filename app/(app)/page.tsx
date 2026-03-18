@@ -2780,7 +2780,13 @@ const fireIntegrations = (trigger: string, note: any) => {
                 folder_name: folderName,
                 folder_color: noteColor || folders.find((f) => f.name === folderName)?.color || editingNote?.folder_color || palette12[0],
                 is_folder: false,
-                type: pendingNoteType ?? (editingNote as any)?.type ?? detectNoteType(saveContent),
+                type: (() => {
+                    if (pendingNoteType) return pendingNoteType;
+                    const saved = (editingNote as any)?.type ?? null;
+                    // Never overwrite a code/mermaid type with a weaker detection
+                    if (saved && CODE_TYPES.has(saved)) return saved;
+                    return saved ?? detectNoteType(saveContent);
+                })(),
                 ...(extractedTags.length > 0 ? { tags: extractedTags } : {}),
                 updated_at: new Date().toISOString(),
                 ...(folderId ? { folder_id: folderId } : {}),
@@ -2895,13 +2901,14 @@ const fireIntegrations = (trigger: string, note: any) => {
         setImages([]);
     }, [saveNote, closeEditorTools, editingNote?.id, title, noteColor]);
 
-    const backToRootFromEditor = useCallback(() => {
+    const backToRootFromEditor = useCallback(async () => {
         const wasChanged = noteEverDirtyRef.current;
+        const isNew = !editingNote?.id;
         noteEverDirtyRef.current = false;
-        void saveNote({ silent: true });
+        // Await save so folder reload only fires after the note is in the DB
+        await saveNote({ silent: true });
         if (wasChanged && title.trim()) {
             const t = title.slice(0, 10) + (title.length > 10 ? "…" : "");
-            const isNew = !editingNote?.id;
             showToast(isNew ? `+ "${t}"` : `"${t}" updated`, noteColor || "#34C759", isNew);
         }
         closeEditorTools();
@@ -3617,7 +3624,12 @@ const fireIntegrations = (trigger: string, note: any) => {
 
     // ── Type resolution: DB `type` is source of truth; fall back to client detection ──
     const dbType: string | null = (editingNote as any)?.type ?? null;
-    const noteType: string = dbType ?? pendingNoteType ?? detectNoteType(content);
+    const detectedType = detectNoteType(content);
+    // If DB type is null but content is clearly a code/mermaid type, trust the detection
+    // so the toggle never shows and the correct renderer is used. Never downgrade a code type.
+    const CODE_TYPES = new Set(["mermaid","javascript","typescript","python","css","sql","bash","html","json","markdown"]);
+    const effectiveDbType = dbType ?? (CODE_TYPES.has(detectedType) ? detectedType : null);
+    const noteType: string = pendingNoteType ?? effectiveDbType ?? detectedType;
 
     // Derived booleans — clean, no detection chains
     const baseMode = !listMode && !graphMode && !mindmapMode && !stackMode;
@@ -6071,7 +6083,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         fontSize: 13, lineHeight: "19px",
                                         paddingTop: 8, paddingBottom: 24, paddingLeft: 16, paddingRight: 24,
                                         outline: "none", resize: "none", caretColor: "#f8f8f2",
-                                        whiteSpace: "pre", overflowWrap: "normal", wordBreak: "normal",
+                                        whiteSpace: "pre-wrap", overflowWrap: "break-word", wordBreak: "break-word",
                                         minHeight: "100%", overflow: "hidden",
                                     }}
                                     placeholder="START TYPING..."
