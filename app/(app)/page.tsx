@@ -108,7 +108,7 @@ const supabase = { from: (...a: Parameters<ReturnType<typeof getSupabase>["from"
 
 async function getAuthToken(): Promise<string> {
     if (process.env.NEXT_PUBLIC_STICKIES_API_KEY) {
-        return process.env.NEXT_PUBLIC_STICKIES_API_KEY;
+        return process.env.NEXT_PUBLIC_STICKIES_API_KEY.trim();
     }
     // Use the SSR-aware browser client — reads session from cookies (set by @supabase/ssr)
     const sb = createBrowserClient();
@@ -1181,6 +1181,7 @@ export default function NotesMaster() {
     const [toastConfetti, setToastConfetti] = useState(false);
     const [undoDeleteTask, setUndoDeleteTask] = useState<{ text: string; lineIdx: number } | null>(null);
     const taskContentHistory = useRef<string[]>([]);
+    const pendingDeleteRef = useRef<{ note: any; title: string; content: string; noteColor: string; targetFolder: string; timeoutId: ReturnType<typeof setTimeout> } | null>(null);
     useEffect(() => { if (!undoDeleteTask) return; const t = setTimeout(() => setUndoDeleteTask(null), 5000); return () => clearTimeout(t); }, [undoDeleteTask]);
     const [flashColor, setFlashColor] = useState("#ffffff");
     const [flashNote, setFlashNote] = useState<any | null>(null);
@@ -2926,6 +2927,31 @@ const fireIntegrations = (trigger: string, note: any) => {
         return () => window.removeEventListener("keydown", handler);
     }, [saveNote, title, noteColor]);
 
+    // Cmd+Z → undo note deletion (pending delete within window)
+    useEffect(() => {
+        const handler = (e: KeyboardEvent) => {
+            if (!pendingDeleteRef.current) return;
+            if ((e.metaKey || e.ctrlKey) && e.key === "z") {
+                e.preventDefault();
+                const pd = pendingDeleteRef.current;
+                clearTimeout(pd.timeoutId);
+                pendingDeleteRef.current = null;
+                setDbData((prev) => [pd.note, ...prev.filter((r) => String(r.id) !== String(pd.note.id))]);
+                setEditingNote(pd.note);
+                setTitle(pd.title);
+                setContent(pd.content);
+                setNoteColor(pd.noteColor);
+                setTargetFolder(pd.targetFolder);
+                setActiveLine(0);
+                setEditorScrollTop(0);
+                setEditorOpen(true);
+                showToast("Restored", pd.noteColor || "#34C759");
+            }
+        };
+        window.addEventListener("keydown", handler);
+        return () => window.removeEventListener("keydown", handler);
+    }, []);
+
     const openNewNote = useCallback((type?: string) => {
         noteEverDirtyRef.current = false;
         const isStandup = (activeFolder || "").toLowerCase() === "standup";
@@ -3382,6 +3408,39 @@ const fireIntegrations = (trigger: string, note: any) => {
         [closeEditorTools],
     );
 
+    // Fast delete from toolbar — no confirmation, Cmd+Z to undo within 8s
+    const fastDeleteNote = useCallback(() => {
+        if (!editingNote?.id) return;
+        const noteId = String(editingNote.id);
+        const snap = { note: editingNote, title, content, noteColor: noteColor || "#FF3B30", targetFolder: targetFolder || "" };
+        const label = snap.title.trim().slice(0, 10) + (snap.title.trim().length > 10 ? "…" : "") || "Untitled";
+        // Cancel any previous pending delete
+        if (pendingDeleteRef.current) {
+            clearTimeout(pendingDeleteRef.current.timeoutId);
+            void notesApi.delete(String(pendingDeleteRef.current.note.id));
+            pendingDeleteRef.current = null;
+        }
+        // Optimistic UI
+        setDbData((prev) => prev.filter((r) => String(r.id) !== noteId));
+        localStorage.removeItem(ACTIVE_DRAFT_KEY);
+        setPendingShare(null);
+        closeEditorTools();
+        setEditingNote(null);
+        setTitle("");
+        setContent("");
+        setActiveLine(0);
+        setEditorScrollTop(0);
+        setEditorOpen(false);
+        playSound("delete");
+        showToast(`"${label}" deleted — ⌘Z to undo`, snap.noteColor);
+        // Actual DB delete after 8s
+        const timeoutId = setTimeout(async () => {
+            pendingDeleteRef.current = null;
+            try { await notesApi.delete(noteId); } catch { /* ignore */ }
+        }, 8000);
+        pendingDeleteRef.current = { ...snap, timeoutId };
+    }, [editingNote, title, content, noteColor, targetFolder, closeEditorTools]);
+
     const deleteFolderByName = useCallback(
         async (folderName: string) => {
             if (!folderName) return;
@@ -3541,7 +3600,7 @@ const fireIntegrations = (trigger: string, note: any) => {
 
     // Checklist toggle: plain-text only, bullet/numbered list ≤12 lines, no blank lines between items
     const canToggleChecklist = (() => {
-        if (noteType === "rich" || listMode) return false;
+        if (noteType !== "text" || listMode) return false;
         const lines = content.split("\n").filter(l => l.trim());
         if (lines.length === 0 || lines.length > 12) return false;
         // Must have no blank lines between items (all non-empty lines are list items)
@@ -5317,19 +5376,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 </button>
                             </div>
                         )}
-                        {noteType === "mermaid" ? (
-                            <button type="button"
-                                onClick={() => {
-                                    const encoded = LZString.compressToEncodedURIComponent(extractMermaid(content));
-                                    window.open(`https://mermaid-bheng.vercel.app/?data=${encoded}`, "_blank");
-                                }}
-                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full flex-shrink-0 transition text-[9px] font-black uppercase tracking-wide hover:opacity-80"
-                                style={{ background: "rgba(6,182,212,0.15)", color: "#06b6d4", border: "1px solid rgba(6,182,212,0.3)" }}
-                                title="Open in Mermaid editor">
-                                {mermaidSubType(content)}
-                                <ArrowTopRightOnSquareIcon className="w-3 h-3" />
-                            </button>
-                        ) : TYPE_BADGE[noteType] ? (
+                        {TYPE_BADGE[noteType] && noteType !== "mermaid" ? (
                             <span className="inline-flex text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-full flex-shrink-0"
                                 style={{ background: `${TYPE_BADGE[noteType].color}20`, color: TYPE_BADGE[noteType].color, border: `1px solid ${TYPE_BADGE[noteType].color}40` }}>
                                 {TYPE_BADGE[noteType].label}
@@ -5367,7 +5414,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                     </div>
                     <div className="relative flex-1 flex overflow-hidden bg-black font-mono">
                         {/* ── Unified pill bar — always visible top-right ── */}
-                        {!showNoteActions && content.trim() && !listMode && !graphMode && !mindmapMode && !stackMode && !voiceNote && noteType !== "rich" && (
+                        {!showNoteActions && content.trim() && !listMode && !graphMode && !mindmapMode && !stackMode && !voiceNote && noteType !== "rich" && noteType !== "html" && (
                         <div className="absolute top-3 right-3 z-[2147483647] pointer-events-auto">
                             <button type="button"
                                 onClick={() => {
@@ -5838,7 +5885,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     }}
                                     accentColor={activeAccentColor}
                                     editMode={true}
-                                    onDelete={() => void deleteCurrentNote(editingNote, title)}
+                                    onDelete={fastDeleteNote}
                                 />
                                 {/* Rich text live stats bar */}
                                 {(() => {
@@ -6341,6 +6388,13 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                         {linkCount > 1 && <span className="absolute -top-1 -right-1 text-[8px] font-black text-white/60 leading-none">+</span>}
                                                     </span>}
                                                 </div>;
+                                            })()}
+                                            {!item.is_folder && (() => {
+                                                const t = (item as any).type;
+                                                const badge = t && t !== "text" ? TYPE_BADGE[t] : null;
+                                                if (!badge) return null;
+                                                const label = t === "mermaid" ? mermaidSubType(item.content || "") : badge.label;
+                                                return <span className="hidden sm:inline-flex text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-full flex-shrink-0" style={{ background: `${badge.color}20`, color: badge.color, border: `1px solid ${badge.color}40` }}>{label}</span>;
                                             })()}
                                             {!item.is_folder && (item as any).flag && (
                                                 <span className="flex-shrink-0 text-base leading-none" title={(item as any).flag}>{(item as any).flag}</span>

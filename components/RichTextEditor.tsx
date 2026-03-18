@@ -568,28 +568,30 @@ export function RichTextEditor({ noteId, content, onChange, onBlur, onUploadImag
                     <SvgBtn icon={<IcoHR />}      active={false}                     onClick={() => tb.chain().focus().setHorizontalRule().run()} title="Divider" />
                     <Sep />
                     <SvgBtn icon={<IcoTable />}   active={tb.isActive('table')}      onClick={() => tb.chain().focus().insertTable({ rows: 3, cols: 2, withHeaderRow: true }).run()} title="Insert table" />
-                    {onDelete && (
-                        <>
-                            <Sep />
-                            <button
-                                type="button"
-                                onMouseDown={(e) => { e.preventDefault(); onDelete(); }}
-                                title="Delete note"
-                                style={{ ...btnBase(), color: 'rgba(239,68,68,0.65)' }}
-                                onMouseEnter={e => (e.currentTarget.style.color = '#ef4444')}
-                                onMouseLeave={e => (e.currentTarget.style.color = 'rgba(239,68,68,0.65)')}
-                            ><IcoTrash /></button>
-                        </>
-                    )}
-                    {(uploading || dragPos) && (
-                        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4, color: 'rgba(255,255,255,0.5)', fontSize: 10, fontWeight: 700, flexShrink: 0 }}>
-                            <svg style={{ width: 13, height: 13, animation: 'spin 0.8s linear infinite' }} viewBox="0 0 24 24" fill="none">
-                                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeOpacity="0.2" />
-                                <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
-                            </svg>
-                            {uploading ? 'Uploading…' : 'Drop to insert'}
-                        </div>
-                    )}
+                    <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                        {(uploading || dragPos) && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'rgba(255,255,255,0.5)', fontSize: 10, fontWeight: 700 }}>
+                                <svg style={{ width: 13, height: 13, animation: 'spin 0.8s linear infinite' }} viewBox="0 0 24 24" fill="none">
+                                    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeOpacity="0.2" />
+                                    <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+                                </svg>
+                                {uploading ? 'Uploading…' : 'Drop to insert'}
+                            </div>
+                        )}
+                        {onDelete && (
+                            <>
+                                {(uploading || dragPos) && <Sep />}
+                                <button
+                                    type="button"
+                                    onMouseDown={(e) => { e.preventDefault(); onDelete(); }}
+                                    title="Delete note"
+                                    style={{ ...btnBase(), color: 'rgba(239,68,68,0.65)' }}
+                                    onMouseEnter={e => (e.currentTarget.style.color = '#ef4444')}
+                                    onMouseLeave={e => (e.currentTarget.style.color = 'rgba(239,68,68,0.65)')}
+                                ><IcoTrash /></button>
+                            </>
+                        )}
+                    </div>
                 </div>
             )}
             {/* ── Editor content ── */}
