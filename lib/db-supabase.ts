@@ -22,6 +22,12 @@ function formatQuery(sql: string, params?: unknown[]): string {
         if (val === null || val === undefined) return "NULL";
         if (typeof val === "number") return String(val);
         if (typeof val === "boolean") return val ? "true" : "false";
+        // Arrays: convert to PostgreSQL ARRAY[...] literal
+        if (Array.isArray(val)) {
+            if (val.length === 0) return "ARRAY[]::text[]";
+            const items = val.map(v => `'${String(v).replace(/'/g, "''")}'`).join(",");
+            return `ARRAY[${items}]`;
+        }
         // String: escape single quotes by doubling them (standard SQL)
         return `'${String(val).replace(/'/g, "''")}'`;
     });
