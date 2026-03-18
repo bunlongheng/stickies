@@ -6931,8 +6931,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         const active = noteViewMode === mode;
                                         const icon = mode === "Text" ? (
                                             <Bars3Icon className="w-4 h-4" />
-                                        ) : mode === "Checklist" ? (
-                                            <ListBulletIcon className="w-4 h-4" />
                                         ) : mode === "Graph" ? (
                                             <CubeTransparentIcon className="w-4 h-4" />
                                         ) : mode === "Mindmap" ? (
@@ -6940,8 +6938,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         ) : (
                                             <RectangleStackIcon className="w-4 h-4" />
                                         );
-                                        const autoLocked = (markdownMode || htmlMode) && mode !== "Text"
-                                            || (mode === "Checklist" && !canToggleChecklist);
+                                        const autoLocked = (markdownMode || htmlMode) && mode !== "Text";
                                         return (
                                             <button key={mode} type="button"
                                                 disabled={autoLocked}
@@ -6951,8 +6948,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                     if (graphMode) toggleGraphMode();
                                                     if (mindmapMode) toggleMindmapMode();
                                                     if (stackMode) toggleStackMode();
-                                                    if (mode === "Checklist") toggleListMode();
-                                                    else if (mode === "Graph") toggleGraphMode();
+                                                    if (mode === "Graph") toggleGraphMode();
                                                     else if (mode === "Mindmap") toggleMindmapMode();
                                                     else if (mode === "Stack") toggleStackMode();
                                                     else if (mode === "Text") {
