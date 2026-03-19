@@ -32,12 +32,13 @@ async function fetchExternalIdeas(req: Request, folderName: string): Promise<Rec
         return rows.map((idea) => ({
             id: `ext_idea_${idea.id}`,
             title: idea.name,
-            content: `[🗺️ Open in Ideas](${baseUrl}/?map=${idea.id})\n\n**Type:** ${idea.type}  \n**Nodes:** ${Array.isArray(idea.nodes) ? idea.nodes.length : 0}  \n**Updated:** ${new Date(idea.updated_at).toLocaleString()}`,
+            content: `**Type:** ${idea.type}\n**Nodes:** ${Array.isArray(idea.nodes) ? idea.nodes.length : 0}\n**Updated:** ${new Date(idea.updated_at).toLocaleString()}`,
             folder_name: folderName,
             folder_color: randomIdeaColor(),
             is_folder: false,
-            type: "text",
+            type: "markdown",
             _external: true,
+            _mapUrl: `${baseUrl}/?map=${idea.id}`,
             created_at: idea.created_at,
             updated_at: idea.updated_at,
         }));

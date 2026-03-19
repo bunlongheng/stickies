@@ -5536,6 +5536,13 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 onClick={noteType === "text" ? switchToRich : switchToPlain}
                             />
                         )}
+                        {(editingNote as any)?._mapUrl && (
+                            <a href={(editingNote as any)._mapUrl} target="_blank" rel="noopener noreferrer"
+                                className="p-2 sm:p-3 text-zinc-400 hover:text-indigo-400 active:text-indigo-400 transition flex-shrink-0"
+                                title="Open in Ideas">
+                                <ArrowTopRightOnSquareIcon className="w-[29px] h-[29px] sm:w-7 sm:h-7" />
+                            </a>
+                        )}
                         <button type="button"
                             onClick={() => { setShowNoteActions(true); closeEditorTools(); }}
                             className="p-2 sm:p-3 text-zinc-300 hover:text-white active:text-white transition flex-shrink-0">
