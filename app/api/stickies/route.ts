@@ -281,7 +281,8 @@ export async function GET(req: Request) {
     }
 
     if (folderFilter) {
-        const FOLDER_COLS = `id, title, folder_name, folder_color, folder_id, parent_folder_name, "order", updated_at, created_at, type, is_folder`;
+        // Include COUNT(*) OVER() in the same query to avoid a second round-trip to the DB.
+        const FOLDER_COLS = `id, title, folder_name, folder_color, folder_id, parent_folder_name, "order", updated_at, created_at, type, is_folder, COUNT(*) OVER() AS _total`;
         const limitParam = parseInt(url.searchParams.get("limit") ?? "0");
         const offsetParam = parseInt(url.searchParams.get("offset") ?? "0");
 
@@ -295,22 +296,19 @@ export async function GET(req: Request) {
             whereParams.push(limitParam, offsetParam);
             paginationSql = `LIMIT $${whereParams.length - 1} OFFSET $${whereParams.length}`;
         }
-        const rows = await query(
+        const rows = await query<Record<string, unknown>>(
             `SELECT ${FOLDER_COLS} FROM "${table}" ${whereSql} ORDER BY updated_at DESC ${paginationSql}`,
             whereParams
         );
-        const { sql: countSql, params: countParams } = withUser(
-            `SELECT COUNT(*) AS count FROM "${table}" WHERE is_folder = false AND folder_name = $1`,
-            [folderFilter],
-            userId
-        );
-        const countRow = await queryOne<{ count: string }>(countSql, countParams);
-        let allNotes: unknown[] = rows;
+        const total = Number(rows[0]?._total ?? 0);
+        // Strip the internal _total field from each row before sending to client
+        const cleanRows = rows.map(({ _total, ...rest }) => rest);
+        let allNotes: unknown[] = cleanRows;
         if (folderFilter.toLowerCase() === "ideas" && offsetParam === 0) {
             const external = await fetchExternalIdeas(req, folderFilter);
-            allNotes = [...rows, ...external];
+            allNotes = [...cleanRows, ...external];
         }
-        return NextResponse.json({ notes: allNotes, total: Number(countRow?.count ?? 0) + (allNotes.length - rows.length) });
+        return NextResponse.json({ notes: allNotes, total: total + (allNotes.length - cleanRows.length) });
     }
 
     if (q) {
