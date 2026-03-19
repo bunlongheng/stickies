@@ -281,11 +281,26 @@ export async function GET(req: Request) {
     }
 
     if (folderFilter) {
-        // Include COUNT(*) OVER() in the same query to avoid a second round-trip to the DB.
-        const FOLDER_COLS = `id, title, folder_name, folder_color, folder_id, parent_folder_name, "order", updated_at, created_at, type, is_folder, COUNT(*) OVER() AS _total`;
+        const FOLDER_COLS = `id, title, folder_name, folder_color, folder_id, parent_folder_name, "order", updated_at, created_at, type, is_folder`;
         const limitParam = parseInt(url.searchParams.get("limit") ?? "0");
         const offsetParam = parseInt(url.searchParams.get("offset") ?? "0");
+        const sinceParam = url.searchParams.get("since"); // ISO timestamp — delta sync
 
+        // ── Delta sync: only return notes changed since last sync ─────────────
+        if (sinceParam) {
+            const sinceDate = new Date(sinceParam);
+            if (!isNaN(sinceDate.getTime())) {
+                const { sql, params } = withUser(
+                    `SELECT ${FOLDER_COLS} FROM "${table}" WHERE is_folder = false AND folder_name = $1 AND updated_at > $2`,
+                    [folderFilter, sinceDate.toISOString()],
+                    userId
+                );
+                const changed = await query<Record<string, unknown>>(`${sql} ORDER BY updated_at DESC`, params);
+                return NextResponse.json({ notes: changed, delta: true, syncedAt: new Date().toISOString() });
+            }
+        }
+
+        // ── Full fetch: include COUNT(*) OVER() to avoid a second round-trip ─
         const { sql: whereSql, params: whereParams } = withUser(
             `WHERE is_folder = false AND folder_name = $1`,
             [folderFilter],
@@ -297,18 +312,17 @@ export async function GET(req: Request) {
             paginationSql = `LIMIT $${whereParams.length - 1} OFFSET $${whereParams.length}`;
         }
         const rows = await query<Record<string, unknown>>(
-            `SELECT ${FOLDER_COLS} FROM "${table}" ${whereSql} ORDER BY updated_at DESC ${paginationSql}`,
+            `SELECT ${FOLDER_COLS}, COUNT(*) OVER() AS _total FROM "${table}" ${whereSql} ORDER BY updated_at DESC ${paginationSql}`,
             whereParams
         );
         const total = Number(rows[0]?._total ?? 0);
-        // Strip the internal _total field from each row before sending to client
         const cleanRows = rows.map(({ _total, ...rest }) => rest);
         let allNotes: unknown[] = cleanRows;
         if (folderFilter.toLowerCase() === "ideas" && offsetParam === 0) {
             const external = await fetchExternalIdeas(req, folderFilter);
             allNotes = [...cleanRows, ...external];
         }
-        return NextResponse.json({ notes: allNotes, total: total + (allNotes.length - cleanRows.length) });
+        return NextResponse.json({ notes: allNotes, total: total + (allNotes.length - cleanRows.length), syncedAt: new Date().toISOString() });
     }
 
     if (q) {
