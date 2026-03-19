@@ -457,6 +457,62 @@ const DEFAULT_FOLDER_KEY = "stickies:default-folder:v1";
 const DB_CACHE_KEY = "stickies:db-cache:v1";
 const COUNTS_CACHE_KEY = "stickies:counts-cache:v1";
 const NOTES_CACHE_KEY = "stickies:notes-cache:v2";
+const NOTES_SYNCED_AT_KEY = "stickies:notes-synced-at:v2"; // ISO timestamps per folder
+
+// ── Notes cache helpers ───────────────────────────────────────────────────────
+function getNotesCacheForFolder(folderName: string): unknown[] {
+    try {
+        const raw = localStorage.getItem(NOTES_CACHE_KEY);
+        if (!raw) return [];
+        const cache = JSON.parse(raw) as Record<string, unknown[]>;
+        return Array.isArray(cache[folderName]) ? cache[folderName] : [];
+    } catch { return []; }
+}
+
+function setNotesCacheForFolder(folderName: string, notes: unknown[]): void {
+    try {
+        const raw = localStorage.getItem(NOTES_CACHE_KEY);
+        const cache = raw ? JSON.parse(raw) as Record<string, unknown[]> : {};
+        cache[folderName] = notes.filter((n: any) => !n._external);
+        localStorage.setItem(NOTES_CACHE_KEY, JSON.stringify(cache));
+    } catch { /* quota exceeded */ }
+}
+
+function getSyncedAtForFolder(folderName: string): string | null {
+    try {
+        const raw = localStorage.getItem(NOTES_SYNCED_AT_KEY);
+        if (!raw) return null;
+        return (JSON.parse(raw) as Record<string, string>)[folderName] ?? null;
+    } catch { return null; }
+}
+
+function setSyncedAtForFolder(folderName: string, iso: string): void {
+    try {
+        const raw = localStorage.getItem(NOTES_SYNCED_AT_KEY);
+        const map = raw ? JSON.parse(raw) as Record<string, string> : {};
+        map[folderName] = iso;
+        localStorage.setItem(NOTES_SYNCED_AT_KEY, JSON.stringify(map));
+    } catch { /* ignore */ }
+}
+
+/** Merge an array of changed notes into the cached array for a folder. */
+function mergeIntoCachedNotes(folderName: string, changed: unknown[]): void {
+    if (changed.length === 0) return;
+    try {
+        const existing = getNotesCacheForFolder(folderName);
+        const byId = new Map(existing.map((n: any) => [String(n.id), n]));
+        changed.filter((n: any) => !n._external).forEach((n: any) => byId.set(String(n.id), n));
+        setNotesCacheForFolder(folderName, Array.from(byId.values()));
+    } catch { /* ignore */ }
+}
+
+/** Remove a note from the cached array for a folder. */
+function removeFromCachedNotes(folderName: string, noteId: string): void {
+    try {
+        const existing = getNotesCacheForFolder(folderName);
+        setNotesCacheForFolder(folderName, existing.filter((n: any) => String(n.id) !== noteId));
+    } catch { /* ignore */ }
+}
 
 // --- Mindmap ---
 const MIND_COLORS = ["#FF3B30","#FF9500","#FFCC00","#34C759","#00C7BE","#007AFF","#5856D6","#AF52DE","#FF2D55","#FF6B4E"];
@@ -1465,7 +1521,7 @@ export default function NotesMaster() {
         [setFolderFabOffsetWithRef, stopFolderFabAnimation],
     );
 
-    // --- PAGINATED FOLDER NOTES ---
+    // --- PAGINATED FOLDER NOTES (with delta sync) ---
     const loadFolderNotes = async (folderName: string, append = false) => {
         if (folderNotesLoadingRef.current) return;
         const existing = folderPaginationRef.current.get(folderName);
@@ -1474,54 +1530,68 @@ export default function NotesMaster() {
         const offset = append ? (existing?.offset ?? 0) : 0;
         const limit = append ? 80 : 20;
 
-        // Seed from per-folder notes cache immediately so tiles appear before network response
+        // ── Step 1: Show cached notes instantly ─────────────────────────────
         if (!append && offset === 0) {
-            try {
-                const raw = localStorage.getItem(NOTES_CACHE_KEY);
-                if (raw) {
-                    const cache = JSON.parse(raw) as Record<string, unknown[]>;
-                    const cached = cache[folderName];
-                    if (Array.isArray(cached) && cached.length > 0) {
-                        setDbData((prev) => {
-                            const without = prev.filter((r: any) => r.is_folder || r.folder_name !== folderName || r._optimistic);
-                            return [...without, ...cached];
-                        });
-                    }
-                }
-            } catch { /* ignore */ }
+            const cached = getNotesCacheForFolder(folderName);
+            if (cached.length > 0) {
+                setDbData((prev) => {
+                    const without = prev.filter((r: any) => r.is_folder || r.folder_name !== folderName || r._optimistic);
+                    return [...without, ...cached];
+                });
+            }
         }
 
         folderNotesLoadingRef.current = true;
         setFolderNotesLoading(true);
         try {
             const token = await getAuthToken();
+            const cachedNotes = !append && offset === 0 ? getNotesCacheForFolder(folderName) : [];
+            const syncedAt = !append && offset === 0 && cachedNotes.length > 0 ? getSyncedAtForFolder(folderName) : null;
+
+            // ── Step 2: Delta sync if we have a cache — only fetch what changed ──
+            if (syncedAt) {
+                const deltaRes = await fetch(
+                    `/api/stickies?folder=${encodeURIComponent(folderName)}&since=${encodeURIComponent(syncedAt)}`,
+                    { headers: { Authorization: `Bearer ${token}` } }
+                );
+                if (deltaRes.ok) {
+                    const { notes: changed = [], syncedAt: newSyncedAt } = await deltaRes.json();
+                    if (newSyncedAt) setSyncedAtForFolder(folderName, newSyncedAt);
+                    if (changed.length > 0) {
+                        // Merge only the changed notes into current state
+                        setDbData((prev) => {
+                            const byId = new Map(prev.map((r: any) => [String(r.id), r]));
+                            changed.forEach((n: any) => byId.set(String(n.id), n));
+                            return Array.from(byId.values());
+                        });
+                        mergeIntoCachedNotes(folderName, changed);
+                    }
+                    return; // delta done — cache was already shown in step 1
+                }
+            }
+
+            // ── Step 3: Full fetch (first visit or delta unavailable) ────────
             const res = await fetch(
                 `/api/stickies?folder=${encodeURIComponent(folderName)}&limit=${limit}&offset=${offset}`,
                 { headers: { Authorization: `Bearer ${token}` } }
             );
             if (!res.ok) return;
-            const { notes = [], total = 0 } = await res.json();
+            const { notes = [], total = 0, syncedAt: newSyncedAt } = await res.json();
             folderPaginationRef.current.set(folderName, { offset: offset + notes.length, total });
 
             setDbData((prev) => {
                 if (append) {
-                    const existing = new Set(prev.map((r: any) => String(r.id)));
-                    return [...prev, ...notes.filter((n: any) => !existing.has(String(n.id)))];
+                    const seen = new Set(prev.map((r: any) => String(r.id)));
+                    return [...prev, ...notes.filter((n: any) => !seen.has(String(n.id)))];
                 }
-                // Replace notes for this folder, keep folders + notes from other folders
                 const without = prev.filter((r: any) => r.is_folder || r.folder_name !== folderName || r._optimistic);
                 return [...without, ...notes];
             });
 
-            // Persist fresh notes to per-folder cache (only first page, no external notes)
+            // Persist to cache + record syncedAt
             if (!append && offset === 0) {
-                try {
-                    const storeable = notes.filter((n: any) => !n._external);
-                    const raw = localStorage.getItem(NOTES_CACHE_KEY);
-                    const cache = raw ? JSON.parse(raw) as Record<string, unknown[]> : {};
-                    cache[folderName] = storeable;
-                    localStorage.setItem(NOTES_CACHE_KEY, JSON.stringify(cache));
-                } catch { /* quota exceeded — skip */ }
+                setNotesCacheForFolder(folderName, notes);
+                if (newSyncedAt) setSyncedAtForFolder(folderName, newSyncedAt);
             }
         } finally {
             folderNotesLoadingRef.current = false;
@@ -2066,6 +2136,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                 if (prev.some((r) => String(r.id) === String(note.id))) return prev;
                 return [...prev, note];
             });
+            // Write-through: keep notes cache in sync with real-time creates
+            if (note.folder_name) mergeIntoCachedNotes(note.folder_name, [note]);
             // Live-update folder tile count badge
             if (!note.is_folder && note.folder_name) {
                 setFolderCounts((prev) => {
@@ -2095,6 +2167,8 @@ const fireIntegrations = (trigger: string, note: any) => {
             const lastWrite = localWriteRef.current.get(String(note.id));
             if (lastWrite && Date.now() - lastWrite < 3000) return;
             setDbData((prev) => prev.map((r) => String(r.id) === String(note.id) ? { ...r, ...note } : r));
+            // Write-through: keep notes cache in sync with real-time updates
+            if (note.folder_name) mergeIntoCachedNotes(note.folder_name, [note]);
             setEditingNote((prev: any) => {
                 if (!prev || String(prev.id) !== String(note.id)) return prev;
                 if (note.content !== undefined) setContent(note.content);
@@ -2161,10 +2235,15 @@ const fireIntegrations = (trigger: string, note: any) => {
                 const lastWrite = localWriteRef.current.get(String(note.id));
                 if (lastWrite && Date.now() - lastWrite < 3000) return;
                 setDbData((prev) => prev.map((r) => String(r.id) === String(note.id) ? { ...r, ...note } : r));
+                if (note.folder_name) mergeIntoCachedNotes(note.folder_name, [note]);
             })
             .on("postgres_changes", { event: "DELETE", schema: "public", table: "stickies" }, (payload: any) => {
                 const id = payload.old?.id;
-                if (id) setDbData((prev) => prev.filter((r) => String(r.id) !== String(id)));
+                const folderName = payload.old?.folder_name;
+                if (id) {
+                    setDbData((prev) => prev.filter((r) => String(r.id) !== String(id)));
+                    if (folderName) removeFromCachedNotes(folderName, String(id));
+                }
             })
             .subscribe();
         return () => { client.removeChannel(rt); };
@@ -2855,18 +2934,24 @@ const fireIntegrations = (trigger: string, note: any) => {
                 }
                 return [...prev, optimisticNote];
             });
+            // Write-through cache immediately on optimistic update
+            mergeIntoCachedNotes(payload.folder_name, [{ ...optimisticNote, ...payload }]);
 
             try {
                 if (existingNoteId !== null) {
                     localWriteRef.current.set(String(existingNoteId), Date.now());
                     await notesApi.update(String(existingNoteId), payload);
                     setEditingNote((prev: any) => (prev ? { ...prev, ...payload } : prev));
+                    mergeIntoCachedNotes(payload.folder_name, [{ id: existingNoteId, ...payload }]);
                 } else {
                     const { note: data } = await notesApi.insert(payload);
                     if (data) {
                         setPendingNoteType(null);
                         setEditingNote(data);
                         setDbData((prev) => { const seen = new Set<string>(); return prev.map((n) => String(n.id) === optimisticId ? data : n).filter((n) => { const id = String(n.id); if (seen.has(id)) return false; seen.add(id); return true; }); });
+                        // Replace optimistic entry in cache with confirmed server data
+                        removeFromCachedNotes(payload.folder_name, optimisticId);
+                        mergeIntoCachedNotes(payload.folder_name, [data]);
                     }
                 }
                 localStorage.removeItem(ACTIVE_DRAFT_KEY);
@@ -3475,8 +3560,10 @@ const fireIntegrations = (trigger: string, note: any) => {
                 return;
             }
             try {
+                const deletedNote = dbData.find((r) => String(r.id) === noteId);
                 await notesApi.delete(noteId);
                 setDbData((prev) => prev.filter((row) => String(row.id) !== noteId));
+                if (deletedNote?.folder_name) removeFromCachedNotes(String(deletedNote.folder_name), noteId);
                 localStorage.removeItem(ACTIVE_DRAFT_KEY);
                 setPendingShare(null);
                 closeEditorTools();
