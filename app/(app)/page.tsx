@@ -107,9 +107,9 @@ const getSupabase = () => createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, pr
 const supabase = { from: (...a: Parameters<ReturnType<typeof getSupabase>["from"]>) => getSupabase().from(...a) } as ReturnType<typeof getSupabase>;
 
 async function getAuthToken(): Promise<string> {
-    if (process.env.NEXT_PUBLIC_STICKIES_API_KEY) {
-        return process.env.NEXT_PUBLIC_STICKIES_API_KEY.trim();
-    }
+    // Always use the Supabase session JWT — never send the static API key from the browser.
+    // The static key is for external callers (CLI, Claude) only; sending it from the browser
+    // would grant every visitor owner-level access to all notes.
     // Use the SSR-aware browser client — reads session from cookies (set by @supabase/ssr)
     const sb = createBrowserClient();
     const { data: { session } } = await sb.auth.getSession();
