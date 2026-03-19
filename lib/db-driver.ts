@@ -1,12 +1,10 @@
 /**
  * DB driver switcher.
  *
- * Set DB_DRIVER in your environment to control which backend is used:
- *   DB_DRIVER=postgres  → Linode PostgreSQL via DATABASE_URL          (default)
- *   DB_DRIVER=supabase  → Supabase PostgreSQL via DATABASE_URL_SUPABASE
+ * DB_DRIVER=postgres  (default) → direct Supabase PostgreSQL via DATABASE_URL
+ * DB_DRIVER=supabase             → Supabase Management API (fallback if direct quota exhausted)
  *
- * Both adapters expose the same query/queryOne/execute interface so the
- * rest of the codebase (route.ts etc.) needs zero changes when switching.
+ * Both adapters expose the same query/queryOne/execute interface.
  */
 import {
     query as pgQuery,
