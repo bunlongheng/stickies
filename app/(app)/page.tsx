@@ -106,21 +106,31 @@ import PusherClient from "pusher-js";
 const getSupabase = () => createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
 const supabase = { from: (...a: Parameters<ReturnType<typeof getSupabase>["from"]>) => getSupabase().from(...a) } as ReturnType<typeof getSupabase>;
 
+// Cache the JWT in memory so getSession() isn't called on every fetch.
+// Cleared automatically when the token is about to expire.
+let _tokenCache: { value: string; expiresAt: number } | null = null;
+
 async function getAuthToken(): Promise<string> {
+    // Return cached token if it's still valid for >60 seconds
+    if (_tokenCache && Date.now() < _tokenCache.expiresAt) return _tokenCache.value;
+
     // Always use the Supabase session JWT — never send the static API key from the browser.
     // The static key is for external callers (CLI, Claude) only; sending it from the browser
     // would grant every visitor owner-level access to all notes.
     // Use the SSR-aware browser client — reads session from cookies (set by @supabase/ssr)
     const sb = createBrowserClient();
     const { data: { session } } = await sb.auth.getSession();
-    if (!session) return "";
+    if (!session) { _tokenCache = null; return ""; }
     // Proactively refresh if the token expires within 60 seconds
     const expiresAt = (session as any).expires_at as number | undefined;
+    let token = session.access_token;
     if (expiresAt !== undefined && expiresAt - Math.floor(Date.now() / 1000) < 60) {
         const { data } = await sb.auth.refreshSession();
-        return data.session?.access_token ?? "";
+        token = data.session?.access_token ?? "";
     }
-    return session.access_token;
+    // Cache for 50 seconds (well within the typical 3600s JWT lifetime)
+    _tokenCache = { value: token, expiresAt: Date.now() + 50_000 };
+    return token;
 }
 const notesApi = {
     update: async (id: string, fields: Record<string, unknown>) => {
@@ -446,6 +456,7 @@ const PLAIN_MODE_KEY  = "stickies:plain-mode-notes:v1";
 const DEFAULT_FOLDER_KEY = "stickies:default-folder:v1";
 const DB_CACHE_KEY = "stickies:db-cache:v1";
 const COUNTS_CACHE_KEY = "stickies:counts-cache:v1";
+const NOTES_CACHE_KEY = "stickies:notes-cache:v2";
 
 // --- Mindmap ---
 const MIND_COLORS = ["#FF3B30","#FF9500","#FFCC00","#34C759","#00C7BE","#007AFF","#5856D6","#AF52DE","#FF2D55","#FF6B4E"];
@@ -1462,6 +1473,24 @@ export default function NotesMaster() {
         if (append && existing && (existing.offset >= existing.total || existing.offset >= MAX_NOTES)) return;
         const offset = append ? (existing?.offset ?? 0) : 0;
         const limit = append ? 80 : 20;
+
+        // Seed from per-folder notes cache immediately so tiles appear before network response
+        if (!append && offset === 0) {
+            try {
+                const raw = localStorage.getItem(NOTES_CACHE_KEY);
+                if (raw) {
+                    const cache = JSON.parse(raw) as Record<string, unknown[]>;
+                    const cached = cache[folderName];
+                    if (Array.isArray(cached) && cached.length > 0) {
+                        setDbData((prev) => {
+                            const without = prev.filter((r: any) => r.is_folder || r.folder_name !== folderName || r._optimistic);
+                            return [...without, ...cached];
+                        });
+                    }
+                }
+            } catch { /* ignore */ }
+        }
+
         folderNotesLoadingRef.current = true;
         setFolderNotesLoading(true);
         try {
@@ -1483,6 +1512,17 @@ export default function NotesMaster() {
                 const without = prev.filter((r: any) => r.is_folder || r.folder_name !== folderName || r._optimistic);
                 return [...without, ...notes];
             });
+
+            // Persist fresh notes to per-folder cache (only first page, no external notes)
+            if (!append && offset === 0) {
+                try {
+                    const storeable = notes.filter((n: any) => !n._external);
+                    const raw = localStorage.getItem(NOTES_CACHE_KEY);
+                    const cache = raw ? JSON.parse(raw) as Record<string, unknown[]> : {};
+                    cache[folderName] = storeable;
+                    localStorage.setItem(NOTES_CACHE_KEY, JSON.stringify(cache));
+                } catch { /* quota exceeded — skip */ }
+            }
         } finally {
             folderNotesLoadingRef.current = false;
             setFolderNotesLoading(false);
