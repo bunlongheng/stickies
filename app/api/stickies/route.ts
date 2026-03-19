@@ -4,6 +4,46 @@ import Pusher from "pusher";
 import crypto from "crypto";
 import { query, queryOne, execute } from "@/lib/db-driver";
 
+// ── External ideas integration ────────────────────────────────────────────────
+const IDEAS_PALETTE = [
+    "#FF3B30","#FF6B4E","#FF9500","#FFCC00","#D4E157","#34C759",
+    "#00C7BE","#32ADE6","#007AFF","#5856D6","#AF52DE","#FF2D55",
+];
+function randomIdeaColor(): string {
+    return IDEAS_PALETTE[Math.floor(Math.random() * IDEAS_PALETTE.length)];
+}
+
+async function fetchExternalIdeas(req: Request, folderName: string): Promise<Record<string, unknown>[]> {
+    const ref   = process.env.BHENG_SUPABASE_PROJECT_REF;
+    const token = process.env.BHENG_SUPABASE_MANAGEMENT_TOKEN;
+    if (!ref || !token) return [];
+    try {
+        const res = await fetch(`https://api.supabase.com/v1/projects/${ref}/database/query`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ query: "SELECT id, name, type, nodes, created_at, updated_at FROM ideas ORDER BY updated_at DESC" }),
+        });
+        if (!res.ok) return [];
+        const rows: any[] = await res.json();
+        if (!Array.isArray(rows)) return [];
+        const host = req.headers.get("host") ?? "";
+        const isLocal = host.startsWith("localhost") || host.startsWith("10.") || host.startsWith("192.168.");
+        const baseUrl = isLocal ? "http://10.0.0.138:5173" : "https://ideas-bheng.vercel.app";
+        return rows.map((idea) => ({
+            id: `ext_idea_${idea.id}`,
+            title: idea.name,
+            content: `[🗺️ Open in Ideas](${baseUrl}/?map=${idea.id})\n\n**Type:** ${idea.type}  \n**Nodes:** ${Array.isArray(idea.nodes) ? idea.nodes.length : 0}  \n**Updated:** ${new Date(idea.updated_at).toLocaleString()}`,
+            folder_name: folderName,
+            folder_color: randomIdeaColor(),
+            is_folder: false,
+            type: "text",
+            _external: true,
+            created_at: idea.created_at,
+            updated_at: idea.updated_at,
+        }));
+    } catch { return []; }
+}
+
 const palette12 = [
     "#FF3B30", "#FF6B4E", "#FF9500", "#FFCC00",
     "#D4E157", "#34C759", "#00C7BE", "#32ADE6",
@@ -264,7 +304,12 @@ export async function GET(req: Request) {
             userId
         );
         const countRow = await queryOne<{ count: string }>(countSql, countParams);
-        return NextResponse.json({ notes: rows, total: Number(countRow?.count ?? 0) });
+        let allNotes: unknown[] = rows;
+        if (folderFilter.toLowerCase() === "ideas" && offsetParam === 0) {
+            const external = await fetchExternalIdeas(req, folderFilter);
+            allNotes = [...rows, ...external];
+        }
+        return NextResponse.json({ notes: allNotes, total: Number(countRow?.count ?? 0) + (allNotes.length - rows.length) });
     }
 
     if (q) {

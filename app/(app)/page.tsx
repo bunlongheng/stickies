@@ -1473,6 +1473,7 @@ export default function NotesMaster() {
             if (!res.ok) return;
             const { notes = [], total = 0 } = await res.json();
             folderPaginationRef.current.set(folderName, { offset: offset + notes.length, total });
+
             setDbData((prev) => {
                 if (append) {
                     const existing = new Set(prev.map((r: any) => String(r.id)));
@@ -6153,7 +6154,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 <span className="flex-shrink-0 w-6 h-6 flex items-center justify-center text-sm font-black leading-none overflow-hidden" style={{ background: "#fff", color: folderColors[frame.name] || frame.color, borderRadius: 4 } as React.CSSProperties}>
                                                     {frame.name === "CLAUDE" ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-0.5" /> : <FolderIconDisplay value={folderIcons[frame.name] || ""} folderName={frame.name} className="w-3.5 h-3.5" />}
                                                 </span>
-                                                <span className="hidden sm:inline uppercase">{frame.name}</span>
+                                                <span className={`uppercase ${i === folderStack.length - 1 && folderStack.length <= 2 ? "inline" : "hidden sm:inline"}`}>{frame.name}</span>
                                             </button>
                                         </React.Fragment>
                                     ))}
