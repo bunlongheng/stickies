@@ -13,6 +13,32 @@ function randomIdeaColor(): string {
     return IDEAS_PALETTE[Math.floor(Math.random() * IDEAS_PALETTE.length)];
 }
 
+function mindmapNodesToJSON(name: string, nodes: any[]): string {
+    if (!Array.isArray(nodes) || nodes.length === 0) return JSON.stringify({ [name]: [] }, null, 2);
+    const nodeIds = new Set(nodes.map((n: any) => n.id));
+    const childrenMap = new Map<string, any[]>();
+    for (const n of nodes) {
+        if (n.parentId && nodeIds.has(n.parentId)) {
+            if (!childrenMap.has(n.parentId)) childrenMap.set(n.parentId, []);
+            childrenMap.get(n.parentId)!.push(n);
+        }
+    }
+    for (const list of childrenMap.values()) list.sort((a: any, b: any) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+    const roots = nodes
+        .filter((n: any) => !n.parentId || !nodeIds.has(n.parentId))
+        .sort((a: any, b: any) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+    const categories: any[] = [];
+    for (const root of roots) {
+        for (const cat of childrenMap.get(root.id) ?? []) {
+            const leaves = (childrenMap.get(cat.id) ?? []).map((c: any) => (c.title ?? "").trim()).filter(Boolean);
+            const obj: any = { [(cat.title ?? "").trim()]: leaves };
+            if (cat.emoji) obj.emoji = cat.emoji;
+            categories.push(obj);
+        }
+    }
+    return JSON.stringify({ [name]: categories }, null, 2);
+}
+
 async function fetchExternalIdeas(req: Request, folderName: string): Promise<Record<string, unknown>[]> {
     const ref   = process.env.BHENG_SUPABASE_PROJECT_REF;
     const token = process.env.BHENG_SUPABASE_MANAGEMENT_TOKEN;
@@ -21,7 +47,7 @@ async function fetchExternalIdeas(req: Request, folderName: string): Promise<Rec
         const res = await fetch(`https://api.supabase.com/v1/projects/${ref}/database/query`, {
             method: "POST",
             headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-            body: JSON.stringify({ query: "SELECT id, name, type, nodes, created_at, updated_at FROM ideas ORDER BY updated_at DESC" }),
+            body: JSON.stringify({ query: "SELECT id, name, type, nodes, created_at, updated_at FROM mindmaps ORDER BY updated_at DESC" }),
         });
         if (!res.ok) return [];
         const rows: any[] = await res.json();
@@ -29,19 +55,53 @@ async function fetchExternalIdeas(req: Request, folderName: string): Promise<Rec
         const host = req.headers.get("host") ?? "";
         const isLocal = host.startsWith("localhost") || host.startsWith("10.") || host.startsWith("192.168.");
         const baseUrl = isLocal ? "http://10.0.0.138:5173" : "https://ideas-bheng.vercel.app";
-        return rows.map((idea) => ({
-            id: `ext_idea_${idea.id}`,
-            title: idea.name,
-            content: `**Type:** ${idea.type}\n**Nodes:** ${Array.isArray(idea.nodes) ? idea.nodes.length : 0}\n**Updated:** ${new Date(idea.updated_at).toLocaleString()}`,
-            folder_name: folderName,
-            folder_color: randomIdeaColor(),
-            is_folder: false,
-            type: "markdown",
-            _external: true,
-            _mapUrl: `${baseUrl}/?map=${idea.id}`,
-            created_at: idea.created_at,
-            updated_at: idea.updated_at,
-        }));
+        return rows.map((idea) => {
+            const mapUrl = `${baseUrl}/?map=${idea.id}`;
+            return {
+                id: `ext_idea_${idea.id}`,
+                title: idea.name,
+                content: mindmapNodesToJSON(idea.name, idea.nodes),
+                folder_name: folderName,
+                folder_color: randomIdeaColor(),
+                is_folder: false,
+                type: "json",
+                _external: true,
+                _mapUrl: mapUrl,
+                created_at: idea.created_at,
+                updated_at: idea.updated_at,
+            };
+        });
+    } catch { return []; }
+}
+
+async function fetchDiagrams(req: Request): Promise<Record<string, unknown>[]> {
+    try {
+        const { createClient: createSb } = await import("@supabase/supabase-js");
+        const sb = createSb(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+        const { data, error } = await sb
+            .from("diagrams")
+            .select("id, title, slug, diagram_type, code, created_at, updated_at")
+            .order("updated_at", { ascending: false });
+        if (error || !data) return [];
+        const host = req.headers.get("host") ?? "";
+        const isLocal = host.startsWith("localhost") || host.startsWith("10.") || host.startsWith("192.168.");
+        const baseUrl = isLocal ? "http://10.0.0.138:3002" : "https://mermaid-bheng.vercel.app";
+        return data.map((d: any, i: number) => {
+            const galleryUrl = `${baseUrl}/?id=${d.id}&view=1`;
+            return {
+                id: `ext_diagram_${d.id}`,
+                title: d.title || d.slug || "Untitled Diagram",
+                content: d.code ?? "",
+                folder_name: "diagrams",
+                folder_color: palette12[i % palette12.length],
+                is_folder: false,
+                type: "mermaid",
+                _external: true,
+                _mapUrl: galleryUrl,
+                created_at: d.created_at,
+                updated_at: d.updated_at,
+            };
+        });
     } catch { return []; }
 }
 
@@ -78,8 +138,9 @@ function getPusher() {
     return _pusher;
 }
 
-// ── API request broadcast ─────────────────────────────────────────────────────
+// ── API request broadcast — only for external callers ────────────────────────
 function broadcastRequest(req: Request, auth: AuthResult, extra?: Record<string, unknown>) {
+    if (auth.type !== "external") return; // frontend (owner/user) calls are silent
     const url = new URL(req.url);
     const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
         ?? req.headers.get("cf-connecting-ip")
@@ -97,10 +158,8 @@ function broadcastRequest(req: Request, auth: AuthResult, extra?: Record<string,
     getPusher().trigger("stickies", "api-request", payload).catch(() => {});
 }
 
-// ── Hue trigger ──────────────────────────────────────────────────────────────
-function triggerHue(req: Request, color: string) {
-    const ua = req.headers.get("user-agent") ?? "";
-    if (/mozilla/i.test(ua)) return;
+// ── Hue trigger — only called for external (AI/script) requests ──────────────
+function triggerHue(color: string) {
     const base = (process.env.NEXT_PUBLIC_APP_BASE_URL ?? "http://localhost:4444").replace(/\/$/, "");
     fetch(`${base}/api/hue/trigger`, {
         method: "POST",
@@ -110,21 +169,24 @@ function triggerHue(req: Request, color: string) {
 }
 
 // ── Auth ────────────────────────────────────────────────────────────────────
-type AuthResult = { type: "apikey" } | { type: "user"; userId: string };
+// "external" = static API key (AI / scripts / curl) → triggers Hue flash + broadcast
+// "owner"    = browser JWT for the owner account → no Hue flash, no broadcast
+// "user"     = browser JWT for other users → scoped to users_stickies table
+type AuthResult = { type: "external" } | { type: "owner" } | { type: "user"; userId: string };
 
 async function authenticate(req: Request): Promise<AuthResult | null> {
     const auth = req.headers.get("authorization") ?? "";
     const bearer = auth.startsWith("Bearer ") ? auth.slice(7) : "";
     if (!bearer) return null;
 
-    // Static API key → owner
+    // Static API key → external caller (AI, scripts, automations)
     const apiKey = process.env.STICKIES_API_KEY;
     if (apiKey) {
         const expected = `Bearer ${apiKey}`;
         if (auth.length === expected.length) {
             try {
                 if (crypto.timingSafeEqual(Buffer.from(auth), Buffer.from(expected))) {
-                    return { type: "apikey" };
+                    return { type: "external" };
                 }
             } catch {}
         }
@@ -138,7 +200,7 @@ async function authenticate(req: Request): Promise<AuthResult | null> {
         const isOwner =
             (ownerUserId && user.id === ownerUserId) ||
             (ownerEmail  && user.email?.toLowerCase() === ownerEmail.toLowerCase());
-        if (isOwner) return { type: "apikey" };
+        if (isOwner) return { type: "owner" };
         return { type: "user", userId: user.id };
     }
 
@@ -277,6 +339,25 @@ export async function GET(req: Request) {
             if (row.folder_id) byId[String(row.folder_id)] = (byId[String(row.folder_id)] || 0) + n;
             total += n;
         }
+
+        // Add external source counts so folder tiles show the right number
+        try {
+            const [ideasRows, diagramsCount] = await Promise.all([
+                // mindmaps: use same fetch path as folder load (reuses proven Management API call)
+                fetchExternalIdeas(req, "mindmaps"),
+                // diagrams: count rows in stickies diagrams table
+                (async () => {
+                    const { createClient: createSb } = await import("@supabase/supabase-js");
+                    const sb = createSb(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+                    const { count } = await sb.from("diagrams").select("*", { count: "exact", head: true });
+                    return count ?? 0;
+                })(),
+            ]);
+            const ideasCount = ideasRows.length;
+            if (ideasCount > 0) { byName["mindmaps"] = (byName["mindmaps"] || 0) + ideasCount; total += ideasCount; }
+            if (diagramsCount > 0) { byName["diagrams"] = (byName["diagrams"] || 0) + diagramsCount; total += diagramsCount; }
+        } catch { /* non-fatal — counts just won't include externals */ }
+
         return NextResponse.json({ counts: byName, countsByFolderId: byId, total });
     }
 
@@ -318,9 +399,13 @@ export async function GET(req: Request) {
         const total = Number(rows[0]?._total ?? 0);
         const cleanRows = rows.map(({ _total, ...rest }) => rest);
         let allNotes: unknown[] = cleanRows;
-        if (folderFilter.toLowerCase() === "ideas" && offsetParam === 0) {
+        if (folderFilter.toLowerCase() === "mindmaps" && offsetParam === 0) {
             const external = await fetchExternalIdeas(req, folderFilter);
             allNotes = [...cleanRows, ...external];
+        }
+        if (folderFilter.toLowerCase() === "diagrams" && offsetParam === 0) {
+            const diagrams = await fetchDiagrams(req);
+            allNotes = [...cleanRows, ...diagrams];
         }
         return NextResponse.json({ notes: allNotes, total: total + (allNotes.length - cleanRows.length), syncedAt: new Date().toISOString() });
     }
@@ -702,9 +787,9 @@ export async function POST(req: Request) {
 
     if (!data) { return NextResponse.json({ error: "Database error" }, { status: 500 }); }
 
-    if (auth.type === "apikey") {
-        try { await getPusher().trigger("stickies", existingNote?.id ? "note-updated" : "note-created", data); } catch {}
-        triggerHue(req, folder_color);
+    try { await getPusher().trigger("stickies", existingNote?.id ? "note-updated" : "note-created", data); } catch {}
+    if (auth.type === "external") {
+        triggerHue(folder_color);
     }
 
     return NextResponse.json({ note: data, action: existingNote?.id ? "updated" : "created" }, { status: 201 });

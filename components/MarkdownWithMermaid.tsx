@@ -1,7 +1,15 @@
 "use client";
 import { useMemo } from "react";
-import { marked } from "marked";
+import { marked, Renderer } from "marked";
 import dynamic from "next/dynamic";
+
+// Open all links in a new tab
+const renderer = new Renderer();
+renderer.link = ({ href, title, tokens }) => {
+    const text = tokens.map(t => ("raw" in t ? t.raw : "")).join("") || href;
+    const titleAttr = title ? ` title="${title}"` : "";
+    return `<a href="${href}"${titleAttr} target="_blank" rel="noopener noreferrer">${text}</a>`;
+};
 
 const MermaidRenderer = dynamic(() => import("./MermaidRenderer").then(m => ({ default: m.MermaidRenderer })), { ssr: false });
 
@@ -56,7 +64,7 @@ export function MarkdownWithMermaid({ content, theme = "dark" }: Props) {
                     ) : (
                         <div key={i}
                             className="prose prose-sm prose-invert max-w-none"
-                            dangerouslySetInnerHTML={{ __html: marked.parse(seg.text, { async: false }) as string }}
+                            dangerouslySetInnerHTML={{ __html: marked.parse(seg.text, { async: false, renderer }) as string }}
                         />
                     )
                 )}

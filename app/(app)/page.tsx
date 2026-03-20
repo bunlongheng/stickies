@@ -114,7 +114,12 @@ async function getAuthToken(): Promise<string> {
     // Return cached token if it's still valid for >60 seconds
     if (_tokenCache && Date.now() < _tokenCache.expiresAt) return _tokenCache.value;
 
-    // Always use the Supabase session JWT — never send the static API key from the browser.
+    // In development, skip Supabase entirely — use the static API key directly.
+    if (process.env.NODE_ENV === "development") {
+        return process.env.NEXT_PUBLIC_STICKIES_API_KEY ?? "";
+    }
+
+    // Production: always use the Supabase session JWT — never send the static API key from the browser.
     // The static key is for external callers (CLI, Claude) only; sending it from the browser
     // would grant every visitor owner-level access to all notes.
     // Use the SSR-aware browser client — reads session from cookies (set by @supabase/ssr)
@@ -1377,6 +1382,8 @@ export default function NotesMaster() {
     const [mainListMode, setMainListMode] = useState<"thumb" | "list">("thumb");
     const [defaultFolder, setDefaultFolder] = useState<string>("CLAUDE");
     const [showDefaultFolderPicker, setShowDefaultFolderPicker] = useState(false);
+    const [showNotebookPicker, setShowNotebookPicker] = useState(false);
+    const [notebookPickerSearch, setNotebookPickerSearch] = useState("");
     const [navMode, setNavMode] = useState<"folders-and-files" | "files-only">("folders-and-files");
     const [kanbanMode, setKanbanMode] = useState(false);
     const [appTheme, setAppTheme] = useState<"dark" | "light" | "monokai">("dark");
@@ -1546,7 +1553,9 @@ export default function NotesMaster() {
         try {
             const token = await getAuthToken();
             const cachedNotes = !append && offset === 0 ? getNotesCacheForFolder(folderName) : [];
-            const syncedAt = !append && offset === 0 && cachedNotes.length > 0 ? getSyncedAtForFolder(folderName) : null;
+            // External-only folders (all notes injected server-side) must always do a full fetch
+            const isExternalFolder = ["diagrams", "mindmaps"].includes(folderName.toLowerCase());
+            const syncedAt = !append && offset === 0 && cachedNotes.length > 0 && !isExternalFolder ? getSyncedAtForFolder(folderName) : null;
 
             // ── Step 2: Delta sync if we have a cache — only fetch what changed ──
             if (syncedAt) {
@@ -1791,6 +1800,8 @@ export default function NotesMaster() {
                 if (folderParam) setPendingFolderQuery(folderParam);
                 if (noteParam) setPendingNoteQuery(noteParam);
                 if (noteIdParam) setPendingNoteIdQuery(noteIdParam);
+                // Strip URL params immediately so refresh doesn't re-apply them
+                window.history.replaceState({}, "", window.location.pathname);
             }
         } catch (err) {
             console.error("Failed to restore URL state:", err);
@@ -2203,8 +2214,8 @@ const fireIntegrations = (trigger: string, note: any) => {
 
         channel.bind("api-request", (data: any) => {
             if (!data?.at) return;
-            // Only show when an external API key created notes (not the user's own browser session)
-            if (data.auth !== "apikey" || data.method !== "POST") return;
+            // Only show for external callers (AI/scripts), not the owner's own browser
+            if (data.auth !== "external" || data.method !== "POST") return;
             setApiLog((prev) => [data, ...prev].slice(0, 50));
         });
 
@@ -2284,6 +2295,7 @@ const fireIntegrations = (trigger: string, note: any) => {
     // Auto-clean mermaid fences + frontmatter when a mermaid note opens
     useEffect(() => {
         if (!editingNote?.id) return;
+        if ((editingNote as any)._external) return; // read-only — never clean or save
         const raw = editingNote.content || "";
         if (editingNote.type !== "mermaid" && !detectMermaid(raw)) return;
         const cleaned = cleanMermaidContent(raw);
@@ -2295,28 +2307,51 @@ const fireIntegrations = (trigger: string, note: any) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [editingNote?.id]);
 
-    // Auto-select the most-recently-updated note when entering edit mode
+    // In split view, restore last notebook choice from localStorage (or default folder)
     useEffect(() => {
-        if (!editMode || !isDataLoaded) return;
-        if (editorOpen && editingNote) return; // already viewing a note
-        const topNote = dbData.filter((n) => !n.is_folder).sort((a, b) =>
+        if (!editMode || activeFolder) return;
+        const saved = localStorage.getItem("stickies-split-notebook");
+        if (saved === "__all__") return; // stay in All Notes
+        setActiveFolder(saved || defaultFolder);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [editMode]);
+
+    // In split view, seed notes from the default folder if none are loaded yet
+    useEffect(() => {
+        if (!editMode || !isDataLoaded || pendingRestoreNoteId) return;
+        const hasNotes = dbData.some((n: any) => !n.is_folder);
+        if (!hasNotes && !folderNotesLoading) {
+            void loadFolderNotes(defaultFolder, false);
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [editMode, isDataLoaded, dbData, folderNotesLoading, pendingRestoreNoteId]);
+
+    // Auto-open in split view: resume top note, or open a new blank note as fallback
+    useEffect(() => {
+        if (!editMode || !isDataLoaded || pendingRestoreNoteId) return;
+        if (editorOpen) return; // already open
+        const topNote = dbData.filter((n: any) => !n.is_folder).sort((a: any, b: any) =>
             String(b.updated_at || "").localeCompare(String(a.updated_at || ""))
         )[0];
-        if (!topNote) return;
-        setEditingNote(topNote);
-        setTitle(topNote.title || "");
-        setContent(topNote.content || "");
-        setImages((topNote as any).images ?? []);
-        setTargetFolder(topNote.folder_name || "General");
-        setNoteColor(topNote.folder_color || palette12[0]);
-        setActiveLine(0);
-        setEditorScrollTop(0);
-        if (topNote.id && (topNote.list_mode || topNote.type === "checklist")) {
-            setListModeNotes((prev) => new Set([...prev, String(topNote.id)]));
+        if (topNote) {
+            setEditingNote(topNote);
+            setTitle(topNote.title || "");
+            setContent(topNote.content || "");
+            setImages((topNote as any).images ?? []);
+            setTargetFolder(topNote.folder_name || "General");
+            setNoteColor(topNote.folder_color || palette12[0]);
+            setActiveLine(0);
+            setEditorScrollTop(0);
+            if (topNote.id && (topNote.list_mode || topNote.type === "checklist")) {
+                setListModeNotes((prev) => new Set([...prev, String(topNote.id)]));
+            }
+            setEditorOpen(true);
+        } else if (!folderNotesLoading) {
+            // No notes in default folder — open a blank rich note ready to type
+            openNewNote("rich"); // openNewNote is defined later but accessible in callback
         }
-        setEditorOpen(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [editMode, isDataLoaded]);
+    }, [editMode, isDataLoaded, dbData, folderNotesLoading, pendingRestoreNoteId, editorOpen]);
 
     useEffect(() => {
         if (!pendingFolderQuery && !pendingNoteQuery && !pendingNoteIdQuery) return;
@@ -2441,15 +2476,8 @@ const fireIntegrations = (trigger: string, note: any) => {
             const noteToken = editorOpen ? toUrlToken(title) : "";
             const noteIdToken = editorOpen && editingNote?.id ? String(editingNote.id) : "";
 
-            // Encode full nested stack as "parent/child" path
-            const stackForUrl = folderStack.length > 0
-                ? folderStack
-                : (editorOpen && (targetFolder || activeFolder || editingNote?.folder_name))
-                    ? [{ name: targetFolder || activeFolder || editingNote?.folder_name || "" }]
-                    : [];
-            const folderPath = stackForUrl.map((f) => toUrlToken(f.name)).filter(Boolean).join("/");
-            if (folderPath) next.searchParams.set("folder", folderPath);
-            else next.searchParams.delete("folder");
+            // Folder is stored in localStorage, not the URL — keep URL clean
+            next.searchParams.delete("folder");
 
             if (noteToken) next.searchParams.set("note", noteToken);
             else next.searchParams.delete("note");
@@ -2646,7 +2674,7 @@ const fireIntegrations = (trigger: string, note: any) => {
 
     const displayItems = useMemo(() => {
         const byUpdated = (a: any, b: any) =>
-            String(b.updated_at || "").localeCompare(String(a.updated_at || "")) ||
+            String(b.updated_at || b.created_at || "").localeCompare(String(a.updated_at || a.created_at || "")) ||
             String(a.title || a.name || "").localeCompare(String(b.title || b.name || ""));
         if (search.trim()) {
             const q = search.toLowerCase();
@@ -2670,10 +2698,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                 .filter((n) => !n.is_folder && score(n) < 9)
                 .sort((a, b) => { const sd = score(a) - score(b); return sd !== 0 ? sd : byUpdated(a, b); });
         }
-        if (editMode) {
-            // Edit mode: all notes, no folders (hide BOOKMARKS)
-            return dbData.filter((n) => !n.is_folder).sort(byUpdated);
-        }
         if (activeFolder) {
             // Inside a folder: subfolders first, then notes
             const activeFolderId = folderStack.at(-1)?.id ?? null;
@@ -2683,6 +2707,10 @@ const fireIntegrations = (trigger: string, note: any) => {
                 n.folder_name === activeFolder
             )).sort(byUpdated);
             return [...currentLevelFolders, ...notes];
+        }
+        // Split view (editMode) with no active folder: show all notes sorted by updated
+        if (editMode) {
+            return dbData.filter((n) => !n.is_folder).sort(byUpdated);
         }
         // Root: files-only mode → all notes sorted by newest first, then alpha by folder/title
         if (navMode === "files-only") {
@@ -2882,6 +2910,7 @@ const fireIntegrations = (trigger: string, note: any) => {
             if (!title.trim() && !content.trim()) return true;
             if (!isDraftDirty) return true;
             if (isSavingRef.current) return true;
+            if ((editingNote as any)?._external) return true; // read-only external note
             isSavingRef.current = true;
             // Auto-clean mermaid junk (trailing fences, --- blocks) on every save
             let saveContent = content;
@@ -3116,7 +3145,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         setTitle(isStandup ? dateStr : "");
         setContent("");
         setImages([]);
-        setPendingNoteType(type ?? null);
+        setPendingNoteType(type ?? (editMode ? "rich" : null));
         setTargetFolder(activeFolder || (editMode ? "Work" : "General"));
         setNoteColor(pickUniqueColor());
         shouldFocusTitleOnOpenRef.current = !isStandup;
@@ -3680,6 +3709,7 @@ const fireIntegrations = (trigger: string, note: any) => {
     // Lazily fetch full note content if it wasn't loaded in the list sync
     const openNote = useCallback(async (note: any) => {
         // Open immediately with available metadata so the editor switches at once
+        setPendingNoteType(null); // reset so noteType comes from note.type, not prior mode
         setEditingNote(note);
         setTitle(note.title || "");
         setContent("");
@@ -5459,7 +5489,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 ? ["#ff0080","#ff8c00","#ffe600","#00ff85","#00cfff","#b44aff","#fff","#f472b6"]
                                 : [toastColor, "#ffffff", "#FFD700", "#a78bfa", "#34d399", "#f472b6"];
                             return (
-                                <div key={i} className="fixed z-[100003] pointer-events-none rounded-sm"
+                                <div key={i} className="fixed z-[2147483646] pointer-events-none rounded-sm"
                                     style={{
                                         width: size, height: size,
                                         left: cx, top: cy,
@@ -5477,7 +5507,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                             const tx = Math.round(cx + Math.cos(angle * Math.PI / 180) * dist);
                             const ty = Math.round(cy + Math.sin(angle * Math.PI / 180) * dist);
                             return (
-                                <div key={i} className="fixed z-[100003] pointer-events-none text-sm"
+                                <div key={i} className="fixed z-[2147483646] pointer-events-none text-sm"
                                     style={{
                                         left: cx, top: cy,
                                         animation: `confettiShoot 1.4s cubic-bezier(0.2,1,0.3,1) ${i * 60}ms both`,
@@ -5487,8 +5517,12 @@ const fireIntegrations = (trigger: string, note: any) => {
                             );
                         })}
                         {/* Toast pill */}
-                        <div className="fixed left-1/2 -translate-x-1/2 z-[100002] pointer-events-auto"
-                            style={{ top: "calc(env(safe-area-inset-top, 0px) + 6px)", animation: "islandToastInOut 3s cubic-bezier(0.16, 1, 0.3, 1) forwards" }}
+                        <div className="fixed -translate-x-1/2 z-[2147483647] pointer-events-auto"
+                            style={{
+                                left: "50%",
+                                top: "calc(env(safe-area-inset-top, 0px) + 12px)",
+                                animation: "islandToastInOut 3s cubic-bezier(0.16, 1, 0.3, 1) forwards",
+                            }}
                             onClick={() => void secureCopy(toast).then(() => { if (!isError) showToast("Copied!"); })}>
                             <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-white cursor-pointer active:scale-95 transition-transform" style={{
                                 background: toastRainbow
@@ -5512,7 +5546,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                 );
             })()}
             {undoDeleteTask && (
-                <div className="fixed left-1/2 -translate-x-1/2 z-[100003] flex items-center gap-2 px-3 py-1.5 rounded-full bg-zinc-800 border border-white/20 shadow-xl"
+                <div className="fixed left-1/2 -translate-x-1/2 z-[2147483647] flex items-center gap-2 px-3 py-1.5 rounded-full bg-zinc-800 border border-white/20 shadow-xl"
                     style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 80px)" }}>
                     <span className="text-[11px] font-bold text-zinc-300">Deleted</span>
                     <button type="button"
@@ -5618,33 +5652,24 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 </span>
                                 <button type="button"
                                     onClick={() => {
-                                        const encoded = LZString.compressToEncodedURIComponent(extractMermaid(content));
-                                        const h = window.location.hostname;
-                                        const localHost = (h === "localhost" || h.startsWith("10.") || h.startsWith("192.168.")) ? h : "localhost";
-                                        window.open(`http://${localHost}:3002/?data=${encoded}`, "_blank");
-                                    }}
-                                    className="p-2 sm:p-3 text-zinc-400 hover:text-cyan-400 active:text-cyan-400 transition flex-shrink-0"
-                                    title="Open in local Mermaid editor">
-                                    <ComputerDesktopIcon className="w-[29px] h-[29px] sm:w-7 sm:h-7" />
-                                </button>
-                                <button type="button"
-                                    onClick={() => {
-                                        const encoded = LZString.compressToEncodedURIComponent(extractMermaid(content));
-                                        window.open(`https://mermaid-bheng.vercel.app/?data=${encoded}`, "_blank");
+                                        const mapUrl = (editingNote as any)?._mapUrl;
+                                        if (mapUrl) {
+                                            // External note — open its source app link (local or prod)
+                                            window.open(mapUrl, "_blank");
+                                        } else {
+                                            // Regular mermaid note — open in mermaid editor (local or prod)
+                                            const encoded = LZString.compressToEncodedURIComponent(extractMermaid(content));
+                                            const h = window.location.hostname;
+                                            const isLocal = h === "localhost" || h.startsWith("10.") || h.startsWith("192.168.");
+                                            const url = isLocal
+                                                ? `http://${h}:3002/?data=${encoded}`
+                                                : `https://mermaid-bheng.vercel.app/?data=${encoded}`;
+                                            window.open(url, "_blank");
+                                        }
                                     }}
                                     className="p-2 sm:p-3 text-zinc-400 hover:text-purple-400 active:text-purple-400 transition flex-shrink-0"
-                                    title="Open in prod Mermaid editor">
+                                    title={(editingNote as any)?._source === "stickies:diagrams" ? "Open in Sequence Diagram" : (editingNote as any)?._external ? "Open in Mind Map" : "Open in Mermaid editor"}>
                                     <SparklesIcon className="w-[29px] h-[29px] sm:w-7 sm:h-7" />
-                                </button>
-                                <button type="button"
-                                    onClick={() => {
-                                        const state = JSON.stringify({ code: extractMermaid(content), mermaid: { theme: "default" } });
-                                        const encoded = btoa(unescape(encodeURIComponent(state)));
-                                        window.open(`https://mermaid.live/edit#base64:${encoded}`, "_blank");
-                                    }}
-                                    className="p-2 sm:p-3 text-zinc-400 hover:text-emerald-400 active:text-emerald-400 transition flex-shrink-0"
-                                    title="Open in mermaid.live">
-                                    <ArrowTopRightOnSquareIcon className="w-[29px] h-[29px] sm:w-7 sm:h-7" />
                                 </button>
                             </div>
                         )}
@@ -5663,12 +5688,13 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 onClick={noteType === "text" ? switchToRich : switchToPlain}
                             />
                         )}
-                        {(editingNote as any)?._mapUrl && (
-                            <a href={(editingNote as any)._mapUrl} target="_blank" rel="noopener noreferrer"
-                                className="p-2 sm:p-3 text-zinc-400 hover:text-indigo-400 active:text-indigo-400 transition flex-shrink-0"
-                                title="Open in Ideas">
-                                <ArrowTopRightOnSquareIcon className="w-[29px] h-[29px] sm:w-7 sm:h-7" />
-                            </a>
+                        {editingNote?.id && (
+                            <button type="button"
+                                onClick={fastDeleteNote}
+                                className="p-2 sm:p-3 text-red-500 hover:text-red-400 active:text-red-600 transition flex-shrink-0"
+                                title="Delete note (⌘Z to undo)">
+                                <TrashIcon className="w-[29px] h-[29px] sm:w-7 sm:h-7" />
+                            </button>
                         )}
                         <button type="button"
                             onClick={() => { setShowNoteActions(true); closeEditorTools(); }}
@@ -6270,7 +6296,90 @@ const fireIntegrations = (trigger: string, note: any) => {
                 <>
                     <div className="safe-top-bar shrink-0 bg-black sticky top-0 z-40" />
                     <header className="ios-mobile-header relative h-auto min-h-[4rem] px-4 flex items-center gap-2 sticky top-0 bg-black z-40 shrink-0">
-                        {folderStack.length > 0 && (
+                        {/* Notebook picker — split view only */}
+                        {editMode && (
+                            <div className="relative flex-shrink-0">
+                                <button
+                                    type="button"
+                                    onClick={() => { setShowNotebookPicker(v => !v); setNotebookPickerSearch(""); }}
+                                    className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg hover:bg-white/10 transition">
+                                    {activeFolder ? (
+                                        <>
+                                            <span className="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded overflow-hidden" style={{ background: "#fff", color: folderColors[activeFolder] || folderStack.at(-1)?.color || "#888" } as React.CSSProperties}>
+                                                {activeFolder === "CLAUDE" ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-0.5" /> : <FolderIconDisplay value={folderIcons[activeFolder] || ""} folderName={activeFolder} className="w-3 h-3" />}
+                                            </span>
+                                            <span className="text-xs font-black tracking-tight text-white uppercase truncate max-w-[110px]">{activeFolder}</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Squares2X2Icon className="w-4 h-4 text-zinc-400 flex-shrink-0" />
+                                            <span className="text-xs font-black tracking-tight text-zinc-400 uppercase">All Notes</span>
+                                        </>
+                                    )}
+                                    <ChevronDownIcon className="w-3 h-3 text-zinc-600 flex-shrink-0" />
+                                </button>
+
+                                {showNotebookPicker && (
+                                    <>
+                                        {/* Backdrop */}
+                                        <div className="fixed inset-0 z-[49]" onClick={() => setShowNotebookPicker(false)} />
+                                        {/* Dropdown */}
+                                        <div className="absolute top-full left-0 mt-1 w-60 bg-zinc-900 border border-white/15 rounded-xl shadow-2xl z-50 overflow-hidden">
+                                            {/* Search */}
+                                            <div className="p-2 border-b border-white/10">
+                                                <input
+                                                    autoFocus
+                                                    type="text"
+                                                    placeholder="Search notebooks…"
+                                                    value={notebookPickerSearch}
+                                                    onChange={e => setNotebookPickerSearch(e.target.value)}
+                                                    className="w-full bg-white/10 text-white text-xs font-bold px-3 py-2 rounded-lg outline-none placeholder:text-white/30"
+                                                />
+                                            </div>
+                                            {/* All Notes */}
+                                            {!notebookPickerSearch.trim() && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => { localStorage.setItem("stickies-split-notebook", "__all__"); setFolderStack([]); setShowNotebookPicker(false); window.history.replaceState({}, "", window.location.pathname); }}
+                                                    className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-xs font-bold hover:bg-white/10 transition ${!activeFolder ? "text-white" : "text-zinc-400"}`}>
+                                                    <Squares2X2Icon className="w-4 h-4 flex-shrink-0" />
+                                                    <span>All Notes</span>
+                                                    {!activeFolder && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-white/60 flex-shrink-0" />}
+                                                </button>
+                                            )}
+                                            {/* Folder list */}
+                                            <div className="max-h-60 overflow-y-auto">
+                                                {folders
+                                                    .filter(f => !notebookPickerSearch.trim() || f.name.toLowerCase().includes(notebookPickerSearch.toLowerCase()))
+                                                    .map(f => (
+                                                        <button
+                                                            key={f.id}
+                                                            type="button"
+                                                            onClick={() => {
+                                                                localStorage.setItem("stickies-split-notebook", f.name);
+                                                                enterFolder({ id: String(f.id), name: f.name, color: folderColors[f.name] || (f as any).color || "#888" });
+                                                                void loadFolderNotes(f.name, false);
+                                                                setShowNotebookPicker(false);
+                                                                window.history.replaceState({}, "", window.location.pathname);
+                                                            }}
+                                                            className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-xs font-bold hover:bg-white/10 transition ${activeFolder === f.name ? "text-white" : "text-zinc-400"}`}>
+                                                            <span className="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded overflow-hidden" style={{ background: "#fff", color: folderColors[f.name] || (f as any).color || "#888" } as React.CSSProperties}>
+                                                                {f.name === "CLAUDE" ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-0.5" /> : <FolderIconDisplay value={folderIcons[f.name] || ""} folderName={f.name} className="w-3 h-3" />}
+                                                            </span>
+                                                            <span className="uppercase truncate">{f.name}</span>
+                                                            {activeFolder === f.name && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-white/60 flex-shrink-0" />}
+                                                        </button>
+                                                    ))
+                                                }
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Regular breadcrumbs — non-split view */}
+                        {!editMode && folderStack.length > 0 && (
                             <>
                                 <button
                                     onClick={() => { goBack(); }}
@@ -6525,16 +6634,17 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     }}
                                     style={(() => {
                                         const c = item.color || item.folder_color || "#888888";
+                                        const isActive = editMode && !item.is_folder && String(item.id) === String(editingNote?.id);
                                         if (isListMode) {
-                                            return { position: "relative", isolation: "isolate", "--row-color": c } as React.CSSProperties;
+                                            return { position: "relative", isolation: "isolate", "--row-color": c, ...(isActive ? { borderLeftColor: c } : {}) } as React.CSSProperties;
                                         }
                                         return item.is_folder
                                             ? { isolation: "isolate", "--fc": c } as React.CSSProperties
                                             : { isolation: "isolate", backgroundColor: c, borderRadius: "3px 3px 3px 14px" };
                                     })()}
                                     className={`${isListMode
-                                        ? `group list-row-hover flex items-center gap-3 px-4 py-3 border-b border-white/5 cursor-pointer select-none transition-colors active:bg-white/10 overflow-hidden ${isDragging ? "opacity-30" : dt?.mode === "into" ? "bg-cyan-950/60 ring-1 ring-inset ring-cyan-400" : ""} ${isSelectMode && !item.is_folder && selectedIds.has(String(item.id)) ? "bg-blue-950/50" : ""}`
-                                        : `grid-square-tile min-w-0 cursor-pointer transition-all group ${item.is_folder ? "folder-grid-tile" : ""} ${isDragging ? "opacity-30 scale-95" : dt?.mode === "into" ? "ring-4 ring-cyan-400 ring-inset z-10" : ""}`}`}>
+                                        ? `group list-row-hover flex items-center gap-3 px-4 py-3 border-b border-white/5 cursor-pointer select-none transition-colors active:bg-white/10 overflow-hidden ${isDragging ? "opacity-30" : dt?.mode === "into" ? "bg-cyan-950/60 ring-1 ring-inset ring-cyan-400" : ""} ${isSelectMode && !item.is_folder && selectedIds.has(String(item.id)) ? "bg-blue-950/50" : ""} ${editMode && !item.is_folder && String(item.id) === String(editingNote?.id) ? "bg-white/10 border-l-[3px]" : "border-l-[3px] border-l-transparent"}`
+                                        : `grid-square-tile min-w-0 cursor-pointer transition-all group ${item.is_folder ? "folder-grid-tile" : ""} ${isDragging ? "opacity-30 scale-95" : dt?.mode === "into" ? "ring-4 ring-cyan-400 ring-inset z-10" : ""} ${editMode && !item.is_folder && String(item.id) === String(editingNote?.id) ? "ring-2 ring-white/40 ring-inset" : ""}`}`}>
                                     {/* Cursor spotlight glow */}
                                     {isListMode && glowCard?.id === tileId && (() => {
                                         const c = item.color || item.folder_color || "#888888";
@@ -6667,13 +6777,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                     </span>}
                                                 </div>;
                                             })()}
-                                            {!item.is_folder && (() => {
-                                                const t = (item as any).type;
-                                                const badge = t && t !== "text" ? TYPE_BADGE[t] : null;
-                                                if (!badge) return null;
-                                                const label = t === "mermaid" ? mermaidSubType(item.content || "") : badge.label;
-                                                return <span className="hidden sm:inline-flex text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-full flex-shrink-0" style={{ background: `${badge.color}20`, color: badge.color, border: `1px solid ${badge.color}40` }}>{label}</span>;
-                                            })()}
                                             {!item.is_folder && (item as any).flag && (
                                                 <span className="flex-shrink-0 text-base leading-none" title={(item as any).flag}>{(item as any).flag}</span>
                                             )}
@@ -6681,9 +6784,16 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 <HeartSolidIcon className="w-3.5 h-3.5 text-white flex-shrink-0" />
                                             )}
                                             {item.is_folder && <ArrowRightIcon className="w-4 h-4 text-zinc-600 flex-shrink-0" />}
-                                            {/* Date — always furthest right, fixed 15% column */}
+                                            {/* Badge + Date — grouped together on the far right */}
                                             {!item.is_folder && item.updated_at && (
-                                                <div className="flex items-center justify-end" style={{ width: "15%", flexShrink: 0 }}>
+                                                <div className="flex items-center justify-end gap-2 flex-shrink-0">
+                                                    {(() => {
+                                                        const t = (item as any).type;
+                                                        const badge = t && t !== "text" ? TYPE_BADGE[t] : null;
+                                                        if (!badge) return null;
+                                                        const label = t === "mermaid" ? mermaidSubType(item.content || "") : badge.label;
+                                                        return <span className="hidden sm:inline-flex text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-full flex-shrink-0" style={{ background: `${badge.color}20`, color: badge.color, border: `1px solid ${badge.color}40` }}>{label}</span>;
+                                                    })()}
                                                     <span className="text-[11px] text-zinc-500 font-medium whitespace-nowrap">{timeAgo(item.updated_at)}</span>
                                                 </div>
                                             )}

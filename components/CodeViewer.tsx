@@ -38,20 +38,8 @@ const LANG_MAP: Record<string, string> = {
 };
 
 const MONOKAI = `
-.token{transition:color 0.15s ease}
-.token.comment,.token.prolog,.token.doctype,.token.cdata{color:#75715e}
-.token.punctuation{color:#f8f8f2}
-.token.property,.token.tag,.token.constant,.token.symbol,.token.deleted{color:#f92672}
-.token.boolean,.token.number{color:#ae81ff}
-.token.selector,.token.attr-name,.token.string,.token.char,.token.builtin,.token.inserted{color:#a6e22e}
-.token.operator,.token.entity,.token.url,.language-css .token.string,.token.variable{color:#f8f8f2}
-.token.atrule,.token.attr-value,.token.function,.token.class-name{color:#e6db74}
-.token.keyword{color:#66d9e8}
-.token.regex,.token.important{color:#fd971f}
-.token.direction{color:#ae81ff}
-.token.arrow{color:#f92672}
-.token.bracket{color:#f8f8f2}
-.token.label{color:#e6db74}
+.token{transition:none;color:#e8e8e8}
+.token.comment,.token.prolog,.token.doctype,.token.cdata{color:#666}
 /* Override iOS Safari font-size zoom and disable word wrap */
 .code-viewer-wrap textarea,
 .code-viewer-wrap pre {
@@ -182,7 +170,7 @@ export function CodeViewer({ code, language, editing, autoFocus = true, wordWrap
         <div
             ref={containerRef}
             className="flex-1 overflow-auto relative"
-            style={{ background: "#272822", display: "flex" }}
+            style={{ background: "#000", display: "flex" }}
             onClick={!editing ? onClick : undefined}
         >
             <style>{MONOKAI}</style>
