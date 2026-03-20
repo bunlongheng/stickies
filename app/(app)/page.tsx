@@ -1406,6 +1406,7 @@ export default function NotesMaster() {
     const [cmdKQuery, setCmdKQuery] = useState("");
     const [cmdKCursor, setCmdKCursor] = useState(0);
     const [cmdKGlobal, setCmdKGlobal] = useState(false);
+    const [cmdKInFile, setCmdKInFile] = useState(false);
     const cmdKInputRef = useRef<HTMLInputElement | null>(null);
     const [showCmdB, setShowCmdB] = useState(false);
     const [cmdBQuery, setCmdBQuery] = useState("");
@@ -2064,11 +2065,20 @@ export default function NotesMaster() {
     // Cmd+K / Cmd+J global shortcut
     useEffect(() => {
         const handler = (e: KeyboardEvent) => {
-            if ((e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "j")) {
+            if ((e.metaKey || e.ctrlKey) && e.key === "k") {
                 e.preventDefault();
-                const global = e.shiftKey;
-                setCmdKGlobal(global);
+                setCmdKGlobal(false); setCmdKInFile(false);
                 setShowCmdK(v => { if (!v) { setCmdKQuery(""); setCmdKCursor(0); } return !v; });
+            }
+            if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "f") {
+                e.preventDefault();
+                setCmdKGlobal(true); setCmdKInFile(false);
+                setShowCmdK(v => { if (!v) { setCmdKQuery(""); setCmdKCursor(0); } return true; });
+            }
+            if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === "f") {
+                e.preventDefault();
+                setCmdKInFile(true); setCmdKGlobal(false);
+                setShowCmdK(v => { if (!v) { setCmdKQuery(""); setCmdKCursor(0); } return true; });
             }
             if ((e.metaKey || e.ctrlKey) && e.key === "b") {
                 e.preventDefault();
@@ -2761,20 +2771,28 @@ const fireIntegrations = (trigger: string, note: any) => {
     const deferredCmdKQuery = useDeferredValue(cmdKQuery);
 
     const cmdKResults = useMemo(() => {
+        // In-file mode: search lines of the current note
+        if (cmdKInFile) {
+            if (!deferredCmdKQuery.trim()) return [];
+            const q = deferredCmdKQuery.toLowerCase();
+            return (content || "").split("\n")
+                .map((line, i) => ({ _isLine: true, id: `line_${i}`, lineNum: i + 1, text: line }))
+                .filter(item => item.text.toLowerCase().includes(q))
+                .slice(0, 100);
+        }
         // Scope to active folder unless global mode
         const scopedIndex = (activeFolder && !cmdKGlobal)
             ? cmdKIndex.filter(e => e.f === activeFolder.toLowerCase())
             : cmdKIndex;
         const byDate = (a: any, b: any) => b.date.localeCompare(a.date);
         if (!deferredCmdKQuery.trim()) {
-            return scopedIndex.slice().sort(byDate).slice(0, 5).map(x => x._orig);
+            return scopedIndex.slice().sort(byDate).map(x => x._orig);
         }
         const q = deferredCmdKQuery.toLowerCase();
         // Only show folder results when not scoped to a folder
         const matchingFolders = (activeFolder && !cmdKGlobal) ? [] : folders
             .filter(f => f.name.toLowerCase().includes(q))
-            .map(f => ({ ...f, _isFolder: true }))
-            .slice(0, 3);
+            .map(f => ({ ...f, _isFolder: true }));
         const scoreEntry = (e: typeof cmdKIndex[0]): number => {
             const pinned = pinnedIds.has(String(e._orig.id));
             if (e.t === q)              return 0;
@@ -2789,7 +2807,7 @@ const fireIntegrations = (trigger: string, note: any) => {
             .filter(x => x.s < 9)
             .sort((a, b) => a.s !== b.s ? a.s - b.s : b.e.date.localeCompare(a.e.date));
         return [...matchingFolders, ...scored.map(x => x.e._orig)];
-    }, [cmdKIndex, deferredCmdKQuery, pinnedIds, folders, activeFolder, cmdKGlobal]);
+    }, [cmdKIndex, deferredCmdKQuery, pinnedIds, folders, activeFolder, cmdKGlobal, cmdKInFile, content]);
 
     const cmdBResults = useMemo(() => {
         if (!cmdBQuery.trim()) return bookmarksData.slice(0, 12);
@@ -3100,16 +3118,28 @@ const fireIntegrations = (trigger: string, note: any) => {
             if ((e.metaKey || e.ctrlKey) && e.key === "s") {
                 e.preventDefault();
                 void saveNote({ silent: true }).then(() => {
-                    if (title.trim()) {
-                        const t = title.slice(0, 10) + (title.length > 10 ? "…" : "");
-                        showToast(`"${t}" saved`, noteColor || "#34C759");
-                    }
+                    const t = title.trim() ? title.slice(0, 12) + (title.length > 12 ? "…" : "") : "Saved";
+                    showToast(`"${t}" saved`, noteColor || "#34C759");
                 });
             }
         };
         window.addEventListener("keydown", handler);
         return () => window.removeEventListener("keydown", handler);
     }, [saveNote, title, noteColor]);
+
+    // Cmd+R → refresh notes (prevents browser reload)
+    useEffect(() => {
+        const handler = (e: KeyboardEvent) => {
+            if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === "r") {
+                e.preventDefault();
+                void sync();
+                if (activeFolder) void loadFolderNotes(activeFolder, false);
+                showToast("Refreshed", "#3b82f6");
+            }
+        };
+        window.addEventListener("keydown", handler);
+        return () => window.removeEventListener("keydown", handler);
+    }, [activeFolder, loadFolderNotes]);
 
     // Cmd+Z → undo note deletion (pending delete within window)
     useEffect(() => {
@@ -3765,12 +3795,25 @@ const fireIntegrations = (trigger: string, note: any) => {
     const openNoteFromCmdK = useCallback((note: any, cmdClick = false) => {
         setShowCmdK(false);
         setCmdKQuery("");
+        // Folder selected — navigate into it (don't open as a note)
+        if (note._isFolder) {
+            const fr = dbData.find((r: any) => r.is_folder && (r.folder_name === note.name || String(r.id) === String(note.id)));
+            enterFolder({ id: fr ? String(fr.id) : `virtual-${note.name}`, name: note.name, color: note.color || palette12[0] });
+            loadFolderNotes(note.name, false).then(() => {
+                const first = (getNotesCacheForFolder(note.name) as any[])
+                    .filter((n: any) => !n.is_folder)
+                    .sort((a: any, b: any) => (b.updated_at || "").localeCompare(a.updated_at || ""))[0];
+                if (first) void openNote(first);
+            });
+            if (editMode) localStorage.setItem("stickies-split-notebook", note.name);
+            return;
+        }
         if (note.folder_name) {
             const fr = dbData.find((r: any) => r.is_folder && r.folder_name === note.folder_name);
             if (fr) enterFolder({ id: String(fr.id), name: note.folder_name, color: fr.color || fr.folder_color || palette12[0] });
         }
         void openNote(note);
-    }, [dbData, enterFolder, openNote]);
+    }, [dbData, enterFolder, openNote, loadFolderNotes, editMode]);
 
     const stripBulletSpacing = () => {
         const cleaned = content.replace(/^\s*([0-9]+\.|[-*•+_])\s+/gm, "$1");
@@ -7952,7 +7995,7 @@ const fireIntegrations = (trigger: string, note: any) => {
 
             {/* CMD+K SEARCH PALETTE */}
             {showCmdK && (
-                <div className="fixed inset-0 z-[99990] flex items-center justify-center px-4 bg-black/60 backdrop-blur-sm"
+                <div className="fixed inset-0 z-[99990] flex items-start justify-center pt-[8vh] px-4 bg-black/60 backdrop-blur-sm"
                     onClick={() => setShowCmdK(false)}>
                     <div className="w-full max-w-lg bg-zinc-900 border border-white/15 shadow-2xl overflow-hidden"
                         onClick={(e) => e.stopPropagation()}
@@ -7970,10 +8013,15 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 autoFocus
                                 value={cmdKQuery}
                                 onChange={(e) => { setCmdKQuery(e.target.value); setCmdKCursor(0); }}
-                                placeholder="SEARCH NOTES…"
+                                placeholder={cmdKInFile ? "SEARCH IN FILE…" : "SEARCH NOTES…"}
                                 className="flex-1 bg-transparent text-sm text-white outline-none placeholder-zinc-600 font-medium"
                             />
-                            {activeFolder && (
+                            {cmdKInFile ? (
+                                <span className="px-2 py-0.5 rounded text-[10px] font-black tracking-wide flex-shrink-0"
+                                    style={{ background: "rgba(234,179,8,0.15)", color: "#ca8a04", border: "1px solid rgba(234,179,8,0.3)" }}>
+                                    IN FILE
+                                </span>
+                            ) : activeFolder ? (
                                 <button
                                     type="button"
                                     onClick={() => setCmdKGlobal(v => !v)}
@@ -7983,12 +8031,31 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         : { background: "rgba(99,102,241,0.15)", color: "#818cf8", border: "1px solid rgba(99,102,241,0.3)" }}>
                                     {cmdKGlobal ? "GLOBAL" : activeFolder}
                                 </button>
-                            )}
+                            ) : null}
                             <kbd className="text-[10px] text-zinc-600 border border-zinc-700 px-1.5 py-0.5 font-mono">esc</kbd>
                         </div>
                         {/* Results */}
-                        <div className="max-h-[360px] overflow-y-auto">
+                        <div className="max-h-[520px] overflow-y-auto">
                             {(() => {
+                                // In-file search results
+                                if (cmdKInFile) {
+                                    if (!cmdKQuery.trim()) return <div className="px-4 py-8 text-center text-xs text-zinc-600">Type to search in current note</div>;
+                                    if (cmdKResults.length === 0) return <div className="px-4 py-8 text-center text-xs text-zinc-600">No matches in file</div>;
+                                    return (
+                                        <>
+                                            <div className="px-4 pt-3 pb-1 text-[9px] font-black tracking-[0.2em] text-zinc-600 uppercase">{cmdKResults.length} line{cmdKResults.length !== 1 ? "s" : ""} matched</div>
+                                            {cmdKResults.map((item: any, i: number) => (
+                                                <button key={item.id} type="button"
+                                                    onMouseEnter={() => setCmdKCursor(i)}
+                                                    onClick={() => setShowCmdK(false)}
+                                                    className={`w-full flex items-start gap-3 px-4 py-2 text-left transition ${i === cmdKCursor ? "bg-white/10" : "hover:bg-white/5"}`}>
+                                                    <span className="text-[10px] text-zinc-600 w-8 text-right flex-shrink-0 mt-0.5 font-mono">{item.lineNum}</span>
+                                                    <span className="text-xs text-zinc-300 font-mono truncate">{item.text || <span className="text-zinc-700">(empty)</span>}</span>
+                                                </button>
+                                            ))}
+                                        </>
+                                    );
+                                }
                                 const folderItems = cmdKResults.filter((r: any) => r._isFolder);
                                 const noteItems = cmdKResults.filter((r: any) => !r._isFolder);
                                 return (
@@ -8006,6 +8073,13 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                             setShowCmdK(false); setCmdKQuery("");
                                                             const fr = dbData.find((r: any) => r.is_folder && (r.folder_name === folder.name || r.name === folder.name));
                                                             enterFolder({ id: fr ? String(fr.id) : `virtual-${folder.name}`, name: folder.name, color: folder.color || palette12[0] });
+                                                            loadFolderNotes(folder.name, false).then(() => {
+                                                                const first = (getNotesCacheForFolder(folder.name) as any[])
+                                                                    .filter((n: any) => !n.is_folder)
+                                                                    .sort((a: any, b: any) => (b.updated_at || "").localeCompare(a.updated_at || ""))[0];
+                                                                if (first) void openNote(first);
+                                                            });
+                                                            if (editMode) localStorage.setItem("stickies-split-notebook", folder.name);
                                                         }}
                                                         className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition ${i === cmdKCursor ? "bg-white/10" : "hover:bg-white/5"}`}>
                                                         <div className="w-7 h-7 flex-shrink-0 flex items-center justify-center text-sm font-black overflow-hidden"
