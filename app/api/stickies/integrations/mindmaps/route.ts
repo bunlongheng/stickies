@@ -31,6 +31,48 @@ async function queryBheng(sql: string): Promise<Record<string, unknown>[]> {
     return Array.isArray(data) ? data : [];
 }
 
+// Convert flat node list → readable markdown outline
+function nodesToMarkdown(nodes: any[]): string {
+    if (!Array.isArray(nodes) || nodes.length === 0) return "";
+
+    const nodeIds = new Set(nodes.map((n: any) => n.id));
+
+    // Root = nodes whose parentId isn't in the set (orphaned = top-level)
+    const roots = nodes
+        .filter((n: any) => !n.parentId || !nodeIds.has(n.parentId))
+        .sort((a: any, b: any) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+
+    // Build children map
+    const childrenMap = new Map<string, any[]>();
+    for (const n of nodes) {
+        if (n.parentId && nodeIds.has(n.parentId)) {
+            if (!childrenMap.has(n.parentId)) childrenMap.set(n.parentId, []);
+            childrenMap.get(n.parentId)!.push(n);
+        }
+    }
+    for (const list of childrenMap.values()) {
+        list.sort((a: any, b: any) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+    }
+
+    const lines: string[] = [];
+
+    function walk(node: any, depth: number) {
+        const title = (node.title ?? "").trim();
+        if (!title) return;
+        if (depth === 0) {
+            lines.push(`## ${title}`);
+        } else {
+            lines.push(`${"  ".repeat(depth - 1)}- ${title}`);
+        }
+        for (const child of childrenMap.get(node.id) ?? []) {
+            walk(child, depth + 1);
+        }
+    }
+
+    for (const root of roots) walk(root, 0);
+    return lines.join("\n");
+}
+
 export async function GET(req: Request) {
     if (!await authorizeOwner(req)) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -42,19 +84,20 @@ export async function GET(req: Request) {
         );
         const notes = rows.map((idea: any) => {
             const mapUrl = `${baseUrl}/?map=${idea.id}`;
-            const nodeCount = Array.isArray(idea.nodes) ? idea.nodes.length : 0;
-            const content = `[🗺️ Open in Ideas](${mapUrl})\n\n**Type:** ${idea.type}  \n**Nodes:** ${nodeCount}  \n**Updated:** ${new Date(idea.updated_at).toLocaleString()}\n\n\`\`\`json\n${JSON.stringify(idea.nodes, null, 2)}\n\`\`\``;
+            const outline = nodesToMarkdown(idea.nodes);
+            const content = `[🗺️ Open in Ideas](${mapUrl})\n\n${outline}`;
             return {
                 id: `ext_idea_${idea.id}`,
                 title: idea.name,
                 content,
-                folder_name: "Ideas",
+                folder_name: "mindmaps",
                 parent_folder_name: "Integrations",
-                type: "text",
+                type: "markdown",
                 is_folder: false,
                 _external: true,
                 _source: "bheng:ideas",
                 _external_id: idea.id,
+                _mapUrl: mapUrl,
                 created_at: idea.created_at,
                 updated_at: idea.updated_at,
             };
