@@ -2357,10 +2357,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                 setListModeNotes((prev) => new Set([...prev, String(topNote.id)]));
             }
             setEditorOpen(true);
-        } else if (!folderNotesLoading) {
-            // No notes in default folder — open a blank rich note ready to type
-            openNewNote("rich"); // openNewNote is defined later but accessible in callback
         }
+        // If no notes yet — wait for loadFolderNotes to complete (effect re-runs when dbData updates)
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [editMode, isDataLoaded, dbData, folderNotesLoading, pendingRestoreNoteId, editorOpen]);
 
