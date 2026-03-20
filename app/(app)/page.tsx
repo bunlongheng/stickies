@@ -1253,6 +1253,7 @@ export default function NotesMaster() {
     const [toastConfetti, setToastConfetti] = useState(false);
     const [toastIsError, setToastIsError] = useState(false);
     const [toastRainbow, setToastRainbow] = useState(false);
+    const [toastKey, setToastKey] = useState(0);
     const [undoDeleteTask, setUndoDeleteTask] = useState<{ text: string; lineIdx: number } | null>(null);
     const taskContentHistory = useRef<string[]>([]);
     const pendingDeleteRef = useRef<{ note: any; title: string; content: string; noteColor: string; targetFolder: string; timeoutId: ReturnType<typeof setTimeout> } | null>(null);
@@ -3187,6 +3188,7 @@ const fireIntegrations = (trigger: string, note: any) => {
     }, [activeFolder, editMode, closeEditorTools, pickUniqueColor]);
 
     const showToast = (msg: string, color = "#34C759", confetti = false) => {
+        setToastKey(k => k + 1);
         setToastColor(color);
         setToast(msg);
         setToastConfetti(confetti);
@@ -3196,6 +3198,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         playSound("toast");
     };
     const showRainbowToast = (msg: string) => {
+        setToastKey(k => k + 1);
         setToast(msg);
         setToastConfetti(true);
         setToastIsError(false);
@@ -3204,6 +3207,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         playSound("toast");
     };
     const showError = (msg: string) => {
+        setToastKey(k => k + 1);
         setToastColor("#FF3B30");
         setToast(msg);
         setToastConfetti(false);
@@ -5519,7 +5523,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                 const cx = typeof window !== "undefined" ? window.innerWidth / 2 : 200;
                 const cy = 28;
                 return (
-                    <>
+                    <React.Fragment key={toastKey}>
                         {/* Confetti (non-error toasts only) — mini on every toast, bigger when explicitly requested */}
                         {!isError && Array.from({ length: toastConfetti ? 18 : 10 }).map((_, i) => {
                             const count = toastConfetti ? 18 : 10;
@@ -5585,7 +5589,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 <span className="font-black uppercase tracking-wide text-[7px] sm:text-[8px] leading-snug max-w-[220px] break-words text-center">{toast}</span>
                             </div>
                         </div>
-                    </>
+                    </React.Fragment>
                 );
             })()}
             {undoDeleteTask && (
