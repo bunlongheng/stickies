@@ -114,12 +114,7 @@ async function getAuthToken(): Promise<string> {
     // Return cached token if it's still valid for >60 seconds
     if (_tokenCache && Date.now() < _tokenCache.expiresAt) return _tokenCache.value;
 
-    // In development, skip Supabase entirely — use the static API key directly.
-    if (process.env.NODE_ENV === "development") {
-        return process.env.NEXT_PUBLIC_STICKIES_API_KEY ?? "";
-    }
-
-    // Production: always use the Supabase session JWT — never send the static API key from the browser.
+    // Always use the Supabase session JWT — never send the static API key from the browser.
     // The static key is for external callers (CLI, Claude) only; sending it from the browser
     // would grant every visitor owner-level access to all notes.
     // Use the SSR-aware browser client — reads session from cookies (set by @supabase/ssr)
