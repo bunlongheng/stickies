@@ -1420,6 +1420,7 @@ export default function NotesMaster() {
     const [uploadingImages, setUploadingImages] = useState(false);
 
     const isSavingRef = useRef(false);
+    const saveNoteRef = useRef<((opts?: { silent?: boolean }) => Promise<boolean>) | null>(null);
     const localWriteRef = useRef<Map<string, number>>(new Map()); // noteId → timestamp, self-echo guard
     const flashQueueRef = useRef<Array<{ note: any; color: string }>>([]);
     const integrationsRef = useRef<Array<{ trigger: string; condition: Record<string, string>; type: string; config: Record<string, string> }>>([]);
@@ -3055,6 +3056,8 @@ const fireIntegrations = (trigger: string, note: any) => {
         },
         [isDraftDirty, targetFolder, noteColor, activeFolder, folderStack, editingNote, title, content, folders, dbData, pendingNoteType],
     );
+    // Always-current ref so other callbacks can call saveNote without stale closures
+    useEffect(() => { saveNoteRef.current = saveNote; }, [saveNote]);
 
     const closeEditorTools = useCallback(() => {
         setShowColorPicker(false);
@@ -3781,6 +3784,13 @@ const fireIntegrations = (trigger: string, note: any) => {
 
     // Lazily fetch full note content if it wasn't loaded in the list sync
     const openNote = useCallback(async (note: any) => {
+        // Save any unsaved new note before switching — prevents duplicate INSERT from stale auto-save timer
+        if (isDraftDirtyRef.current && !isSavingRef.current) {
+            void saveNoteRef.current?.({ silent: true });
+        }
+        // Cancel pending auto-save timer so the stale closure can't fire a second INSERT
+        if (autoSaveTimerRef.current) { clearTimeout(autoSaveTimerRef.current); autoSaveTimerRef.current = null; }
+
         // Open immediately with available metadata so the editor switches at once
         setPendingNoteType(null); // reset so noteType comes from note.type, not prior mode
         setEditingNote(note);
