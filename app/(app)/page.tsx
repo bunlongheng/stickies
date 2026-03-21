@@ -1254,6 +1254,7 @@ export default function NotesMaster() {
     const [toastIsError, setToastIsError] = useState(false);
     const [toastRainbow, setToastRainbow] = useState(false);
     const [toastKey, setToastKey] = useState(0);
+    const [showWelcomeBack, setShowWelcomeBack] = useState(false);
     const [undoDeleteTask, setUndoDeleteTask] = useState<{ text: string; lineIdx: number } | null>(null);
     const taskContentHistory = useRef<string[]>([]);
     const pendingDeleteRef = useRef<{ note: any; title: string; content: string; noteColor: string; targetFolder: string; timeoutId: ReturnType<typeof setTimeout> } | null>(null);
@@ -1737,6 +1738,7 @@ export default function NotesMaster() {
             if (event === "SIGNED_IN" && sawInitialSession) {
                 // Fresh login — navigate to default folder + open first note
                 sessionStorage.removeItem("stickies:session-started");
+                setShowWelcomeBack(true);
                 const savedDefault = localStorage.getItem(DEFAULT_FOLDER_KEY);
                 if (!savedDefault) {
                     // No default set → show All Notes
@@ -3245,6 +3247,13 @@ const fireIntegrations = (trigger: string, note: any) => {
         setTimeout(() => { setToast(""); setToastIsError(false); }, 3000);
         playSound("toast-error");
     };
+
+    useEffect(() => {
+        if (!showWelcomeBack) return;
+        setShowWelcomeBack(false);
+        showRainbowToast("Welcome back 👋");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [showWelcomeBack]);
 
     useEffect(() => {
         const handler = (e: Event) => {
