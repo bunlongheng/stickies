@@ -1530,6 +1530,29 @@ export default function NotesMaster() {
         [setFolderFabOffsetWithRef, stopFolderFabAnimation],
     );
 
+    // --- LOAD ALL NOTES (for "All Notes" view) ---
+    const loadAllNotes = async () => {
+        if (folderNotesLoadingRef.current) return;
+        folderNotesLoadingRef.current = true;
+        setFolderNotesLoading(true);
+        try {
+            const token = await getAuthToken();
+            const res = await fetch(`/api/stickies`, { headers: { Authorization: `Bearer ${token}` } });
+            if (!res.ok) return;
+            const { notes = [] } = await res.json();
+            setDbData((prev) => {
+                const folders = prev.filter((r: any) => r.is_folder);
+                const noteMap = new Map(notes.map((n: any) => [String(n.id), n]));
+                // Keep optimistic notes, merge fetched notes
+                const kept = prev.filter((r: any) => !r.is_folder && (r._optimistic || !noteMap.has(String(r.id))));
+                return [...folders, ...kept, ...notes];
+            });
+        } finally {
+            folderNotesLoadingRef.current = false;
+            setFolderNotesLoading(false);
+        }
+    };
+
     // --- PAGINATED FOLDER NOTES (with delta sync) ---
     const loadFolderNotes = async (folderName: string, append = false) => {
         if (folderNotesLoadingRef.current) return;
@@ -1779,8 +1802,7 @@ export default function NotesMaster() {
         setMounted(true);
         void sync().then(() => {
             // Auto-navigate to last-used folder and open most recent note on every page load
-            const savedDefault = localStorage.getItem(DEFAULT_FOLDER_KEY);
-            if (!savedDefault) return;
+            const savedDefault = localStorage.getItem(DEFAULT_FOLDER_KEY) || "CLAUDE";
             setActiveFolder(savedDefault);
             void loadFolderNotes(savedDefault, false).then(() => {
                 const first = (getNotesCacheForFolder(savedDefault) as any[])
@@ -1870,7 +1892,7 @@ export default function NotesMaster() {
             if (isNewSession) {
                 sessionStorage.setItem("stickies:session-started", "1");
                 if (savedDefaultFolder) setActiveFolder(savedDefaultFolder);
-                setMainListMode("thumb"); // thumbnail as default
+                setMainListMode("list"); // list as default
             } else {
                 try {
                     const raw = localStorage.getItem(VIEW_STATE_KEY);
@@ -6520,7 +6542,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             {!notebookPickerSearch.trim() && (
                                                 <button
                                                     type="button"
-                                                    onClick={() => { localStorage.setItem("stickies-split-notebook", "__all__"); setFolderStack([]); setShowNotebookPicker(false); window.history.replaceState({}, "", window.location.pathname); }}
+                                                    onClick={() => { localStorage.setItem("stickies-split-notebook", "__all__"); setFolderStack([]); setShowNotebookPicker(false); window.history.replaceState({}, "", window.location.pathname); void loadAllNotes(); }}
                                                     className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-xs font-bold hover:bg-white/10 transition ${!activeFolder ? "text-white" : "text-zinc-400"}`}>
                                                     <Squares2X2Icon className="w-4 h-4 flex-shrink-0" />
                                                     <span>All Notes</span>
@@ -6605,7 +6627,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     <span className="w-full pl-12 pr-3 py-3 text-sm font-black tracking-tight text-white/30">SEARCH</span>
                                 </button>
                                 <div className="ml-auto flex items-center gap-1">
-                                    <HeaderIconBtn icon={mainListMode === "list" ? Bars3Icon : Squares2X2Icon} label={mainListMode === "list" ? "List" : "Thumb"} active={!kanbanMode} onClick={() => { setMainListMode(v => v === "thumb" ? "list" : "thumb"); setKanbanMode(false); }} />
+                                    {!editMode && <HeaderIconBtn icon={mainListMode === "list" ? Bars3Icon : Squares2X2Icon} label={mainListMode === "list" ? "List" : "Thumb"} active={!kanbanMode} onClick={() => { setMainListMode(v => v === "thumb" ? "list" : "thumb"); setKanbanMode(false); }} />}
                                     {editMode && <HeaderIconBtn icon={Cog6ToothIcon} label="Settings" onClick={() => { const hueInt = integrationsRef.current.find(ig => ig.type === "hue"); setLightMode((hueInt?.config?.mode as any) ?? "flash"); setIsGlobalSettings(true); setShowFolderActions(true); }} />}
                                 </div>
                             </>
@@ -6622,7 +6644,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     </div>
                                 ) : (
                                     <>
-                                        <HeaderIconBtn icon={mainListMode === "list" ? Bars3Icon : Squares2X2Icon} label={mainListMode === "list" ? "List" : "Thumb"} active={!kanbanMode} onClick={() => { setMainListMode(v => v === "thumb" ? "list" : "thumb"); setKanbanMode(false); }} />
+                                        {!editMode && <HeaderIconBtn icon={mainListMode === "list" ? Bars3Icon : Squares2X2Icon} label={mainListMode === "list" ? "List" : "Thumb"} active={!kanbanMode} onClick={() => { setMainListMode(v => v === "thumb" ? "list" : "thumb"); setKanbanMode(false); }} />}
                                         <HeaderIconBtn icon={Cog6ToothIcon} label="Settings" onClick={() => { const hueInt = integrationsRef.current.find(ig => ig.type === "hue"); setLightMode((hueInt?.config?.mode as any) ?? "flash"); setIsGlobalSettings(false); setShowFolderActions(true); }} />
                                     </>
                                 )}
