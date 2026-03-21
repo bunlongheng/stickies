@@ -1736,26 +1736,30 @@ export default function NotesMaster() {
             }
             if (event === "SIGNED_IN" && sawInitialSession) {
                 // Fresh login — navigate to default folder + open first note
-                const savedDefault = localStorage.getItem("stickies:default-folder") || "CLAUDE";
                 sessionStorage.removeItem("stickies:session-started");
-                setActiveFolder(savedDefault);
-                void loadFolderNotes(savedDefault, false).then(() => {
-                    const first = (getNotesCacheForFolder(savedDefault) as any[])
-                        .filter((n: any) => !n.is_folder)
-                        .sort((a: any, b: any) => (b.updated_at || "").localeCompare(a.updated_at || ""))[0];
-                    if (first) void openNote(first);
-                });
+                const savedDefault = localStorage.getItem(DEFAULT_FOLDER_KEY);
+                if (!savedDefault) {
+                    // No default set → show All Notes
+                    setActiveFolder(null);
+                } else {
+                    setActiveFolder(savedDefault);
+                    void loadFolderNotes(savedDefault, false).then(() => {
+                        const first = (getNotesCacheForFolder(savedDefault) as any[])
+                            .filter((n: any) => !n.is_folder)
+                            .sort((a: any, b: any) => (b.updated_at || "").localeCompare(a.updated_at || ""))[0];
+                        if (first) void openNote(first);
+                    });
+                }
             }
         });
         return () => subscription.unsubscribe();
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // Auto-enable split view on wide screens if no saved preference yet
+    // Always enable split view on desktop (≥1024px)
     useEffect(() => {
         try {
-            const saved = localStorage.getItem(EDIT_MODE_KEY);
-            if (saved === null && window.matchMedia("(min-width: 1024px)").matches) {
+            if (window.matchMedia("(min-width: 1024px)").matches) {
                 setEditMode(true);
             }
         } catch { /* ignore */ }
@@ -1933,6 +1937,8 @@ export default function NotesMaster() {
             if (rawKanban) setKanbanMode(rawKanban === "true");
             const rawEdit = localStorage.getItem(EDIT_MODE_KEY);
             if (rawEdit) setEditMode(rawEdit === "true");
+            // Desktop always defaults to split view regardless of saved preference
+            if (window.matchMedia("(min-width: 1024px)").matches) setEditMode(true);
         } catch { /* ignore */ }
         try {
             const rawTheme = localStorage.getItem(APP_THEME_KEY);
