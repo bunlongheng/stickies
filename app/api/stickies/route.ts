@@ -794,7 +794,7 @@ export async function POST(req: Request) {
     } else {
         const nextOrder = await getNextOrder(table, false);
         const folderIdClause = resolved_folder_id ? `, folder_id` : "";
-        const folderIdVal = resolved_folder_id ? `, $${userId ? 9 : 8}` : "";
+        const folderIdVal = resolved_folder_id ? `, $${userId ? 10 : 9}` : "";
         const extraParams: unknown[] = resolved_folder_id ? [resolved_folder_id] : [];
 
         if (userId) {
