@@ -169,10 +169,33 @@ function triggerHue(color: string) {
 }
 
 // ── Auth ────────────────────────────────────────────────────────────────────
-// "external" = static API key (AI / scripts / curl) → triggers Hue flash + broadcast
-// "owner"    = browser JWT for the owner account → no Hue flash, no broadcast
+// "external" = static API key (AI / scripts / curl) → ONLY via /api/stickies/ext
+// "owner"    = browser JWT for the owner account → /api/stickies (browser only)
 // "user"     = browser JWT for other users → scoped to users_stickies table
 type AuthResult = { type: "external" } | { type: "owner" } | { type: "user"; userId: string };
+
+// Guards the main /api/stickies route against static API key access.
+// External callers (AI, scripts, automations) MUST use /api/stickies/ext instead.
+// Returns a friendly 403 response if the API key is being used on the wrong route.
+function blockExternalKey(req: Request): NextResponse | null {
+    const auth = req.headers.get("authorization") ?? "";
+    const apiKey = process.env.STICKIES_API_KEY;
+    if (!apiKey || !auth) return null;
+    const expected = `Bearer ${apiKey}`;
+    if (auth.length !== expected.length) return null;
+    try {
+        if (!crypto.timingSafeEqual(Buffer.from(auth), Buffer.from(expected))) return null;
+    } catch { return null; }
+    // It is the API key — only allow it on the /ext route
+    const url = new URL(req.url);
+    if (url.pathname.includes("/stickies/ext")) return null;
+    return NextResponse.json({
+        error: "API key access is not permitted on /api/stickies.",
+        message: "This endpoint is reserved for browser sessions (JWT auth). External integrations — including AI agents, scripts, and automations — must use /api/stickies/ext instead.",
+        correct_endpoint: "/api/stickies/ext",
+        hint: "Send your Authorization: Bearer <STICKIES_API_KEY> to /api/stickies/ext — same methods (GET, POST, PATCH, DELETE) work identically there.",
+    }, { status: 403 });
+}
 
 async function authenticate(req: Request): Promise<AuthResult | null> {
     const auth = req.headers.get("authorization") ?? "";
@@ -294,6 +317,8 @@ async function resolveFolderPath(raw: string, table: string): Promise<{ folder_n
 
 // ── GET ─────────────────────────────────────────────────────────────────────
 export async function GET(req: Request) {
+    const blocked = blockExternalKey(req);
+    if (blocked) return blocked;
     const auth = await authenticate(req);
     if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -455,6 +480,8 @@ export async function GET(req: Request) {
 
 // ── POST ────────────────────────────────────────────────────────────────────
 export async function POST(req: Request) {
+    const blocked = blockExternalKey(req);
+    if (blocked) return blocked;
     const auth = await authenticate(req);
     if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -797,6 +824,8 @@ export async function POST(req: Request) {
 
 // ── DELETE ──────────────────────────────────────────────────────────────────
 export async function DELETE(req: Request) {
+    const blocked = blockExternalKey(req);
+    if (blocked) return blocked;
     const auth = await authenticate(req);
     if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -867,6 +896,8 @@ function htmlToPlainLines(html: string): string {
 
 // ── PATCH ───────────────────────────────────────────────────────────────────
 export async function PATCH(req: Request) {
+    const blocked = blockExternalKey(req);
+    if (blocked) return blocked;
     const auth = await authenticate(req);
     if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
