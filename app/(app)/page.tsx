@@ -4975,7 +4975,54 @@ const fireIntegrations = (trigger: string, note: any) => {
         return () => cancelAnimationFrame(frame);
     }, [editorOpen]);
 
-    if (!mounted || isUrlChecking) return <div className="h-screen bg-black" />;
+    if (!mounted || isUrlChecking) return (
+        <div className="h-screen bg-black flex flex-col items-center justify-center gap-8 overflow-hidden">
+            <style>{`
+                @keyframes stickyFloat0 { 0%,100%{transform:rotate(-18deg) translateY(0px) scale(1)}  50%{transform:rotate(-20deg) translateY(-14px) scale(1.04)} }
+                @keyframes stickyFloat1 { 0%,100%{transform:rotate(-8deg)  translateY(0px) scale(1)}  50%{transform:rotate(-6deg)  translateY(-18px) scale(1.06)} }
+                @keyframes stickyFloat2 { 0%,100%{transform:rotate(2deg)   translateY(0px) scale(1)}  50%{transform:rotate(4deg)   translateY(-12px) scale(1.05)} }
+                @keyframes stickyFloat3 { 0%,100%{transform:rotate(12deg)  translateY(0px) scale(1)}  50%{transform:rotate(14deg)  translateY(-16px) scale(1.06)} }
+                @keyframes stickyFloat4 { 0%,100%{transform:rotate(22deg)  translateY(0px) scale(1)}  50%{transform:rotate(20deg)  translateY(-10px) scale(1.04)} }
+                @keyframes stickyPulse  { 0%,100%{opacity:.7} 50%{opacity:1} }
+                @keyframes loadDots     { 0%,80%,100%{opacity:.2;transform:scale(.8)} 40%{opacity:1;transform:scale(1)} }
+                .sticky-load { position:absolute; border-radius:3px 3px 3px 18px; box-shadow:0 8px 28px rgba(0,0,0,.55), 0 2px 6px rgba(0,0,0,.4); }
+                .sticky-load::after { content:''; position:absolute; bottom:0; right:0; width:0; height:0; border-style:solid; border-width:0 0 14px 14px; border-color:transparent transparent rgba(0,0,0,.18) transparent; }
+            `}</style>
+
+            {/* Fanned sticky stack */}
+            <div style={{ position: "relative", width: 110, height: 110 }}>
+                {[
+                    { color: "#FF3B30", anim: "stickyFloat0", delay: "0s",    z: 1 },
+                    { color: "#FF9500", anim: "stickyFloat1", delay: "0.15s", z: 2 },
+                    { color: "#FFCC00", anim: "stickyFloat2", delay: "0.3s",  z: 3 },
+                    { color: "#34C759", anim: "stickyFloat3", delay: "0.15s", z: 2 },
+                    { color: "#007AFF", anim: "stickyFloat4", delay: "0s",    z: 1 },
+                ].map((s, i) => (
+                    <div key={i} className="sticky-load" style={{
+                        width: 72, height: 72,
+                        background: s.color,
+                        left: "50%", top: "50%",
+                        marginLeft: -36, marginTop: -36,
+                        zIndex: s.z,
+                        animation: `${s.anim} ${1.8 + i * 0.1}s ease-in-out ${s.delay} infinite, stickyPulse ${2.4}s ease-in-out ${s.delay} infinite`,
+                    }} />
+                ))}
+            </div>
+
+            {/* Brand label + dots */}
+            <div className="flex flex-col items-center gap-3">
+                <span className="text-white/80 text-[11px] font-black tracking-[0.35em] uppercase">Stickies</span>
+                <div className="flex gap-1.5">
+                    {["#FF9500","#FFCC00","#34C759"].map((c, i) => (
+                        <div key={i} style={{
+                            width: 6, height: 6, borderRadius: "50%", background: c,
+                            animation: `loadDots 1.2s ease-in-out ${i * 0.2}s infinite`,
+                        }} />
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
     const activeAccentColor = noteColor || editingNote?.folder_color || folders.find((f) => f.name === activeFolder)?.color || "#22d3ee";
     const noteBadgeInitial = meaningfulInitial(title.trim() || editingNote?.title || "", "U");
     const noteBadgeLabel = noteBadgeInitial;
