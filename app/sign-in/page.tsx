@@ -1,59 +1,30 @@
 'use client'
 
-import { useSearchParams } from 'next/navigation'
 import { useState, Suspense } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
 function SignInContent() {
-  const searchParams = useSearchParams()
-  const errorParam   = searchParams.get('error')
-  const [loading, setLoading] = useState(false)
-  const [email, setEmail] = useState('')
-  const [emailSent, setEmailSent] = useState(false)
-  const [emailLoading, setEmailLoading] = useState(false)
-  const [showEmail, setShowEmail] = useState(false)
-  const [emailError, setEmailError] = useState<string | null>(null)
+  const [email, setEmail]       = useState('')
+  const [password, setPassword] = useState('')
+  const [loading, setLoading]   = useState(false)
+  const [error, setError]       = useState<string | null>(null)
 
-  const siteUrl = (typeof window !== 'undefined' ? window.location.origin : (process.env.NEXT_PUBLIC_SITE_URL ?? '')).replace('0.0.0.0', 'localhost')
-
-  async function signInGoogle() {
-    setLoading(true)
-    const supabase = createClient()
-    await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${siteUrl}/api/auth/callback`,
-        queryParams: { access_type: 'offline', prompt: 'consent' },
-      },
-    })
-  }
-
-  async function signInEmail(e: React.FormEvent) {
+  async function signIn(e: React.FormEvent) {
     e.preventDefault()
-    if (!email.trim()) return
-    setEmailLoading(true)
-    setEmailError(null)
-
-    // Check if email is already a Google account
-    const check = await fetch('/api/auth/check-email', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: email.trim() }),
-    }).then(r => r.json())
-
-    if (check.exists && check.provider === 'google') {
-      setEmailLoading(false)
-      setEmailError('This email is linked to Google. Please use "Continue with Google" above.')
-      return
-    }
-
+    if (!email.trim() || !password) return
+    setLoading(true)
+    setError(null)
     const supabase = createClient()
-    const { error } = await supabase.auth.signInWithOtp({
+    const { error: err } = await supabase.auth.signInWithPassword({
       email: email.trim(),
-      options: { emailRedirectTo: `${siteUrl}/api/auth/callback` },
+      password,
     })
-    setEmailLoading(false)
-    if (!error) setEmailSent(true)
+    if (err) {
+      setError('Wrong email or password.')
+      setLoading(false)
+    } else {
+      window.location.href = '/'
+    }
   }
 
   return (
@@ -70,8 +41,6 @@ function SignInContent() {
         .note-float { animation: float 4s ease-in-out infinite; }
         .fade-up    { animation: fadeUp 0.5s ease forwards; }
         .fade-up-2  { animation: fadeUp 0.5s ease 0.1s forwards; opacity: 0; }
-        .fade-up-3  { animation: fadeUp 0.5s ease 0.2s forwards; opacity: 0; }
-        .btn-google:hover { background: #2563eb !important; transform: translateY(-1px); box-shadow: 0 8px 24px rgba(66,133,244,0.3) !important; }
         .email-input { caret-color: #FFCC00; caret-shape: block; }
       `}</style>
 
@@ -86,7 +55,7 @@ function SignInContent() {
           { top: '38%', right: '5%', color: '#FFCC00', rotate: '-12deg', scale: '0.55',delay: '2s'   },
         ].map((n, i) => (
           <div key={i} className="absolute note-float" style={{
-            top: n.top, left: n.left, right: n.right,
+            top: n.top, left: (n as any).left, right: (n as any).right,
             animationDelay: n.delay,
             transform: `rotate(${n.rotate}) scale(${n.scale})`,
             opacity: 0.18,
@@ -126,126 +95,67 @@ function SignInContent() {
             </div>
           </div>
 
-          <div className="text-center mb-1">
+          <div className="text-center mb-6">
             <h1 className="text-white text-2xl font-bold tracking-tight">Stickies</h1>
           </div>
-          <p className="text-center text-zinc-500 text-sm mb-8">
-            Sign in or create your free account
-          </p>
 
-          {/* Error */}
-          {errorParam && (
-            <div className="mb-5 px-4 py-3 rounded-xl text-center text-xs text-red-400"
-              style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
-              Sign-in failed. Please try again.
-            </div>
-          )}
-
-          {emailSent ? (
-            /* ── Magic link sent ── */
-            <div className="text-center py-4">
-              <div className="text-3xl mb-3">📬</div>
-              <p className="text-white font-bold text-sm mb-1">Check your email</p>
-              <p className="text-zinc-500 text-xs">We sent a magic link to<br /><span className="text-zinc-300">{email}</span></p>
-              <button onClick={() => { setEmailSent(false); setEmail('') }} className="mt-5 text-xs text-zinc-600 hover:text-zinc-400 transition">
-                Use a different email
-              </button>
-            </div>
+          {process.env.NODE_ENV === 'development' ? (
+            <a href="/"
+              className="fade-up-2 w-full flex items-center justify-center gap-3 px-5 py-4 rounded-2xl text-sm font-semibold text-white transition-all duration-200"
+              style={{
+                background: 'linear-gradient(135deg, #FFCC00 0%, #FF9500 100%)',
+                color: '#000',
+                boxShadow: '0 4px 16px rgba(255,204,0,0.25)',
+              }}>
+              Go in (dev)
+            </a>
           ) : (
-            <>
-              {process.env.NODE_ENV === 'development' ? (
-                <a href="/"
-                  className="fade-up-2 w-full flex items-center justify-center gap-3 px-5 py-4 rounded-2xl text-sm font-semibold text-white transition-all duration-200"
-                  style={{
-                    background: 'linear-gradient(135deg, #4285F4 0%, #1a6ef5 100%)',
-                    border: '1px solid rgba(66,133,244,0.3)',
-                    boxShadow: '0 4px 16px rgba(66,133,244,0.2)',
-                  }}>
-                  Go in
-                </a>
-              ) : (
-                <>
-                  {/* Google Button */}
-                  <div className="fade-up-2">
-                    <button
-                      className="btn-google w-full flex items-center justify-center gap-3 px-5 py-4 rounded-2xl text-sm font-semibold text-white transition-all duration-200"
-                      style={{
-                        background: 'linear-gradient(135deg, #4285F4 0%, #1a6ef5 100%)',
-                        border: '1px solid rgba(66,133,244,0.3)',
-                        boxShadow: '0 4px 16px rgba(66,133,244,0.2)',
-                      }}
-                      onClick={signInGoogle}
-                      disabled={loading}
-                    >
-                      {loading ? (
-                        <span className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
-                      ) : (
-                        <svg viewBox="0 0 24 24" className="w-5 h-5 shrink-0">
-                          <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#fff"/>
-                          <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="rgba(255,255,255,0.85)"/>
-                          <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="rgba(255,255,255,0.7)"/>
-                          <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="rgba(255,255,255,0.9)"/>
-                        </svg>
-                      )}
-                      Continue with Google
-                    </button>
-                  </div>
-
-                  {/* Divider */}
-                  <div className="flex items-center gap-3 my-4">
-                    <div className="flex-1 h-px bg-white/8" />
-                    <span className="text-zinc-600 text-xs">or</span>
-                    <div className="flex-1 h-px bg-white/8" />
-                  </div>
-
-                  {/* Magic link */}
-                  {showEmail ? (
-                    <form onSubmit={signInEmail} className="fade-up-3 flex flex-col gap-3">
-                      <input
-                        type="email"
-                        value={email}
-                        onChange={e => { setEmail(e.target.value); setEmailError(null); }}
-                        placeholder="your@email.com"
-                        autoFocus
-                        required
-                        className="email-input w-full px-4 py-3 rounded-2xl text-base text-white placeholder:text-zinc-600 outline-none"
-                        style={{
-                          background: 'rgba(255,255,255,0.05)',
-                          border: emailError ? '1px solid rgba(239,68,68,0.6)' : '1px solid rgba(255,255,255,0.1)',
-                        }}
-                      />
-                      {emailError && (
-                        <p className="text-xs text-red-400 text-center leading-snug">{emailError}</p>
-                      )}
-                      <button
-                        type="submit"
-                        disabled={emailLoading || !email.trim()}
-                        className="w-full flex items-center justify-center gap-2 px-5 py-4 rounded-2xl text-sm font-semibold text-white transition-all duration-200 disabled:opacity-50"
-                        style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)' }}
-                      >
-                        {emailLoading
-                          ? <span className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
-                          : '✉️ Send magic link'
-                        }
-                      </button>
-                    </form>
-                  ) : (
-                    <button
-                      onClick={() => setShowEmail(true)}
-                      className="fade-up-3 w-full flex items-center justify-center gap-2 px-5 py-4 rounded-2xl text-sm font-semibold text-zinc-400 hover:text-white transition-all duration-200"
-                      style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
-                    >
-                      ✉️ Continue with email
-                    </button>
-                  )}
-                </>
+            <form onSubmit={signIn} className="fade-up-2 flex flex-col gap-3">
+              <input
+                type="email"
+                value={email}
+                onChange={e => { setEmail(e.target.value); setError(null) }}
+                placeholder="Email"
+                autoFocus
+                required
+                className="email-input w-full px-4 py-3 rounded-2xl text-sm text-white placeholder:text-zinc-600 outline-none"
+                style={{
+                  background: 'rgba(255,255,255,0.05)',
+                  border: error ? '1px solid rgba(239,68,68,0.6)' : '1px solid rgba(255,255,255,0.1)',
+                }}
+              />
+              <input
+                type="password"
+                value={password}
+                onChange={e => { setPassword(e.target.value); setError(null) }}
+                placeholder="Password"
+                required
+                className="email-input w-full px-4 py-3 rounded-2xl text-sm text-white placeholder:text-zinc-600 outline-none"
+                style={{
+                  background: 'rgba(255,255,255,0.05)',
+                  border: error ? '1px solid rgba(239,68,68,0.6)' : '1px solid rgba(255,255,255,0.1)',
+                }}
+              />
+              {error && (
+                <p className="text-xs text-red-400 text-center">{error}</p>
               )}
-            </>
+              <button
+                type="submit"
+                disabled={loading || !email.trim() || !password}
+                className="w-full flex items-center justify-center gap-2 px-5 py-4 rounded-2xl text-sm font-semibold transition-all duration-200 disabled:opacity-40"
+                style={{
+                  background: 'linear-gradient(135deg, #FFCC00 0%, #FF9500 100%)',
+                  color: '#000',
+                  boxShadow: '0 4px 16px rgba(255,204,0,0.2)',
+                }}
+              >
+                {loading
+                  ? <span className="w-4 h-4 rounded-full border-2 border-black border-t-transparent animate-spin" />
+                  : 'Sign in'
+                }
+              </button>
+            </form>
           )}
-
-          <p className="fade-up-3 text-center text-zinc-600 text-xs mt-5">
-            New? Sign-in creates your account instantly.
-          </p>
 
         </div>
       </div>
