@@ -1778,12 +1778,16 @@ export default function NotesMaster() {
     useEffect(() => {
         setMounted(true);
         void sync().then(() => {
-            // Auto-navigate to the last-used folder on every page load (not just after OAuth sign-in)
+            // Auto-navigate to last-used folder and open most recent note on every page load
             const savedDefault = localStorage.getItem(DEFAULT_FOLDER_KEY);
-            if (savedDefault) {
-                setActiveFolder(savedDefault);
-                void loadFolderNotes(savedDefault, false);
-            }
+            if (!savedDefault) return;
+            setActiveFolder(savedDefault);
+            void loadFolderNotes(savedDefault, false).then(() => {
+                const first = (getNotesCacheForFolder(savedDefault) as any[])
+                    .filter((n: any) => !n.is_folder)
+                    .sort((a: any, b: any) => (b.updated_at || "").localeCompare(a.updated_at || ""))[0];
+                if (first) void openNote(first);
+            });
         });
 
         let restoredFromUrl = false;
