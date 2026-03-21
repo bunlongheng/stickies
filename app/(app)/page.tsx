@@ -3311,7 +3311,7 @@ const fireIntegrations = (trigger: string, note: any) => {
             "All systems initiated.",
             "Let's make something great.",
         ];
-        showRainbowToast(greetings[Math.floor(Math.random() * greetings.length)]);
+        showToast(greetings[Math.floor(Math.random() * greetings.length)], "#34C759");
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [showWelcomeBack]);
 
@@ -5489,19 +5489,19 @@ const fireIntegrations = (trigger: string, note: any) => {
                 @keyframes islandToastInOut {
                     0% {
                         opacity: 0;
-                        transform: translateX(-50%) translateY(-10px) scale(0.72);
+                        transform: translateX(-50%) translateY(calc(-50% - 10px)) scale(0.72);
                     }
                     14% {
                         opacity: 1;
-                        transform: translateX(-50%) translateY(0) scale(1);
+                        transform: translateX(-50%) translateY(-50%) scale(1);
                     }
                     82% {
                         opacity: 1;
-                        transform: translateX(-50%) translateY(0) scale(1);
+                        transform: translateX(-50%) translateY(-50%) scale(1);
                     }
                     100% {
                         opacity: 0;
-                        transform: translateX(-50%) translateY(-8px) scale(0.78);
+                        transform: translateX(-50%) translateY(calc(-50% - 8px)) scale(0.78);
                     }
                 }
                 @keyframes confettiShoot {
@@ -5674,7 +5674,7 @@ const fireIntegrations = (trigger: string, note: any) => {
             {toast && (() => {
                 const isError = toastIsError;
                 const cx = typeof window !== "undefined" ? window.innerWidth / 2 : 200;
-                const cy = 28;
+                const cy = typeof window !== "undefined" ? window.innerHeight / 2 : 300;
                 return (
                     <React.Fragment key={toastKey}>
                         {/* Confetti (non-error toasts only) — mini on every toast, bigger when explicitly requested */}
@@ -5717,10 +5717,10 @@ const fireIntegrations = (trigger: string, note: any) => {
                             );
                         })}
                         {/* Toast pill */}
-                        <div className="fixed -translate-x-1/2 z-[2147483647] pointer-events-auto"
+                        <div className="fixed z-[2147483647] pointer-events-auto"
                             style={{
                                 left: "50%",
-                                top: "calc(env(safe-area-inset-top, 0px) + 12px)",
+                                top: "50%",
                                 animation: "islandToastInOut 3s cubic-bezier(0.16, 1, 0.3, 1) forwards",
                             }}
                             onClick={() => void secureCopy(toast).then(() => { if (!isError) showToast("Copied!"); })}>
