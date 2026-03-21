@@ -57,6 +57,7 @@ import XMarkIcon from "@heroicons/react/24/outline/XMarkIcon";
 import ArrowTopRightOnSquareIcon from "@heroicons/react/24/outline/ArrowTopRightOnSquareIcon";
 import ComputerDesktopIcon from "@heroicons/react/24/outline/ComputerDesktopIcon";
 import SparklesIcon from "@heroicons/react/24/outline/SparklesIcon";
+import CpuChipIcon from "@heroicons/react/24/outline/CpuChipIcon";
 import PencilSquareIcon from "@heroicons/react/24/outline/PencilSquareIcon";
 import StarIcon from "@heroicons/react/24/outline/StarIcon";
 import BriefcaseIcon from "@heroicons/react/24/outline/BriefcaseIcon";
@@ -1194,6 +1195,7 @@ export default function NotesMaster() {
     const [folderCountsById, setFolderCountsById] = useState<Record<string, number>>({});
     const [folderNotesLoading, setFolderNotesLoading] = useState(false);
     const folderNotesLoadingRef = useRef(false);
+    const syncHadTokenRef = useRef(false); // true after first sync() that got a valid auth token
     const folderPaginationRef = useRef<Map<string, { offset: number; total: number }>>(new Map());
     const notesEndRef = useRef<HTMLDivElement>(null);
     const [ripples, setRipples] = useState<any[]>([]);
@@ -1357,6 +1359,7 @@ export default function NotesMaster() {
     const [graphTick, setGraphTick] = useState(0);
 
     const [showFolderActions, setShowFolderActions] = useState(false);
+    const [isGlobalSettings, setIsGlobalSettings] = useState(false);
     const [lightMode, setLightMode] = useState<"off" | "flash" | "ambient">("flash");
     const [isEditingFolderTitle, setIsEditingFolderTitle] = useState(false);
     const [editingFolderTitleValue, setEditingFolderTitleValue] = useState("");
@@ -1633,7 +1636,14 @@ export default function NotesMaster() {
         } catch { /* ignore */ }
 
         try {
-            const token = await getAuthToken();
+            let token = await getAuthToken();
+            // If no session yet (OAuth redirect race), wait briefly and retry once
+            if (!token) {
+                await new Promise(r => setTimeout(r, 800));
+                _tokenCache = null;
+                token = await getAuthToken();
+            }
+            syncHadTokenRef.current = !!token;
             const [foldersRes, iconsResult, integrationsResult, countsResult] = await Promise.all([
                 fetch("/api/stickies?folders=1", {
                     headers: { Authorization: `Bearer ${token}` },
@@ -1731,23 +1741,24 @@ export default function NotesMaster() {
                 // If there's no session on first load, mark that we're waiting for login
                 if (!session) sawInitialSession = true;
             }
-            if (event === "SIGNED_IN" && sawInitialSession) {
-                // Fresh login — navigate to default folder + open first note
+            if (event === "SIGNED_IN" && (sawInitialSession || !syncHadTokenRef.current)) {
+                // Fresh login — sync() may have fired before session was ready, re-run it now
                 sessionStorage.removeItem("stickies:session-started");
                 setShowWelcomeBack(true);
-                const savedDefault = localStorage.getItem(DEFAULT_FOLDER_KEY);
-                if (!savedDefault) {
-                    // No default set → show All Notes
-                    setActiveFolder(null);
-                } else {
-                    setActiveFolder(savedDefault);
-                    void loadFolderNotes(savedDefault, false).then(() => {
-                        const first = (getNotesCacheForFolder(savedDefault) as any[])
-                            .filter((n: any) => !n.is_folder)
-                            .sort((a: any, b: any) => (b.updated_at || "").localeCompare(a.updated_at || ""))[0];
-                        if (first) void openNote(first);
-                    });
-                }
+                void sync().then(() => {
+                    const savedDefault = localStorage.getItem(DEFAULT_FOLDER_KEY);
+                    if (!savedDefault) {
+                        setActiveFolder(null);
+                    } else {
+                        setActiveFolder(savedDefault);
+                        void loadFolderNotes(savedDefault, false).then(() => {
+                            const first = (getNotesCacheForFolder(savedDefault) as any[])
+                                .filter((n: any) => !n.is_folder)
+                                .sort((a: any, b: any) => (b.updated_at || "").localeCompare(a.updated_at || ""))[0];
+                            if (first) void openNote(first);
+                        });
+                    }
+                });
             }
         });
         return () => subscription.unsubscribe();
@@ -1762,6 +1773,7 @@ export default function NotesMaster() {
             }
         } catch { /* ignore */ }
     }, []);
+
 
     useEffect(() => {
         setMounted(true);
@@ -2353,19 +2365,24 @@ const fireIntegrations = (trigger: string, note: any) => {
         if (!editMode || activeFolder) return;
         const saved = localStorage.getItem("stickies-split-notebook");
         if (saved === "__all__") return; // stay in All Notes
-        setActiveFolder(saved || defaultFolder);
+        const target = saved || defaultFolder;
+        setActiveFolder(target);
+        if (target) void loadFolderNotes(target, false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [editMode]);
 
-    // In split view, seed notes from the default folder if none are loaded yet
+    // In split view, seed notes for the active folder if none are loaded yet
     useEffect(() => {
         if (!editMode || !isDataLoaded || pendingRestoreNoteId) return;
-        const hasNotes = dbData.some((n: any) => !n.is_folder);
-        if (!hasNotes && !folderNotesLoading) {
-            void loadFolderNotes(defaultFolder, false);
+        if (folderNotesLoading) return;
+        const target = activeFolder || defaultFolder;
+        const hasFolderNotes = dbData.some((n: any) => !n.is_folder &&
+            (activeFolder ? n.folder_name === activeFolder : true));
+        if (!hasFolderNotes) {
+            void loadFolderNotes(target, false);
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [editMode, isDataLoaded, dbData, folderNotesLoading, pendingRestoreNoteId]);
+    }, [editMode, isDataLoaded, activeFolder, pendingRestoreNoteId]);
 
     // Auto-open in split view: resume top note, or open a new blank note as fallback
     useEffect(() => {
@@ -3249,7 +3266,19 @@ const fireIntegrations = (trigger: string, note: any) => {
     useEffect(() => {
         if (!showWelcomeBack) return;
         setShowWelcomeBack(false);
-        showRainbowToast("Welcome back 👋");
+        const greetings = [
+            "Let's build something cool.",
+            "Welcome back, boss.",
+            "Let's do it. One diagram at a time.",
+            "Good to see you.",
+            "Ready when you are.",
+            "Let's make it count.",
+            "Diagrams standing by.",
+            "Ready, set, go.",
+            "All systems initiated.",
+            "Let's make something great.",
+        ];
+        showRainbowToast(greetings[Math.floor(Math.random() * greetings.length)]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [showWelcomeBack]);
 
@@ -5673,10 +5702,9 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 border: toastRainbow ? "1px solid rgba(255,255,255,0.3)" : `1px solid ${toastColor}99`,
                                 boxShadow: toastRainbow ? "0 8px 26px rgba(180,74,255,0.5)" : `0 8px 26px ${toastColor}66`,
                             }}>
-                                {isError
-                                    ? <span style={{ flexShrink: 0, fontSize: 10, lineHeight: 1 }}>🔥</span>
-                                    : <span style={{ width: 10, height: 10, borderRadius: "50%", border: "1.5px solid rgba(255,255,255,0.35)", borderTopColor: "#fff", display: "inline-block", flexShrink: 0, animation: "toastSpin 0.7s linear infinite" }} />
-                                }
+                                <span style={{ width: 20, height: 20, borderRadius: "50%", background: "rgba(255,255,255,0.2)", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                                    <CpuChipIcon style={{ width: 12, height: 12, color: "#fff", strokeWidth: 2 }} />
+                                </span>
                                 <span className="font-black uppercase tracking-wide text-[7px] sm:text-[8px] leading-snug max-w-[220px] break-words text-center">{toast}</span>
                             </div>
                         </div>
@@ -5835,8 +5863,9 @@ const fireIntegrations = (trigger: string, note: any) => {
                             </button>
                         )}
                         <button type="button"
-                            onClick={() => { setShowNoteActions(true); closeEditorTools(); }}
-                            className="p-2 sm:p-3 text-zinc-300 hover:text-white active:text-white transition flex-shrink-0">
+                            onClick={() => { const hueInt = integrationsRef.current.find(ig => ig.type === "hue"); setLightMode((hueInt?.config?.mode as any) ?? "flash"); setIsGlobalSettings(true); setShowFolderActions(true); closeEditorTools(); }}
+                            className="p-2 sm:p-3 text-zinc-300 hover:text-white active:text-white transition flex-shrink-0"
+                            title="App settings">
                             <Cog6ToothIcon className="w-[29px] h-[29px] sm:w-7 sm:h-7" />
                         </button>
                     </div>
@@ -6417,14 +6446,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                 </section>
                 ) : (
                     /* Desktop empty state — select a note */
-                    <div className="flex-1 flex flex-col items-center justify-center select-none text-center gap-2">
-                        <PencilSquareIcon className="w-14 h-14 text-zinc-800" />
-                        <p className="text-xs font-black uppercase tracking-[0.2em] text-zinc-700">Select a note</p>
-                        <button
-                            onClick={() => openNewNote()}
-                            className="mt-2 px-4 py-2 text-[10px] font-black uppercase tracking-widest border border-white/10 text-zinc-600 hover:text-white hover:border-white/30 transition">
-                            + New note
-                        </button>
+                    <div className="flex-1 flex flex-col items-center justify-center select-none text-center px-8">
+                        <p className="text-sm font-semibold leading-relaxed tracking-tight text-white/40 max-w-xs">{EMPTY_QUOTES[quoteIndex]}</p>
                     </div>
                 )}
                 </div>{/* ── end right panel ── */}
@@ -6436,7 +6459,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                     <header className="ios-mobile-header relative h-auto min-h-[4rem] px-4 flex items-center gap-2 sticky top-0 bg-black z-40 shrink-0">
                         {/* Notebook picker — split view only */}
                         {editMode && (
-                            <div className="relative flex-shrink-0">
+                            <div className="relative flex-shrink-0 flex items-center">
+                                {/* Folder icon + name → opens notebook picker */}
                                 <button
                                     type="button"
                                     onClick={() => { setShowNotebookPicker(v => !v); setNotebookPickerSearch(""); }}
@@ -6454,7 +6478,14 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             <span className="text-xs font-black tracking-tight text-zinc-400 uppercase">All Notes</span>
                                         </>
                                     )}
-                                    <ChevronDownIcon className="w-3 h-3 text-zinc-600 flex-shrink-0" />
+                                </button>
+                                {/* Chevron → opens notebook switcher */}
+                                <button
+                                    type="button"
+                                    onClick={() => { setShowNotebookPicker(v => !v); setNotebookPickerSearch(""); }}
+                                    className="p-1 rounded hover:bg-white/10 transition flex-shrink-0"
+                                    title="Switch notebook">
+                                    <ChevronDownIcon className="w-3 h-3 text-zinc-600" />
                                 </button>
 
                                 {showNotebookPicker && (
@@ -6529,9 +6560,20 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         <React.Fragment key={frame.id + i}>
                                             {i > 0 && <span className="text-zinc-700 text-[10px] flex-shrink-0">/</span>}
                                             <button
-                                                onClick={() => { goToIndex(i); }}
-                                                className={`flex items-center gap-1.5 font-black tracking-tight truncate sm:max-w-[150px] flex-shrink-0 px-0.5 sm:px-1 transition text-xs ${i === folderStack.length - 1 ? "text-white" : "text-zinc-400 hover:text-white"}`}
-                                                title={frame.name}>
+                                                onClick={() => {
+                                                    if (i === folderStack.length - 1) {
+                                                        // Current folder — open its settings
+                                                        setIsGlobalSettings(false);
+                                                        setShowFolderColorPicker(false);
+                                                        setShowFolderIconPicker(false);
+                                                        setShowFolderMovePicker(false);
+                                                        setShowFolderActions(true);
+                                                    } else {
+                                                        goToIndex(i);
+                                                    }
+                                                }}
+                                                className={`flex items-center gap-1.5 font-black tracking-tight truncate sm:max-w-[150px] flex-shrink-0 px-0.5 sm:px-1 transition text-xs ${i === folderStack.length - 1 ? "text-white hover:text-zinc-300" : "text-zinc-400 hover:text-white"}`}
+                                                title={i === folderStack.length - 1 ? `${frame.name} settings` : frame.name}>
                                                 <span className="flex-shrink-0 w-6 h-6 flex items-center justify-center text-sm font-black leading-none overflow-hidden" style={{ background: "#fff", color: folderColors[frame.name] || frame.color, borderRadius: 4 } as React.CSSProperties}>
                                                     {frame.name === "CLAUDE" ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-0.5" /> : <FolderIconDisplay value={folderIcons[frame.name] || ""} folderName={frame.name} className="w-3.5 h-3.5" />}
                                                 </span>
@@ -6553,7 +6595,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 </button>
                                 <div className="ml-auto flex items-center gap-1">
                                     <HeaderIconBtn icon={mainListMode === "list" ? Bars3Icon : Squares2X2Icon} label={mainListMode === "list" ? "List" : "Thumb"} active={!kanbanMode} onClick={() => { setMainListMode(v => v === "thumb" ? "list" : "thumb"); setKanbanMode(false); }} />
-                                    <HeaderIconBtn icon={Cog6ToothIcon} label="Settings" onClick={() => { const hueInt = integrationsRef.current.find(ig => ig.type === "hue"); setLightMode((hueInt?.config?.mode as any) ?? "flash"); setShowFolderActions(true); }} />
+                                    {editMode && <HeaderIconBtn icon={Cog6ToothIcon} label="Settings" onClick={() => { const hueInt = integrationsRef.current.find(ig => ig.type === "hue"); setLightMode((hueInt?.config?.mode as any) ?? "flash"); setIsGlobalSettings(true); setShowFolderActions(true); }} />}
                                 </div>
                             </>
                         ) : (
@@ -6570,7 +6612,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 ) : (
                                     <>
                                         <HeaderIconBtn icon={mainListMode === "list" ? Bars3Icon : Squares2X2Icon} label={mainListMode === "list" ? "List" : "Thumb"} active={!kanbanMode} onClick={() => { setMainListMode(v => v === "thumb" ? "list" : "thumb"); setKanbanMode(false); }} />
-                                        <HeaderIconBtn icon={Cog6ToothIcon} label="Settings" onClick={() => { const hueInt = integrationsRef.current.find(ig => ig.type === "hue"); setLightMode((hueInt?.config?.mode as any) ?? "flash"); setShowFolderActions(true); setShowFolderColorPicker(false); setShowFolderIconPicker(false); setShowFolderMovePicker(false); }} />
+                                        <HeaderIconBtn icon={Cog6ToothIcon} label="Settings" onClick={() => { const hueInt = integrationsRef.current.find(ig => ig.type === "hue"); setLightMode((hueInt?.config?.mode as any) ?? "flash"); setIsGlobalSettings(false); setShowFolderActions(true); }} />
                                     </>
                                 )}
                             </div>
@@ -6810,12 +6852,14 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             {item.is_folder && (() => {
                                                 const c = item.color || item.folder_color || palette12[0];
                                                 return (
-                                                    <div className="folder-icon-badge flex-shrink-0 w-[54px] h-[54px] sm:w-[46px] sm:h-[46px] flex items-center justify-center font-black overflow-hidden"
+                                                    <button type="button"
+                                                        onClick={(e) => { e.stopPropagation(); enterFolder({ id: String(item.id), name: item.name, color: item.color || palette12[0] }); setIsGlobalSettings(false); setShowFolderColorPicker(false); setShowFolderIconPicker(false); setShowFolderMovePicker(false); setShowFolderActions(true); }}
+                                                        className="folder-icon-badge flex-shrink-0 w-[54px] h-[54px] sm:w-[46px] sm:h-[46px] flex items-center justify-center font-black overflow-hidden"
                                                         style={{ fontSize: 22, "--fc": c, boxShadow: `2px 3px 8px ${c}55` } as React.CSSProperties}>
                                                         {item.name === "CLAUDE"
                                                             ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-0.5" />
                                                             : <FolderIconDisplay value={item.icon || ""} folderName={item.name || "F"} className="w-6 h-6" />}
-                                                    </div>
+                                                    </button>
                                                 );
                                             })()}
                                             {!item.is_folder && (() => {
@@ -6823,7 +6867,9 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 const nc = (item as any).color || (item as any).folder_color || "#71717a";
                                                 const initial = meaningfulInitial(item.title || "", "N");
                                                 return (
-                                                    <div className="flex-shrink-0 w-[54px] h-[54px] sm:w-[46px] sm:h-[46px] flex items-center justify-center font-black overflow-hidden relative"
+                                                    <button type="button"
+                                                        onClick={(e) => { e.stopPropagation(); void openNote(item); setShowNoteActions(true); closeEditorTools(); }}
+                                                        className="flex-shrink-0 w-[54px] h-[54px] sm:w-[46px] sm:h-[46px] flex items-center justify-center font-black overflow-hidden relative"
                                                         style={{
                                                             fontSize: 22,
                                                             backgroundColor: nc,
@@ -6832,7 +6878,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                             boxShadow: `2px 3px 8px ${nc}55`,
                                                         }}>
                                                         {initial}
-                                                    </div>
+                                                    </button>
                                                 );
                                             })()}
                                             <div className="flex-1 min-w-0">
@@ -6930,7 +6976,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                         const badge = t && t !== "text" ? TYPE_BADGE[t] : null;
                                                         if (!badge) return null;
                                                         const label = t === "mermaid" ? mermaidSubType(item.content || "") : badge.label;
-                                                        return <span className="hidden sm:inline-flex text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-full flex-shrink-0" style={{ background: `${badge.color}20`, color: badge.color, border: `1px solid ${badge.color}40` }}>{label}</span>;
+                                                        return <span className="hidden sm:inline-flex text-[7px] font-black uppercase tracking-wide px-1 py-px rounded-full flex-shrink-0" style={{ background: `${badge.color}20`, color: badge.color, border: `1px solid ${badge.color}40` }}>{label}</span>;
                                                     })()}
                                                     <span className="text-[11px] text-zinc-500 font-medium whitespace-nowrap">{timeAgo(item.updated_at)}</span>
                                                 </div>
@@ -7007,18 +7053,20 @@ const fireIntegrations = (trigger: string, note: any) => {
                             />
                         )}
                         {activeFolder && folderNotesLoading && (
-                            <div
-                                style={!isListMode ? { gridColumn: "1 / -1" } : undefined}
-                                className="py-4 text-center text-[10px] tracking-widest text-white/20 uppercase"
-                            >
-                                Loading…
+                            <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
+                                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                             </div>
                         )}
-{isEmptyView && (
+{isEmptyView && !editMode && (
                             <div className="absolute inset-0 z-20 pointer-events-none flex items-center justify-center px-6 sm:px-10">
                                 <div key={quoteIndex} className="empty-quote-anim max-w-[760px] text-center">
                                     <p className="text-white/85 text-base sm:text-xl font-semibold leading-relaxed tracking-tight">{EMPTY_QUOTES[quoteIndex]}</p>
                                 </div>
+                            </div>
+                        )}
+                        {isEmptyView && editMode && !folderNotesLoading && (
+                            <div className="absolute inset-0 z-20 pointer-events-none flex items-center justify-center px-4">
+                                <p className="text-zinc-600 text-xs font-semibold text-center">No notes in this notebook</p>
                             </div>
                         )}
                         {/* Stats footer — desktop list mode only */}
@@ -7037,8 +7085,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                         })()}
                     </main>
 
-                    {/* FAB — floating + button bottom right */}
-                    {!isSelectMode && (() => {
+                    {/* FAB — floating + button bottom right (hidden in split view) */}
+                    {!isSelectMode && !editMode && (() => {
                         const depth = folderStack.length; // 0=root, 1=L1, 2=L2, 3+=L3
                         const baseSize = 48;
                         const fabSize = depth > 0 ? Math.round(baseSize * 1.2) : baseSize;
@@ -7068,7 +7116,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                         );
                     })()}
 
-                    {/* STATS BOTTOM BAR */}
+                    {/* STATS BOTTOM BAR — shown outside split view only (in split view stats appear in right panel) */}
+                    {!editMode && (
                     <div className="fixed bottom-4 left-0 right-0 z-[120] hidden sm:flex justify-center items-center gap-2 select-none pointer-events-none tabular-nums" style={{ fontSize: 9, opacity: 0.6 }}>
                         {/* Global stats — grey pill */}
                         <span className="flex items-center gap-1.5 px-2 py-0.5 rounded" style={{ border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.04)" }}>
@@ -7100,6 +7149,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                             </span>
                         ))}
                     </div>
+                    )}
 
                     {/* MULTI-SELECT ACTION BAR */}
                     {isSelectMode && (
@@ -7433,13 +7483,13 @@ const fireIntegrations = (trigger: string, note: any) => {
 
             {/* SETTINGS + INTEGRATIONS PANEL (single sliding container) */}
             {showFolderActions && (
-                <div className="fixed inset-0 z-[510] flex items-center justify-center p-4 lg:items-stretch lg:justify-end lg:p-0" onClick={() => { setShowFolderActions(false); setShowIntegrationsPanel(false); setConfiguringIntegration(null); setShowAutomationsPanel(false); setSelectedAutomation(null); setShowFolderColorPicker(false); setShowFolderIconPicker(false); setShowFolderMovePicker(false); setShowDefaultFolderPicker(false); }}>
+                <div className="fixed inset-0 z-[510] flex items-center justify-center p-4 lg:items-stretch lg:justify-end lg:p-0" onClick={() => { setShowFolderActions(false); setIsGlobalSettings(false); setShowIntegrationsPanel(false); setConfiguringIntegration(null); setShowAutomationsPanel(false); setSelectedAutomation(null); setShowFolderColorPicker(false); setShowFolderIconPicker(false); setShowFolderMovePicker(false); setShowDefaultFolderPicker(false); }}>
                     <div className="note-actions-panel bg-zinc-900 border border-white/15 w-full max-w-sm flex flex-col overflow-hidden lg:max-w-[300px] lg:w-[300px] lg:h-full lg:border-l lg:border-r-0 lg:border-t-0 lg:border-b-0 lg:rounded-none relative" onClick={(e) => e.stopPropagation()}>
 
                         {/* Depth level watermark */}
                         <div className="absolute inset-0 flex items-end justify-end pointer-events-none z-0 overflow-hidden pb-16 pr-4">
                             <span className="text-[160px] font-black text-white/[0.04] select-none leading-none tracking-tighter">
-                                L{Math.min(folderStack.length + 1, 3)}
+                                {isGlobalSettings ? "APP" : `L${Math.min(folderStack.length + 1, 3)}`}
                             </span>
                         </div>
 
@@ -7761,7 +7811,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                         </div>
                         {/* Header — icon + folder name */}
                         <div className="border-b border-white/10 px-6 py-4 flex items-center gap-3">
-                            {activeFolder ? (
+                            {activeFolder && !isGlobalSettings ? (
                                 <>
                                     <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center text-sm font-black leading-none overflow-hidden"
                                         style={{ backgroundColor: "#fff", color: activeFolder === "CLAUDE" ? "#000" : activeFolderColor }}>
@@ -7788,7 +7838,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                         </div>
                         <div className="flex flex-col divide-y divide-white/10 overflow-y-auto flex-1">
                             {/* COLOR ROW */}
-                            {activeFolder && (
+                            {activeFolder && !isGlobalSettings && (
                                 <div>
                                     <button type="button"
                                         onClick={() => { setShowFolderColorPicker((v) => !v); setShowFolderIconPicker(false); setShowFolderMovePicker(false); }}
@@ -7815,7 +7865,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 </div>
                             )}
                             {/* ICON ROW */}
-                            {activeFolder && (
+                            {activeFolder && !isGlobalSettings && (
                                 <div>
                                     <button type="button"
                                         onClick={() => { setShowFolderIconPicker((v) => !v); setShowFolderColorPicker(false); setShowFolderMovePicker(false); }}
@@ -7892,7 +7942,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 </div>
                             )}
                             {/* MOVE FOLDER */}
-                            {activeFolder && (
+                            {activeFolder && !isGlobalSettings && (
                                 <div>
                                     <button type="button"
                                         onClick={() => { setShowFolderMovePicker((v) => !v); setShowFolderColorPicker(false); setShowFolderIconPicker(false); setTimeout(() => folderMoveSearchRef.current?.focus(), 50); }}
@@ -7949,15 +7999,15 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 </div>
                             )}
                             {/* DELETE FOLDER */}
-                            {activeFolder && canDeleteActiveFolder && (
+                            {activeFolder && !isGlobalSettings && canDeleteActiveFolder && (
                                 <button type="button" className="w-full flex items-center gap-4 px-6 py-4 text-left text-red-400 hover:bg-red-500/10 active:bg-red-500/20 transition"
                                     onClick={() => { setShowFolderActions(false); setConfirmDelete({ type: "folder", folderName: activeFolder }); }}>
                                     <TrashIcon className="w-5 h-5 flex-shrink-0" />
                                     <span className="text-xs font-black tracking-wide">Delete</span>
                                 </button>
                             )}
-                            {/* L1 only: App Settings, Graph, Integrations, Sign Out */}
-                            {folderStack.length === 0 && (<>
+                            {/* Global App Settings — shown when gear is clicked or at root level */}
+                            {(folderStack.length === 0 || isGlobalSettings) && (<>
                                 {/* DEFAULT NOTEBOOK */}
                                 {(() => {
                                     const df = folders.find(f => f.name === defaultFolder);
@@ -8074,10 +8124,17 @@ const fireIntegrations = (trigger: string, note: any) => {
                             </>)}
                         </div>
                         <div className="border-t border-white/10 p-4 flex gap-3">
-                            <button type="button" onClick={() => { setShowFolderActions(false); setShowFolderColorPicker(false); setShowFolderIconPicker(false); setShowFolderMovePicker(false); }} className="flex-1 py-3 bg-white text-black font-black uppercase text-xs tracking-wide hover:bg-zinc-100 transition">Close</button>
-                            {folderStack.length === 0 && (
+                            <button type="button" onClick={() => { setShowFolderActions(false); setIsGlobalSettings(false); setShowFolderColorPicker(false); setShowFolderIconPicker(false); setShowFolderMovePicker(false); }} className="flex-1 py-3 bg-white text-black font-black uppercase text-xs tracking-wide hover:bg-zinc-100 transition">Close</button>
+                            {(folderStack.length === 0 || isGlobalSettings) && (
                                 <button type="button"
-                                    onClick={async () => { setShowFolderActions(false); await fetch("/api/stickies/logout", { method: "POST" }); window.location.href = "/sign-in"; }}
+                                    onClick={async () => {
+                                        setShowFolderActions(false);
+                                        setIsGlobalSettings(false);
+                                        const farewells = ["Later!", "See ya!", "Peace out!", "Catch you later!", "Adios!", "So long!", "Bye for now!", "Take care!", "Until next time!"];
+                                        showToast(farewells[Math.floor(Math.random() * farewells.length)]);
+                                        await fetch("/api/stickies/logout", { method: "POST" });
+                                        setTimeout(() => { window.location.href = "/sign-in"; }, 1800);
+                                    }}
                                     className="flex items-center gap-2 px-5 py-3 bg-red-500 text-white hover:bg-red-600 active:bg-red-700 transition font-black uppercase text-xs tracking-wide">
                                     <ArrowRightOnRectangleIcon className="w-4 h-4 flex-shrink-0" />
                                     Sign Out

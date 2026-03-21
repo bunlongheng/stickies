@@ -171,8 +171,8 @@ function triggerHue(color: string) {
 // ── Auth ────────────────────────────────────────────────────────────────────
 // "external" = static API key (AI / scripts / curl) → ONLY via /api/stickies/ext
 // "owner"    = browser JWT for the owner account → /api/stickies (browser only)
-// "user"     = browser JWT for other users → scoped to users_stickies table
-type AuthResult = { type: "external" } | { type: "owner" } | { type: "user"; userId: string };
+// "user"     = browser JWT for other users → scoped by user_id in stickies table
+type AuthResult = { type: "external" | "owner" | "user"; userId: string };
 
 // Guards the main /api/stickies route against static API key access.
 // External callers (AI, scripts, automations) MUST use /api/stickies/ext instead.
@@ -198,6 +198,11 @@ function blockExternalKey(req: Request): NextResponse | null {
 }
 
 async function authenticate(req: Request): Promise<AuthResult | null> {
+    // Dev bypass: in development, always authenticate as owner — no login needed locally
+    if (process.env.NODE_ENV === "development") {
+        return { type: "owner", userId: process.env.OWNER_USER_ID?.trim() ?? "" };
+    }
+
     const auth = req.headers.get("authorization") ?? "";
     const bearer = auth.startsWith("Bearer ") ? auth.slice(7) : "";
     if (!bearer) return null;
@@ -209,7 +214,7 @@ async function authenticate(req: Request): Promise<AuthResult | null> {
         if (auth.length === expected.length) {
             try {
                 if (crypto.timingSafeEqual(Buffer.from(auth), Buffer.from(expected))) {
-                    return { type: "external" };
+                    return { type: "external", userId: process.env.OWNER_USER_ID?.trim() ?? "" };
                 }
             } catch {}
         }
@@ -223,15 +228,11 @@ async function authenticate(req: Request): Promise<AuthResult | null> {
         const isOwner =
             (ownerUserId && user.id === ownerUserId) ||
             (ownerEmail  && user.email?.toLowerCase() === ownerEmail.toLowerCase());
-        if (isOwner) return { type: "owner" };
+        if (isOwner) return { type: "owner", userId: user.id };
         return { type: "user", userId: user.id };
     }
 
     return null;
-}
-
-function getTable(auth: AuthResult): string {
-    return auth.type === "user" ? "users_stickies" : "stickies";
 }
 
 // ── User scope helper ────────────────────────────────────────────────────────
@@ -254,11 +255,11 @@ const PATCH_ALLOWED_COLS = new Set([
 ]);
 
 // ── Color helpers ────────────────────────────────────────────────────────────
-async function pickLeastUsedColor(table: string, rawColor?: string): Promise<string> {
+async function pickLeastUsedColor(userId: string, rawColor?: string): Promise<string> {
     const c = String(rawColor ?? "").trim().toUpperCase();
     if (/^#[0-9A-F]{6}$/.test(c)) return c;
 
-    const rows = await query<{ folder_color: string }>(`SELECT folder_color FROM "${table}" WHERE is_folder = false LIMIT 500`);
+    const rows = await query<{ folder_color: string }>(`SELECT folder_color FROM "stickies" WHERE is_folder = false AND user_id = $1 LIMIT 500`, [userId]);
     const counts = new Map<string, number>(palette12.map((p) => [p, 0]));
     rows.forEach((r) => {
         const col = String(r.folder_color ?? "").toUpperCase();
@@ -267,11 +268,11 @@ async function pickLeastUsedColor(table: string, rawColor?: string): Promise<str
     return palette12.reduce((a, b) => (counts.get(b)! < counts.get(a)! ? b : a), palette12[0]);
 }
 
-async function pickLeastUsedFolderColor(table: string, rawColor?: string): Promise<string> {
+async function pickLeastUsedFolderColor(userId: string, rawColor?: string): Promise<string> {
     const c = String(rawColor ?? "").trim().toUpperCase();
     if (/^#[0-9A-F]{6}$/.test(c)) return c;
 
-    const rows = await query<{ folder_color: string }>(`SELECT folder_color FROM "${table}" WHERE is_folder = true LIMIT 500`);
+    const rows = await query<{ folder_color: string }>(`SELECT folder_color FROM "stickies" WHERE is_folder = true AND user_id = $1 LIMIT 500`, [userId]);
     const counts = new Map<string, number>(palette12.map((p) => [p, 0]));
     rows.forEach((r) => {
         const col = String(r.folder_color ?? "").toUpperCase();
@@ -280,19 +281,20 @@ async function pickLeastUsedFolderColor(table: string, rawColor?: string): Promi
     return palette12.reduce((a, b) => (counts.get(b)! < counts.get(a)! ? b : a), palette12[0]);
 }
 
-async function getNextOrder(table: string, isFolderOnly = false): Promise<number> {
-    const whereClause = isFolderOnly ? "WHERE is_folder = true" : "WHERE is_folder = false";
-    const row = await queryOne<{ order: number }>(`SELECT "order" FROM "${table}" ${whereClause} ORDER BY "order" DESC LIMIT 1`);
+async function getNextOrder(userId: string, isFolderOnly = false): Promise<number> {
+    const whereClause = isFolderOnly ? "WHERE is_folder = true AND user_id = $1" : "WHERE is_folder = false AND user_id = $1";
+    const row = await queryOne<{ order: number }>(`SELECT "order" FROM "stickies" ${whereClause} ORDER BY "order" DESC LIMIT 1`, [userId]);
     return typeof row?.order === "number" ? row.order + 1 : 0;
 }
 
 // ── Folder path resolver ─────────────────────────────────────────────────────
-async function resolveFolderPath(raw: string, table: string): Promise<{ folder_name: string; folder_id: string | null }> {
+async function resolveFolderPath(raw: string, userId: string): Promise<{ folder_name: string; folder_id: string | null }> {
     const parts = raw.split("/").map((p) => p.trim()).filter(Boolean);
     if (parts.length <= 1) return { folder_name: raw.trim() || "CLAUDE", folder_id: null };
 
     const folders = await query<{ id: string; folder_name: string; parent_folder_name: string | null }>(
-        `SELECT id::text, folder_name, parent_folder_name FROM "${table}" WHERE is_folder = true`
+        `SELECT id::text, folder_name, parent_folder_name FROM "stickies" WHERE is_folder = true AND user_id = $1`,
+        [userId]
     );
 
     let parentName: string | null = null;
@@ -322,8 +324,8 @@ export async function GET(req: Request) {
     const auth = await authenticate(req);
     if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const table = getTable(auth);
-    const userId = auth.type === "user" ? auth.userId : undefined;
+    const table = "stickies";
+    const userId = auth.userId;
     const url = new URL(req.url);
     const foldersOnly = url.searchParams.get("folders") === "1";
     const folderFilter = url.searchParams.get("folder");
@@ -353,7 +355,8 @@ export async function GET(req: Request) {
 
     if (url.searchParams.get("counts") === "1") {
         const rows = await query<{ folder_name: string; folder_id: string | null; cnt: string }>(
-            `SELECT folder_name, folder_id::text AS folder_id, COUNT(*) AS cnt FROM "${table}" WHERE is_folder = false GROUP BY folder_name, folder_id`
+            `SELECT folder_name, folder_id::text AS folder_id, COUNT(*) AS cnt FROM "stickies" WHERE is_folder = false AND user_id = $1 GROUP BY folder_name, folder_id`,
+            [userId]
         );
         const byName: Record<string, number> = {};
         const byId: Record<string, number> = {};
@@ -485,9 +488,8 @@ export async function POST(req: Request) {
     const auth = await authenticate(req);
     if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const table = getTable(auth);
-    const userId = auth.type === "user" ? auth.userId : undefined;
-    const userField: Record<string, unknown> = userId ? { user_id: userId } : {};
+    const table = "stickies";
+    const userId = auth.userId;
 
     const url = new URL(req.url);
     const isJsonBody = /application\/json/i.test(req.headers.get("content-type") ?? "");
@@ -533,7 +535,7 @@ export async function POST(req: Request) {
         const now = new Date().toISOString();
 
         // Load existing color counts once
-        const colorRows = await query<{ folder_color: string }>(`SELECT folder_color FROM "${table}" WHERE is_folder = false`);
+        const colorRows = await query<{ folder_color: string }>(`SELECT folder_color FROM "stickies" WHERE is_folder = false AND user_id = $1`, [userId]);
         const colorCounts = new Map<string, number>(palette12.map((c) => [c, 0]));
         colorRows.forEach((r) => {
             const c = String(r.folder_color ?? "").toUpperCase();
@@ -547,7 +549,7 @@ export async function POST(req: Request) {
             return least;
         };
 
-        const maxOrderRow = await queryOne<{ order: number }>(`SELECT "order" FROM "${table}" ORDER BY "order" DESC LIMIT 1`);
+        const maxOrderRow = await queryOne<{ order: number }>(`SELECT "order" FROM "stickies" WHERE user_id = $1 ORDER BY "order" DESC LIMIT 1`, [userId]);
         let nextOrder = typeof maxOrderRow?.order === "number" ? maxOrderRow.order + 1 : 0;
         const results: Array<{ type: string; data: Record<string, unknown> | null; error?: string }> = [];
 
@@ -561,11 +563,9 @@ export async function POST(req: Request) {
                     const folder_color = pickColor(item.color as string);
                     const parent_folder_name = String(item.parent_folder ?? "").trim() || null;
                     const row = await queryOne(
-                        `INSERT INTO "${table}" (is_folder, folder_name, title, content, folder_color, parent_folder_name, "order", created_at, updated_at${userId ? ", user_id" : ""})
-                         VALUES (true, $1, $2, '', $3, $4, $5, $6, $7${userId ? ", $8" : ""}) RETURNING *`,
-                        userId
-                            ? [name, name, folder_color, parent_folder_name, nextOrder++, now, now, userId]
-                            : [name, name, folder_color, parent_folder_name, nextOrder++, now, now]
+                        `INSERT INTO "stickies" (is_folder, folder_name, title, content, folder_color, parent_folder_name, "order", created_at, updated_at, user_id)
+                         VALUES (true, $1, $2, '', $3, $4, $5, $6, $7, $8) RETURNING *`,
+                        [name, name, folder_color, parent_folder_name, nextOrder++, now, now, userId]
                     );
                     results.push({ type: "folder", data: row as Record<string, unknown> });
                 } else {
@@ -579,11 +579,9 @@ export async function POST(req: Request) {
                     const batchType = (typeof item.type === "string" && VALID_TYPES.has(item.type)) ? item.type : detectType(content, title);
                     const folder_color = pickColor(item.color as string);
                     const row = await queryOne(
-                        `INSERT INTO "${table}" (is_folder, title, content, folder_name, type, folder_color, "order", created_at, updated_at${userId ? ", user_id" : ""})
-                         VALUES (false, $1, $2, $3, $4, $5, $6, $7, $8${userId ? ", $9" : ""}) RETURNING *`,
-                        userId
-                            ? [title, content, folder_name, batchType, folder_color, nextOrder++, now, now, userId]
-                            : [title, content, folder_name, batchType, folder_color, nextOrder++, now, now]
+                        `INSERT INTO "stickies" (is_folder, title, content, folder_name, type, folder_color, "order", created_at, updated_at, user_id)
+                         VALUES (false, $1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+                        [title, content, folder_name, batchType, folder_color, nextOrder++, now, now, userId]
                     );
                     results.push({ type: "note", data: row as Record<string, unknown> });
                 }
@@ -611,15 +609,14 @@ export async function POST(req: Request) {
 
         const rawColor = String(url.searchParams.get("color") || (bodyForFolderCheck?.color as string) || "").trim();
         const parentFolder = String(url.searchParams.get("parent") || (bodyForFolderCheck?.parent_folder as string) || "").trim() || null;
-        const folder_color = await pickLeastUsedFolderColor(table, rawColor);
-        const nextOrder = await getNextOrder(table, true);
+        const folder_color = await pickLeastUsedFolderColor(userId, rawColor);
+        const nextOrder = await getNextOrder(userId, true);
         const now = new Date().toISOString();
 
         const data = await queryOne(
-            `INSERT INTO "${table}" (is_folder, folder_name, title, content, folder_color, parent_folder_name, "order", created_at, updated_at${userId ? ", user_id" : ""})
-             VALUES (true, $1, $2, '', $3, $4, $5, $6, $7${userId ? ", $8" : ""}) RETURNING *`,
-            userId ? [name, name, folder_color, parentFolder, nextOrder, now, now, userId]
-                   : [name, name, folder_color, parentFolder, nextOrder, now, now]
+            `INSERT INTO "stickies" (is_folder, folder_name, title, content, folder_color, parent_folder_name, "order", created_at, updated_at, user_id)
+             VALUES (true, $1, $2, '', $3, $4, $5, $6, $7, $8) RETURNING *`,
+            [name, name, folder_color, parentFolder, nextOrder, now, now, userId]
         );
 
         if (!data) { return NextResponse.json({ error: "Database error" }, { status: 500 }); }
@@ -633,7 +630,7 @@ export async function POST(req: Request) {
         try { payload = bodyForFolderCheck ?? await req.json(); }
         catch { return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 }); }
         const now = new Date().toISOString();
-        const insertPayload = { ...payload, updated_at: now, created_at: payload.created_at ?? now, ...userField };
+        const insertPayload = { ...payload, updated_at: now, created_at: payload.created_at ?? now, user_id: userId };
         // Fix #2: whitelist allowed columns — reject arbitrary user-supplied column names
         const filteredPayload = Object.fromEntries(
             Object.entries(insertPayload).filter(([k]) => RAW_INSERT_ALLOWED_COLS.has(k) || k === "user_id")
@@ -700,7 +697,8 @@ export async function POST(req: Request) {
     const isExternalCall = !/mozilla/i.test(req.headers.get("user-agent") ?? "");
     if (isExternalCall && !folder_name!.includes("/")) {
         const rootFolders = await query<{ folder_name: string }>(
-            `SELECT folder_name FROM "${table}" WHERE is_folder = true AND parent_folder_name IS NULL`
+            `SELECT folder_name FROM "stickies" WHERE is_folder = true AND parent_folder_name IS NULL AND user_id = $1`,
+            [userId]
         );
         const rootNames = rootFolders.map((f) => f.folder_name.toLowerCase());
         if (!rootNames.includes(folder_name!.toLowerCase())) {
@@ -716,7 +714,8 @@ export async function POST(req: Request) {
 
     if (folderPathParts.length > 1) {
         const allFolders = await query<{ id: string; folder_name: string; parent_folder_name: string | null }>(
-            `SELECT id::text, folder_name, parent_folder_name FROM "${table}" WHERE is_folder = true`
+            `SELECT id::text, folder_name, parent_folder_name FROM "stickies" WHERE is_folder = true AND user_id = $1`,
+            [userId]
         );
 
         let parentName: string | null = null;
@@ -736,13 +735,11 @@ export async function POST(req: Request) {
                     return NextResponse.json({ error: `Root folder "${segment}" does not exist. Create it manually or use an existing folder.` }, { status: 400 });
                 }
                 // Create missing sub-folder
-                const folderOrder = await getNextOrder(table, true);
+                const folderOrder = await getNextOrder(userId, true);
                 const newFolder = await queryOne(
-                    `INSERT INTO "${table}" (is_folder, folder_name, title, content, folder_color, parent_folder_name, "order", created_at, updated_at${userId ? ", user_id" : ""})
-                     VALUES (true, $1, $2, '', $3, $4, $5, $6, $7${userId ? ", $8" : ""}) RETURNING *`,
-                    userId
-                        ? [segment, segment, palette12[8], parentName, folderOrder, nowTs, nowTs, userId]
-                        : [segment, segment, palette12[8], parentName, folderOrder, nowTs, nowTs]
+                    `INSERT INTO "stickies" (is_folder, folder_name, title, content, folder_color, parent_folder_name, "order", created_at, updated_at, user_id)
+                     VALUES (true, $1, $2, '', $3, $4, $5, $6, $7, $8) RETURNING *`,
+                    [segment, segment, palette12[8], parentName, folderOrder, nowTs, nowTs, userId]
                 );
                 if (newFolder) {
                     try { await getPusher().trigger("stickies", "note-created", newFolder); } catch {}
@@ -759,8 +756,8 @@ export async function POST(req: Request) {
     } else {
         // Simple folder — look up existing
         const folderRows = await query<{ id: string; folder_name: string; parent_folder_name: string | null }>(
-            `SELECT id::text, folder_name, parent_folder_name FROM "${table}" WHERE is_folder = true AND folder_name = $1`,
-            [folder_name!]
+            `SELECT id::text, folder_name, parent_folder_name FROM "stickies" WHERE is_folder = true AND folder_name = $1 AND user_id = $2`,
+            [folder_name!, userId]
         );
         if (folderRows.length > 0) {
             const match = parentFolderHint
@@ -771,7 +768,7 @@ export async function POST(req: Request) {
         resolved_folder_name = folder_name!;
     }
 
-    const folder_color = await pickLeastUsedColor(table, rawColor);
+    const folder_color = await pickLeastUsedColor(userId, rawColor);
     const now = new Date().toISOString();
 
     // Upsert: check if note with same title exists in this folder
@@ -788,28 +785,20 @@ export async function POST(req: Request) {
 
     if (existingNote?.id) {
         data = await queryOne(
-            `UPDATE "${table}" SET content = $1, folder_color = $2, type = $3, updated_at = $4 WHERE id = $5 RETURNING *`,
+            `UPDATE "stickies" SET content = $1, folder_color = $2, type = $3, updated_at = $4 WHERE id = $5 RETURNING *`,
             [content, folder_color, noteType, now, existingNote.id]
         );
     } else {
-        const nextOrder = await getNextOrder(table, false);
+        const nextOrder = await getNextOrder(userId, false);
         const folderIdClause = resolved_folder_id ? `, folder_id` : "";
-        const folderIdVal = resolved_folder_id ? `, $${userId ? 10 : 9}` : "";
+        const folderIdVal = resolved_folder_id ? `, $10` : "";
         const extraParams: unknown[] = resolved_folder_id ? [resolved_folder_id] : [];
 
-        if (userId) {
-            data = await queryOne(
-                `INSERT INTO "${table}" (title, content, folder_name, folder_color, is_folder, type, "order", created_at, updated_at, user_id${folderIdClause})
-                 VALUES ($1, $2, $3, $4, false, $5, $6, $7, $8, $9${folderIdVal}) RETURNING *`,
-                [title, content, resolved_folder_name, folder_color, noteType, nextOrder, now, now, userId, ...extraParams]
-            );
-        } else {
-            data = await queryOne(
-                `INSERT INTO "${table}" (title, content, folder_name, folder_color, is_folder, type, "order", created_at, updated_at${folderIdClause})
-                 VALUES ($1, $2, $3, $4, false, $5, $6, $7, $8${folderIdVal}) RETURNING *`,
-                [title, content, resolved_folder_name, folder_color, noteType, nextOrder, now, now, ...extraParams]
-            );
-        }
+        data = await queryOne(
+            `INSERT INTO "stickies" (title, content, folder_name, folder_color, is_folder, type, "order", created_at, updated_at, user_id${folderIdClause})
+             VALUES ($1, $2, $3, $4, false, $5, $6, $7, $8, $9${folderIdVal}) RETURNING *`,
+            [title, content, resolved_folder_name, folder_color, noteType, nextOrder, now, now, userId, ...extraParams]
+        );
     }
 
     if (!data) { return NextResponse.json({ error: "Database error" }, { status: 500 }); }
@@ -831,8 +820,8 @@ export async function DELETE(req: Request) {
 
     broadcastRequest(req, auth);
 
-    const table = getTable(auth);
-    const userId = auth.type === "user" ? auth.userId : undefined;
+    const table = "stickies";
+    const userId = auth.userId;
     const url = new URL(req.url);
     const noteId = url.searchParams.get("id")?.trim();
     const folderName = url.searchParams.get("folder_name")?.trim();
@@ -901,8 +890,8 @@ export async function PATCH(req: Request) {
     const auth = await authenticate(req);
     if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const table = getTable(auth);
-    const userId = auth.type === "user" ? auth.userId : undefined;
+    const table = "stickies";
+    const userId = auth.userId;
 
     let body: Record<string, unknown>;
     try { body = await req.json(); }

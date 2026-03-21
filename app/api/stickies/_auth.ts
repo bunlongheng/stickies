@@ -16,6 +16,9 @@ function getSupabase() {
 }
 
 export async function authorizeOwner(req: Request): Promise<boolean> {
+    // Dev bypass: no login needed in development
+    if (process.env.NODE_ENV === "development") return true;
+
     const auth = req.headers.get("authorization") ?? "";
     const bearer = auth.startsWith("Bearer ") ? auth.slice(7) : "";
     if (!bearer) return false;
