@@ -1777,7 +1777,14 @@ export default function NotesMaster() {
 
     useEffect(() => {
         setMounted(true);
-        void sync();
+        void sync().then(() => {
+            // Auto-navigate to the last-used folder on every page load (not just after OAuth sign-in)
+            const savedDefault = localStorage.getItem(DEFAULT_FOLDER_KEY);
+            if (savedDefault) {
+                setActiveFolder(savedDefault);
+                void loadFolderNotes(savedDefault, false);
+            }
+        });
 
         let restoredFromUrl = false;
         let shouldWaitForInitialTarget = false;
