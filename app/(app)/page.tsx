@@ -1720,9 +1720,35 @@ export default function NotesMaster() {
     }, []);
 
     useEffect(() => {
-        createBrowserClient().auth.getUser().then(({ data }) => {
+        const sb = createBrowserClient();
+        sb.auth.getUser().then(({ data }) => {
             setUserEmail(data.user?.email ?? null);
         });
+        // On fresh login: INITIAL_SESSION fires with null session (not yet logged in),
+        // then SIGNED_IN fires when the session is established from the OAuth callback.
+        // We track whether we've seen an INITIAL_SESSION first — if yes, the next
+        // SIGNED_IN is a real login (not just a page-refresh with an existing session).
+        let sawInitialSession = false;
+        const { data: { subscription } } = sb.auth.onAuthStateChange((event, session) => {
+            if (event === "INITIAL_SESSION") {
+                // If there's no session on first load, mark that we're waiting for login
+                if (!session) sawInitialSession = true;
+            }
+            if (event === "SIGNED_IN" && sawInitialSession) {
+                // Fresh login — navigate to default folder + open first note
+                const savedDefault = localStorage.getItem("stickies:default-folder") || "CLAUDE";
+                sessionStorage.removeItem("stickies:session-started");
+                setActiveFolder(savedDefault);
+                void loadFolderNotes(savedDefault, false).then(() => {
+                    const first = (getNotesCacheForFolder(savedDefault) as any[])
+                        .filter((n: any) => !n.is_folder)
+                        .sort((a: any, b: any) => (b.updated_at || "").localeCompare(a.updated_at || ""))[0];
+                    if (first) void openNote(first);
+                });
+            }
+        });
+        return () => subscription.unsubscribe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     // Auto-enable split view on wide screens if no saved preference yet
