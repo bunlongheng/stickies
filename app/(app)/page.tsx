@@ -3061,15 +3061,37 @@ const fireIntegrations = (trigger: string, note: any) => {
                     setEditingNote((prev: any) => (prev && String(prev.id) === String(existingNoteId)) ? { ...prev, ...payload } : prev);
                     mergeIntoCachedNotes(payload.folder_name, [{ id: existingNoteId, ...payload }]);
                 } else {
-                    const { note: data } = await notesApi.insert(payload);
-                    if (data) {
-                        setPendingNoteType(null);
-                        // Only take editingNote if user hasn't already switched to a different note
-                        setEditingNote((prev: any) => (prev === null || String(prev.id) === optimisticId) ? data : prev);
-                        setDbData((prev) => { const seen = new Set<string>(); return prev.map((n) => String(n.id) === optimisticId ? data : n).filter((n) => { const id = String(n.id); if (seen.has(id)) return false; seen.add(id); return true; }); });
-                        // Replace optimistic entry in cache with confirmed server data
+                    // Duplicate guard: if a note with the same title already exists in the same folder,
+                    // UPDATE it instead of INSERT to prevent accidental duplicates
+                    const titleNorm = (payload.title || "").trim().toLowerCase();
+                    const existingDup = dbData.find((n: any) =>
+                        !n.is_folder && !n._optimistic &&
+                        String(n.id) !== optimisticId &&
+                        (n.title || "").trim().toLowerCase() === titleNorm &&
+                        (n.folder_name || "") === (payload.folder_name || "")
+                    );
+                    if (existingDup) {
+                        // Overwrite the duplicate instead of creating a new row
+                        localWriteRef.current.set(String(existingDup.id), Date.now());
+                        await notesApi.update(String(existingDup.id), payload);
+                        const merged = { ...existingDup, ...payload, id: existingDup.id };
+                        setEditingNote((prev: any) => (prev === null || String(prev.id) === optimisticId) ? merged : prev);
+                        setDbData((prev) => prev
+                            .filter((n: any) => String(n.id) !== optimisticId)
+                            .map((n: any) => String(n.id) === String(existingDup.id) ? merged : n));
                         removeFromCachedNotes(payload.folder_name, optimisticId);
-                        mergeIntoCachedNotes(payload.folder_name, [data]);
+                        mergeIntoCachedNotes(payload.folder_name, [merged]);
+                    } else {
+                        const { note: data } = await notesApi.insert(payload);
+                        if (data) {
+                            setPendingNoteType(null);
+                            // Only take editingNote if user hasn't already switched to a different note
+                            setEditingNote((prev: any) => (prev === null || String(prev.id) === optimisticId) ? data : prev);
+                            setDbData((prev) => { const seen = new Set<string>(); return prev.map((n) => String(n.id) === optimisticId ? data : n).filter((n) => { const id = String(n.id); if (seen.has(id)) return false; seen.add(id); return true; }); });
+                            // Replace optimistic entry in cache with confirmed server data
+                            removeFromCachedNotes(payload.folder_name, optimisticId);
+                            mergeIntoCachedNotes(payload.folder_name, [data]);
+                        }
                     }
                 }
                 localStorage.removeItem(ACTIVE_DRAFT_KEY);
@@ -6448,6 +6470,32 @@ const fireIntegrations = (trigger: string, note: any) => {
                             </div>
                         )}
                     </div>
+
+                    {/* File stats bar — always visible so user knows data exists even if display bugs */}
+                    {(() => {
+                        const bytes = new TextEncoder().encode(content).length;
+                        const sizeStr = bytes >= 1_048_576 ? `${(bytes / 1_048_576).toFixed(1)} MB`
+                            : bytes >= 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${bytes} B`;
+                        const lines = content ? content.split("\n").length : 0;
+                        const chars = content.length;
+                        const curLine = activeLine + 1;
+                        const stats = [
+                            lines > 0 ? `${lines} ln` : null,
+                            chars > 0 ? `${chars.toLocaleString()} ch` : null,
+                            bytes > 0 ? sizeStr : null,
+                            `Ln ${curLine}`,
+                        ].filter(Boolean) as string[];
+                        return (
+                            <div className="shrink-0 flex items-center gap-2 px-3 py-[3px] border-t border-white/[0.06] bg-black/60 overflow-x-auto select-none" style={{ fontSize: 9, opacity: 0.5 }}>
+                                {stats.map((s, i) => (
+                                    <span key={i} className="flex items-center gap-1.5 whitespace-nowrap">
+                                        {i > 0 && <span className="text-zinc-700">·</span>}
+                                        <span className="text-zinc-400">{s}</span>
+                                    </span>
+                                ))}
+                            </div>
+                        );
+                    })()}
 
                     {/* Image attachment strip */}
                     {(images.length > 0 || uploadingImages) && (
