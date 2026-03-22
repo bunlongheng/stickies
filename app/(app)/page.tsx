@@ -5711,6 +5711,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                         <div className="fixed z-[2147483647] pointer-events-auto"
                             style={{
                                 left: "50%",
+                                transform: "translateX(-50%)",
                                 top: "calc(env(safe-area-inset-top, 0px) + 14px)",
                                 animation: "islandToastInOut 3s cubic-bezier(0.16, 1, 0.3, 1) forwards",
                             }}
