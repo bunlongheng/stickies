@@ -1425,6 +1425,7 @@ export default function NotesMaster() {
     const isFlashingRef = useRef(false);
     const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const suppressOpenRef = useRef(false);
+    const openingNoteIdRef = useRef<string | null>(null); // tracks most-recent openNote call; stale fetches are discarded
     const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const mainScrollRef = useRef<HTMLElement | null>(null);
     const editorTextRef = useRef<HTMLTextAreaElement | null>(null);
@@ -1769,18 +1770,10 @@ export default function NotesMaster() {
                 sessionStorage.removeItem("stickies:session-started");
                 setShowWelcomeBack(true);
                 void sync().then(() => {
-                    const savedDefault = localStorage.getItem(DEFAULT_FOLDER_KEY);
-                    if (!savedDefault) {
-                        setActiveFolder(null);
-                    } else {
-                        setActiveFolder(savedDefault);
-                        void loadFolderNotes(savedDefault, false).then(() => {
-                            const first = (getNotesCacheForFolder(savedDefault) as any[])
-                                .filter((n: any) => !n.is_folder)
-                                .sort((a: any, b: any) => (b.updated_at || "").localeCompare(a.updated_at || ""))[0];
-                            if (first) void openNote(first);
-                        });
-                    }
+                    const savedDefault = localStorage.getItem(DEFAULT_FOLDER_KEY) || "CLAUDE";
+                    setActiveFolder(savedDefault);
+                    void loadFolderNotes(savedDefault, false);
+                    // auto-open effect handles opening the note once dbData is ready
                 });
             }
         });
@@ -1801,15 +1794,12 @@ export default function NotesMaster() {
     useEffect(() => {
         setMounted(true);
         void sync().then(() => {
-            // Auto-navigate to last-used folder and open most recent note on every page load
+            // Navigate to last-used folder so the left panel + auto-open effect can load notes
             const savedDefault = localStorage.getItem(DEFAULT_FOLDER_KEY) || "CLAUDE";
             setActiveFolder(savedDefault);
-            void loadFolderNotes(savedDefault, false).then(() => {
-                const first = (getNotesCacheForFolder(savedDefault) as any[])
-                    .filter((n: any) => !n.is_folder)
-                    .sort((a: any, b: any) => (b.updated_at || "").localeCompare(a.updated_at || ""))[0];
-                if (first) void openNote(first);
-            });
+            void loadFolderNotes(savedDefault, false);
+            // Note: openNote is intentionally NOT called here — the auto-open effect handles it
+            // once dbData is populated, avoiding a race between two concurrent openNote calls.
         });
 
         let restoredFromUrl = false;
@@ -3862,11 +3852,15 @@ const fireIntegrations = (trigger: string, note: any) => {
         // Cancel pending auto-save timer so the stale closure can't fire a second INSERT
         if (autoSaveTimerRef.current) { clearTimeout(autoSaveTimerRef.current); autoSaveTimerRef.current = null; }
 
+        // Stamp this open so concurrent stale fetches don't overwrite the latest result
+        const noteId = String(note.id);
+        openingNoteIdRef.current = noteId;
+
         // Open immediately with available metadata so the editor switches at once
         setPendingNoteType(null); // reset so noteType comes from note.type, not prior mode
         setEditingNote(note);
         setTitle(note.title || "");
-        setContent("");
+        setContent(note.content != null ? (note.type === "mermaid" || detectMermaid(note.content || "") ? cleanMermaidContent(note.content) : note.content) : "");
         setImages((note as any).images ?? []);
         setTargetFolder(note.folder_name || activeFolder || "General");
         setNoteColor(note.folder_color || folders.find((f: any) => f.name === (note.folder_name || activeFolder))?.color || palette12[0]);
@@ -3876,8 +3870,8 @@ const fireIntegrations = (trigger: string, note: any) => {
         setEditorScrollTop(0);
         setEditorOpen(true);
 
-        let full = note;
-        if (note.content === undefined || note.content === null) {
+        // Always fetch full content — list API omits the content column
+        if (note.content == null) {
             try {
                 const token = await getAuthToken();
                 const res = await fetch(`/api/stickies?id=${encodeURIComponent(note.id)}`, {
@@ -3886,18 +3880,24 @@ const fireIntegrations = (trigger: string, note: any) => {
                 if (res.ok) {
                     const { note: fetched } = await res.json();
                     if (fetched) {
-                        full = fetched;
-                        setDbData((prev: any[]) => prev.map((r) => String(r.id) === String(note.id) ? { ...r, ...fetched } : r));
+                        // Discard if user switched to a different note while this fetch was in flight
+                        if (openingNoteIdRef.current !== noteId) return;
+                        setDbData((prev: any[]) => prev.map((r) => String(r.id) === noteId ? { ...r, ...fetched } : r));
+                        setEditingNote(fetched);
+                        const body = (fetched.type === "mermaid" || detectMermaid(fetched.content || "")) ? cleanMermaidContent(fetched.content || "") : (fetched.content || "");
+                        setContent(body);
+                        if (fetched.id && looksLikeMarkdown(fetched.content || "")) setMarkdownModeNotes((p: Set<string>) => new Set([...p, String(fetched.id)]));
+                        if (fetched.id && (fetched.list_mode || fetched.type === "checklist")) setListModeNotes((p: Set<string>) => new Set([...p, String(fetched.id)]));
+                        if (fetched.id && fetched.mindmap_mode) setMindmapModeNotes((p: Set<string>) => new Set([...p, String(fetched.id)]));
                     }
                 }
             } catch { /* use note as-is */ }
+        } else {
+            // Content already present — apply modes directly
+            if (note.id && looksLikeMarkdown(note.content || "")) setMarkdownModeNotes((p: Set<string>) => new Set([...p, String(note.id)]));
+            if (note.id && (note.list_mode || note.type === "checklist")) setListModeNotes((p: Set<string>) => new Set([...p, String(note.id)]));
+            if (note.id && note.mindmap_mode) setMindmapModeNotes((p: Set<string>) => new Set([...p, String(note.id)]));
         }
-        // Now patch in the real content
-        setEditingNote(full);
-        setContent((full.type === "mermaid" || detectMermaid(full.content || "")) ? cleanMermaidContent(full.content || "") : (full.content || ""));
-        if (full.id && looksLikeMarkdown(full.content || "")) setMarkdownModeNotes((p: Set<string>) => new Set([...p, String(full.id)]));
-        if (full.id && (full.list_mode || full.type === "checklist")) setListModeNotes((p: Set<string>) => new Set([...p, String(full.id)]));
-        if (full.id && full.mindmap_mode) setMindmapModeNotes((p: Set<string>) => new Set([...p, String(full.id)]));
     }, [activeFolder, folders]);
 
     useEffect(() => {
