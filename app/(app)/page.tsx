@@ -2949,12 +2949,18 @@ const fireIntegrations = (trigger: string, note: any) => {
 
     const saveNote = useCallback(
         async ({ silent = false }: { silent?: boolean } = {}) => {
-            // Never save notes with no real content
-            if (!title.trim() && !content.trim()) return true;
+            // Never save a note with no content
+            if (!content.trim()) return true;
             if (!isDraftDirty) return true;
             if (isSavingRef.current) return true;
             if ((editingNote as any)?._external) return true; // read-only external note
             isSavingRef.current = true;
+            // Auto-title: if no title, use first non-empty line of content
+            if (!title.trim()) {
+                const firstLine = content.trim().split("\n").find(l => l.trim()) || "";
+                const autoTitle = firstLine.replace(/^#+\s*/, "").slice(0, 60).trim() || "Untitled";
+                setTitle(autoTitle);
+            }
             // Auto-clean mermaid junk (trailing fences, --- blocks) on every save
             let saveContent = content;
             const isMermaidNote = (editingNote as any)?.type === "mermaid" || detectMermaid(content);
@@ -2972,7 +2978,7 @@ const fireIntegrations = (trigger: string, note: any) => {
             const folderId = activeFolderRow && !activeFolderRow.id.startsWith("virtual-") ? activeFolderRow.id : null;
             const extractedTags = Array.from(new Set((saveContent.match(/#[a-zA-Z0-9_-]+/g) ?? []).map(t => t.toLowerCase())));
             const payload: any = {
-                title: title.trim() || "Untitled",
+                title: title.trim() || content.trim().split("\n").find(l => l.trim())?.replace(/^#+\s*/, "").slice(0, 60).trim() || "Untitled",
                 content: saveContent,
                 folder_name: folderName,
                 folder_color: noteColor || folders.find((f) => f.name === folderName)?.color || editingNote?.folder_color || palette12[0],
@@ -5846,9 +5852,9 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             // Regular mermaid note — open in mermaid editor (local or prod)
                                             const encoded = LZString.compressToEncodedURIComponent(extractMermaid(content));
                                             const h = window.location.hostname;
-                                            const isLocal = h === "localhost" || h.startsWith("10.") || h.startsWith("192.168.");
+                                            const isLocal = h === "localhost" || h === "127.0.0.1";
                                             const url = isLocal
-                                                ? `http://${h}:3002/?data=${encoded}`
+                                                ? `http://localhost:3002/?data=${encoded}`
                                                 : `https://mermaid-bheng.vercel.app/?data=${encoded}`;
                                             window.open(url, "_blank");
                                         }
@@ -7016,6 +7022,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             {!item.is_folder && item.updated_at && (
                                                 <div className="flex items-center justify-end gap-2 flex-shrink-0">
                                                     {(() => {
+                                                        if (editMode) return null; // split view — badge already visible in list
                                                         const t = (item as any).type;
                                                         const badge = t && t !== "text" ? TYPE_BADGE[t] : null;
                                                         if (!badge) return null;
