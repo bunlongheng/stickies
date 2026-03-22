@@ -6476,7 +6476,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                     const extMap: Record<string, string> = {
                         text: ".txt", markdown: ".md", mermaid: ".mmd", json: ".json",
                         javascript: ".js", typescript: ".ts", python: ".py", css: ".css",
-                        sql: ".sql", bash: ".sh", html: ".html", voice: ".webm", rich: ".html",
+                        sql: ".sql", bash: ".sh", html: ".html", voice: ".webm", rich: ".rtf",
                     };
                     const ext = extMap[noteType] ?? ".txt";
                     const edited = editingNote.updated_at
