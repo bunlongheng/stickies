@@ -2417,7 +2417,7 @@ const fireIntegrations = (trigger: string, note: any) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [editMode, isDataLoaded, activeFolder, pendingRestoreNoteId]);
 
-    // Auto-open in split view: resume top note, or open a new blank note as fallback
+    // Auto-open in split view: open most recent note (with full content fetch)
     useEffect(() => {
         if (!editMode || !isDataLoaded || pendingRestoreNoteId) return;
         if (editorOpen) return; // already open
@@ -2425,18 +2425,8 @@ const fireIntegrations = (trigger: string, note: any) => {
             String(b.updated_at || "").localeCompare(String(a.updated_at || ""))
         )[0];
         if (topNote) {
-            setEditingNote(topNote);
-            setTitle(topNote.title || "");
-            setContent(topNote.content || "");
-            setImages((topNote as any).images ?? []);
-            setTargetFolder(topNote.folder_name || "General");
-            setNoteColor(topNote.folder_color || palette12[0]);
-            setActiveLine(0);
-            setEditorScrollTop(0);
-            if (topNote.id && (topNote.list_mode || topNote.type === "checklist")) {
-                setListModeNotes((prev) => new Set([...prev, String(topNote.id)]));
-            }
-            setEditorOpen(true);
+            // Use openNote so content is fetched if missing (list API omits the content column)
+            void openNote(topNote);
         }
         // If no notes yet — wait for loadFolderNotes to complete (effect re-runs when dbData updates)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -3067,13 +3057,15 @@ const fireIntegrations = (trigger: string, note: any) => {
                 if (existingNoteId !== null) {
                     localWriteRef.current.set(String(existingNoteId), Date.now());
                     await notesApi.update(String(existingNoteId), payload);
-                    setEditingNote((prev: any) => (prev ? { ...prev, ...payload } : prev));
+                    // Only patch editingNote if still on the same note (user may have switched mid-save)
+                    setEditingNote((prev: any) => (prev && String(prev.id) === String(existingNoteId)) ? { ...prev, ...payload } : prev);
                     mergeIntoCachedNotes(payload.folder_name, [{ id: existingNoteId, ...payload }]);
                 } else {
                     const { note: data } = await notesApi.insert(payload);
                     if (data) {
                         setPendingNoteType(null);
-                        setEditingNote(data);
+                        // Only take editingNote if user hasn't already switched to a different note
+                        setEditingNote((prev: any) => (prev === null || String(prev.id) === optimisticId) ? data : prev);
                         setDbData((prev) => { const seen = new Set<string>(); return prev.map((n) => String(n.id) === optimisticId ? data : n).filter((n) => { const id = String(n.id); if (seen.has(id)) return false; seen.add(id); return true; }); });
                         // Replace optimistic entry in cache with confirmed server data
                         removeFromCachedNotes(payload.folder_name, optimisticId);
