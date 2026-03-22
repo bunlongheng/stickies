@@ -5839,9 +5839,6 @@ const fireIntegrations = (trigger: string, note: any) => {
 
                         {mermaidMode && (
                             <div className="flex items-center gap-1 flex-shrink-0">
-                                <span className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-full" style={{ background: "rgba(6,182,212,0.15)", color: "#06b6d4", border: "1px solid rgba(6,182,212,0.3)" }}>
-                                    {mermaidSubType(content)}
-                                </span>
                                 <button type="button"
                                     onClick={() => {
                                         const mapUrl = (editingNote as any)?._mapUrl;
@@ -5865,7 +5862,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 </button>
                             </div>
                         )}
-                        {TYPE_BADGE[noteType] && noteType !== "mermaid" ? (
+                        {TYPE_BADGE[noteType] && noteType !== "mermaid" && !editMode ? (
                             <span className="inline-flex text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-full flex-shrink-0"
                                 style={{ background: `${TYPE_BADGE[noteType].color}20`, color: TYPE_BADGE[noteType].color, border: `1px solid ${TYPE_BADGE[noteType].color}40` }}>
                                 {TYPE_BADGE[noteType].label}
