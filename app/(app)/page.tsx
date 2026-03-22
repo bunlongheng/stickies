@@ -6448,28 +6448,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 />
                             </div>
                         )}
-                        {/* File stats — right-side IDE panel, non-intrusive */}
-                        {(() => {
-                            const bytes = new TextEncoder().encode(content).length;
-                            const sizeStr = bytes >= 1_048_576 ? `${(bytes / 1_048_576).toFixed(1)} MB`
-                                : bytes >= 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${bytes} B`;
-                            const lines = content ? content.split("\n").length : 0;
-                            const chars = content.length;
-                            const curLine = activeLine + 1;
-                            const stats = [
-                                `Ln ${curLine}`,
-                                lines > 0 ? `${lines} ln` : null,
-                                chars > 0 ? `${chars.toLocaleString()} ch` : null,
-                                bytes > 0 ? sizeStr : null,
-                            ].filter(Boolean) as string[];
-                            return (
-                                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex flex-col items-end gap-[5px] pointer-events-none select-none z-10" style={{ fontSize: 8, opacity: 0.25 }}>
-                                    {stats.map((s, i) => (
-                                        <span key={i} className="text-zinc-400 whitespace-nowrap font-mono">{s}</span>
-                                    ))}
-                                </div>
-                            );
-                        })()}
                     </div>
 
                     {/* Image attachment strip */}
@@ -6491,6 +6469,43 @@ const fireIntegrations = (trigger: string, note: any) => {
                             )}
                         </div>
                     )}
+                {/* ── Bottom status bar ── */}
+                {editingNote && (() => {
+                    const bytes = new TextEncoder().encode(content).length;
+                    const sizeStr = bytes >= 1_048_576 ? `${(bytes / 1_048_576).toFixed(1)} MB`
+                        : bytes >= 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${bytes} B`;
+                    const lines = content ? content.split("\n").length : 0;
+                    const words = content.trim() ? content.trim().split(/\s+/).length : 0;
+                    const chars = content.length;
+                    const accent = activeAccentColor || "#71717a";
+                    const badge = noteType && noteType !== "text" ? TYPE_BADGE[noteType] : null;
+                    return (
+                        <div className="shrink-0 flex items-center gap-3 px-3 select-none border-t border-white/[0.06]"
+                            style={{ height: 24, background: "#0a0a0a", fontSize: 10 }}>
+                            {/* Note type pill */}
+                            {badge ? (
+                                <span className="font-black uppercase tracking-widest whitespace-nowrap"
+                                    style={{ color: badge.color, opacity: 0.8 }}>{badge.label}</span>
+                            ) : (
+                                <span className="font-black uppercase tracking-widest text-zinc-600">TEXT</span>
+                            )}
+                            <span className="text-white/10">·</span>
+                            {/* Stats */}
+                            <span className="font-mono text-zinc-600 whitespace-nowrap">Ln {activeLine + 1}</span>
+                            <span className="font-mono text-zinc-600 whitespace-nowrap">{lines.toLocaleString()} ln</span>
+                            <span className="font-mono text-zinc-600 whitespace-nowrap">{words.toLocaleString()} w</span>
+                            <span className="font-mono text-zinc-600 whitespace-nowrap">{chars.toLocaleString()} ch</span>
+                            <span className="font-mono text-zinc-600 whitespace-nowrap">{sizeStr}</span>
+                            {/* Spacer */}
+                            <div className="flex-1" />
+                            {/* Folder */}
+                            {editingNote.folder_name && (
+                                <span className="font-black uppercase tracking-widest whitespace-nowrap"
+                                    style={{ color: accent, opacity: 0.5 }}>{editingNote.folder_name}</span>
+                            )}
+                        </div>
+                    );
+                })()}
                 </section>
                 ) : (
                     /* Desktop empty state — select a note */
