@@ -5503,19 +5503,19 @@ const fireIntegrations = (trigger: string, note: any) => {
                 @keyframes islandToastInOut {
                     0% {
                         opacity: 0;
-                        transform: translateX(-50%) translateY(calc(-50% - 10px)) scale(0.72);
+                        transform: translateX(-50%) translateY(-8px) scale(0.72);
                     }
                     14% {
                         opacity: 1;
-                        transform: translateX(-50%) translateY(-50%) scale(1);
+                        transform: translateX(-50%) translateY(0) scale(1);
                     }
                     82% {
                         opacity: 1;
-                        transform: translateX(-50%) translateY(-50%) scale(1);
+                        transform: translateX(-50%) translateY(0) scale(1);
                     }
                     100% {
                         opacity: 0;
-                        transform: translateX(-50%) translateY(calc(-50% - 8px)) scale(0.78);
+                        transform: translateX(-50%) translateY(-6px) scale(0.78);
                     }
                 }
                 @keyframes confettiShoot {
@@ -5688,7 +5688,7 @@ const fireIntegrations = (trigger: string, note: any) => {
             {toast && (() => {
                 const isError = toastIsError;
                 const cx = typeof window !== "undefined" ? window.innerWidth / 2 : 200;
-                const cy = typeof window !== "undefined" ? window.innerHeight / 2 : 300;
+                const cy = 32;
                 return (
                     <React.Fragment key={toastKey}>
                         {/* Confetti (non-error toasts only) — mini on every toast, bigger when explicitly requested */}
@@ -5734,7 +5734,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                         <div className="fixed z-[2147483647] pointer-events-auto"
                             style={{
                                 left: "50%",
-                                top: "50%",
+                                top: "calc(env(safe-area-inset-top, 0px) + 14px)",
                                 animation: "islandToastInOut 3s cubic-bezier(0.16, 1, 0.3, 1) forwards",
                             }}
                             onClick={() => void secureCopy(toast).then(() => { if (!isError) showToast("Copied!"); })}>
@@ -5910,9 +5910,9 @@ const fireIntegrations = (trigger: string, note: any) => {
                             </button>
                         )}
                         <button type="button"
-                            onClick={() => { const hueInt = integrationsRef.current.find(ig => ig.type === "hue"); setLightMode((hueInt?.config?.mode as any) ?? "flash"); setIsGlobalSettings(true); setShowFolderActions(true); closeEditorTools(); }}
+                            onClick={() => { setIsGlobalSettings(false); setShowFolderActions(true); closeEditorTools(); }}
                             className="p-2 sm:p-3 text-zinc-300 hover:text-white active:text-white transition flex-shrink-0"
-                            title="App settings">
+                            title="Note settings">
                             <Cog6ToothIcon className="w-[29px] h-[29px] sm:w-7 sm:h-7" />
                         </button>
                     </div>
@@ -6469,33 +6469,29 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 />
                             </div>
                         )}
+                        {/* File stats — right-side IDE panel, non-intrusive */}
+                        {(() => {
+                            const bytes = new TextEncoder().encode(content).length;
+                            const sizeStr = bytes >= 1_048_576 ? `${(bytes / 1_048_576).toFixed(1)} MB`
+                                : bytes >= 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${bytes} B`;
+                            const lines = content ? content.split("\n").length : 0;
+                            const chars = content.length;
+                            const curLine = activeLine + 1;
+                            const stats = [
+                                `Ln ${curLine}`,
+                                lines > 0 ? `${lines} ln` : null,
+                                chars > 0 ? `${chars.toLocaleString()} ch` : null,
+                                bytes > 0 ? sizeStr : null,
+                            ].filter(Boolean) as string[];
+                            return (
+                                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex flex-col items-end gap-[5px] pointer-events-none select-none z-10" style={{ fontSize: 8, opacity: 0.25 }}>
+                                    {stats.map((s, i) => (
+                                        <span key={i} className="text-zinc-400 whitespace-nowrap font-mono">{s}</span>
+                                    ))}
+                                </div>
+                            );
+                        })()}
                     </div>
-
-                    {/* File stats bar — always visible so user knows data exists even if display bugs */}
-                    {(() => {
-                        const bytes = new TextEncoder().encode(content).length;
-                        const sizeStr = bytes >= 1_048_576 ? `${(bytes / 1_048_576).toFixed(1)} MB`
-                            : bytes >= 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${bytes} B`;
-                        const lines = content ? content.split("\n").length : 0;
-                        const chars = content.length;
-                        const curLine = activeLine + 1;
-                        const stats = [
-                            lines > 0 ? `${lines} ln` : null,
-                            chars > 0 ? `${chars.toLocaleString()} ch` : null,
-                            bytes > 0 ? sizeStr : null,
-                            `Ln ${curLine}`,
-                        ].filter(Boolean) as string[];
-                        return (
-                            <div className="shrink-0 flex items-center gap-2 px-3 py-[3px] border-t border-white/[0.06] bg-black/60 overflow-x-auto select-none" style={{ fontSize: 9, opacity: 0.5 }}>
-                                {stats.map((s, i) => (
-                                    <span key={i} className="flex items-center gap-1.5 whitespace-nowrap">
-                                        {i > 0 && <span className="text-zinc-700">·</span>}
-                                        <span className="text-zinc-400">{s}</span>
-                                    </span>
-                                ))}
-                            </div>
-                        );
-                    })()}
 
                     {/* Image attachment strip */}
                     {(images.length > 0 || uploadingImages) && (
