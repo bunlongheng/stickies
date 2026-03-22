@@ -6472,37 +6472,22 @@ const fireIntegrations = (trigger: string, note: any) => {
                 {/* ── Bottom status bar ── */}
                 {editingNote && (() => {
                     const bytes = new TextEncoder().encode(content).length;
-                    const sizeStr = bytes >= 1_048_576 ? `${(bytes / 1_048_576).toFixed(1)} MB`
-                        : bytes >= 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${bytes} B`;
-                    const lines = content ? content.split("\n").length : 0;
-                    const words = content.trim() ? content.trim().split(/\s+/).length : 0;
-                    const chars = content.length;
-                    const accent = activeAccentColor || "#71717a";
-                    const badge = noteType && noteType !== "text" ? TYPE_BADGE[noteType] : null;
+                    const sizeStr = bytes >= 1024 ? `${(bytes / 1024).toFixed(1)} KB` : bytes > 0 ? `${bytes} B` : null;
+                    const extMap: Record<string, string> = {
+                        text: ".txt", markdown: ".md", mermaid: ".mmd", json: ".json",
+                        javascript: ".js", typescript: ".ts", python: ".py", css: ".css",
+                        sql: ".sql", bash: ".sh", html: ".html", voice: ".webm", rich: ".html",
+                    };
+                    const ext = extMap[noteType] ?? ".txt";
+                    const edited = editingNote.updated_at
+                        ? new Date(editingNote.updated_at as string).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                        : null;
                     return (
-                        <div className="shrink-0 flex items-center gap-3 px-3 select-none border-t border-white/[0.06]"
-                            style={{ height: 24, background: "#0a0a0a", fontSize: 10 }}>
-                            {/* Note type pill */}
-                            {badge ? (
-                                <span className="font-black uppercase tracking-widest whitespace-nowrap"
-                                    style={{ color: badge.color, opacity: 0.8 }}>{badge.label}</span>
-                            ) : (
-                                <span className="font-black uppercase tracking-widest text-zinc-600">TEXT</span>
-                            )}
-                            <span className="text-white/10">·</span>
-                            {/* Stats */}
-                            <span className="font-mono text-zinc-600 whitespace-nowrap">Ln {activeLine + 1}</span>
-                            <span className="font-mono text-zinc-600 whitespace-nowrap">{lines.toLocaleString()} ln</span>
-                            <span className="font-mono text-zinc-600 whitespace-nowrap">{words.toLocaleString()} w</span>
-                            <span className="font-mono text-zinc-600 whitespace-nowrap">{chars.toLocaleString()} ch</span>
-                            <span className="font-mono text-zinc-600 whitespace-nowrap">{sizeStr}</span>
-                            {/* Spacer */}
-                            <div className="flex-1" />
-                            {/* Folder */}
-                            {editingNote.folder_name && (
-                                <span className="font-black uppercase tracking-widest whitespace-nowrap"
-                                    style={{ color: accent, opacity: 0.5 }}>{editingNote.folder_name}</span>
-                            )}
+                        <div className="shrink-0 flex items-center justify-end gap-3 px-3 select-none border-t border-white/[0.06]"
+                            style={{ height: 22, background: "#0a0a0a", fontSize: 10 }}>
+                            {sizeStr && <span className="font-mono text-zinc-600 whitespace-nowrap">{sizeStr}</span>}
+                            {edited && <span className="font-mono text-zinc-600 whitespace-nowrap">{edited}</span>}
+                            <span className="font-mono text-zinc-500 whitespace-nowrap">{ext}</span>
                         </div>
                     );
                 })()}
