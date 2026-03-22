@@ -455,10 +455,10 @@ const MINDMAP_MODE_KEY = "stickies:mindmap-mode-notes:v1";
 const STACK_MODE_KEY = "stickies:stack-mode-notes:v1";
 const PLAIN_MODE_KEY  = "stickies:plain-mode-notes:v1";
 const DEFAULT_FOLDER_KEY = "stickies:default-folder:v1";
+const LAST_FOLDER_KEY = "stickies:last-folder:v1"; // persists last active folder across sessions
 const DB_CACHE_KEY = "stickies:db-cache:v1";
 const COUNTS_CACHE_KEY = "stickies:counts-cache:v1";
 const NOTES_CACHE_KEY = "stickies:notes-cache:v2";
-const NOTES_SYNCED_AT_KEY = "stickies:notes-synced-at:v2"; // ISO timestamps per folder
 
 // ── Notes cache helpers ───────────────────────────────────────────────────────
 function getNotesCacheForFolder(folderName: string): unknown[] {
@@ -479,26 +479,10 @@ function setNotesCacheForFolder(folderName: string, notes: unknown[]): void {
     } catch { /* quota exceeded */ }
 }
 
-function getSyncedAtForFolder(folderName: string): string | null {
-    try {
-        const raw = localStorage.getItem(NOTES_SYNCED_AT_KEY);
-        if (!raw) return null;
-        return (JSON.parse(raw) as Record<string, string>)[folderName] ?? null;
-    } catch { return null; }
-}
 
-function setSyncedAtForFolder(folderName: string, iso: string): void {
-    try {
-        const raw = localStorage.getItem(NOTES_SYNCED_AT_KEY);
-        const map = raw ? JSON.parse(raw) as Record<string, string> : {};
-        map[folderName] = iso;
-        localStorage.setItem(NOTES_SYNCED_AT_KEY, JSON.stringify(map));
-    } catch { /* ignore */ }
-}
-
-/** Merge an array of changed notes into the cached array for a folder. */
+/** Upsert a note into the cache for its folder (keeps cache fresh on save). */
 function mergeIntoCachedNotes(folderName: string, changed: unknown[]): void {
-    if (changed.length === 0) return;
+    if (!changed.length) return;
     try {
         const existing = getNotesCacheForFolder(folderName);
         const byId = new Map(existing.map((n: any) => [String(n.id), n]));
@@ -1260,6 +1244,7 @@ export default function NotesMaster() {
     const [flashNote, setFlashNote] = useState<any | null>(null);
 
     const [editorOpen, setEditorOpen] = useState(false);
+    const [noteContentLoading, setNoteContentLoading] = useState(false);
     const [editingNote, setEditingNote] = useState<any | null>(null);
     const [showFloatCopy, setShowFloatCopy] = useState(true);
     const [title, setTitle] = useState("");
@@ -1563,7 +1548,7 @@ export default function NotesMaster() {
         const offset = append ? (existing?.offset ?? 0) : 0;
         const limit = append ? 80 : 20;
 
-        // ── Step 1: Show cached notes instantly ─────────────────────────────
+        // Paint cached notes instantly so UI is never blank
         if (!append && offset === 0) {
             const cached = getNotesCacheForFolder(folderName);
             if (cached.length > 0) {
@@ -1578,40 +1563,12 @@ export default function NotesMaster() {
         setFolderNotesLoading(true);
         try {
             const token = await getAuthToken();
-            const cachedNotes = !append && offset === 0 ? getNotesCacheForFolder(folderName) : [];
-            // External-only folders (all notes injected server-side) must always do a full fetch
-            const isExternalFolder = ["diagrams", "mindmaps"].includes(folderName.toLowerCase());
-            const syncedAt = !append && offset === 0 && cachedNotes.length > 0 && !isExternalFolder ? getSyncedAtForFolder(folderName) : null;
-
-            // ── Step 2: Delta sync if we have a cache — only fetch what changed ──
-            if (syncedAt) {
-                const deltaRes = await fetch(
-                    `/api/stickies?folder=${encodeURIComponent(folderName)}&since=${encodeURIComponent(syncedAt)}`,
-                    { headers: { Authorization: `Bearer ${token}` } }
-                );
-                if (deltaRes.ok) {
-                    const { notes: changed = [], syncedAt: newSyncedAt } = await deltaRes.json();
-                    if (newSyncedAt) setSyncedAtForFolder(folderName, newSyncedAt);
-                    if (changed.length > 0) {
-                        // Merge only the changed notes into current state
-                        setDbData((prev) => {
-                            const byId = new Map(prev.map((r: any) => [String(r.id), r]));
-                            changed.forEach((n: any) => byId.set(String(n.id), n));
-                            return Array.from(byId.values());
-                        });
-                        mergeIntoCachedNotes(folderName, changed);
-                    }
-                    return; // delta done — cache was already shown in step 1
-                }
-            }
-
-            // ── Step 3: Full fetch (first visit or delta unavailable) ────────
             const res = await fetch(
                 `/api/stickies?folder=${encodeURIComponent(folderName)}&limit=${limit}&offset=${offset}`,
                 { headers: { Authorization: `Bearer ${token}` } }
             );
             if (!res.ok) return;
-            const { notes = [], total = 0, syncedAt: newSyncedAt } = await res.json();
+            const { notes = [], total = 0 } = await res.json();
             folderPaginationRef.current.set(folderName, { offset: offset + notes.length, total });
 
             setDbData((prev) => {
@@ -1623,10 +1580,9 @@ export default function NotesMaster() {
                 return [...without, ...notes];
             });
 
-            // Persist to cache + record syncedAt
+            // Update cache so next visit paints instantly
             if (!append && offset === 0) {
                 setNotesCacheForFolder(folderName, notes);
-                if (newSyncedAt) setSyncedAtForFolder(folderName, newSyncedAt);
             }
         } finally {
             folderNotesLoadingRef.current = false;
@@ -1770,9 +1726,15 @@ export default function NotesMaster() {
                 sessionStorage.removeItem("stickies:session-started");
                 setShowWelcomeBack(true);
                 void sync().then(() => {
-                    const savedDefault = localStorage.getItem(DEFAULT_FOLDER_KEY) || "CLAUDE";
-                    setActiveFolder(savedDefault);
-                    void loadFolderNotes(savedDefault, false);
+                    const lastFolder = localStorage.getItem(LAST_FOLDER_KEY);
+                    if (lastFolder === "__all__") {
+                        setActiveFolder(null);
+                        void loadAllNotes();
+                    } else {
+                        const target = lastFolder || localStorage.getItem(DEFAULT_FOLDER_KEY) || "CLAUDE";
+                        setActiveFolder(target);
+                        void loadFolderNotes(target, false);
+                    }
                     // auto-open effect handles opening the note once dbData is ready
                 });
             }
@@ -1781,23 +1743,21 @@ export default function NotesMaster() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // Always enable split view on desktop (≥1024px)
-    useEffect(() => {
-        try {
-            if (window.matchMedia("(min-width: 1024px)").matches) {
-                setEditMode(true);
-            }
-        } catch { /* ignore */ }
-    }, []);
 
 
     useEffect(() => {
         setMounted(true);
         void sync().then(() => {
-            // Navigate to last-used folder so the left panel + auto-open effect can load notes
-            const savedDefault = localStorage.getItem(DEFAULT_FOLDER_KEY) || "CLAUDE";
-            setActiveFolder(savedDefault);
-            void loadFolderNotes(savedDefault, false);
+            // Restore last active folder — LAST_FOLDER_KEY wins, fall back to default folder
+            const lastFolder = localStorage.getItem(LAST_FOLDER_KEY);
+            if (lastFolder === "__all__") {
+                setActiveFolder(null);
+                void loadAllNotes();
+            } else {
+                const target = lastFolder || localStorage.getItem(DEFAULT_FOLDER_KEY) || "CLAUDE";
+                setActiveFolder(target);
+                void loadFolderNotes(target, false);
+            }
             // Note: openNote is intentionally NOT called here — the auto-open effect handles it
             // once dbData is populated, avoiding a race between two concurrent openNote calls.
         });
@@ -1969,9 +1929,12 @@ export default function NotesMaster() {
             const rawKanban = localStorage.getItem(KANBAN_MODE_KEY);
             if (rawKanban) setKanbanMode(rawKanban === "true");
             const rawEdit = localStorage.getItem(EDIT_MODE_KEY);
-            if (rawEdit) setEditMode(rawEdit === "true");
-            // Desktop always defaults to split view regardless of saved preference
-            if (window.matchMedia("(min-width: 1024px)").matches) setEditMode(true);
+            if (rawEdit !== null) {
+                setEditMode(rawEdit === "true");
+            } else if (window.matchMedia("(min-width: 1024px)").matches) {
+                // First time on desktop (no saved preference): default to split view
+                setEditMode(true);
+            }
         } catch { /* ignore */ }
         try {
             const rawTheme = localStorage.getItem(APP_THEME_KEY);
@@ -2101,6 +2064,10 @@ export default function NotesMaster() {
         try { localStorage.setItem(APP_THEME_KEY, appTheme); } catch { /* ignore */ }
         document.documentElement.setAttribute("data-theme", appTheme);
     }, [appTheme]);
+
+    useEffect(() => {
+        try { localStorage.setItem(LAST_FOLDER_KEY, activeFolder ?? "__all__"); } catch { /* ignore */ }
+    }, [activeFolder]);
 
     useEffect(() => {
         try { localStorage.setItem(EDIT_MODE_KEY, String(editMode)); } catch { /* ignore */ }
@@ -2383,14 +2350,13 @@ const fireIntegrations = (trigger: string, note: any) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [editingNote?.id]);
 
-    // In split view, restore last notebook choice from localStorage (or default folder)
+    // In split view, restore last active folder (including "all files") — only if no folder selected yet
     useEffect(() => {
-        if (!editMode || activeFolder) return;
-        const saved = localStorage.getItem("stickies-split-notebook");
-        if (saved === "__all__") return; // stay in All Notes
-        const target = saved || defaultFolder;
-        setActiveFolder(target);
-        if (target) void loadFolderNotes(target, false);
+        if (!editMode || activeFolder !== null) return;
+        const lastFolder = localStorage.getItem(LAST_FOLDER_KEY);
+        if (lastFolder === "__all__" || lastFolder === null) return; // stay in All Notes
+        setActiveFolder(lastFolder);
+        void loadFolderNotes(lastFolder, false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [editMode]);
 
@@ -3821,8 +3787,10 @@ const fireIntegrations = (trigger: string, note: any) => {
             const ids = [...selectedIds];
             if (ids.length === 0) return;
             try {
+                const toDelete = dbData.filter((n) => ids.includes(String(n.id)));
                 setDbData((prev) => prev.filter((n) => !ids.includes(String(n.id))));
                 await Promise.all(ids.map((id) => notesApi.delete(id)));
+                toDelete.forEach((n: any) => { if (n.folder_name) removeFromCachedNotes(String(n.folder_name), String(n.id)); });
                 setIsSelectMode(false);
                 setSelectedIds(new Set());
                 showToast(`Deleted ${ids.length} note${ids.length !== 1 ? "s" : ""}`);
@@ -3872,6 +3840,7 @@ const fireIntegrations = (trigger: string, note: any) => {
 
         // Always fetch full content — list API omits the content column
         if (note.content == null) {
+            setNoteContentLoading(true);
             try {
                 const token = await getAuthToken();
                 const res = await fetch(`/api/stickies?id=${encodeURIComponent(note.id)}`, {
@@ -3892,8 +3861,10 @@ const fireIntegrations = (trigger: string, note: any) => {
                     }
                 }
             } catch { /* use note as-is */ }
+            finally { if (openingNoteIdRef.current === noteId) setNoteContentLoading(false); }
         } else {
-            // Content already present — apply modes directly
+            // Content already present — no loading needed
+            setNoteContentLoading(false);
             if (note.id && looksLikeMarkdown(note.content || "")) setMarkdownModeNotes((p: Set<string>) => new Set([...p, String(note.id)]));
             if (note.id && (note.list_mode || note.type === "checklist")) setListModeNotes((p: Set<string>) => new Set([...p, String(note.id)]));
             if (note.id && note.mindmap_mode) setMindmapModeNotes((p: Set<string>) => new Set([...p, String(note.id)]));
@@ -5750,7 +5721,9 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 boxShadow: toastRainbow ? "0 8px 26px rgba(180,74,255,0.5)" : `0 8px 26px ${toastColor}66`,
                             }}>
                                 <span style={{ width: 20, height: 20, borderRadius: "50%", background: "rgba(255,255,255,0.2)", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                                    <CpuChipIcon style={{ width: 12, height: 12, color: "#fff", strokeWidth: 2 }} />
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/>
+                                    </svg>
                                 </span>
                                 <span className="font-black uppercase tracking-wide text-[7px] sm:text-[8px] leading-snug max-w-[220px] break-words text-center">{toast}</span>
                             </div>
@@ -5917,6 +5890,21 @@ const fireIntegrations = (trigger: string, note: any) => {
                         </button>
                     </div>
                     <div className="relative flex-1 flex overflow-hidden bg-black font-mono">
+                        {/* ── Note content loading spinner — shown while fetching full content ── */}
+                        {noteContentLoading && (() => {
+                            const nc = editingNote?.color || editingNote?.folder_color || noteColor || "#71717a";
+                            const initial = meaningfulInitial(editingNote?.title || title || "", "N");
+                            return (
+                                <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm pointer-events-none">
+                                    <div className="flex flex-col items-center gap-3">
+                                        <div className="w-14 h-14 flex items-center justify-center font-black text-white text-2xl animate-spin"
+                                            style={{ backgroundColor: nc, borderRadius: "3px 3px 3px 14px", boxShadow: `0 0 24px ${nc}88`, animationDuration: "1s" }}>
+                                            {initial}
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })()}
                         {/* ── Float copy pill — fades after 10s of editing ── */}
                         {showFloatCopy && !showNoteActions && content.trim() && !listMode && !graphMode && !mindmapMode && !stackMode && !voiceNote && noteType !== "rich" && noteType !== "html" && (
                         <div className="absolute top-3 right-3 z-[2147483647] pointer-events-auto">
@@ -6432,19 +6420,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                             </div>
                         ) : (
                             <div className="flex-1 flex overflow-auto" style={{ background: "#000" }}>
-                                {/* Line number gutter */}
-                                <div aria-hidden style={{
-                                    width: 48, minWidth: 48, paddingTop: 8, paddingBottom: 24,
-                                    borderRight: "1px solid rgba(255,255,255,0.06)",
-                                    textAlign: "right", userSelect: "none", pointerEvents: "none",
-                                    lineHeight: "19px", fontSize: 13,
-                                    fontFamily: "ui-monospace,'Fira Code',monospace",
-                                    color: "#3f3f3f", flexShrink: 0,
-                                }}>
-                                    {(content || "").split("\n").map((_, i) => (
-                                        <div key={i} style={{ paddingRight: 10 }}>{i + 1}</div>
-                                    ))}
-                                </div>
                                 {/* Native textarea — no cursor jump */}
                                 <textarea
                                     ref={editorTextRef}
@@ -6885,7 +6860,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         const c = item.color || item.folder_color || "#888888";
                                         const isActive = editMode && !item.is_folder && String(item.id) === String(editingNote?.id);
                                         if (isListMode) {
-                                            return { position: "relative", isolation: "isolate", "--row-color": c, ...(isActive ? { borderLeftColor: c } : {}) } as React.CSSProperties;
+                                            return { position: "relative", isolation: "isolate", "--row-color": c, "--fc": c, ...(isActive ? { borderLeftColor: c } : {}), ...(item.is_folder ? { background: `${c}18` } : {}) } as React.CSSProperties;
                                         }
                                         return item.is_folder
                                             ? { isolation: "isolate", "--fc": c } as React.CSSProperties
@@ -6893,7 +6868,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     })()}
                                     className={`${isListMode
                                         ? `group list-row-hover flex items-center gap-3 px-4 py-3 border-b border-white/5 cursor-pointer select-none transition-colors active:bg-white/10 overflow-hidden ${isDragging ? "opacity-30" : dt?.mode === "into" ? "bg-cyan-950/60 ring-1 ring-inset ring-cyan-400" : ""} ${isSelectMode && !item.is_folder && selectedIds.has(String(item.id)) ? "bg-blue-950/50" : ""} ${editMode && !item.is_folder && String(item.id) === String(editingNote?.id) ? "bg-white/10 border-l-[3px]" : "border-l-[3px] border-l-transparent"}`
-                                        : `grid-square-tile min-w-0 cursor-pointer transition-all group ${item.is_folder ? "folder-grid-tile" : ""} ${isDragging ? "opacity-30 scale-95" : dt?.mode === "into" ? "ring-4 ring-cyan-400 ring-inset z-10" : ""} ${editMode && !item.is_folder && String(item.id) === String(editingNote?.id) ? "ring-2 ring-white/40 ring-inset" : ""}`}`}>
+                                        : `grid-square-tile min-w-0 cursor-pointer transition-all group ${item.is_folder ? `folder-grid-tile${item.name === "CLAUDE" ? " folder-grid-tile-claude" : ""}` : ""} ${isDragging ? "opacity-30 scale-95" : dt?.mode === "into" ? "ring-4 ring-cyan-400 ring-inset z-10" : ""} ${editMode && !item.is_folder && String(item.id) === String(editingNote?.id) ? "ring-2 ring-white/40 ring-inset" : ""}`}`}>
                                     {/* Cursor spotlight glow */}
                                     {isListMode && glowCard?.id === tileId && (() => {
                                         const c = item.color || item.folder_color || "#888888";
@@ -6923,7 +6898,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 return (
                                                     <button type="button"
                                                         onClick={(e) => { e.stopPropagation(); enterFolder({ id: String(item.id), name: item.name, color: item.color || palette12[0] }); setIsGlobalSettings(false); setShowFolderColorPicker(false); setShowFolderIconPicker(false); setShowFolderMovePicker(false); setShowFolderActions(true); }}
-                                                        className="folder-icon-badge flex-shrink-0 w-[54px] h-[54px] sm:w-[46px] sm:h-[46px] flex items-center justify-center font-black overflow-hidden"
+                                                        className={`folder-icon-badge${item.name === "CLAUDE" ? " folder-icon-badge-claude" : ""} flex-shrink-0 w-[54px] h-[54px] sm:w-[46px] sm:h-[46px] flex items-center justify-center font-black overflow-hidden`}
                                                         style={{ fontSize: 22, "--fc": c, boxShadow: `2px 3px 8px ${c}55` } as React.CSSProperties}>
                                                         {item.name === "CLAUDE"
                                                             ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-0.5" />

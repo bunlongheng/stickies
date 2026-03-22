@@ -334,36 +334,53 @@ body {
 
 /* Folder icon badge — always solid folder color, white icon */
 .folder-icon-badge {
-  background: #fff;
-  color: var(--fc, #888);
+  background: var(--fc, #888);
+  color: #fff;
   transition: background 0.15s, color 0.15s, opacity 0.15s;
 }
 .folder-icon-badge:hover {
-  opacity: 0.8;
+  opacity: 0.85;
+}
+/* CLAUDE stays white — special */
+.folder-icon-badge-claude {
+  background: #fff !important;
+  color: inherit !important;
 }
 /* Folder list row — name text turns white on row hover */
 .list-row-hover:hover .folder-name-text {
   color: #fff !important;
 }
 
-/* Folder grid tile — white bg, real color on hover */
+/* Folder grid tile — own color bg by default */
 .folder-grid-tile {
-  background: #fff;
+  background: var(--fc, #888);
   transition: background 0.15s;
 }
 .folder-grid-tile:hover {
-  background: var(--fc) !important;
+  filter: brightness(1.12);
 }
-.folder-grid-tile:hover .folder-grid-name {
+.folder-grid-tile .folder-grid-name {
   color: #fff !important;
 }
-.folder-grid-tile:hover .folder-icon-badge {
+.folder-grid-tile .folder-icon-badge {
   background: rgba(255,255,255,0.2);
   color: #fff;
 }
-.folder-grid-tile:hover .folder-grid-initial,
-.folder-grid-tile:hover .folder-grid-name {
+.folder-grid-tile .folder-grid-initial {
   color: #fff !important;
+}
+/* CLAUDE grid tile stays white */
+.folder-grid-tile-claude {
+  background: #fff !important;
+}
+.folder-grid-tile-claude .folder-grid-name {
+  color: var(--fc, #888) !important;
+}
+.folder-grid-tile-claude .folder-icon-badge {
+  background: #fff !important;
+}
+.folder-grid-tile-claude:hover {
+  filter: brightness(0.95);
 }
 
 /* ── Monokai syntax highlighting for rich note code blocks (hljs/lowlight) ── */
