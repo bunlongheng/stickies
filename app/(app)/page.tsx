@@ -6912,7 +6912,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 const initial = meaningfulInitial(item.title || "", "N");
                                                 return (
                                                     <button type="button"
-                                                        onClick={(e) => { e.stopPropagation(); void openNote(item); setShowNoteActions(true); closeEditorTools(); }}
+                                                        onClick={(e) => { e.stopPropagation(); void openNote(item); closeEditorTools(); }}
                                                         className="flex-shrink-0 w-[54px] h-[54px] sm:w-[46px] sm:h-[46px] flex items-center justify-center font-black overflow-hidden relative"
                                                         style={{
                                                             fontSize: 22,
