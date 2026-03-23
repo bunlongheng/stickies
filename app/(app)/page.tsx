@@ -2760,17 +2760,17 @@ const fireIntegrations = (trigger: string, note: any) => {
             const notes = dbData.filter((n) => !n.is_folder && (
                 (useUuid && String(n.folder_id) === activeFolderId) ||
                 n.folder_name === activeFolder
-            )).sort(byUpdated);
+            ) && (activeFolder === "TRASH" || n.folder_name !== "TRASH")).sort(byUpdated);
             return [...currentLevelFolders, ...notes];
         }
         // Split view (editMode) with no active folder: show all notes sorted by updated
         if (editMode) {
-            return dbData.filter((n) => !n.is_folder).sort(byUpdated);
+            return dbData.filter((n) => !n.is_folder && n.folder_name !== "TRASH").sort(byUpdated);
         }
         // Root: files-only mode → all notes sorted by newest first, then alpha by folder/title
         if (navMode === "files-only") {
             return dbData
-                .filter((n) => !n.is_folder)
+                .filter((n) => !n.is_folder && n.folder_name !== "TRASH")
                 .sort((a, b) =>
                     String(b.created_at || "").localeCompare(String(a.created_at || "")) ||
                     String(a.folder_name || "").localeCompare(String(b.folder_name || "")) ||
@@ -3730,6 +3730,11 @@ const fireIntegrations = (trigger: string, note: any) => {
             const existingNote = dbData.find((r) => String(r.id) === noteId);
             const alreadyInTrash = existingNote?.folder_name === "TRASH";
             try {
+                // Animate out first
+                setRemovingNoteIds((prev) => new Set([...prev, noteId]));
+                await new Promise(r => setTimeout(r, 360));
+                setRemovingNoteIds((prev) => { const s = new Set(prev); s.delete(noteId); return s; });
+
                 if (permanent || alreadyInTrash) {
                     // Permanent delete — only for notes already in TRASH
                     await notesApi.delete(noteId);
@@ -3775,11 +3780,15 @@ const fireIntegrations = (trigger: string, note: any) => {
             void notesApi.update(String(pendingDeleteRef.current.note.id), { folder_name: "TRASH", trashed_at: new Date().toISOString() });
             pendingDeleteRef.current = null;
         }
-        // Optimistic UI
-        setDbData((prev) => alreadyInTrash
-            ? prev.filter((r) => String(r.id) !== noteId)
-            : prev.map((r) => String(r.id) === noteId ? { ...r, folder_name: "TRASH", trashed_at: new Date().toISOString() } : r)
-        );
+        // Slide-out animation, then update state
+        setRemovingNoteIds((prev) => new Set([...prev, noteId]));
+        setTimeout(() => {
+            setRemovingNoteIds((prev) => { const s = new Set(prev); s.delete(noteId); return s; });
+            setDbData((prev) => alreadyInTrash
+                ? prev.filter((r) => String(r.id) !== noteId)
+                : prev.map((r) => String(r.id) === noteId ? { ...r, folder_name: "TRASH", trashed_at: new Date().toISOString() } : r)
+            );
+        }, 360);
         localStorage.removeItem(ACTIVE_DRAFT_KEY);
         setPendingShare(null);
         closeEditorTools();
@@ -3794,12 +3803,13 @@ const fireIntegrations = (trigger: string, note: any) => {
             showToast(`"${label}" deleted`, "#FF3B30");
             void notesApi.delete(noteId);
         } else {
-            showToast(`"${label}" → Trash`, origColor);
+            showToast(`"${label}" → Trash  ⌘Z`, origColor);
             const snap = { note: editingNote, title, content, noteColor: origColor, targetFolder: targetFolder || "" };
+            // Delay actual DB write 8s so ⌘Z can cancel it
             const timeoutId = setTimeout(async () => {
                 pendingDeleteRef.current = null;
                 try { await notesApi.update(noteId, { folder_name: "TRASH", trashed_at: new Date().toISOString() }); } catch { /* ignore */ }
-            }, 800);
+            }, 8000);
             pendingDeleteRef.current = { ...snap, timeoutId };
         }
     }, [editingNote, title, content, noteColor, targetFolder, closeEditorTools]);
