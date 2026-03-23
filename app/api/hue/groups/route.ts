@@ -2,9 +2,6 @@ import https from "node:https";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
-const CLIENT_ID     = process.env.HUE_CLIENT_ID?.trim();
-const CLIENT_SECRET = process.env.HUE_CLIENT_SECRET?.trim();
-
 function getSupabase() {
     return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
@@ -29,6 +26,8 @@ function localFetch(bridgeIp: string, appKey: string, path: string): Promise<any
 }
 
 async function getRemoteToken(integration: any): Promise<string | null> {
+    const CLIENT_ID     = integration.config?.client_id?.trim();
+    const CLIENT_SECRET = integration.config?.client_secret?.trim();
     if (!CLIENT_ID || !CLIENT_SECRET) return null;
     if (!integration.access_token) return null;
 
