@@ -1245,6 +1245,7 @@ export default function NotesMaster() {
     const [flashColor, setFlashColor] = useState("#ffffff");
     const [flashNote, setFlashNote] = useState<any | null>(null);
     const [incomingNoteIds, setIncomingNoteIds] = useState<Set<string>>(new Set());
+    const [removingNoteIds, setRemovingNoteIds] = useState<Set<string>>(new Set());
 
     const [editorOpen, setEditorOpen] = useState(false);
     const [editingNote, setEditingNote] = useState<any | null>(null);
@@ -2301,8 +2302,13 @@ const fireIntegrations = (trigger: string, note: any) => {
                 const id = payload.old?.id;
                 const folderName = payload.old?.folder_name;
                 if (id) {
-                    setDbData((prev) => prev.filter((r) => String(r.id) !== String(id)));
-                    if (folderName) removeFromCachedNotes(folderName, String(id));
+                    const nid = String(id);
+                    setRemovingNoteIds((prev) => new Set([...prev, nid]));
+                    setTimeout(() => {
+                        setDbData((prev) => prev.filter((r) => String(r.id) !== nid));
+                        setRemovingNoteIds((prev) => { const s = new Set(prev); s.delete(nid); return s; });
+                        if (folderName) removeFromCachedNotes(folderName, nid);
+                    }, 360);
                 }
             })
             .subscribe();
@@ -6858,7 +6864,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             : { isolation: "isolate", backgroundColor: c, borderRadius: "3px 3px 3px 14px" };
                                     })()}
                                     className={`${isListMode
-                                        ? `group list-row-hover flex items-center gap-3 px-4 py-3 border-b border-white/5 cursor-pointer select-none transition-colors active:bg-white/10 overflow-hidden ${!item.is_folder && incomingNoteIds.has(String(item.id)) ? "note-incoming" : ""} ${isDragging ? "opacity-30" : dt?.mode === "into" ? "bg-cyan-950/60 ring-1 ring-inset ring-cyan-400" : ""} ${isSelectMode && !item.is_folder && selectedIds.has(String(item.id)) ? "bg-blue-950/50" : ""} ${editMode && !item.is_folder && String(item.id) === String(editingNote?.id) ? "bg-white/10 border-l-[3px]" : "border-l-[3px] border-l-transparent"}`
+                                        ? `group list-row-hover flex items-center gap-3 px-4 py-3 border-b border-white/5 cursor-pointer select-none transition-colors active:bg-white/10 overflow-hidden ${!item.is_folder && incomingNoteIds.has(String(item.id)) ? "note-incoming" : ""} ${!item.is_folder && removingNoteIds.has(String(item.id)) ? "note-removing" : ""} ${isDragging ? "opacity-30" : dt?.mode === "into" ? "bg-cyan-950/60 ring-1 ring-inset ring-cyan-400" : ""} ${isSelectMode && !item.is_folder && selectedIds.has(String(item.id)) ? "bg-blue-950/50" : ""} ${editMode && !item.is_folder && String(item.id) === String(editingNote?.id) ? "bg-white/10 border-l-[3px]" : "border-l-[3px] border-l-transparent"}`
                                         : `grid-square-tile min-w-0 cursor-pointer transition-all group ${item.is_folder ? `folder-grid-tile${item.name === "CLAUDE" ? " folder-grid-tile-claude" : ""}` : ""} ${isDragging ? "opacity-30 scale-95" : dt?.mode === "into" ? "ring-4 ring-cyan-400 ring-inset z-10" : ""} ${editMode && !item.is_folder && String(item.id) === String(editingNote?.id) ? "ring-2 ring-white/40 ring-inset" : ""}`}`}>
                                     {/* Cursor spotlight glow */}
                                     {isListMode && glowCard?.id === tileId && (() => {

@@ -415,3 +415,13 @@ body {
 .note-incoming {
   animation: noteIncoming 1.2s ease forwards;
 }
+@keyframes noteRemoving {
+  0%   { transform: translateX(0); opacity: 1; max-height: 64px; }
+  60%  { transform: translateX(-100%); opacity: 0; max-height: 64px; }
+  100% { transform: translateX(-100%); opacity: 0; max-height: 0; padding-top: 0; padding-bottom: 0; border: none; }
+}
+.note-removing {
+  animation: noteRemoving 0.35s ease forwards;
+  overflow: hidden;
+  pointer-events: none;
+}
