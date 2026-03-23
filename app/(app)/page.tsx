@@ -6493,6 +6493,12 @@ const fireIntegrations = (trigger: string, note: any) => {
                             {sizeStr && <span className="font-mono text-zinc-600 whitespace-nowrap">{sizeStr}</span>}
                             {edited && <span className="font-mono text-zinc-600 whitespace-nowrap">{edited}</span>}
                             <span className="font-mono text-zinc-500 whitespace-nowrap">{ext}</span>
+                            {(() => {
+                                const badge = TYPE_BADGE[noteType] ?? TYPE_BADGE["text"];
+                                if (!badge) return null;
+                                const label = noteType === "mermaid" ? mermaidSubType(content) : badge.label;
+                                return <span className="font-mono font-black uppercase tracking-wide whitespace-nowrap px-1.5 py-px rounded-full" style={{ fontSize: 8, background: `${badge.color}22`, color: badge.color, border: `1px solid ${badge.color}44` }}>{label}</span>;
+                            })()}
                         </div>
                     );
                 })()}
@@ -7021,18 +7027,9 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 <HeartSolidIcon className="w-3.5 h-3.5 text-white flex-shrink-0" />
                                             )}
                                             {item.is_folder && <ArrowRightIcon className="w-4 h-4 text-zinc-600 flex-shrink-0" />}
-                                            {/* Badge + Date — grouped together on the far right */}
+                                            {/* Date only — badge moved to bottom status bar */}
                                             {!item.is_folder && item.updated_at && (
-                                                <div className="flex items-center justify-end gap-2 flex-shrink-0">
-                                                    {(() => {
-                                                        const t = (item as any).type || "text";
-                                                        const badge = TYPE_BADGE[t] ?? TYPE_BADGE["text"];
-                                                        if (!badge) return null;
-                                                        const label = t === "mermaid" ? mermaidSubType(item.content || "") : badge.label;
-                                                        return <span className="hidden sm:inline-flex text-[7px] font-black uppercase tracking-wide px-1 py-px rounded-full flex-shrink-0" style={{ background: `${badge.color}20`, color: badge.color, border: `1px solid ${badge.color}40` }}>{label}</span>;
-                                                    })()}
-                                                    <span className="text-[11px] text-zinc-500 font-medium whitespace-nowrap">{timeAgo(item.updated_at)}</span>
-                                                </div>
+                                                <span className="text-[11px] text-zinc-500 font-medium whitespace-nowrap flex-shrink-0">{timeAgo(item.updated_at)}</span>
                                             )}
                                             {item.is_folder && item.latestUpdatedAt && (
                                                 <div className="flex items-center justify-end" style={{ width: "15%", flexShrink: 0 }}>
