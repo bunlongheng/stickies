@@ -4,7 +4,7 @@
  *
  * Usage:
  *   node scripts/stickies-cli.mjs <command> [options]
- *   npm run st -- <command> [options]
+ *   npm run stickies -- <command> [options]
  *
  * Commands:
  *   new      Create a new note
@@ -16,13 +16,13 @@
  *   post     Pipe stdin as note content
  *
  * Examples:
- *   npm run st -- new "My Note" "Content here" --folder CLAUDE
- *   npm run st -- list --folder SKILLS
- *   npm run st -- folders
- *   npm run st -- get abc123
- *   npm run st -- delete abc123
- *   npm run st -- search "rainbow"
- *   echo "# Title\n\nContent" | npm run st -- post
+ *   npm run stickies -- new "My Note" "Content here" --folder CLAUDE
+ *   npm run stickies -- list --folder SKILLS
+ *   npm run stickies -- folders
+ *   npm run stickies -- get abc123
+ *   npm run stickies -- delete abc123
+ *   npm run stickies -- search "rainbow"
+ *   echo "# Title\n\nContent" | npm run stickies -- post
  */
 
 import http from "node:http";
@@ -250,12 +250,12 @@ ${CYAN}Commands:${RESET}
   ${BOLD}post${RESET} [--folder F]                                    Post from stdin
 
 ${CYAN}Examples:${RESET}
-  npm run st -- new "My Note" "Hello world" --folder CLAUDE
-  npm run st -- list --folder SKILLS
-  npm run st -- folders
-  npm run st -- search "rainbow"
-  npm run st -- delete abc12345
-  echo "# Title\\n\\nContent" | npm run st -- post --folder IDEAS
+  npm run stickies --new "My Note" "Hello world" --folder CLAUDE
+  npm run stickies --list --folder SKILLS
+  npm run stickies --folders
+  npm run stickies --search "rainbow"
+  npm run stickies --delete abc12345
+  echo "# Title\\n\\nContent" | npm run stickies --post --folder IDEAS
 
 ${DIM}Always tries localhost:4444 first (triggers Hue + screen flash),
 falls back to stickies-bheng.vercel.app if local is unreachable.${RESET}

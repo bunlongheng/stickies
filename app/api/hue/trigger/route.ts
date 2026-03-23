@@ -2,8 +2,6 @@ import https from "node:https";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
-const CLIENT_ID     = process.env.HUE_CLIENT_ID?.trim();
-const CLIENT_SECRET = process.env.HUE_CLIENT_SECRET?.trim();
 const RESTORE_DELAY = 60_000; // 1 minute of inactivity → restore
 
 // Module-level debounce state (persists in PM2 process; ignored on Vercel)
@@ -59,6 +57,8 @@ function localFetch(bridgeIp: string, appKey: string, path: string, method = "GE
 
 // Get valid Remote API access token from integrations row, refresh if needed
 async function getRemoteToken(integration: any): Promise<string | null> {
+    const CLIENT_ID     = integration.config?.client_id?.trim();
+    const CLIENT_SECRET = integration.config?.client_secret?.trim();
     if (!CLIENT_ID || !CLIENT_SECRET) return null;
     if (!integration.access_token) return null;
 
