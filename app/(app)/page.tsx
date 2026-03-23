@@ -6670,7 +6670,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 </button>
                                 <div className="ml-auto flex items-center gap-1">
                                     {!editMode && <HeaderIconBtn icon={mainListMode === "list" ? Bars3Icon : Squares2X2Icon} label={mainListMode === "list" ? "List" : "Thumb"} active={!kanbanMode} onClick={() => { setMainListMode(v => v === "thumb" ? "list" : "thumb"); setKanbanMode(false); }} />}
-                                    {editMode && <HeaderIconBtn icon={Cog6ToothIcon} label="Settings" onClick={() => { const hueInt = integrationsRef.current.find(ig => ig.type === "hue"); setLightMode((hueInt?.config?.mode as any) ?? "flash"); setIsGlobalSettings(true); setShowFolderActions(true); }} />}
+                                    <HeaderIconBtn icon={Cog6ToothIcon} label="Settings" onClick={() => { const hueInt = integrationsRef.current.find(ig => ig.type === "hue"); setLightMode((hueInt?.config?.mode as any) ?? "flash"); setIsGlobalSettings(true); setShowFolderActions(true); }} />
                                 </div>
                             </>
                         ) : (
@@ -6898,7 +6898,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             : { isolation: "isolate", backgroundColor: c, borderRadius: "3px 3px 3px 14px" };
                                     })()}
                                     className={`${isListMode
-                                        ? `group list-row-hover flex items-center gap-3 px-4 py-3 border-b border-white/5 cursor-pointer select-none transition-colors active:bg-white/10 overflow-hidden ${!item.is_folder && incomingNoteIds.has(String(item.id)) ? "note-incoming" : ""} ${!item.is_folder && removingNoteIds.has(String(item.id)) ? "note-removing" : ""} ${isDragging ? "opacity-30" : dt?.mode === "into" ? "bg-cyan-950/60 ring-1 ring-inset ring-cyan-400" : ""} ${isSelectMode && !item.is_folder && selectedIds.has(String(item.id)) ? "bg-blue-950/50" : ""} ${editMode && !item.is_folder && String(item.id) === String(editingNote?.id) ? "bg-white/10 border-l-[3px]" : "border-l-[3px] border-l-transparent"}`
+                                        ? `group list-row-hover flex items-center gap-3 pr-4 min-h-[54px] border-b border-white/5 cursor-pointer select-none transition-colors active:bg-white/10 overflow-hidden ${!item.is_folder && incomingNoteIds.has(String(item.id)) ? "note-incoming" : ""} ${!item.is_folder && removingNoteIds.has(String(item.id)) ? "note-removing" : ""} ${isDragging ? "opacity-30" : dt?.mode === "into" ? "bg-cyan-950/60 ring-1 ring-inset ring-cyan-400" : ""} ${isSelectMode && !item.is_folder && selectedIds.has(String(item.id)) ? "bg-blue-950/50" : ""} ${editMode && !item.is_folder && String(item.id) === String(editingNote?.id) ? "bg-white/10 border-l-[3px]" : "border-l-[3px] border-l-transparent"}`
                                         : `grid-square-tile min-w-0 cursor-pointer transition-all group ${item.is_folder ? `folder-grid-tile${item.name === "CLAUDE" ? " folder-grid-tile-claude" : ""}` : ""} ${isDragging ? "opacity-30 scale-95" : dt?.mode === "into" ? "ring-4 ring-cyan-400 ring-inset z-10" : ""} ${editMode && !item.is_folder && String(item.id) === String(editingNote?.id) ? "ring-2 ring-white/40 ring-inset" : ""}`}`}>
                                     {/* Cursor spotlight glow */}
                                     {isListMode && glowCard?.id === tileId && (() => {
@@ -6920,7 +6920,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     {isListMode ? (
                                         <>
                                             {isSelectMode && !item.is_folder && (
-                                                <div className={`w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center border-2 transition-all ${selectedIds.has(String(item.id)) ? "bg-blue-500 border-blue-500" : "border-zinc-600"}`}>
+                                                <div className={`ml-4 w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center border-2 transition-all ${selectedIds.has(String(item.id)) ? "bg-blue-500 border-blue-500" : "border-zinc-600"}`}>
                                                     {selectedIds.has(String(item.id)) && <CheckIcon className="w-3 h-3 text-white" />}
                                                 </div>
                                             )}
@@ -6929,7 +6929,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 return (
                                                     <button type="button"
                                                         onClick={(e) => { e.stopPropagation(); enterFolder({ id: String(item.id), name: item.name, color: item.color || palette12[0] }); setIsGlobalSettings(false); setShowFolderColorPicker(false); setShowFolderIconPicker(false); setShowFolderMovePicker(false); setShowFolderActions(true); }}
-                                                        className={`folder-icon-badge${item.name === "CLAUDE" ? " folder-icon-badge-claude" : ""} flex-shrink-0 w-[54px] h-[54px] sm:w-[46px] sm:h-[46px] flex items-center justify-center font-black overflow-hidden`}
+                                                        className={`folder-icon-badge${item.name === "CLAUDE" ? " folder-icon-badge-claude" : ""} flex-shrink-0 self-stretch w-[54px] sm:w-[46px] flex items-center justify-center font-black overflow-hidden`}
                                                         style={{ fontSize: 22, "--fc": c, boxShadow: `2px 3px 8px ${c}55` } as React.CSSProperties}>
                                                         {item.name === "CLAUDE"
                                                             ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-0.5" />
@@ -6944,7 +6944,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 return (
                                                     <button type="button"
                                                         onClick={(e) => { e.stopPropagation(); void openNote(item); closeEditorTools(); }}
-                                                        className="flex-shrink-0 w-[54px] h-[54px] sm:w-[46px] sm:h-[46px] flex items-center justify-center font-black overflow-hidden relative"
+                                                        className="flex-shrink-0 self-stretch w-[54px] sm:w-[46px] flex items-center justify-center font-black overflow-hidden relative"
                                                         style={{
                                                             fontSize: 22,
                                                             backgroundColor: nc,
@@ -8127,10 +8127,11 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         ))}
                                     </div>
                                 </div>
-                                {/* VIEW MODE */}
+                                {/* VIEW MODE — hidden in split mode (auto-list) */}
+                                {!editMode && (
                                 <div className="px-6 py-2 border-b border-white/[0.06]">
                                     <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-1.5">View</p>
-                                    <div className="grid grid-cols-3 gap-1.5">
+                                    <div className="grid grid-cols-2 gap-1.5">
                                         <button type="button" onClick={() => { setMainListMode("list"); setKanbanMode(false); }}
                                             className={`py-1.5 rounded flex flex-col items-center gap-0.5 transition ${mainListMode === "list" && !kanbanMode ? "bg-white text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"}`}>
                                             <Bars3Icon className="w-4 h-4" />
@@ -8141,13 +8142,9 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             <Squares2X2Icon className="w-4 h-4" />
                                             <span className="text-[9px] font-black uppercase tracking-wide">Thumb</span>
                                         </button>
-                                        <button type="button" onClick={() => { if (listMode) toggleListMode(); else { if (graphMode) toggleGraphMode(); if (mindmapMode) toggleMindmapMode(); if (stackMode) toggleStackMode(); toggleListMode(); } setShowFolderActions(false); }}
-                                            className={`py-1.5 rounded flex flex-col items-center gap-0.5 transition ${listMode ? "bg-white text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"}`}>
-                                            <ListBulletIcon className="w-4 h-4" />
-                                            <span className="text-[9px] font-black uppercase tracking-wide">Todo</span>
-                                        </button>
                                     </div>
                                 </div>
+                                )}
                                 {/* SPLIT LAYOUT TOGGLE */}
                                 <div className="px-6 py-2 border-b border-white/[0.06]">
                                     <button type="button" onClick={() => { setEditMode(v => !v); setShowFolderActions(false); }}
