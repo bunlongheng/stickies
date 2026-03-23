@@ -159,7 +159,11 @@ function broadcastRequest(req: Request, auth: AuthResult, extra?: Record<string,
 
 // ── Hue trigger — only called for external (AI/script) requests ──────────────
 function triggerHue(color: string) {
-    const base = (process.env.NEXT_PUBLIC_APP_BASE_URL ?? "http://localhost:4444").replace(/\/$/, "");
+    // VERCEL_PROJECT_PRODUCTION_URL is auto-set by Vercel to the stable prod domain
+    // Fall back to NEXT_PUBLIC_APP_BASE_URL for local dev
+    const base = process.env.VERCEL_PROJECT_PRODUCTION_URL
+        ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+        : (process.env.NEXT_PUBLIC_APP_BASE_URL ?? "http://localhost:4444").replace(/\/$/, "");
     fetch(`${base}/api/hue/trigger`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
