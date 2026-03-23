@@ -2954,12 +2954,12 @@ const fireIntegrations = (trigger: string, note: any) => {
             if (isSavingRef.current) return true;
             if ((editingNote as any)?._external) return true; // read-only external note
             isSavingRef.current = true;
-            // Auto-title: if no title, use first non-empty line of content
-            if (!title.trim()) {
+            // Auto-title: if no title, derive from first non-empty content line
+            const resolvedTitle = title.trim() || (() => {
                 const firstLine = content.trim().split("\n").find(l => l.trim()) || "";
-                const autoTitle = firstLine.replace(/^#+\s*/, "").slice(0, 60).trim() || "Untitled";
-                setTitle(autoTitle);
-            }
+                return firstLine.replace(/^#+\s*/, "").slice(0, 60).trim() || "Untitled";
+            })();
+            if (!title.trim()) setTitle(resolvedTitle);
             // Auto-clean mermaid junk (trailing fences, --- blocks) on every save
             let saveContent = content;
             const isMermaidNote = (editingNote as any)?.type === "mermaid" || detectMermaid(content);
@@ -2977,7 +2977,7 @@ const fireIntegrations = (trigger: string, note: any) => {
             const folderId = activeFolderRow && !activeFolderRow.id.startsWith("virtual-") ? activeFolderRow.id : null;
             const extractedTags = Array.from(new Set((saveContent.match(/#[a-zA-Z0-9_-]+/g) ?? []).map(t => t.toLowerCase())));
             const payload: any = {
-                title: title.trim() || content.trim().split("\n").find(l => l.trim())?.replace(/^#+\s*/, "").slice(0, 60).trim() || "Untitled",
+                title: resolvedTitle,
                 content: saveContent,
                 folder_name: folderName,
                 folder_color: noteColor || folders.find((f) => f.name === folderName)?.color || editingNote?.folder_color || palette12[0],
@@ -6925,7 +6925,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                         const isChecklist = isListModeNote || (item as any).type === "checklist" || /^\[[ x]\]/im.test(c);
                                                         const lines = c.split("\n").filter((l: string) => l.trim());
                                                         const checked = lines.filter((l: string) => /^\[x\]/i.test(l.trim())).length;
-                                                        if (isChecklist && lines.length > 0) {
+                                                        if (isChecklist && lines.length > 0 && !editMode) {
                                                             const nc = (item as any).color || (item as any).folder_color || null;
                                                             const undone = lines.filter((l: string) => !/^\[x\]/i.test(l.trim()));
                                                             const remaining = lines.length - checked;
@@ -7000,7 +7000,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             {!item.is_folder && item.updated_at && (
                                                 <div className="flex items-center justify-end gap-2 flex-shrink-0">
                                                     {(() => {
-                                                        if (editMode) return null; // split view — badge already visible in list
                                                         const t = (item as any).type;
                                                         const badge = t && t !== "text" ? TYPE_BADGE[t] : null;
                                                         if (!badge) return null;
