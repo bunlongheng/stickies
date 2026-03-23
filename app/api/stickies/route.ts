@@ -254,7 +254,7 @@ const RAW_INSERT_ALLOWED_COLS = new Set([
 // ── Allowed columns for PATCH updates ────────────────────────────────────────
 const PATCH_ALLOWED_COLS = new Set([
     "title", "content", "folder_name", "folder_color", "is_folder", "type",
-    "order", "updated_at", "parent_folder_name", "folder_id", "list_mode", "tags",
+    "order", "updated_at", "parent_folder_name", "folder_id", "list_mode", "tags", "trashed_at",
 ]);
 
 // ── Color helpers ────────────────────────────────────────────────────────────
@@ -329,6 +329,14 @@ export async function GET(req: Request) {
 
     const table = "stickies";
     const userId = auth.userId;
+
+    // Auto-expire: permanently delete TRASH notes older than 7 days
+    try {
+        await execute(
+            `DELETE FROM "${table}" WHERE user_id = $1 AND folder_name = 'TRASH' AND trashed_at IS NOT NULL AND trashed_at < NOW() - INTERVAL '7 days'`,
+            [userId]
+        );
+    } catch { /* column may not exist yet — migration pending */ }
     const url = new URL(req.url);
     const foldersOnly = url.searchParams.get("folders") === "1";
     const folderFilter = url.searchParams.get("folder");

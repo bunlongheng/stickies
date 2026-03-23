@@ -2699,13 +2699,19 @@ const fireIntegrations = (trigger: string, note: any) => {
             }));
 
         const all = [...foldersFromRows, ...missingFolders];
-        const SYSTEM_BOTTOM = ["CLAUDE"];
+        // These three always pin to the bottom in order: INTEGRATIONS, CLAUDE, TRASH
+        const SYSTEM_BOTTOM = ["INTEGRATIONS", "CLAUDE", "TRASH"];
+        const bottomOrder = (name: string) => SYSTEM_BOTTOM.indexOf(name); // -1 = not pinned
         if (pendingFolderOrder) {
             const idx = new Map(pendingFolderOrder.map((name, i) => [name, i]));
             const sorted = [...all].sort((a, b) => (idx.has(a.name) ? idx.get(a.name)! : all.length) - (idx.has(b.name) ? idx.get(b.name)! : all.length));
-            return [...sorted.filter(f => !SYSTEM_BOTTOM.includes(f.name)), ...sorted.filter(f => SYSTEM_BOTTOM.includes(f.name))];
+            const regular = sorted.filter(f => bottomOrder(f.name) === -1);
+            const pinned = SYSTEM_BOTTOM.map(n => sorted.find(f => f.name === n)).filter(Boolean) as typeof all;
+            return [...regular, ...pinned];
         }
-        return [...all.filter(f => !SYSTEM_BOTTOM.includes(f.name)), ...all.filter(f => SYSTEM_BOTTOM.includes(f.name))];
+        const regular = all.filter(f => bottomOrder(f.name) === -1);
+        const pinned = SYSTEM_BOTTOM.map(n => all.find(f => f.name === n)).filter(Boolean) as typeof all;
+        return [...regular, ...pinned];
     }, [dbData, folderColors, folderIcons, pendingFolderOrder, folderCounts]);
 
     // Folders visible at the current navigation level (root or sub-folder)
@@ -3704,7 +3710,7 @@ const fireIntegrations = (trigger: string, note: any) => {
     }, [editingNote, title, content, noteColor, targetFolder, activeFolder]);
 
     const deleteCurrentNote = useCallback(
-        async (noteId: string | null, noteName: string) => {
+        async (noteId: string | null, noteName: string, permanent = false) => {
             const resolvedNoteName = noteName.trim() || "Untitled";
             const label = resolvedNoteName.length > 10 ? resolvedNoteName.slice(0, 10) + "…" : resolvedNoteName;
             const resolvedColor = (noteId ? dbData.find((r) => String(r.id) === noteId)?.folder_color : null) || noteColor || "#FF3B30";
@@ -3721,11 +3727,23 @@ const fireIntegrations = (trigger: string, note: any) => {
                 showToast(`"${label}" deleted`, resolvedColor);
                 return;
             }
+            const existingNote = dbData.find((r) => String(r.id) === noteId);
+            const alreadyInTrash = existingNote?.folder_name === "TRASH";
             try {
-                const deletedNote = dbData.find((r) => String(r.id) === noteId);
-                await notesApi.delete(noteId);
-                setDbData((prev) => prev.filter((row) => String(row.id) !== noteId));
-                if (deletedNote?.folder_name) removeFromCachedNotes(String(deletedNote.folder_name), noteId);
+                if (permanent || alreadyInTrash) {
+                    // Permanent delete — only for notes already in TRASH
+                    await notesApi.delete(noteId);
+                    setDbData((prev) => prev.filter((row) => String(row.id) !== noteId));
+                    if (existingNote?.folder_name) removeFromCachedNotes(String(existingNote.folder_name), noteId);
+                    showToast(`"${label}" deleted`, "#FF3B30");
+                } else {
+                    // Soft delete — move to TRASH
+                    const trashedAt = new Date().toISOString();
+                    await notesApi.update(noteId, { folder_name: "TRASH", trashed_at: trashedAt });
+                    setDbData((prev) => prev.map((r) => String(r.id) === noteId ? { ...r, folder_name: "TRASH", trashed_at: trashedAt } : r));
+                    if (existingNote?.folder_name) removeFromCachedNotes(String(existingNote.folder_name), noteId);
+                    showToast(`"${label}" → Trash`, resolvedColor);
+                }
                 localStorage.removeItem(ACTIVE_DRAFT_KEY);
                 setPendingShare(null);
                 closeEditorTools();
@@ -3736,29 +3754,32 @@ const fireIntegrations = (trigger: string, note: any) => {
                 setEditorScrollTop(0);
                 setEditorOpen(false);
                 playSound("delete");
-                showToast(`"${label}" deleted`, resolvedColor);
             } catch (err) {
                 console.error("Delete note failed:", err);
                 showError("Delete Failed");
             }
         },
-        [closeEditorTools],
+        [closeEditorTools, dbData, noteColor],
     );
 
-    // Fast delete from toolbar — no confirmation, Cmd+Z to undo within 8s
+    // Fast delete from toolbar — soft deletes to TRASH (recoverable), permanent if already in TRASH
     const fastDeleteNote = useCallback(() => {
         if (!editingNote?.id) return;
         const noteId = String(editingNote.id);
-        const snap = { note: editingNote, title, content, noteColor: noteColor || "#FF3B30", targetFolder: targetFolder || "" };
-        const label = snap.title.trim().slice(0, 10) + (snap.title.trim().length > 10 ? "…" : "") || "Untitled";
+        const label = title.trim().slice(0, 10) + (title.trim().length > 10 ? "…" : "") || "Untitled";
+        const alreadyInTrash = editingNote.folder_name === "TRASH";
+        const origColor = noteColor || "#FF3B30";
         // Cancel any previous pending delete
         if (pendingDeleteRef.current) {
             clearTimeout(pendingDeleteRef.current.timeoutId);
-            void notesApi.delete(String(pendingDeleteRef.current.note.id));
+            void notesApi.update(String(pendingDeleteRef.current.note.id), { folder_name: "TRASH", trashed_at: new Date().toISOString() });
             pendingDeleteRef.current = null;
         }
         // Optimistic UI
-        setDbData((prev) => prev.filter((r) => String(r.id) !== noteId));
+        setDbData((prev) => alreadyInTrash
+            ? prev.filter((r) => String(r.id) !== noteId)
+            : prev.map((r) => String(r.id) === noteId ? { ...r, folder_name: "TRASH", trashed_at: new Date().toISOString() } : r)
+        );
         localStorage.removeItem(ACTIVE_DRAFT_KEY);
         setPendingShare(null);
         closeEditorTools();
@@ -3769,13 +3790,18 @@ const fireIntegrations = (trigger: string, note: any) => {
         setEditorScrollTop(0);
         setEditorOpen(false);
         playSound("delete");
-        showToast(`"${label}" deleted — ⌘Z to undo`, snap.noteColor);
-        // Actual DB delete after 8s
-        const timeoutId = setTimeout(async () => {
-            pendingDeleteRef.current = null;
-            try { await notesApi.delete(noteId); } catch { /* ignore */ }
-        }, 8000);
-        pendingDeleteRef.current = { ...snap, timeoutId };
+        if (alreadyInTrash) {
+            showToast(`"${label}" deleted`, "#FF3B30");
+            void notesApi.delete(noteId);
+        } else {
+            showToast(`"${label}" → Trash`, origColor);
+            const snap = { note: editingNote, title, content, noteColor: origColor, targetFolder: targetFolder || "" };
+            const timeoutId = setTimeout(async () => {
+                pendingDeleteRef.current = null;
+                try { await notesApi.update(noteId, { folder_name: "TRASH", trashed_at: new Date().toISOString() }); } catch { /* ignore */ }
+            }, 800);
+            pendingDeleteRef.current = { ...snap, timeoutId };
+        }
     }, [editingNote, title, content, noteColor, targetFolder, closeEditorTools]);
 
     const deleteFolderByName = useCallback(
@@ -3818,18 +3844,25 @@ const fireIntegrations = (trigger: string, note: any) => {
             if (ids.length === 0) return;
             try {
                 const toDelete = dbData.filter((n) => ids.includes(String(n.id)));
-                setDbData((prev) => prev.filter((n) => !ids.includes(String(n.id))));
-                await Promise.all(ids.map((id) => notesApi.delete(id)));
+                const inTrash = activeFolder === "TRASH";
+                const trashedAt = new Date().toISOString();
+                if (inTrash) {
+                    setDbData((prev) => prev.filter((n) => !ids.includes(String(n.id))));
+                    await Promise.all(ids.map((id) => notesApi.delete(id)));
+                } else {
+                    setDbData((prev) => prev.map((n) => ids.includes(String(n.id)) ? { ...n, folder_name: "TRASH", trashed_at: trashedAt } : n));
+                    await Promise.all(ids.map((id) => notesApi.update(id, { folder_name: "TRASH", trashed_at: trashedAt })));
+                }
                 toDelete.forEach((n: any) => { if (n.folder_name) removeFromCachedNotes(String(n.folder_name), String(n.id)); });
                 setIsSelectMode(false);
                 setSelectedIds(new Set());
-                showToast(`Deleted ${ids.length} note${ids.length !== 1 ? "s" : ""}`);
+                showToast(inTrash ? `Deleted ${ids.length} note${ids.length !== 1 ? "s" : ""}` : `${ids.length} note${ids.length !== 1 ? "s" : ""} → Trash`);
             } catch (err) {
                 console.error("Bulk delete failed:", err);
                 showError("Delete Failed");
             }
         },
-        [selectedIds],
+        [selectedIds, activeFolder, dbData],
     );
 
     const togglePin = useCallback((id: string) => {
@@ -5907,8 +5940,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                         {editingNote?.id && (
                             <button type="button"
                                 onClick={fastDeleteNote}
-                                className="p-2 sm:p-3 text-red-500 hover:text-red-400 active:text-red-600 transition flex-shrink-0"
-                                title="Delete note (⌘Z to undo)">
+                                className={`p-2 sm:p-3 transition flex-shrink-0 ${editingNote?.folder_name === "TRASH" ? "text-red-500 hover:text-red-300 active:text-red-200" : "text-zinc-500 hover:text-red-400 active:text-red-600"}`}
+                                title={editingNote?.folder_name === "TRASH" ? "Permanently Delete" : "Move to Trash"}>
                                 <TrashIcon className="w-[29px] h-[29px] sm:w-7 sm:h-7" />
                             </button>
                         )}
@@ -6929,10 +6962,12 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 return (
                                                     <button type="button"
                                                         onClick={(e) => { e.stopPropagation(); enterFolder({ id: String(item.id), name: item.name, color: item.color || palette12[0] }); setIsGlobalSettings(false); setShowFolderColorPicker(false); setShowFolderIconPicker(false); setShowFolderMovePicker(false); setShowFolderActions(true); }}
-                                                        className={`folder-icon-badge${item.name === "CLAUDE" ? " folder-icon-badge-claude" : ""} flex-shrink-0 self-stretch aspect-square flex items-center justify-center font-black overflow-hidden`}
+                                                        className={`folder-icon-badge${item.name === "CLAUDE" ? " folder-icon-badge-claude" : ""} flex-shrink-0 w-[54px] h-[54px] sm:w-[46px] sm:h-[46px] flex items-center justify-center font-black overflow-hidden`}
                                                         style={{ fontSize: 22, "--fc": c, boxShadow: `2px 3px 8px ${c}55` } as React.CSSProperties}>
                                                         {item.name === "CLAUDE"
                                                             ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-0.5" />
+                                                            : item.name === "TRASH"
+                                                            ? <TrashIcon className="w-6 h-6 text-white" />
                                                             : <FolderIconDisplay value={item.icon || ""} folderName={item.name || "F"} className="w-6 h-6" />}
                                                     </button>
                                                 );
@@ -6944,7 +6979,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 return (
                                                     <button type="button"
                                                         onClick={(e) => { e.stopPropagation(); void openNote(item); closeEditorTools(); }}
-                                                        className="flex-shrink-0 self-stretch aspect-square flex items-center justify-center font-black overflow-hidden relative"
+                                                        className="flex-shrink-0 w-[54px] h-[54px] sm:w-[46px] sm:h-[46px] flex items-center justify-center font-black overflow-hidden relative"
                                                         style={{
                                                             fontSize: 22,
                                                             backgroundColor: nc,
@@ -7042,9 +7077,14 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             {!item.is_folder && pinnedIds.has(String(item.id)) && !isSelectMode && (
                                                 <HeartSolidIcon className="w-3.5 h-3.5 text-white flex-shrink-0" />
                                             )}
-                                            {item.is_folder && <ArrowRightIcon className="w-4 h-4 text-zinc-600 flex-shrink-0" />}
+                                            {item.is_folder && !!activeFolder && <ArrowRightIcon className="w-4 h-4 text-zinc-600 flex-shrink-0" />}
                                             {/* Date only — badge moved to bottom status bar */}
-                                            {!item.is_folder && item.updated_at && (
+                                            {!item.is_folder && (item as any).trashed_at && (
+                                                <span className="text-[11px] text-red-500/70 font-medium whitespace-nowrap flex-shrink-0">
+                                                    {(() => { const days = 7 - Math.floor((Date.now() - new Date((item as any).trashed_at).getTime()) / 86400000); return days > 0 ? `${days}d left` : "expiring"; })()}
+                                                </span>
+                                            )}
+                                            {!item.is_folder && !(item as any).trashed_at && item.updated_at && (
                                                 <span className="text-[11px] text-zinc-500 font-medium whitespace-nowrap flex-shrink-0">{timeAgo(item.updated_at)}</span>
                                             )}
                                             {item.is_folder && item.latestUpdatedAt && (
@@ -8064,8 +8104,16 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     })()}
                                 </div>
                             )}
-                            {/* DELETE FOLDER */}
-                            {activeFolder && !isGlobalSettings && canDeleteActiveFolder && (
+                            {/* EMPTY TRASH (TRASH folder only) */}
+                            {activeFolder === "TRASH" && !isGlobalSettings && (
+                                <button type="button" className="w-full flex items-center gap-4 px-6 py-4 text-left text-red-400 hover:bg-red-500/10 active:bg-red-500/20 transition"
+                                    onClick={() => { setShowFolderActions(false); setConfirmDelete({ type: "folder", folderName: "TRASH" }); }}>
+                                    <TrashIcon className="w-5 h-5 flex-shrink-0" />
+                                    <span className="text-xs font-black tracking-wide">Empty Trash</span>
+                                </button>
+                            )}
+                            {/* DELETE FOLDER (non-TRASH folders only) */}
+                            {activeFolder && activeFolder !== "TRASH" && !isGlobalSettings && canDeleteActiveFolder && (
                                 <button type="button" className="w-full flex items-center gap-4 px-6 py-4 text-left text-red-400 hover:bg-red-500/10 active:bg-red-500/20 transition"
                                     onClick={() => { setShowFolderActions(false); setConfirmDelete({ type: "folder", folderName: activeFolder }); }}>
                                     <TrashIcon className="w-5 h-5 flex-shrink-0" />
@@ -8682,9 +8730,17 @@ const fireIntegrations = (trigger: string, note: any) => {
                 <div className="fixed inset-0 z-[620] bg-black/90 flex items-center justify-center p-4">
                     <div className="bg-zinc-900 border-2 border-red-500 p-7 sm:p-9 w-full max-w-sm text-center">
                         <ExclamationTriangleIcon className="w-14 h-14 text-red-500 mx-auto mb-4" />
-                        <h2 className="text-sm font-black uppercase tracking-wider text-red-400 mb-2">{confirmDelete.type === "folder" ? "Delete Folder?" : confirmDelete.noteId ? "Delete Note?" : "Discard Draft?"}</h2>
+                        <h2 className="text-sm font-black uppercase tracking-wider text-red-400 mb-2">
+                            {confirmDelete.type === "folder"
+                                ? (confirmDelete.folderName === "TRASH" ? "Empty Trash?" : "Delete Folder?")
+                                : (confirmDelete.noteId ? ((dbData.find(r => String(r.id) === confirmDelete.noteId)?.folder_name === "TRASH") ? "Permanently Delete?" : "Move to Trash?") : "Discard Draft?")}
+                        </h2>
                         <p className="text-base font-black text-white mb-1 truncate">&ldquo;{confirmDelete.type === "folder" ? confirmDelete.folderName : confirmDelete.noteName || "Untitled"}&rdquo;</p>
-                        <p className="text-[11px] text-white/70 uppercase tracking-wide mb-5">{confirmDelete.type === "folder" ? (() => { const n = dbData.filter((r) => !r.is_folder && String(r.folder_name || "") === confirmDelete.folderName).length; return n > 0 ? `This will delete the folder and all ${n} note${n !== 1 ? "s" : ""} inside.` : "This action cannot be undone."; })() : "This action cannot be undone."}</p>
+                        <p className="text-[11px] text-white/70 uppercase tracking-wide mb-5">
+                            {confirmDelete.type === "folder"
+                                ? (() => { const n = dbData.filter((r) => !r.is_folder && String(r.folder_name || "") === confirmDelete.folderName).length; return confirmDelete.folderName === "TRASH" ? `Permanently deletes all ${n} note${n !== 1 ? "s" : ""} in Trash. Cannot be undone.` : n > 0 ? `Permanently deletes the folder and all ${n} note${n !== 1 ? "s" : ""} inside.` : "Permanently deletes this folder."; })()
+                                : (dbData.find(r => String(r.id) === (confirmDelete as any).noteId)?.folder_name === "TRASH" ? "Permanently deleted. Cannot be undone." : "Moved to Trash. Deleted after 7 days.")}
+                        </p>
                         <div className="flex flex-col gap-2">
                             <button
                                 type="button"
