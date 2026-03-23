@@ -278,6 +278,20 @@ function tiptapToPlainText(node: any): string {
     return block.includes(node.type) ? inner + "\n" : inner;
 }
 
+/** Extract plain text from TipTap/ProseMirror JSON — returns first meaningful text */
+function extractRichTextTitle(json: string): string {
+    try {
+        const doc = JSON.parse(json);
+        const texts: string[] = [];
+        const walk = (node: any) => {
+            if (node.type === "text" && node.text) texts.push(node.text);
+            if (Array.isArray(node.content)) node.content.forEach(walk);
+        };
+        walk(doc);
+        return texts.join(" ").trim().slice(0, 60);
+    } catch { return ""; }
+}
+
 /** Client-side fallback type detection — used only when DB type is null (legacy notes) */
 function detectNoteType(content: string): string {
     const t = content.trim();
@@ -2105,7 +2119,7 @@ export default function NotesMaster() {
         const handler = (e: KeyboardEvent) => {
             if ((e.metaKey || e.ctrlKey) && e.key === "k") {
                 e.preventDefault();
-                setCmdKGlobal(false); setCmdKInFile(false);
+                setCmdKGlobal(true); setCmdKInFile(false);
                 setShowCmdK(v => { if (!v) { setCmdKQuery(""); setCmdKCursor(0); } return !v; });
             }
             if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "f") {
@@ -2782,6 +2796,29 @@ const fireIntegrations = (trigger: string, note: any) => {
     }, [dbData, editMode, activeFolder, folderStack, search, currentLevelFolders, pendingNoteOrder, pinnedIds, navMode]);
 
     // Available type chips for the filter row (only types present in current view, notes only)
+    // Rich text stats — deferred so JSON parse + tree walk never blocks typing
+    const deferredContent = useDeferredValue(content);
+    const richStatsChips = useMemo(() => {
+        if (!deferredContent.trimStart().startsWith("{")) return [];
+        let tiptap: any = null;
+        try { tiptap = JSON.parse(deferredContent); } catch { return []; }
+        const topNodes: any[] = tiptap?.content ?? [];
+        let words = 0, images = 0, codeBlocks = 0, tables = 0;
+        const walk = (nodes: any[]) => {
+            for (const n of nodes) {
+                if (n.type === "text" && n.text) words += n.text.trim().split(/\s+/).filter(Boolean).length;
+                else if (n.type === "image") images++;
+                else if (n.type === "codeBlock") codeBlocks++;
+                else if (n.type === "table") tables++;
+                if (n.content) walk(n.content);
+            }
+        };
+        walk(topNodes);
+        const bytes = new TextEncoder().encode(deferredContent).length;
+        const sizeStr = bytes >= 1_048_576 ? `${(bytes / 1_048_576).toFixed(1)} MB` : bytes >= 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${bytes} B`;
+        return [`${topNodes.length} blocks`, `${words} words`, sizeStr, images > 0 ? `${images} img` : null, codeBlocks > 0 ? `${codeBlocks} code` : null, tables > 0 ? `${tables} tbl` : null].filter(Boolean) as string[];
+    }, [deferredContent]);
+
     const availableTypeChips = useMemo(() => {
         const counts: Record<string, number> = {};
         for (const item of displayItems) {
@@ -2798,6 +2835,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         return displayItems.filter((item: any) => item.is_folder || item._header || item.type === typeFilter);
     }, [displayItems, typeFilter]);
 
+
     // Search index — rebuilt only when data changes, not on every keystroke
     const cmdKIndex = useMemo(() =>
         dbData
@@ -2812,8 +2850,12 @@ const fireIntegrations = (trigger: string, note: any) => {
             })),
     [dbData]);
 
-    // Deferred value: input is always instant; expensive search useMemo runs at lower priority
-    const deferredCmdKQuery = useDeferredValue(cmdKQuery);
+    // Debounced: wait 2s after user stops typing before running search
+    const [deferredCmdKQuery, setDeferredCmdKQuery] = useState(cmdKQuery);
+    useEffect(() => {
+        const t = setTimeout(() => setDeferredCmdKQuery(cmdKQuery), 2000);
+        return () => clearTimeout(t);
+    }, [cmdKQuery]);
 
     const cmdKResults = useMemo(() => {
         // In-file mode: search lines of the current note
@@ -2825,18 +2867,18 @@ const fireIntegrations = (trigger: string, note: any) => {
                 .filter(item => item.text.toLowerCase().includes(q))
                 .slice(0, 100);
         }
-        // Scope to active folder unless global mode
-        const scopedIndex = (activeFolder && !cmdKGlobal)
-            ? cmdKIndex.filter(e => e.f === activeFolder.toLowerCase())
-            : cmdKIndex;
         const byDate = (a: any, b: any) => b.date.localeCompare(a.date);
         if (!deferredCmdKQuery.trim()) {
-            return scopedIndex.slice().sort(byDate).map(x => x._orig);
+            return cmdKIndex.slice().sort(byDate).slice(0, 30).map(x => x._orig);
         }
         const q = deferredCmdKQuery.toLowerCase();
-        // Only show folder results when not scoped to a folder
-        const matchingFolders = (activeFolder && !cmdKGlobal) ? [] : folders
-            .filter(f => f.name.toLowerCase().includes(q))
+        const matchingFolders = folders
+            .filter(f => {
+                if (f.name.toUpperCase() === "BOOKMARKS") return false;
+                const dbRow = dbData.find((r: any) => r.is_folder && (r.folder_name === f.name || r.name === f.name));
+                if (dbRow?.parent_folder_name?.toUpperCase() === "BOOKMARKS") return false;
+                return f.name.toLowerCase().includes(q);
+            })
             .map(f => ({ ...f, _isFolder: true }));
         const scoreEntry = (e: typeof cmdKIndex[0]): number => {
             const pinned = pinnedIds.has(String(e._orig.id));
@@ -2847,12 +2889,13 @@ const fireIntegrations = (trigger: string, note: any) => {
             if (e.c.includes(q))        return 5;
             return 9;
         };
-        const scored = scopedIndex
+        const scored = cmdKIndex
             .map(e => ({ e, s: scoreEntry(e) }))
             .filter(x => x.s < 9)
-            .sort((a, b) => a.s !== b.s ? a.s - b.s : b.e.date.localeCompare(a.e.date));
+            .sort((a, b) => a.s !== b.s ? a.s - b.s : b.e.date.localeCompare(a.e.date))
+            .slice(0, 30);
         return [...matchingFolders, ...scored.map(x => x.e._orig)];
-    }, [cmdKIndex, deferredCmdKQuery, pinnedIds, folders, activeFolder, cmdKGlobal, cmdKInFile, content]);
+    }, [cmdKIndex, deferredCmdKQuery, pinnedIds, folders, cmdKInFile, content]);
 
     const cmdBResults = useMemo(() => {
         if (!cmdBQuery.trim()) return bookmarksData.slice(0, 12);
@@ -2922,11 +2965,12 @@ const fireIntegrations = (trigger: string, note: any) => {
     // Reset dirty tracker whenever we switch to a different note (or open a new one)
     useEffect(() => { noteEverDirtyRef.current = false; prevContentForHashRef.current = content; }, [editingNote?.id]);
 
-    // Hashtag easter egg — plain text notes only (rich text has WYSIWYG, no need)
+    // Hashtag easter egg — deferred so regex never blocks typing
     useEffect(() => {
-        if (!editorOpen) { prevContentForHashRef.current = content; return; }
+        if (!editorOpen) { prevContentForHashRef.current = deferredContent; return; }
         const prev = prevContentForHashRef.current;
-        prevContentForHashRef.current = content;
+        prevContentForHashRef.current = deferredContent;
+        const content = deferredContent;
         if (!prev && !content) return;
 
         // Detect newly typed `#`
@@ -2956,7 +3000,8 @@ const fireIntegrations = (trigger: string, note: any) => {
             }, 3000);
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [content, editorOpen]);
+    }, [deferredContent, editorOpen]);
+
 
     // Debounced auto-save while typing — broadcasts to other devices via Pusher
     useEffect(() => {
@@ -2977,6 +3022,8 @@ const fireIntegrations = (trigger: string, note: any) => {
             isSavingRef.current = true;
             // Auto-title: if no title, derive from first non-empty content line
             const resolvedTitle = title.trim() || (() => {
+                const isRich = content.trimStart().startsWith("{");
+                if (isRich) return extractRichTextTitle(content) || "Untitled";
                 const firstLine = content.trim().split("\n").find(l => l.trim()) || "";
                 return firstLine.replace(/^#+\s*/, "").slice(0, 60).trim() || "Untitled";
             })();
@@ -3034,6 +3081,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                 id: optimisticId,
                 ...payload,
                 created_at: editingNote?.created_at || new Date().toISOString(),
+                updated_at: new Date().toISOString(),
             };
 
             setDbData((prev) => {
@@ -3263,7 +3311,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         setContent("");
         setImages([]);
         setPendingNoteType(type ?? (editMode ? "rich" : null));
-        setTargetFolder(activeFolder || (editMode ? "Work" : "General"));
+        setTargetFolder(activeFolder || (editMode ? "Work" : "CLAUDE"));
         setNoteColor(pickUniqueColor());
         shouldFocusTitleOnOpenRef.current = !isStandup;
         closeEditorTools();
@@ -3272,6 +3320,19 @@ const fireIntegrations = (trigger: string, note: any) => {
         setEditorOpen(true);
         playSound("create");
     }, [activeFolder, editMode, closeEditorTools, pickUniqueColor]);
+
+    // Cmd+N — open new note (always global, but can't override OS-level browser new-tab)
+    useEffect(() => {
+        const handler = (e: KeyboardEvent) => {
+            if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === "n") {
+                e.preventDefault();
+                e.stopPropagation();
+                openNewNote();
+            }
+        };
+        window.addEventListener("keydown", handler, true);
+        return () => window.removeEventListener("keydown", handler, true);
+    }, [openNewNote]);
 
     const showToast = (msg: string, color = "#34C759", confetti = false) => {
         setToastKey(k => k + 1);
@@ -3817,15 +3878,16 @@ const fireIntegrations = (trigger: string, note: any) => {
     const deleteFolderByName = useCallback(
         async (folderName: string) => {
             if (!folderName) return;
+            const isTrash = folderName === "TRASH";
             try {
                 const folderColor = folderColors[folderName] || palette12[0];
                 await notesApi.deleteByFolder(folderName);
-                setDbData((prev) => prev.filter((row) => String(row.folder_name || "") !== folderName));
-                setFolderColors((prev) => {
-                    const next = { ...prev };
-                    delete next[folderName];
-                    return next;
-                });
+                setDbData((prev) => prev.filter((row) =>
+                    // For TRASH: only remove notes inside, keep the TRASH folder row itself
+                    isTrash
+                        ? !(String(row.folder_name || "") === folderName && !row.is_folder)
+                        : String(row.folder_name || "") !== folderName
+                ));
                 localStorage.removeItem(ACTIVE_DRAFT_KEY);
                 setPendingShare(null);
                 closeEditorTools();
@@ -3835,10 +3897,13 @@ const fireIntegrations = (trigger: string, note: any) => {
                 setActiveLine(0);
                 setEditorScrollTop(0);
                 setEditorOpen(false);
-                goBack();
+                if (!isTrash) {
+                    setFolderColors((prev) => { const next = { ...prev }; delete next[folderName]; return next; });
+                    goBack();
+                }
                 setSearch("");
                 playSound("delete");
-                showToast(`folder "${folderName}", deleted!`, folderColor);
+                showToast(isTrash ? "Trash emptied" : `folder "${folderName}", deleted!`, folderColor);
             } catch (err) {
                 console.error("Delete folder failed:", err);
                 showError("Delete Failed");
@@ -3900,7 +3965,8 @@ const fireIntegrations = (trigger: string, note: any) => {
         // Open immediately with available metadata so the editor switches at once
         setPendingNoteType(null); // reset so noteType comes from note.type, not prior mode
         setEditingNote(note);
-        setTitle(note.title || "");
+        const rawTitle = note.title || "";
+        setTitle(rawTitle.trimStart().startsWith("{") ? extractRichTextTitle(rawTitle) : rawTitle);
         setContent(note.content != null ? (note.type === "mermaid" || detectMermaid(note.content || "") ? cleanMermaidContent(note.content) : note.content) : "");
         setImages((note as any).images ?? []);
         setTargetFolder(note.folder_name || activeFolder || "General");
@@ -3995,7 +4061,7 @@ const fireIntegrations = (trigger: string, note: any) => {
 
     // ── Type resolution: DB `type` is source of truth; fall back to client detection ──
     const dbType: string | null = (editingNote as any)?.type ?? null;
-    const detectedType = detectNoteType(content);
+    const detectedType = useMemo(() => detectNoteType(content), [content]);
     // If DB type is null but content is clearly a code/mermaid type, trust the detection
     // so the toggle never shows and the correct renderer is used. Never downgrade a code type.
     const CODE_TYPES = new Set(["mermaid","javascript","typescript","python","css","sql","bash","html","json","markdown"]);
@@ -4011,22 +4077,21 @@ const fireIntegrations = (trigger: string, note: any) => {
     const codeMode     = baseMode && ["javascript","typescript","python","css","sql","bash"].includes(noteType);
     const plainMode    = baseMode && !!currentNoteId && plainModeNotes.has(currentNoteId) && noteType === "rich";
     type VoiceEntry = { _type: "voice"; audioUrl: string; transcript: string; summary: string; duration: number; recordedAt: string };
-    const voiceNote = baseMode && noteType === "voice"
+    const voiceNote = useMemo(() => baseMode && noteType === "voice"
         ? (() => { try { const p = JSON.parse(content); return (Array.isArray(p) ? p : [p]) as VoiceEntry[]; } catch { return null; } })()
-        : null;
+        : null, [baseMode, noteType, content]);
     // jsonDetect kept for JSON syntax highlight fallback
-    const jsonDetect = jsonMode ? detectJson(content) : { ok: false, parsed: null };
+    const jsonDetect = useMemo(() => jsonMode ? detectJson(content) : { ok: false, parsed: null }, [jsonMode, content]);
 
     // Checklist toggle: plain-text only, bullet/numbered list ≤12 lines, no blank lines between items
-    const canToggleChecklist = (() => {
+    const canToggleChecklist = useMemo(() => {
         if (noteType !== "text" || listMode) return false;
-        const lines = content.split("\n").filter(l => l.trim());
-        if (lines.length === 0 || lines.length > 12) return false;
-        // Must have no blank lines between items (all non-empty lines are list items)
         const rawLines = content.split("\n");
+        const lines = rawLines.filter(l => l.trim());
+        if (lines.length === 0 || lines.length > 12) return false;
         const hasBlankBetween = rawLines.some((l, i) => i > 0 && i < rawLines.length - 1 && !l.trim() && rawLines[i - 1].trim());
         return !hasBlankBetween;
-    })();
+    }, [noteType, listMode, content]);
 
     // Unified active mode label
     const noteViewMode = stackMode ? "Stack" : mindmapMode ? "Mindmap" : graphMode ? "Graph" : listMode ? "Checklist" : mermaidMode ? "Mermaid" : voiceNote ? "Voice" : codeMode ? noteType : markdownMode ? "Markdown" : htmlMode ? "HTML" : noteType === "rich" ? "Rich" : "Text";
@@ -4289,7 +4354,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         setContent(lines.join("\n"));
     }, [content]);
 
-    const contentLineCount = useMemo(() => content.split("\n").filter((l) => l.trim().length > 0).length, [content]);
+    const contentLineCount = useMemo(() => deferredContent.split("\n").filter((l) => l.trim().length > 0).length, [deferredContent]);
     const isListEligible = contentLineCount >= 2;
     const isGraphEligible = contentLineCount >= 2;
 
@@ -4297,7 +4362,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         if (!listMode && !graphMode && !stackMode) return [];
         const isSeparator = (s: string) => /^[-–—=*#~_.]{2,}$/.test(s) || /^[-–—]{2,}.*[-–—]{2,}$/.test(s);
         const result: { done: boolean; text: string; lineIdx: number }[] = [];
-        content.split("\n").forEach((line, lineIdx) => {
+        deferredContent.split("\n").forEach((line, lineIdx) => {
             const trimmed = line.trim();
             if (trimmed.length === 0 || isSeparator(trimmed)) return;
             const noBullet = trimmed.replace(/^\s*[-*•+_]\s*/, "").replace(/^\s*\d+\.\s*/, "").trim();
@@ -4307,7 +4372,7 @@ const fireIntegrations = (trigger: string, note: any) => {
             result.push({ done, text, lineIdx });
         });
         return result;
-    }, [content, listMode, graphMode, stackMode]);
+    }, [deferredContent, listMode, graphMode, stackMode]);
 
     const pushTaskHistory = useCallback((c: string) => {
         taskContentHistory.current = [...taskContentHistory.current.slice(-30), c];
@@ -5947,14 +6012,12 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 onClick={noteType === "text" ? switchToRich : switchToPlain}
                             />
                         )}
-                        {editingNote?.id && (
-                            <button type="button"
-                                onClick={fastDeleteNote}
-                                className={`p-2 sm:p-3 transition flex-shrink-0 ${editingNote?.folder_name === "TRASH" ? "text-red-500 hover:text-red-300 active:text-red-200" : "text-zinc-500 hover:text-red-400 active:text-red-600"}`}
-                                title={editingNote?.folder_name === "TRASH" ? "Permanently Delete" : "Move to Trash"}>
-                                <TrashIcon className="w-[29px] h-[29px] sm:w-7 sm:h-7" />
-                            </button>
-                        )}
+                        <button type="button"
+                            onClick={() => { setVoiceAutoStart(true); setShowVoiceRecorder(true); }}
+                            className="p-2 sm:p-3 text-red-500/70 hover:text-red-400 active:text-red-300 transition flex-shrink-0"
+                            title="Voice recording">
+                            <MicrophoneIcon className="w-[29px] h-[29px] sm:w-7 sm:h-7" />
+                        </button>
                         <button type="button"
                             onClick={() => { setIsGlobalSettings(false); setShowFolderActions(true); closeEditorTools(); }}
                             className="p-2 sm:p-3 text-zinc-300 hover:text-white active:text-white transition flex-shrink-0"
@@ -6402,7 +6465,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                         ) : plainMode ? (
                             <div onPaste={handlePlainModePaste} className="flex-1 flex flex-col min-h-0">
                                 {(() => {
-                                    const rawDetected = detectNoteType(content);
+                                    const rawDetected = detectedType;
                                     const detectedLang = (rawDetected !== "text" && rawDetected !== "rich") ? rawDetected : null;
                                     return (
                                         <>
@@ -6449,44 +6512,17 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     editMode={true}
                                     onDelete={fastDeleteNote}
                                 />
-                                {/* Rich text live stats bar */}
-                                {(() => {
-                                    let tiptap: any = null;
-                                    try { tiptap = JSON.parse(content); } catch {}
-                                    const topNodes: any[] = tiptap?.content ?? [];
-                                    let words = 0, images = 0, codeBlocks = 0, tables = 0;
-                                    const walkStat = (nodes: any[]) => {
-                                        for (const n of nodes) {
-                                            if (n.type === "text" && n.text) words += n.text.trim().split(/\s+/).filter(Boolean).length;
-                                            else if (n.type === "image") images++;
-                                            else if (n.type === "codeBlock") codeBlocks++;
-                                            else if (n.type === "table") tables++;
-                                            if (n.content) walkStat(n.content);
-                                        }
-                                    };
-                                    walkStat(topNodes);
-                                    const bytes = new TextEncoder().encode(content).length;
-                                    const sizeStr = bytes >= 1_048_576 ? `${(bytes / 1_048_576).toFixed(1)} MB`
-                                        : bytes >= 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${bytes} B`;
-                                    const chips = [
-                                        `${topNodes.length} blocks`,
-                                        `${words} words`,
-                                        sizeStr,
-                                        images > 0 ? `${images} img` : null,
-                                        codeBlocks > 0 ? `${codeBlocks} code` : null,
-                                        tables > 0 ? `${tables} tbl` : null,
-                                    ].filter(Boolean) as string[];
-                                    return (
-                                        <div className="shrink-0 flex items-center gap-2 px-3 py-1 border-t border-white/[0.06] bg-black/60 overflow-x-auto" style={{ fontSize: 9, opacity: 0.55 }}>
-                                            {chips.map((c, i) => (
-                                                <span key={i} className="flex items-center gap-1.5 whitespace-nowrap">
-                                                    {i > 0 && <span className="text-zinc-700">·</span>}
-                                                    <span className="text-zinc-400">{c}</span>
-                                                </span>
-                                            ))}
-                                        </div>
-                                    );
-                                })()}
+                                {/* Rich text live stats bar — uses memoized deferred content to avoid blocking typing */}
+                                {richStatsChips.length > 0 && (
+                                    <div className="shrink-0 flex items-center gap-2 px-3 py-1 border-t border-white/[0.06] bg-black/60 overflow-x-auto" style={{ fontSize: 9, opacity: 0.55 }}>
+                                        {richStatsChips.map((c, i) => (
+                                            <span key={i} className="flex items-center gap-1.5 whitespace-nowrap">
+                                                {i > 0 && <span className="text-zinc-700">·</span>}
+                                                <span className="text-zinc-400">{c}</span>
+                                            </span>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                         ) : (
                             <div className="flex-1 flex overflow-auto" style={{ background: "#000" }}>
@@ -6552,12 +6588,14 @@ const fireIntegrations = (trigger: string, note: any) => {
                         <div className="shrink-0 flex items-center justify-between px-3 select-none border-t border-white/[0.06]"
                             style={{ height: 22, background: "#0a0a0a", fontSize: 10 }}>
                             <span className="font-mono text-zinc-600 whitespace-nowrap">{edited ?? ""}</span>
-                            {(() => {
-                                const badge = TYPE_BADGE[noteType] ?? TYPE_BADGE["text"];
-                                if (!badge) return null;
-                                const label = noteType === "mermaid" ? mermaidSubType(content) : badge.label;
-                                return <span className="font-mono font-black uppercase tracking-wide whitespace-nowrap px-1.5 py-px rounded-full" style={{ fontSize: 8, background: `${badge.color}22`, color: badge.color, border: `1px solid ${badge.color}44` }}>{label}</span>;
-                            })()}
+                            <div className="flex items-center gap-2">
+                                {(() => {
+                                    const badge = TYPE_BADGE[noteType] ?? TYPE_BADGE["text"];
+                                    if (!badge) return null;
+                                    const label = noteType === "mermaid" ? mermaidSubType(content) : badge.label;
+                                    return <span className="font-mono font-black uppercase tracking-wide whitespace-nowrap px-1.5 py-px rounded-full" style={{ fontSize: 8, background: `${badge.color}22`, color: badge.color, border: `1px solid ${badge.color}44` }}>{label}</span>;
+                                })()}
+                            </div>
                         </div>
                     );
                 })()}
@@ -6571,7 +6609,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                 </div>{/* ── end right panel ── */}
 
                 {/* LEFT PANEL: slim notes list */}
-                <div className={`bg-black flex flex-col overflow-hidden ${editMode ? "order-first w-[30%] min-w-[260px] max-w-[420px] flex-shrink-0 border-r border-white/10" : editorOpen ? "hidden" : "flex-1"}`}>
+                <div className={`bg-black flex flex-col relative ${editMode ? "order-first w-[30%] min-w-[260px] max-w-[420px] flex-shrink-0 border-r border-white/10" : editorOpen ? "hidden" : "flex-1 overflow-hidden"}`}>
                 <>
                     <div className="safe-top-bar shrink-0 bg-black sticky top-0 z-40" />
                     <header className="ios-mobile-header relative h-auto min-h-[4rem] px-4 flex items-center gap-2 sticky top-0 bg-black z-40 shrink-0">
@@ -6585,7 +6623,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg hover:bg-white/10 transition">
                                     {activeFolder ? (
                                         <>
-                                            <span className="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded overflow-hidden" style={{ background: "#fff", color: folderColors[activeFolder] || folderStack.at(-1)?.color || "#888" } as React.CSSProperties}>
+                                            <span className="flex-shrink-0 w-5 h-5 flex items-center justify-center overflow-hidden font-black text-[10px]" style={{ background: activeFolder === "CLAUDE" ? "#fff" : (folderColors[activeFolder] || folderStack.at(-1)?.color || "#888"), color: activeFolder === "CLAUDE" ? (folderColors[activeFolder] || "#888") : "#fff" } as React.CSSProperties}>
                                                 {activeFolder === "CLAUDE" ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-0.5" /> : <FolderIconDisplay value={folderIcons[activeFolder] || ""} folderName={activeFolder} className="w-3 h-3" />}
                                             </span>
                                             <span className="text-xs font-black tracking-tight text-white uppercase truncate max-w-[110px]">{activeFolder}</span>
@@ -6934,14 +6972,14 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         const c = item.color || item.folder_color || "#888888";
                                         const isActive = editMode && !item.is_folder && String(item.id) === String(editingNote?.id);
                                         if (isListMode) {
-                                            return { position: "relative", isolation: "isolate", "--row-color": c, "--fc": c, ...(isActive ? { borderLeftColor: c } : {}), ...(item.is_folder ? { background: `${c}18` } : {}) } as React.CSSProperties;
+                                            return { position: "relative", isolation: "isolate", "--row-color": c, "--fc": c, ...(isActive ? { borderRightColor: c } : {}), ...(item.is_folder ? { background: `${c}18` } : {}) } as React.CSSProperties;
                                         }
                                         return item.is_folder
                                             ? { isolation: "isolate", "--fc": c } as React.CSSProperties
                                             : { isolation: "isolate", backgroundColor: c, borderRadius: "3px 3px 3px 14px" };
                                     })()}
                                     className={`${isListMode
-                                        ? `group list-row-hover flex items-center gap-3 pr-4 min-h-[54px] border-b border-white/5 cursor-pointer select-none transition-colors active:bg-white/10 overflow-hidden ${!item.is_folder && incomingNoteIds.has(String(item.id)) ? "note-incoming" : ""} ${!item.is_folder && removingNoteIds.has(String(item.id)) ? "note-removing" : ""} ${isDragging ? "opacity-30" : dt?.mode === "into" ? "bg-cyan-950/60 ring-1 ring-inset ring-cyan-400" : ""} ${isSelectMode && !item.is_folder && selectedIds.has(String(item.id)) ? "bg-blue-950/50" : ""} ${editMode && !item.is_folder && String(item.id) === String(editingNote?.id) ? "bg-white/10 border-l-[3px]" : "border-l-[3px] border-l-transparent"}`
+                                        ? `group list-row-hover flex items-center gap-3 pr-4 min-h-[54px] border-b border-white/5 cursor-pointer select-none transition-colors active:bg-white/10 overflow-hidden ${!item.is_folder && incomingNoteIds.has(String(item.id)) ? "note-incoming" : ""} ${!item.is_folder && removingNoteIds.has(String(item.id)) ? "note-removing" : ""} ${isDragging ? "opacity-30" : dt?.mode === "into" ? "bg-cyan-950/60 ring-1 ring-inset ring-cyan-400" : ""} ${isSelectMode && !item.is_folder && selectedIds.has(String(item.id)) ? "bg-blue-950/50" : ""} ${editMode && !item.is_folder && String(item.id) === String(editingNote?.id) ? "bg-white/10 border-r-[3px]" : "border-r-[3px] border-r-transparent"}`
                                         : `grid-square-tile min-w-0 cursor-pointer transition-all group ${item.is_folder ? `folder-grid-tile${item.name === "CLAUDE" ? " folder-grid-tile-claude" : ""}` : ""} ${isDragging ? "opacity-30 scale-95" : dt?.mode === "into" ? "ring-4 ring-cyan-400 ring-inset z-10" : ""} ${editMode && !item.is_folder && String(item.id) === String(editingNote?.id) ? "ring-2 ring-white/40 ring-inset" : ""}`}`}>
                                     {/* Cursor spotlight glow */}
                                     {isListMode && glowCard?.id === tileId && (() => {
@@ -7049,38 +7087,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                     <PencilSquareIcon className="w-4 h-4" />
                                                 </button>
                                             )}
-                                            {/* Content indicator icons — fixed 20% column */}
-                                            {!item.is_folder && (() => {
-                                                const c = item.content || "";
-                                                const isRich = c.trimStart().startsWith("{");
-                                                // Rich text notes don't show content badges
-                                                if (isRich) return <div style={{ width: "20%", flexShrink: 0 }} />;
-                                                // Table detection
-                                                const hasTable = isRich
-                                                    ? c.includes('"type":"table"')
-                                                    : /^\|.+\|/m.test(c);
-                                                // Image detection — stored images array or markdown ![]() or lh3/storage URLs in rich text
-                                                const imgArr = (item as any).images;
-                                                const storedImgCount = Array.isArray(imgArr) ? imgArr.filter((x: any) => x && (x.url || x)).length : 0;
-                                                const mdImgCount = (c.match(/!\[/g) || []).length;
-                                                const richImgCount = isRich ? (c.match(/"type"\s*:\s*"image"/g) || []).length : 0;
-                                                const imgCount = storedImgCount || mdImgCount || richImgCount;
-                                                // Link detection
-                                                const linkMatches = c.match(/https?:\/\/[^\s)>\]"]+/g) || [];
-                                                const linkCount = new Set(linkMatches).size;
-                                                if (!hasTable && !imgCount && !linkCount) return <div style={{ width: "20%", flexShrink: 0 }} />;
-                                                return <div className="flex items-center justify-end gap-1.5" style={{ width: "20%", flexShrink: 0 }}>
-                                                    {hasTable && <TableCellsIcon className="w-3.5 h-3.5 text-white/40" title="Contains table" />}
-                                                    {imgCount > 0 && <span className="relative flex-shrink-0" title={`${imgCount} image${imgCount > 1 ? "s" : ""}`}>
-                                                        <PhotoIcon className="w-3.5 h-3.5 text-white/40" />
-                                                        {imgCount > 1 && <span className="absolute -top-1 -right-1 text-[8px] font-black text-white/60 leading-none">+</span>}
-                                                    </span>}
-                                                    {linkCount > 0 && <span className="relative flex-shrink-0" title={`${linkCount} link${linkCount > 1 ? "s" : ""}`}>
-                                                        <LinkIcon className="w-3.5 h-3.5 text-white/40" />
-                                                        {linkCount > 1 && <span className="absolute -top-1 -right-1 text-[8px] font-black text-white/60 leading-none">+</span>}
-                                                    </span>}
-                                                </div>;
-                                            })()}
                                             {!item.is_folder && (item as any).flag && (
                                                 <span className="flex-shrink-0 text-base leading-none" title={(item as any).flag}>{(item as any).flag}</span>
                                             )}
@@ -7201,8 +7207,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                         })()}
                     </main>
 
-                    {/* FAB — floating + button bottom right (hidden in split view) */}
-                    {!isSelectMode && !editMode && (() => {
+                    {/* FAB — floating + button bottom right */}
+                    {!isSelectMode && (() => {
                         const depth = folderStack.length; // 0=root, 1=L1, 2=L2, 3+=L3
                         const baseSize = 48;
                         const fabSize = depth > 0 ? Math.round(baseSize * 1.2) : baseSize;
@@ -7214,7 +7220,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     type="button"
                                     onClick={() => {
                                         if (activeFolder) {
-                                            setShowNoteTypePicker(true);
+                                            openNewNote();
                                         } else {
                                             openCreateFolder();
                                         }

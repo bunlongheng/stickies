@@ -846,8 +846,11 @@ export async function DELETE(req: Request) {
 
     if (!folderName) return NextResponse.json({ error: "id or folder_name is required" }, { status: 400 });
 
-    const { sql, params } = withUser(`DELETE FROM "${table}" WHERE folder_name = $1`, [folderName], userId);
-    await execute(sql, params);
+    // For TRASH: only delete notes inside, never the folder row itself
+    const deleteQuery = folderName === "TRASH"
+        ? withUser(`DELETE FROM "${table}" WHERE folder_name = $1 AND is_folder = false`, [folderName], userId)
+        : withUser(`DELETE FROM "${table}" WHERE folder_name = $1`, [folderName], userId);
+    await execute(deleteQuery.sql, deleteQuery.params);
     try { await getPusher().trigger("stickies", "note-deleted", { folder_name: folderName }); } catch {}
     return NextResponse.json({ ok: true, deleted_folder: folderName });
 }
