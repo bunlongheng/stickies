@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "st": "node scripts/stickies-cli.mjs",
     "predev": "node scripts/dev-banner.mjs; kill $(lsof -ti :4444) 2>/dev/null || true",
     "dev": "node scripts/dev.mjs",
     "build": "next build",
