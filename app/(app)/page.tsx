@@ -2278,7 +2278,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         const rt = client
             .channel("notes-realtime")
             .on("postgres_changes", { event: "INSERT", schema: "public", table: "stickies" }, (payload: any) => {
-                const note = payload.new;
+                const note = { ...payload.new, updated_at: payload.new?.updated_at || new Date().toISOString() };
                 if (!note?.id) return;
                 setDbData((prev) => {
                     if (prev.some((r) => String(r.id) === String(note.id))) return prev;
@@ -5502,19 +5502,19 @@ const fireIntegrations = (trigger: string, note: any) => {
                 @keyframes islandToastInOut {
                     0% {
                         opacity: 0;
-                        transform: translateX(-50%) translateY(-8px) scale(0.72);
+                        transform: translateY(-8px) scale(0.72);
                     }
                     14% {
                         opacity: 1;
-                        transform: translateX(-50%) translateY(0) scale(1);
+                        transform: translateY(0) scale(1);
                     }
                     82% {
                         opacity: 1;
-                        transform: translateX(-50%) translateY(0) scale(1);
+                        transform: translateY(0) scale(1);
                     }
                     100% {
                         opacity: 0;
-                        transform: translateX(-50%) translateY(-6px) scale(0.78);
+                        transform: translateY(-6px) scale(0.78);
                     }
                 }
                 @keyframes confettiShoot {
@@ -6506,11 +6506,9 @@ const fireIntegrations = (trigger: string, note: any) => {
                         ? new Date(editingNote.updated_at as string).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
                         : null;
                     return (
-                        <div className="shrink-0 flex items-center justify-end gap-3 px-3 select-none border-t border-white/[0.06]"
+                        <div className="shrink-0 flex items-center justify-between px-3 select-none border-t border-white/[0.06]"
                             style={{ height: 22, background: "#0a0a0a", fontSize: 10 }}>
-                            {sizeStr && <span className="font-mono text-zinc-600 whitespace-nowrap">{sizeStr}</span>}
-                            {edited && <span className="font-mono text-zinc-600 whitespace-nowrap">{edited}</span>}
-                            <span className="font-mono text-zinc-500 whitespace-nowrap">{ext}</span>
+                            <span className="font-mono text-zinc-600 whitespace-nowrap">{edited ?? ""}</span>
                             {(() => {
                                 const badge = TYPE_BADGE[noteType] ?? TYPE_BADGE["text"];
                                 if (!badge) return null;
