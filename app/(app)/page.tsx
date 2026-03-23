@@ -1842,11 +1842,11 @@ export default function NotesMaster() {
             const savedDefaultFolder = localStorage.getItem(DEFAULT_FOLDER_KEY) || "CLAUDE";
             setDefaultFolder(savedDefaultFolder);
 
-            // On first load of a new session, open default folder + thumbnail view
+            // On first load of a new session, open All Notes view
             const isNewSession = !sessionStorage.getItem("stickies:session-started");
             if (isNewSession) {
                 sessionStorage.setItem("stickies:session-started", "1");
-                if (savedDefaultFolder) setActiveFolder(savedDefaultFolder);
+                setActiveFolder(null); // Always start at All Notes on login
                 setMainListMode("list"); // list as default
             } else {
                 try {
