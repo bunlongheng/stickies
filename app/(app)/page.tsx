@@ -2391,9 +2391,9 @@ const fireIntegrations = (trigger: string, note: any) => {
     useEffect(() => {
         if (!editMode || !isDataLoaded || pendingRestoreNoteId) return;
         if (editorOpen) return; // already open
-        const topNote = dbData.filter((n: any) => !n.is_folder).sort((a: any, b: any) =>
-            String(b.updated_at || "").localeCompare(String(a.updated_at || ""))
-        )[0];
+        const topNote = dbData
+            .filter((n: any) => !n.is_folder && n.folder_name !== "TRASH" && !removingNoteIds.has(String(n.id)))
+            .sort((a: any, b: any) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")))[0];
         if (topNote) {
             // Use openNote so content is fetched if missing (list API omits the content column)
             void openNote(topNote);
