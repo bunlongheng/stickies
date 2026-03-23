@@ -2363,20 +2363,6 @@ const fireIntegrations = (trigger: string, note: any) => {
         }
     }, [editingNote?.id]);
 
-    // Auto-clean mermaid fences + frontmatter when a mermaid note opens
-    useEffect(() => {
-        if (!editingNote?.id) return;
-        if ((editingNote as any)._external) return; // read-only — never clean or save
-        const raw = editingNote.content || "";
-        if (editingNote.type !== "mermaid" && !detectMermaid(raw)) return;
-        const cleaned = cleanMermaidContent(raw);
-        if (cleaned === raw) return;
-        setContent(cleaned);
-        showToast("Cleaned ✦", "#06b6d4", true);
-        // Save directly with the cleaned value (avoids stale closure on saveNote)
-        void notesApi.update(String(editingNote.id), { content: cleaned });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [editingNote?.id]);
 
     // In split view, restore last active folder (including "all files") — only if no folder selected yet
     useEffect(() => {
@@ -3028,17 +3014,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                 return firstLine.replace(/^#+\s*/, "").slice(0, 60).trim() || "Untitled";
             })();
             if (!title.trim()) setTitle(resolvedTitle);
-            // Auto-clean mermaid junk (trailing fences, --- blocks) on every save
-            let saveContent = content;
-            const isMermaidNote = (editingNote as any)?.type === "mermaid" || detectMermaid(content);
-            if (isMermaidNote) {
-                const cleaned = cleanMermaidContent(content);
-                if (cleaned !== content) {
-                    saveContent = cleaned;
-                    setContent(cleaned);
-                    showToast("Cleaned ✦", "#06b6d4", true);
-                }
-            }
+            const saveContent = content;
 
             const folderName = targetFolder || activeFolder || editingNote?.folder_name || "General";
             const activeFolderRow = folderStack.at(-1);
