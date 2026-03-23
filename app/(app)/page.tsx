@@ -1244,7 +1244,6 @@ export default function NotesMaster() {
     const [flashNote, setFlashNote] = useState<any | null>(null);
 
     const [editorOpen, setEditorOpen] = useState(false);
-    const [noteContentLoading, setNoteContentLoading] = useState(false);
     const [editingNote, setEditingNote] = useState<any | null>(null);
     const [showFloatCopy, setShowFloatCopy] = useState(true);
     const [title, setTitle] = useState("");
@@ -3846,7 +3845,6 @@ const fireIntegrations = (trigger: string, note: any) => {
 
         // Always fetch full content — list API omits the content column
         if (note.content == null) {
-            setNoteContentLoading(true);
             try {
                 const token = await getAuthToken();
                 const res = await fetch(`/api/stickies?id=${encodeURIComponent(note.id)}`, {
@@ -3867,10 +3865,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                     }
                 }
             } catch { /* use note as-is */ }
-            finally { if (openingNoteIdRef.current === noteId) setNoteContentLoading(false); }
         } else {
-            // Content already present — no loading needed
-            setNoteContentLoading(false);
             if (note.id && looksLikeMarkdown(note.content || "")) setMarkdownModeNotes((p: Set<string>) => new Set([...p, String(note.id)]));
             if (note.id && (note.list_mode || note.type === "checklist")) setListModeNotes((p: Set<string>) => new Set([...p, String(note.id)]));
             if (note.id && note.mindmap_mode) setMindmapModeNotes((p: Set<string>) => new Set([...p, String(note.id)]));
@@ -5894,21 +5889,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                         </button>
                     </div>
                     <div className="relative flex-1 flex overflow-hidden bg-black font-mono">
-                        {/* ── Note content loading spinner — shown while fetching full content ── */}
-                        {noteContentLoading && (() => {
-                            const nc = editingNote?.color || editingNote?.folder_color || noteColor || "#71717a";
-                            const initial = meaningfulInitial(editingNote?.title || title || "", "N");
-                            return (
-                                <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm pointer-events-none">
-                                    <div className="flex flex-col items-center gap-3">
-                                        <div className="w-14 h-14 flex items-center justify-center font-black text-white text-2xl animate-spin"
-                                            style={{ backgroundColor: nc, borderRadius: "3px 3px 3px 14px", boxShadow: `0 0 24px ${nc}88`, animationDuration: "1s" }}>
-                                            {initial}
-                                        </div>
-                                    </div>
-                                </div>
-                            );
-                        })()}
                         {/* ── Float copy pill — fades after 10s of editing ── */}
                         {showFloatCopy && !showNoteActions && content.trim() && !listMode && !graphMode && !mindmapMode && !stackMode && !voiceNote && noteType !== "rich" && noteType !== "html" && (
                         <div className="absolute top-3 right-3 z-[2147483647] pointer-events-auto">
