@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo, useCallback, useDeferredValue } from "react";
+import { createPortal } from "react-dom";
 import { createClient } from "@supabase/supabase-js";
 import { createClient as createBrowserClient } from "@/lib/supabase/client";
 import { usePageMeta } from "@/lib/usePageMeta";
@@ -1248,6 +1249,7 @@ export default function NotesMaster() {
     const [removingNoteIds, setRemovingNoteIds] = useState<Set<string>>(new Set());
 
     const [editorOpen, setEditorOpen] = useState(false);
+    const [noteContentLoading, setNoteContentLoading] = useState(false);
     const [editingNote, setEditingNote] = useState<any | null>(null);
     const [showFloatCopy, setShowFloatCopy] = useState(true);
     const [title, setTitle] = useState("");
@@ -3868,6 +3870,7 @@ const fireIntegrations = (trigger: string, note: any) => {
 
         // Always fetch full content — list API omits the content column
         if (note.content == null) {
+            setNoteContentLoading(true);
             try {
                 const token = await getAuthToken();
                 const res = await fetch(`/api/stickies?id=${encodeURIComponent(note.id)}`, {
@@ -3888,6 +3891,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                     }
                 }
             } catch { /* use note as-is */ }
+            finally { setNoteContentLoading(false); }
         } else {
             if (note.id && looksLikeMarkdown(note.content || "")) setMarkdownModeNotes((p: Set<string>) => new Set([...p, String(note.id)]));
             if (note.id && (note.list_mode || note.type === "checklist")) setListModeNotes((p: Set<string>) => new Set([...p, String(note.id)]));
@@ -5725,36 +5729,38 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     }}>🔥</div>
                             );
                         })}
-                        {/* Toast pill */}
-                        <div className="fixed z-[2147483647] pointer-events-auto"
-                            style={{
-                                left: 0,
-                                right: 0,
-                                top: "calc(env(safe-area-inset-top, 0px) + 14px)",
-                                display: "flex",
-                                justifyContent: "center",
-                                animation: "islandToastInOut 3s cubic-bezier(0.16, 1, 0.3, 1) forwards",
-                            }}
-                            onClick={() => void secureCopy(toast).then(() => { if (!isError) showToast("Copied!"); })}>
-                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-white cursor-pointer active:scale-95 transition-transform" style={{
-                                background: toastRainbow
-                                    ? "linear-gradient(90deg,#ff0080,#ff8c00,#ffe600,#00ff85,#00cfff,#b44aff,#ff0080)"
-                                    : toastColor,
-                                backgroundSize: toastRainbow ? "200% 100%" : undefined,
-                                animation: toastRainbow
-                                    ? "islandToastInOut 3s cubic-bezier(0.16,1,0.3,1) forwards, rainbowLoop 1.5s linear infinite"
-                                    : undefined,
-                                border: toastRainbow ? "1px solid rgba(255,255,255,0.3)" : `1px solid ${toastColor}99`,
-                                boxShadow: toastRainbow ? "0 8px 26px rgba(180,74,255,0.5)" : `0 8px 26px ${toastColor}66`,
-                            }}>
-                                <span style={{ width: 20, height: 20, borderRadius: "50%", background: "rgba(255,255,255,0.2)", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                        <path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/>
-                                    </svg>
-                                </span>
-                                <span className="font-black uppercase tracking-wide text-[7px] sm:text-[8px] leading-snug max-w-[220px] break-words text-center">{toast}</span>
-                            </div>
-                        </div>
+                        {/* Toast pill — rendered via portal to escape any parent stacking context */}
+                        {typeof document !== "undefined" && createPortal(
+                            <div className="fixed z-[2147483647] pointer-events-auto"
+                                style={{
+                                    left: 0, right: 0,
+                                    top: "calc(env(safe-area-inset-top, 0px) + 14px)",
+                                    display: "flex",
+                                    justifyContent: "center",
+                                    animation: "islandToastInOut 3s cubic-bezier(0.16, 1, 0.3, 1) forwards",
+                                }}
+                                onClick={() => void secureCopy(toast).then(() => { if (!isError) showToast("Copied!"); })}>
+                                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-white cursor-pointer active:scale-95 transition-transform" style={{
+                                    background: toastRainbow
+                                        ? "linear-gradient(90deg,#ff0080,#ff8c00,#ffe600,#00ff85,#00cfff,#b44aff,#ff0080)"
+                                        : toastColor,
+                                    backgroundSize: toastRainbow ? "200% 100%" : undefined,
+                                    animation: toastRainbow
+                                        ? "islandToastInOut 3s cubic-bezier(0.16,1,0.3,1) forwards, rainbowLoop 1.5s linear infinite"
+                                        : undefined,
+                                    border: toastRainbow ? "1px solid rgba(255,255,255,0.3)" : `1px solid ${toastColor}99`,
+                                    boxShadow: toastRainbow ? "0 8px 26px rgba(180,74,255,0.5)" : `0 8px 26px ${toastColor}66`,
+                                }}>
+                                    <span style={{ width: 20, height: 20, borderRadius: "50%", background: "rgba(255,255,255,0.2)", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                            <path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/>
+                                        </svg>
+                                    </span>
+                                    <span className="font-black uppercase tracking-wide text-[7px] sm:text-[8px] leading-snug max-w-[220px] break-words text-center">{toast}</span>
+                                </div>
+                            </div>,
+                            document.body
+                        )}
                     </React.Fragment>
                 );
             })()}
@@ -5914,6 +5920,18 @@ const fireIntegrations = (trigger: string, note: any) => {
                         </button>
                     </div>
                     <div className="relative flex-1 flex overflow-hidden bg-black font-mono">
+                        {/* ── Note loading spinner — portal so it always appears on top ── */}
+                        {noteContentLoading && typeof document !== "undefined" && createPortal(
+                            <div className="fixed inset-0 z-[2147483646] flex items-center justify-center bg-black/70 backdrop-blur-sm pointer-events-none">
+                                <div className="flex flex-col items-center gap-3">
+                                    <div className="w-14 h-14 flex items-center justify-center font-black text-white text-2xl animate-spin"
+                                        style={{ backgroundColor: noteColor || "#71717a", borderRadius: "3px 3px 3px 14px", boxShadow: `0 0 28px ${noteColor || "#71717a"}99`, animationDuration: "0.8s" }}>
+                                        {meaningfulInitial(title || editingNote?.title || "", "N")}
+                                    </div>
+                                </div>
+                            </div>,
+                            document.body
+                        )}
                         {/* ── Float copy pill — fades after 10s of editing ── */}
                         {showFloatCopy && !showNoteActions && content.trim() && !listMode && !graphMode && !mindmapMode && !stackMode && !voiceNote && noteType !== "rich" && noteType !== "html" && (
                         <div className="absolute top-3 right-3 z-[2147483647] pointer-events-auto">
