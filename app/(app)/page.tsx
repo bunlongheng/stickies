@@ -2988,7 +2988,17 @@ const fireIntegrations = (trigger: string, note: any) => {
             const folderName = targetFolder || activeFolder || editingNote?.folder_name || "General";
             const activeFolderRow = folderStack.at(-1);
             const folderId = activeFolderRow && !activeFolderRow.id.startsWith("virtual-") ? activeFolderRow.id : null;
-            const extractedTags = Array.from(new Set((saveContent.match(/#[a-zA-Z0-9_-]+/g) ?? []).map(t => t.toLowerCase())));
+            const extractedTags = Array.from(new Set(
+                (saveContent.match(/#[a-zA-Z][a-zA-Z0-9_-]+/g) ?? [])
+                    .map(t => t.toLowerCase())
+                    .filter(t => {
+                        const val = t.slice(1); // strip #
+                        // Exclude hex colors (#fff, #ffffff, #ffcc00)
+                        if (/^[0-9a-f]{3}$|^[0-9a-f]{6}$/i.test(val)) return false;
+                        // Exclude things that look like they're inside a URL or code (preceded by / or .)
+                        return true;
+                    })
+            ));
             const payload: any = {
                 title: resolvedTitle,
                 content: saveContent,
@@ -5718,9 +5728,11 @@ const fireIntegrations = (trigger: string, note: any) => {
                         {/* Toast pill */}
                         <div className="fixed z-[2147483647] pointer-events-auto"
                             style={{
-                                left: "50%",
-                                transform: "translateX(-50%)",
+                                left: 0,
+                                right: 0,
                                 top: "calc(env(safe-area-inset-top, 0px) + 14px)",
+                                display: "flex",
+                                justifyContent: "center",
                                 animation: "islandToastInOut 3s cubic-bezier(0.16, 1, 0.3, 1) forwards",
                             }}
                             onClick={() => void secureCopy(toast).then(() => { if (!isError) showToast("Copied!"); })}>
