@@ -6929,7 +6929,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 return (
                                                     <button type="button"
                                                         onClick={(e) => { e.stopPropagation(); enterFolder({ id: String(item.id), name: item.name, color: item.color || palette12[0] }); setIsGlobalSettings(false); setShowFolderColorPicker(false); setShowFolderIconPicker(false); setShowFolderMovePicker(false); setShowFolderActions(true); }}
-                                                        className={`folder-icon-badge${item.name === "CLAUDE" ? " folder-icon-badge-claude" : ""} flex-shrink-0 self-stretch w-[54px] sm:w-[46px] flex items-center justify-center font-black overflow-hidden`}
+                                                        className={`folder-icon-badge${item.name === "CLAUDE" ? " folder-icon-badge-claude" : ""} flex-shrink-0 self-stretch aspect-square flex items-center justify-center font-black overflow-hidden`}
                                                         style={{ fontSize: 22, "--fc": c, boxShadow: `2px 3px 8px ${c}55` } as React.CSSProperties}>
                                                         {item.name === "CLAUDE"
                                                             ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-0.5" />
@@ -6944,7 +6944,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 return (
                                                     <button type="button"
                                                         onClick={(e) => { e.stopPropagation(); void openNote(item); closeEditorTools(); }}
-                                                        className="flex-shrink-0 self-stretch w-[54px] sm:w-[46px] flex items-center justify-center font-black overflow-hidden relative"
+                                                        className="flex-shrink-0 self-stretch aspect-square flex items-center justify-center font-black overflow-hidden relative"
                                                         style={{
                                                             fontSize: 22,
                                                             backgroundColor: nc,
