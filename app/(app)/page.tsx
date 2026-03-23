@@ -1244,6 +1244,7 @@ export default function NotesMaster() {
     useEffect(() => { if (!undoDeleteTask) return; const t = setTimeout(() => setUndoDeleteTask(null), 5000); return () => clearTimeout(t); }, [undoDeleteTask]);
     const [flashColor, setFlashColor] = useState("#ffffff");
     const [flashNote, setFlashNote] = useState<any | null>(null);
+    const [incomingNoteIds, setIncomingNoteIds] = useState<Set<string>>(new Set());
 
     const [editorOpen, setEditorOpen] = useState(false);
     const [editingNote, setEditingNote] = useState<any | null>(null);
@@ -2283,6 +2284,10 @@ const fireIntegrations = (trigger: string, note: any) => {
                 const color = note.folder_color || "#34C759";
                 showToast(`+ ${note.title || "New note"}`, color);
                 flashQueueRef.current.push({ note, color });
+                // Blink the list item twice so user knows it just came in live
+                const nid = String(note.id);
+                setIncomingNoteIds((prev) => new Set([...prev, nid]));
+                setTimeout(() => setIncomingNoteIds((prev) => { const s = new Set(prev); s.delete(nid); return s; }), 1400);
             })
             .on("postgres_changes", { event: "UPDATE", schema: "public", table: "stickies" }, (payload: any) => {
                 const note = payload.new;
@@ -6853,7 +6858,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             : { isolation: "isolate", backgroundColor: c, borderRadius: "3px 3px 3px 14px" };
                                     })()}
                                     className={`${isListMode
-                                        ? `group list-row-hover flex items-center gap-3 px-4 py-3 border-b border-white/5 cursor-pointer select-none transition-colors active:bg-white/10 overflow-hidden ${isDragging ? "opacity-30" : dt?.mode === "into" ? "bg-cyan-950/60 ring-1 ring-inset ring-cyan-400" : ""} ${isSelectMode && !item.is_folder && selectedIds.has(String(item.id)) ? "bg-blue-950/50" : ""} ${editMode && !item.is_folder && String(item.id) === String(editingNote?.id) ? "bg-white/10 border-l-[3px]" : "border-l-[3px] border-l-transparent"}`
+                                        ? `group list-row-hover flex items-center gap-3 px-4 py-3 border-b border-white/5 cursor-pointer select-none transition-colors active:bg-white/10 overflow-hidden ${!item.is_folder && incomingNoteIds.has(String(item.id)) ? "note-incoming" : ""} ${isDragging ? "opacity-30" : dt?.mode === "into" ? "bg-cyan-950/60 ring-1 ring-inset ring-cyan-400" : ""} ${isSelectMode && !item.is_folder && selectedIds.has(String(item.id)) ? "bg-blue-950/50" : ""} ${editMode && !item.is_folder && String(item.id) === String(editingNote?.id) ? "bg-white/10 border-l-[3px]" : "border-l-[3px] border-l-transparent"}`
                                         : `grid-square-tile min-w-0 cursor-pointer transition-all group ${item.is_folder ? `folder-grid-tile${item.name === "CLAUDE" ? " folder-grid-tile-claude" : ""}` : ""} ${isDragging ? "opacity-30 scale-95" : dt?.mode === "into" ? "ring-4 ring-cyan-400 ring-inset z-10" : ""} ${editMode && !item.is_folder && String(item.id) === String(editingNote?.id) ? "ring-2 ring-white/40 ring-inset" : ""}`}`}>
                                     {/* Cursor spotlight glow */}
                                     {isListMode && glowCard?.id === tileId && (() => {
