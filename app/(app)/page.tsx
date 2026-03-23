@@ -251,6 +251,8 @@ function syntaxHighlightJson(obj: any): string {
 const MERMAID_KEYWORDS = /^(flowchart|graph|sequenceDiagram|classDiagram|stateDiagram(-v2)?|erDiagram|gantt|pie|gitGraph|mindmap|timeline|xychart(-beta)?|quadrantChart|requirementDiagram|zenuml|sankey(-beta)?|block(-beta)?|packet(-beta)?|kanban|architecture(-beta)?|c4container|c4component|c4dynamic|c4deployment)\b/im;
 
 const TYPE_BADGE: Record<string, { label: string; color: string }> = {
+    text:       { label: "TXT",         color: "#71717a" },
+    rich:       { label: "RTF",         color: "#9ca3af" },
     javascript: { label: "Javascript",  color: "#f97316" },
     typescript: { label: "Typescript",  color: "#3b82f6" },
     python:     { label: "Python",      color: "#eab308" },
@@ -7000,8 +7002,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             {!item.is_folder && item.updated_at && (
                                                 <div className="flex items-center justify-end gap-2 flex-shrink-0">
                                                     {(() => {
-                                                        const t = (item as any).type;
-                                                        const badge = t && t !== "text" ? TYPE_BADGE[t] : null;
+                                                        const t = (item as any).type || "text";
+                                                        const badge = TYPE_BADGE[t] ?? TYPE_BADGE["text"];
                                                         if (!badge) return null;
                                                         const label = t === "mermaid" ? mermaidSubType(item.content || "") : badge.label;
                                                         return <span className="hidden sm:inline-flex text-[7px] font-black uppercase tracking-wide px-1 py-px rounded-full flex-shrink-0" style={{ background: `${badge.color}20`, color: badge.color, border: `1px solid ${badge.color}40` }}>{label}</span>;
