@@ -430,3 +430,10 @@ body {
   overflow: hidden;
   pointer-events: none;
 }
+
+/* Folder search / move picker — arrow-key active highlight */
+.folder-search-item[data-fi-active="1"] {
+  border-color: rgba(255,255,255,0.45) !important;
+  background-color: rgba(255,255,255,0.10) !important;
+  color: #fff !important;
+}

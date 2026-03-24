@@ -1349,6 +1349,8 @@ export default function NotesMaster() {
     const [showColorPicker, setShowColorPicker] = useState(false);
     const [showSwitcher, setShowSwitcher] = useState(false);
     const [folderSearchQuery, setFolderSearchQuery] = useState("");
+    const folderSearchCursorRef = useRef(0);
+    const folderSearchListRef = useRef<HTMLDivElement | null>(null);
     const folderSearchRef = useRef<HTMLInputElement | null>(null);
     const [targetFolder, setTargetFolder] = useState("General");
     const [noteColor, setNoteColor] = useState(palette12[0]);
@@ -1442,6 +1444,8 @@ export default function NotesMaster() {
     const [iconPickerSearch, setIconPickerSearch] = useState("");
     const [showFolderMovePicker, setShowFolderMovePicker] = useState(false);
     const [folderMoveQuery, setFolderMoveQuery] = useState("");
+    const folderMoveCursorRef = useRef(0);
+    const folderMoveListRef = useRef<HTMLDivElement | null>(null);
     const folderMoveSearchRef = useRef<HTMLInputElement | null>(null);
 
     const [quoteIndex, setQuoteIndex] = useState(0);
@@ -7760,33 +7764,57 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         }
                                         return true;
                                     });
-                                    const selectFirst = () => {
-                                        if (filtered.length === 0) return;
-                                        moveToFolder(filtered[0]);
-                                    };
                                     return (
                                         <div className="px-4 pb-4 flex flex-col gap-1.5">
                                             <input
                                                 ref={folderSearchRef}
                                                 type="text"
                                                 value={folderSearchQuery}
-                                                onChange={(e) => setFolderSearchQuery(e.target.value)}
-                                                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); selectFirst(); } if (e.key === "Escape") { setShowSwitcher(false); setFolderSearchQuery(""); } }}
+                                                onChange={(e) => {
+                                                    setFolderSearchQuery(e.target.value);
+                                                    folderSearchCursorRef.current = 0;
+                                                    // reset DOM highlights
+                                                    folderSearchListRef.current?.querySelectorAll<HTMLElement>("[data-fi]").forEach((el, i) => {
+                                                        el.setAttribute("data-fi-active", i === 0 ? "1" : "0");
+                                                    });
+                                                }}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                                                        e.preventDefault();
+                                                        e.stopPropagation();
+                                                        const items = folderSearchListRef.current?.querySelectorAll<HTMLElement>("[data-fi]");
+                                                        if (!items || items.length === 0) return;
+                                                        const next = e.key === "ArrowDown"
+                                                            ? Math.min(folderSearchCursorRef.current + 1, items.length - 1)
+                                                            : Math.max(folderSearchCursorRef.current - 1, 0);
+                                                        folderSearchCursorRef.current = next;
+                                                        items.forEach((el, i) => el.setAttribute("data-fi-active", i === next ? "1" : "0"));
+                                                        items[next]?.scrollIntoView({ block: "nearest" });
+                                                    } else if (e.key === "Enter") {
+                                                        e.preventDefault();
+                                                        const name = filtered[folderSearchCursorRef.current];
+                                                        if (name) moveToFolder(name);
+                                                    } else if (e.key === "Escape") {
+                                                        setShowSwitcher(false); setFolderSearchQuery("");
+                                                        folderSearchCursorRef.current = 0;
+                                                    }
+                                                }}
                                                 placeholder="search folders..."
                                                 className="w-full bg-black border border-white/15 outline-none focus:border-white/40 px-3 py-2 text-xs text-white placeholder:text-zinc-600 font-mono mb-1"
                                             />
-                                            <div className="flex flex-col gap-1.5 max-h-[180px] overflow-y-auto">
+                                            <div ref={folderSearchListRef} className="flex flex-col gap-1.5 max-h-[180px] overflow-y-auto">
                                                 {filtered.map((name, idx) => {
                                                     const color = folders.find((f) => f.name === name)?.color || palette12[0];
                                                     const folderIcon = folderIcons[name] || "";
-                                                    const initial = name.trim().charAt(0).toUpperCase() || "F";
                                                     const selected = targetFolder === name;
                                                     return (
                                                         <button
                                                             key={name}
                                                             type="button"
+                                                            data-fi={idx}
+                                                            data-fi-active={idx === 0 ? "1" : "0"}
                                                             onClick={() => moveToFolder(name)}
-                                                            className={`w-full flex items-center gap-3 px-3 py-2.5 text-left border transition ${idx === 0 && folderSearchQuery ? "border-white/30 bg-white/5 text-white" : selected ? "bg-white/10 border-white/30 text-white" : "bg-black/30 border-white/10 text-zinc-300 hover:bg-white/5"}`}
+                                                            className={`w-full flex items-center gap-3 px-3 py-2.5 text-left border transition folder-search-item ${selected ? "bg-white/10 border-white/30 text-white" : "bg-black/30 border-white/10 text-zinc-300 hover:bg-white/5"}`}
                                                         >
                                                             <span className="w-[18px] h-[18px] flex-shrink-0 inline-flex items-center justify-center text-[10px] font-black text-white leading-none border border-white/25" style={{ backgroundColor: color }}>
                                                                 <FolderIconDisplay value={folderIcon} folderName={name} className="w-3 h-3" />
@@ -8384,24 +8412,51 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                     ref={folderMoveSearchRef}
                                                     type="text"
                                                     value={folderMoveQuery}
-                                                    onChange={(e) => setFolderMoveQuery(e.target.value)}
-                                                    onKeyDown={(e) => { if (e.key === "Enter" && moveTargets.length > 0) { e.preventDefault(); void moveFolderToParent(moveTargets[0]); } if (e.key === "Escape") { setShowFolderMovePicker(false); setFolderMoveQuery(""); } }}
+                                                    onChange={(e) => {
+                                                        setFolderMoveQuery(e.target.value);
+                                                        folderMoveCursorRef.current = 0;
+                                                        folderMoveListRef.current?.querySelectorAll<HTMLElement>("[data-fi]").forEach((el, i) => {
+                                                            el.setAttribute("data-fi-active", i === 0 ? "1" : "0");
+                                                        });
+                                                    }}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                                                            e.preventDefault(); e.stopPropagation();
+                                                            const items = folderMoveListRef.current?.querySelectorAll<HTMLElement>("[data-fi]");
+                                                            if (!items || items.length === 0) return;
+                                                            const next = e.key === "ArrowDown"
+                                                                ? Math.min(folderMoveCursorRef.current + 1, items.length - 1)
+                                                                : Math.max(folderMoveCursorRef.current - 1, 0);
+                                                            folderMoveCursorRef.current = next;
+                                                            items.forEach((el, i) => el.setAttribute("data-fi-active", i === next ? "1" : "0"));
+                                                            items[next]?.scrollIntoView({ block: "nearest" });
+                                                        } else if (e.key === "Enter") {
+                                                            e.preventDefault();
+                                                            const name = moveTargets[folderMoveCursorRef.current];
+                                                            if (name) void moveFolderToParent(name);
+                                                        } else if (e.key === "Escape") {
+                                                            setShowFolderMovePicker(false); setFolderMoveQuery("");
+                                                            folderMoveCursorRef.current = 0;
+                                                        }
+                                                    }}
                                                     placeholder="search folders..."
                                                     className="w-full bg-black border border-white/15 outline-none focus:border-white/40 px-3 py-2 text-xs text-white placeholder:text-zinc-600 font-mono mb-1"
                                                 />
-                                                <div className="flex flex-col gap-1.5 max-h-[180px] overflow-y-auto">
+                                                <div ref={folderMoveListRef} className="flex flex-col gap-1.5 max-h-[180px] overflow-y-auto">
                                                     <button type="button"
                                                         onClick={() => void moveFolderToParent(null)}
                                                         className="w-full flex items-center gap-3 px-3 py-2.5 text-left border border-white/10 bg-black/30 text-zinc-300 hover:bg-white/5 transition">
                                                         <span className="text-[12px] font-bold truncate flex-1">Root</span>
                                                     </button>
-                                                    {moveTargets.map((name) => {
+                                                    {moveTargets.map((name, idx) => {
                                                         const color = folders.find((f) => f.name === name)?.color || palette12[0];
                                                         const iconVal = folderIcons[name] || "";
                                                         return (
                                                             <button key={name} type="button"
+                                                                data-fi={idx}
+                                                                data-fi-active={idx === 0 ? "1" : "0"}
                                                                 onClick={() => void moveFolderToParent(name)}
-                                                                className="w-full flex items-center gap-3 px-3 py-2.5 text-left border border-white/10 bg-black/30 text-zinc-300 hover:bg-white/5 transition">
+                                                                className="w-full flex items-center gap-3 px-3 py-2.5 text-left border transition folder-search-item border-white/10 bg-black/30 text-zinc-300 hover:bg-white/5">
                                                                 <span className="w-[18px] h-[18px] flex-shrink-0 inline-flex items-center justify-center text-[10px] font-black text-white leading-none border border-white/25" style={{ backgroundColor: color }}>
                                                                     <FolderIconDisplay value={iconVal} folderName={name} className="w-3 h-3" />
                                                                 </span>
