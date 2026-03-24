@@ -415,6 +415,11 @@ body {
 .note-incoming {
   animation: noteIncoming 1.2s ease forwards;
 }
+@keyframes pulse {
+  0%, 100% { opacity: 0.6; transform: scale(1); }
+  50%       { opacity: 1;   transform: scale(1.08); }
+}
+
 @keyframes noteRemoving {
   0%   { transform: translateX(0); opacity: 1; max-height: 64px; }
   60%  { transform: translateX(-100%); opacity: 0; max-height: 64px; }

@@ -1,5 +1,5 @@
 "use client";
-import { useState, useRef, useCallback, useEffect } from "react";
+import React, { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import Editor from "react-simple-code-editor";
 import Prism from "prismjs";
 import "prismjs/components/prism-javascript";
@@ -71,12 +71,15 @@ interface Props {
     editing: boolean;
     autoFocus?: boolean;
     wordWrap?: boolean;
+    searchTerm?: string;
+    searchIndex?: number;
+    onSearchResults?: (count: number) => void;
     onChange?: (val: string) => void;
     onBlur?: () => void;
     onClick?: () => void;
 }
 
-export function CodeViewer({ code, language, editing, autoFocus = true, wordWrap = false, onChange, onBlur, onClick }: Props) {
+export function CodeViewer({ code, language, editing, autoFocus = true, wordWrap = false, searchTerm = "", searchIndex = 0, onSearchResults, onChange, onBlur, onClick }: Props) {
     const lang = language === "text" ? "text" : (LANG_MAP[language] ?? "javascript");
     const lines = (code || "").split("\n");
     const lineCount = lines.length;
@@ -103,6 +106,86 @@ export function CodeViewer({ code, language, editing, autoFocus = true, wordWrap
             return Math.max(1, Math.ceil((l.length || 1) / charsPerRow));
           })
         : null;
+
+    // Compute search matches from plain code string
+    const searchMatches = useMemo(() => {
+        if (!searchTerm) return [];
+        const lower = code.toLowerCase();
+        const term = searchTerm.toLowerCase();
+        const matches: { start: number; end: number }[] = [];
+        let idx = 0;
+        while (true) {
+            const pos = lower.indexOf(term, idx);
+            if (pos === -1) break;
+            matches.push({ start: pos, end: pos + term.length });
+            idx = pos + term.length;
+        }
+        return matches;
+    }, [code, searchTerm]);
+
+    // Report match count to parent
+    useEffect(() => {
+        onSearchResults?.(searchMatches.length);
+    }, [searchMatches.length, onSearchResults]);
+
+    // Scroll active match into view
+    useEffect(() => {
+        if (!searchTerm || searchMatches.length === 0) return;
+        const match = searchMatches[searchIndex] ?? searchMatches[0];
+        if (!match) return;
+        const lineNum = code.substring(0, match.start).split("\n").length - 1;
+        const matchTop = PAD_TOP + lineNum * LINE_HEIGHT;
+        const container = containerRef.current;
+        if (container) {
+            const targetScroll = matchTop - container.clientHeight / 2 + LINE_HEIGHT / 2;
+            container.scrollTo({ top: Math.max(0, targetScroll), behavior: "smooth" });
+        }
+    }, [searchTerm, searchIndex, searchMatches, code]);
+
+    // Build highlight overlay spans
+    const searchOverlay = useMemo(() => {
+        if (!searchTerm || searchMatches.length === 0) return null;
+        const currentMatch = searchMatches[searchIndex] ?? searchMatches[0];
+        const spans: React.ReactNode[] = [];
+
+        searchMatches.forEach((m, mi) => {
+            const isCurrent = m === currentMatch;
+            // Find line/col of match start
+            const before = code.substring(0, m.start);
+            const lineIdx = before.split("\n").length - 1;
+            const colStart = before.length - before.lastIndexOf("\n") - 1;
+
+            // A match may span multiple lines — handle simple single-line case
+            const matchText = code.substring(m.start, m.end);
+            const matchLines = matchText.split("\n");
+            matchLines.forEach((part, partIdx) => {
+                const line = lineIdx + partIdx;
+                const col = partIdx === 0 ? colStart : 0;
+                const top = PAD_TOP + line * LINE_HEIGHT;
+                // Approximate char width for monospace: FONT_SIZE * 0.6
+                const charW = FONT_SIZE * 0.601;
+                const left = 20 + col * charW; // 20 = PAD_LEFT
+                const width = part.length * charW;
+                if (width === 0) return;
+                spans.push(
+                    <span
+                        key={`${mi}-${partIdx}`}
+                        style={{
+                            position: "absolute",
+                            top,
+                            left,
+                            width,
+                            height: LINE_HEIGHT,
+                            background: isCurrent ? "rgba(255,214,0,0.85)" : "rgba(255,214,0,0.3)",
+                            borderRadius: 2,
+                            pointerEvents: "none",
+                        }}
+                    />
+                );
+            });
+        });
+        return spans;
+    }, [searchTerm, searchMatches, searchIndex, code]);
 
     const readActiveLine = useCallback(() => {
         const ta = wrapperRef.current?.querySelector("textarea");
@@ -234,6 +317,20 @@ export function CodeViewer({ code, language, editing, autoFocus = true, wordWrap
 
             {/* Editor */}
             <div ref={wrapperRef} className={`code-viewer-wrap${wordWrap ? " word-wrap" : ""}`} style={{ flex: 1, minWidth: 0, position: "relative", zIndex: 1 }}>
+                {/* Search highlight overlay — sits above syntax highlighting */}
+                {searchOverlay && (
+                    <div
+                        aria-hidden
+                        style={{
+                            position: "absolute",
+                            top: 0, left: 0, right: 0, bottom: 0,
+                            pointerEvents: "none",
+                            zIndex: 10,
+                        }}
+                    >
+                        {searchOverlay}
+                    </div>
+                )}
                 <Editor
                     value={code}
                     onValueChange={editing ? (onChange ?? (() => {})) : () => {}}
