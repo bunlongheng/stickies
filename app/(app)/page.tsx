@@ -6216,6 +6216,24 @@ const fireIntegrations = (trigger: string, note: any) => {
                             title="Voice recording">
                             <MicrophoneIcon className="w-[29px] h-[29px] sm:w-7 sm:h-7" />
                         </button>
+                        {/* Checklist toggle — direct toolbar button */}
+                        <button type="button"
+                            onClick={() => {
+                                if (!listMode && noteType === "rich") switchToPlain();
+                                toggleListMode();
+                            }}
+                            className="p-2 sm:p-3 transition flex-shrink-0"
+                            style={{ color: listMode ? noteColor : "#71717a" }}
+                            title={listMode ? "Exit checklist" : "Checklist"}>
+                            <CheckCircleIcon className="w-[26px] h-[26px] sm:w-6 sm:h-6" />
+                        </button>
+                        {/* Share — always visible */}
+                        <button type="button"
+                            onClick={() => { setSharePickerOpen(true); setShowNoteActions(false); closeEditorTools(); }}
+                            className="p-2 sm:p-3 text-zinc-500 hover:text-white active:text-white transition flex-shrink-0"
+                            title="Share">
+                            <PaperAirplaneIcon className="w-[24px] h-[24px] sm:w-[22px] sm:h-[22px]" />
+                        </button>
                         <button type="button"
                             onClick={() => { setShowNoteActions(v => !v); closeEditorTools(); }}
                             className="p-2 sm:p-3 text-zinc-300 hover:text-white active:text-white transition flex-shrink-0"
