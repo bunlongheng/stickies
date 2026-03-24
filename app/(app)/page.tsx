@@ -7841,10 +7841,12 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     <span className="text-[10px] font-black uppercase tracking-widest px-1.5 py-0.5" style={{ background: `${noteColor}25`, color: noteColor }}>{noteViewMode}</span>
                                 </div>
                                 <div className="grid grid-cols-2 gap-1.5">
-                                    {(["Text", "Graph", "Mindmap", "Stack"] as const).map((mode) => {
+                                    {(["Text", "Checklist", "Graph", "Mindmap", "Stack"] as const).map((mode) => {
                                         const active = noteViewMode === mode;
                                         const icon = mode === "Text" ? (
                                             <Bars3Icon className="w-4 h-4" />
+                                        ) : mode === "Checklist" ? (
+                                            <CheckCircleIcon className="w-4 h-4" />
                                         ) : mode === "Graph" ? (
                                             <CubeTransparentIcon className="w-4 h-4" />
                                         ) : mode === "Mindmap" ? (
@@ -7853,25 +7855,35 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             <RectangleStackIcon className="w-4 h-4" />
                                         );
                                         const autoLocked = (markdownMode || htmlMode) && mode !== "Text";
+                                        const isLastOdd = mode === "Stack"; // 5th item — span full width
                                         return (
                                             <button key={mode} type="button"
                                                 disabled={autoLocked}
                                                 onClick={() => {
                                                     if (autoLocked) return;
-                                                    if (listMode) toggleListMode();
-                                                    if (graphMode) toggleGraphMode();
-                                                    if (mindmapMode) toggleMindmapMode();
-                                                    if (stackMode) toggleStackMode();
-                                                    if (mode === "Graph") toggleGraphMode();
-                                                    else if (mode === "Mindmap") toggleMindmapMode();
-                                                    else if (mode === "Stack") toggleStackMode();
-                                                    else if (mode === "Text") {
-                                                        if (markdownMode) toggleMarkdownMode();
-                                                        if (htmlMode) toggleHtmlMode();
+                                                    if (mode === "Checklist") {
+                                                        if (graphMode) toggleGraphMode();
+                                                        if (mindmapMode) toggleMindmapMode();
+                                                        if (stackMode) toggleStackMode();
+                                                        // Rich note → convert to plain first, then checklist
+                                                        if (!listMode && noteType === "rich") switchToPlain();
+                                                        toggleListMode();
+                                                    } else {
+                                                        if (listMode) toggleListMode();
+                                                        if (graphMode) toggleGraphMode();
+                                                        if (mindmapMode) toggleMindmapMode();
+                                                        if (stackMode) toggleStackMode();
+                                                        if (mode === "Graph") toggleGraphMode();
+                                                        else if (mode === "Mindmap") toggleMindmapMode();
+                                                        else if (mode === "Stack") toggleStackMode();
+                                                        else if (mode === "Text") {
+                                                            if (markdownMode) toggleMarkdownMode();
+                                                            if (htmlMode) toggleHtmlMode();
+                                                        }
                                                     }
                                                     if (window.innerWidth < 1024) setShowNoteActions(false);
                                                 }}
-                                                className="flex flex-col items-center gap-1.5 py-3 px-1 transition-all text-[10px] font-black"
+                                                className={`flex flex-col items-center gap-1.5 py-3 px-1 transition-all text-[10px] font-black${isLastOdd ? " col-span-2" : ""}`}
                                                 style={{
                                                     background: active ? `${noteColor}25` : "rgba(255,255,255,0.04)",
                                                     color: autoLocked ? "#27272a" : active ? noteColor : "#71717a",
