@@ -2362,6 +2362,7 @@ const fireIntegrations = (trigger: string, note: any) => {
 
         channel.bind("note-updated", (note: any) => {
             if (!note?.id) return;
+            if (pendingDeleteRef.current && String(pendingDeleteRef.current.note.id) === String(note.id)) return;
             const lastWrite = localWriteRef.current.get(String(note.id));
             if (lastWrite && Date.now() - lastWrite < 3000) return;
             setDbData((prev) => prev.map((r) => String(r.id) === String(note.id) ? { ...r, ...note } : r));
@@ -2434,6 +2435,7 @@ const fireIntegrations = (trigger: string, note: any) => {
             .on("postgres_changes", { event: "UPDATE", schema: "public", table: "stickies" }, (payload: any) => {
                 const note = payload.new;
                 if (!note?.id) return;
+                if (pendingDeleteRef.current && String(pendingDeleteRef.current.note.id) === String(note.id)) return;
                 const lastWrite = localWriteRef.current.get(String(note.id));
                 if (lastWrite && Date.now() - lastWrite < 3000) return;
                 setDbData((prev) => prev.map((r) => String(r.id) === String(note.id) ? { ...r, ...note } : r));
