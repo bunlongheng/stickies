@@ -161,11 +161,22 @@ async function pickEnexFile() {
     });
   }
 
+  const manifest = loadManifest();
+  // Count imported notes per notebook (key format: "<notebook>::<title>::<created>")
+  const importedPerNotebook = {};
+  for (const key of Object.keys(manifest)) {
+    const nb = key.split('::')[0];
+    importedPerNotebook[nb] = (importedPerNotebook[nb] || 0) + 1;
+  }
+
   console.log(`\x1b[32m✓  Found ${files.length} file${files.length !== 1 ? 's' : ''}:\x1b[0m\n`);
   files.forEach((f, i) => {
     const d = new Date(f.mtime).toLocaleDateString();
     const kb = Math.round(statSync(f.path).size / 1024);
-    console.log(`  \x1b[1m${i + 1}\x1b[0m) ${f.name}  \x1b[2m${kb} KB · ${d}\x1b[0m`);
+    const nb = f.name.replace(/\.enex$/i, '').toUpperCase();
+    const doneCount = importedPerNotebook[nb] || 0;
+    const doneTag = doneCount > 0 ? `  \x1b[32m✓ ${doneCount} imported\x1b[0m` : '';
+    console.log(`  \x1b[1m${i + 1}\x1b[0m) ${f.name}  \x1b[2m${kb} KB · ${d}\x1b[0m${doneTag}`);
   });
   console.log('\n\x1b[2mPress a number to import, or Ctrl+C to cancel.\x1b[0m\n');
 
@@ -715,6 +726,11 @@ async function main() {
   const toImport     = limit ? Math.min(limit, pendingMeta.length) : pendingMeta.length;
   console.log(`${skippedCount} already imported, ${pendingMeta.length} pending — importing ${toImport}${sortRecent ? ' (sorted: most recent first)' : ''}`);
 
+  if (toImport === 0) {
+    console.log(`\n✅  ${notebook} already fully imported (${skippedCount} notes). Nothing to do.\n`);
+    process.exit(0);
+  }
+
   // Build ordered block list from sorted/filtered metadata
   const orderedBlocks = pendingMeta.map(m => blocks[m.idx]);
 
@@ -781,6 +797,8 @@ async function main() {
     const note = parseNoteBlock(block);
 
     if (existingTitles.has(note.title.toLowerCase())) {
+      manifest[note.key] = { skipped: true, reason: 'already_in_db', importedAt: new Date().toISOString() };
+      saveManifest(manifest);
       dbSkippedCount++;
       continue;
     }
@@ -790,6 +808,8 @@ async function main() {
     if (isUntitled) {
       const preview = (note.enml || '').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim().slice(0, 300);
       skipLog.push({ title: note.title, reason: 'untitled', preview, createdAt: note.createdAt });
+      manifest[note.key] = { skipped: true, reason: 'untitled', importedAt: new Date().toISOString() };
+      saveManifest(manifest);
       console.log(`${hex('#555560')}⊘${RESET} ${DIM}skip (untitled):  ${note.title}${RESET}`);
       continue;
     }
@@ -798,6 +818,8 @@ async function main() {
     const enmlText = (note.enml || '').replace(/<[^>]+>/g, '').trim();
     if (!enmlText && !note.enml?.includes('<en-media')) {
       skipLog.push({ title: note.title, reason: 'empty content', preview: '', createdAt: note.createdAt });
+      manifest[note.key] = { skipped: true, reason: 'empty', importedAt: new Date().toISOString() };
+      saveManifest(manifest);
       console.log(`${hex('#555560')}⊘${RESET} ${DIM}skip (empty):      ${note.title}${RESET}`);
       continue;
     }
@@ -1056,6 +1078,33 @@ async function main() {
   }
 
   console.log(divider('╚','═','╝'));
+
+  // ── Save per-notebook report to .reports/<notebook>.md ───────────────────────
+  const reportsDir = join(__dirname, '.reports');
+  try { if (!existsSync(reportsDir)) { const { mkdirSync } = await import('fs'); mkdirSync(reportsDir); } } catch {}
+  const reportFile = join(reportsDir, `${notebook.replace(/[^a-z0-9]/gi, '_')}.md`);
+  const runAt = new Date().toLocaleString();
+  const prevReport = existsSync(reportFile) ? readFileSync(reportFile, 'utf8') : '';
+  const newRun = [
+    `## Run: ${runAt}`,
+    `- **Inserted this run:** ${importedCount}`,
+    `- **Failed:** ${failedNotes.length}`,
+    `- **Total in notebook:** ${auditRows.length}`,
+    `- **Content size:** ${totalKB} KB (${totalMB} MB)`,
+    `- **Images:** ${totalImages} in ${notesWithImages} notes`,
+    `- **Tables:** ${totalTables} in ${notesWithTables} notes`,
+    `- **Stripped (too large):** ${strippedNotes.length}`,
+    failedNotes.length   ? `- ⚠ **Failed:** ${failedNotes.join(', ')}` : '',
+    strippedNotes.length ? `- ⚠ **Imgs stripped:** ${strippedNotes.join(', ')}` : '',
+    emptyNotes.length    ? `- ℹ **Empty notes:** ${emptyNotes.join(', ')}` : '',
+    '',
+  ].filter(l => l !== '').join('\n');
+
+  const header = prevReport.startsWith(`# Import Report — ${notebook}`)
+    ? ''
+    : `# Import Report — ${notebook}\n\n`;
+  writeFileSync(reportFile, `${header}${prevReport ? prevReport.replace(/^# Import Report[^\n]*\n\n?/, '') : ''}${newRun}\n`);
+  console.log(`\n${hex('#32ADE6')}📄 Report saved →${RESET} ${DIM}${reportFile}${RESET}\n`);
 }
 
 main().catch(console.error);
