@@ -336,6 +336,7 @@ body {
 .folder-icon-badge {
   background: var(--fc, #888);
   color: #fff;
+  border-radius: 6px;
   transition: background 0.15s, color 0.15s, opacity 0.15s;
 }
 .folder-icon-badge:hover {
