@@ -3183,8 +3183,25 @@ const fireIntegrations = (trigger: string, note: any) => {
 
     const saveNote = useCallback(
         async ({ silent = false, deriveTitle = false }: { silent?: boolean; deriveTitle?: boolean } = {}) => {
-            // Never save a note with no content
-            if (!content.trim()) return true;
+            // Never save a brand-new note with no meaningful content
+            const isNewNoteDraft = !(editingNote?.id);
+            const rawContent = latestContentRef.current || content;
+            const hasNoTitle = !titleRaw.current.trim();
+            const isContentEmpty = (() => {
+                if (!rawContent.trim()) return true;
+                // Empty TipTap doc (rich text editor opened but nothing typed)
+                try {
+                    const p = JSON.parse(rawContent);
+                    if (p?.type === "doc") {
+                        const nodes = p.content ?? [];
+                        if (nodes.length === 0) return true;
+                        if (nodes.length === 1 && nodes[0].type === "paragraph" && (!nodes[0].content || nodes[0].content.length === 0)) return true;
+                    }
+                } catch {}
+                return false;
+            })();
+            if (isNewNoteDraft && hasNoTitle && isContentEmpty) return true;
+            if (!rawContent.trim()) return true;
             if (!isDraftDirty && !deriveTitle) return true;
             if (isDraftDirty === false && deriveTitle) {
                 // Force through for title-only derive — check if title actually needs update
