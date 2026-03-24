@@ -1461,6 +1461,7 @@ export default function NotesMaster() {
     const [showDefaultFolderPicker, setShowDefaultFolderPicker] = useState(false);
     const [showNotebookPicker, setShowNotebookPicker] = useState(false);
     const [notebookPickerSearch, setNotebookPickerSearch] = useState("");
+    const [notebookPickerCursor, setNotebookPickerCursor] = useState(-1);
     const [navMode, setNavMode] = useState<"folders-and-files" | "files-only">("folders-and-files");
     const [kanbanMode, setKanbanMode] = useState(false);
     const [appTheme, setAppTheme] = useState<"dark" | "light" | "monokai">("dark");
@@ -6149,12 +6150,12 @@ const fireIntegrations = (trigger: string, note: any) => {
                             ))}
                             {folderStack.length > 0 && <span className="text-zinc-700 text-[10px] flex-shrink-0">/</span>}
                             {isBreadcrumbChecklist ? (
-                                <div className="w-7 h-7 flex-shrink-0 relative overflow-hidden font-black" style={{ backgroundColor: activeAccentColor, borderRadius: "2px 2px 2px 10px" }}>
+                                <div className="w-6 h-6 flex-shrink-0 relative overflow-hidden font-black" style={{ backgroundColor: activeAccentColor, borderRadius: "2px 2px 2px 10px" }}>
                                     <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: `${breadcrumbFillPct}%`, background: "rgba(0,0,0,0.25)", transition: "height 0.4s ease" }} />
                                     <div className="absolute inset-0 flex items-center justify-center" style={{ fontSize: breadcrumbTotal >= 10 ? 9 : 11, color: "#fff" }}>{breadcrumbTotal}</div>
                                 </div>
                             ) : (
-                                <span className="w-7 h-7 flex-shrink-0 flex items-center justify-center font-black leading-none tracking-tight" style={{ backgroundColor: activeAccentColor, color: "#fff", borderRadius: "2px 2px 2px 10px", fontSize: noteBadgeFontSize }}>
+                                <span className="w-6 h-6 flex-shrink-0 flex items-center justify-center font-black leading-none tracking-tight" style={{ backgroundColor: activeAccentColor, color: "#fff", borderRadius: "2px 2px 2px 10px", fontSize: noteBadgeFontSize }}>
                                     {noteBadgeLabel}
                                 </span>
                             )}
@@ -6200,7 +6201,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                             </div>
                         )}
                         {TYPE_BADGE[noteType] && noteType !== "mermaid" && !editMode ? (
-                            <span className="inline-flex text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-full flex-shrink-0"
+                            <span className="hidden sm:inline-flex text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-full flex-shrink-0"
                                 style={{ background: `${TYPE_BADGE[noteType].color}20`, color: TYPE_BADGE[noteType].color, border: `1px solid ${TYPE_BADGE[noteType].color}40` }}>
                                 {TYPE_BADGE[noteType].label}
                             </span>
@@ -6208,21 +6209,21 @@ const fireIntegrations = (trigger: string, note: any) => {
                         {/* Undo */}
                         <button type="button"
                             onClick={() => { document.execCommand("undo"); }}
-                            className="p-2 sm:p-3 text-zinc-500 hover:text-zinc-200 active:text-white transition flex-shrink-0"
+                            className="hidden sm:flex p-2 sm:p-3 text-zinc-500 hover:text-zinc-200 active:text-white transition flex-shrink-0"
                             title="Undo (⌘Z)">
                             <ArrowUturnLeftIcon className="w-[22px] h-[22px] sm:w-5 sm:h-5" />
                         </button>
                         {/* Redo */}
                         <button type="button"
                             onClick={() => { document.execCommand("redo"); }}
-                            className="p-2 sm:p-3 text-zinc-500 hover:text-zinc-200 active:text-white transition flex-shrink-0"
+                            className="hidden sm:flex p-2 sm:p-3 text-zinc-500 hover:text-zinc-200 active:text-white transition flex-shrink-0"
                             title="Redo (⌘⇧Z)">
                             <ArrowUturnRightIcon className="w-[22px] h-[22px] sm:w-5 sm:h-5" />
                         </button>
                         {/* Fullscreen */}
                         <button type="button"
                             onClick={() => setIsFullscreen(v => !v)}
-                            className="p-2 sm:p-3 text-zinc-500 hover:text-zinc-200 active:text-white transition flex-shrink-0"
+                            className="hidden sm:flex p-2 sm:p-3 text-zinc-500 hover:text-zinc-200 active:text-white transition flex-shrink-0"
                             title={isFullscreen ? "Exit fullscreen (Esc)" : "Fullscreen"}>
                             {isFullscreen
                                 ? <ArrowsPointingInIcon className="w-[22px] h-[22px] sm:w-5 sm:h-5" />
@@ -6970,12 +6971,12 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 {/* Folder icon + name → opens notebook picker */}
                                 <button
                                     type="button"
-                                    onClick={() => { setShowNotebookPicker(v => !v); setNotebookPickerSearch(""); }}
+                                    onClick={() => { setShowNotebookPicker(v => !v); setNotebookPickerSearch(""); setNotebookPickerCursor(-1); }}
                                     className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg hover:bg-white/10 transition">
                                     {activeFolder ? (
                                         <>
-                                            <span className="flex-shrink-0 w-5 h-5 flex items-center justify-center overflow-hidden font-black text-[10px]" style={{ background: activeFolder === "CLAUDE" ? "#fff" : (folderColors[activeFolder] || folderStack.at(-1)?.color || "#888"), color: activeFolder === "CLAUDE" ? (folderColors[activeFolder] || "#888") : "#fff" } as React.CSSProperties}>
-                                                {activeFolder === "CLAUDE" ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-0.5" /> : <FolderIconDisplay value={folderIcons[activeFolder] || ""} folderName={activeFolder} className="w-3 h-3" />}
+                                            <span className="flex-shrink-0 w-6 h-6 flex items-center justify-center overflow-hidden font-black text-[10px]" style={{ background: activeFolder === "CLAUDE" ? "#fff" : (folderColors[activeFolder] || folderStack.at(-1)?.color || "#888"), color: activeFolder === "CLAUDE" ? (folderColors[activeFolder] || "#888") : "#fff", borderRadius: 4 } as React.CSSProperties}>
+                                                {activeFolder === "CLAUDE" ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-0.5" /> : <FolderIconDisplay value={folderIcons[activeFolder] || ""} folderName={activeFolder} className="w-3.5 h-3.5" />}
                                             </span>
                                             <span className="text-xs font-black tracking-tight text-white uppercase truncate max-w-[110px]">{activeFolder}</span>
                                         </>
@@ -6989,13 +6990,30 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 {/* Chevron → opens notebook switcher */}
                                 <button
                                     type="button"
-                                    onClick={() => { setShowNotebookPicker(v => !v); setNotebookPickerSearch(""); }}
+                                    onClick={() => { setShowNotebookPicker(v => !v); setNotebookPickerSearch(""); setNotebookPickerCursor(-1); }}
                                     className="p-1 rounded hover:bg-white/10 transition flex-shrink-0"
                                     title="Switch notebook">
                                     <ChevronDownIcon className="w-3 h-3 text-zinc-600" />
                                 </button>
 
-                                {showNotebookPicker && (
+                                {showNotebookPicker && (() => {
+                                    const hasAllNotes = !notebookPickerSearch.trim();
+                                    const filteredFolders = folders.filter(f => !notebookPickerSearch.trim() || f.name.toLowerCase().includes(notebookPickerSearch.toLowerCase()));
+                                    // items: index 0 = "All Notes" (if visible), then folders
+                                    const totalItems = (hasAllNotes ? 1 : 0) + filteredFolders.length;
+                                    const selectAllNotes = () => { localStorage.setItem("stickies-split-notebook", "__all__"); setFolderStack([]); setShowNotebookPicker(false); window.history.replaceState({}, "", window.location.pathname); void loadAllNotes(); };
+                                    const selectFolder = (f: typeof folders[0]) => { localStorage.setItem("stickies-split-notebook", f.name); enterFolder({ id: String(f.id), name: f.name, color: folderColors[f.name] || (f as any).color || "#888" }); void loadFolderNotes(f.name, false); setShowNotebookPicker(false); window.history.replaceState({}, "", window.location.pathname); };
+                                    const handlePickerKey = (e: React.KeyboardEvent) => {
+                                        if (e.key === "ArrowDown") { e.preventDefault(); setNotebookPickerCursor(c => Math.min(c + 1, totalItems - 1)); }
+                                        else if (e.key === "ArrowUp") { e.preventDefault(); setNotebookPickerCursor(c => Math.max(c - 1, 0)); }
+                                        else if (e.key === "Enter") {
+                                            e.preventDefault();
+                                            if (notebookPickerCursor === 0 && hasAllNotes) { selectAllNotes(); }
+                                            else { const f = filteredFolders[notebookPickerCursor - (hasAllNotes ? 1 : 0)]; if (f) selectFolder(f); }
+                                        }
+                                        else if (e.key === "Escape") { setShowNotebookPicker(false); }
+                                    };
+                                    return (
                                     <>
                                         {/* Backdrop */}
                                         <div className="fixed inset-0 z-[49]" onClick={() => setShowNotebookPicker(false)} />
@@ -7008,16 +7026,17 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                     type="text"
                                                     placeholder="Search notebooks…"
                                                     value={notebookPickerSearch}
-                                                    onChange={e => setNotebookPickerSearch(e.target.value)}
+                                                    onChange={e => { setNotebookPickerSearch(e.target.value); setNotebookPickerCursor(-1); }}
+                                                    onKeyDown={handlePickerKey}
                                                     className="w-full bg-white/10 text-white text-xs font-bold px-3 py-2 rounded-lg outline-none placeholder:text-white/30"
                                                 />
                                             </div>
                                             {/* All Notes */}
-                                            {!notebookPickerSearch.trim() && (
+                                            {hasAllNotes && (
                                                 <button
                                                     type="button"
-                                                    onClick={() => { localStorage.setItem("stickies-split-notebook", "__all__"); setFolderStack([]); setShowNotebookPicker(false); window.history.replaceState({}, "", window.location.pathname); void loadAllNotes(); }}
-                                                    className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-xs font-bold hover:bg-white/10 transition ${!activeFolder ? "text-white" : "text-zinc-400"}`}>
+                                                    onClick={selectAllNotes}
+                                                    className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-xs font-bold transition ${notebookPickerCursor === 0 ? "bg-white/15 text-white" : !activeFolder ? "text-white hover:bg-white/10" : "text-zinc-400 hover:bg-white/10"}`}>
                                                     <Squares2X2Icon className="w-4 h-4 flex-shrink-0" />
                                                     <span>All Notes</span>
                                                     {!activeFolder && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-white/60 flex-shrink-0" />}
@@ -7025,32 +7044,27 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             )}
                                             {/* Folder list */}
                                             <div className="max-h-60 overflow-y-auto">
-                                                {folders
-                                                    .filter(f => !notebookPickerSearch.trim() || f.name.toLowerCase().includes(notebookPickerSearch.toLowerCase()))
-                                                    .map(f => (
+                                                {filteredFolders.map((f, fi) => {
+                                                    const idx = (hasAllNotes ? 1 : 0) + fi;
+                                                    return (
                                                         <button
                                                             key={f.id}
                                                             type="button"
-                                                            onClick={() => {
-                                                                localStorage.setItem("stickies-split-notebook", f.name);
-                                                                enterFolder({ id: String(f.id), name: f.name, color: folderColors[f.name] || (f as any).color || "#888" });
-                                                                void loadFolderNotes(f.name, false);
-                                                                setShowNotebookPicker(false);
-                                                                window.history.replaceState({}, "", window.location.pathname);
-                                                            }}
-                                                            className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-xs font-bold hover:bg-white/10 transition ${activeFolder === f.name ? "text-white" : "text-zinc-400"}`}>
-                                                            <span className="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded overflow-hidden" style={{ background: f.name === "CLAUDE" ? "#fff" : (folderColors[f.name] || (f as any).color || "#888"), color: f.name === "CLAUDE" ? (folderColors[f.name] || "#888") : "#fff" } as React.CSSProperties}>
-                                                                {f.name === "CLAUDE" ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-0.5" /> : <FolderIconDisplay value={folderIcons[f.name] || ""} folderName={f.name} className="w-3 h-3" />}
+                                                            onClick={() => selectFolder(f)}
+                                                            className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-xs font-bold transition ${notebookPickerCursor === idx ? "bg-white/15 text-white" : activeFolder === f.name ? "text-white hover:bg-white/10" : "text-zinc-400 hover:bg-white/10"}`}>
+                                                            <span className="flex-shrink-0 w-6 h-6 flex items-center justify-center overflow-hidden" style={{ background: f.name === "CLAUDE" ? "#fff" : (folderColors[f.name] || (f as any).color || "#888"), color: f.name === "CLAUDE" ? (folderColors[f.name] || "#888") : "#fff", borderRadius: 4 } as React.CSSProperties}>
+                                                                {f.name === "CLAUDE" ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-0.5" /> : <FolderIconDisplay value={folderIcons[f.name] || ""} folderName={f.name} className="w-3.5 h-3.5" />}
                                                             </span>
                                                             <span className="uppercase truncate">{f.name}</span>
                                                             {activeFolder === f.name && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-white/60 flex-shrink-0" />}
                                                         </button>
-                                                    ))
-                                                }
+                                                    );
+                                                })}
                                             </div>
                                         </div>
                                     </>
-                                )}
+                                    );
+                                })()}
                             </div>
                         )}
 
@@ -7277,7 +7291,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         const rect = e.currentTarget.getBoundingClientRect();
                                         const x = ((e.clientX - rect.left) / rect.width) * 100, y = ((e.clientY - rect.top) / rect.height) * 100;
                                         const glow = e.currentTarget.querySelector<HTMLElement>("[data-glow]");
-                                        if (glow) glow.style.background = `radial-gradient(circle at ${x}% ${y}%, rgba(${ri},${gi},${bi},0.4) 0%, rgba(${ri},${gi},${bi},0.2) 50%, rgba(${ri},${gi},${bi},0.03) 100%)`;
+                                        if (glow) glow.style.background = `radial-gradient(circle at ${x}% ${y}%, rgba(${ri},${gi},${bi},0.22) 0%, rgba(${ri},${gi},${bi},0.1) 50%, rgba(${ri},${gi},${bi},0.01) 100%)`;
                                     }}
                                     onMouseMove={(e) => {
                                         if (!isListMode) return;
@@ -7287,7 +7301,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         const rect = e.currentTarget.getBoundingClientRect();
                                         const x = ((e.clientX - rect.left) / rect.width) * 100, y = ((e.clientY - rect.top) / rect.height) * 100;
                                         const glow = e.currentTarget.querySelector<HTMLElement>("[data-glow]");
-                                        if (glow) glow.style.background = `radial-gradient(circle at ${x}% ${y}%, rgba(${ri},${gi},${bi},0.4) 0%, rgba(${ri},${gi},${bi},0.2) 50%, rgba(${ri},${gi},${bi},0.03) 100%)`;
+                                        if (glow) glow.style.background = `radial-gradient(circle at ${x}% ${y}%, rgba(${ri},${gi},${bi},0.22) 0%, rgba(${ri},${gi},${bi},0.1) 50%, rgba(${ri},${gi},${bi},0.01) 100%)`;
                                     }}
                                     onMouseLeave={(e) => { const glow = e.currentTarget.querySelector<HTMLElement>("[data-glow]"); if (glow) glow.style.background = ""; }}
                                     onTouchStart={() => {
@@ -7324,14 +7338,14 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         const c = item.color || item.folder_color || "#888888";
                                         const isActive = editMode && !item.is_folder && String(item.id) === String(editingNote?.id);
                                         if (isListMode) {
-                                            return { position: "relative", isolation: "isolate", "--row-color": c, "--fc": c, ...(isActive ? { borderRightColor: c } : {}), ...(item.is_folder ? { background: `${c}18` } : {}) } as React.CSSProperties;
+                                            return { position: "relative", isolation: "isolate", "--row-color": c, "--fc": c, ...(isActive && !item.is_folder ? { borderRightColor: c, background: `${c}35` } : isActive ? { borderRightColor: c } : {}), ...(item.is_folder ? { background: `${c}18` } : {}) } as unknown as React.CSSProperties;
                                         }
                                         return item.is_folder
                                             ? { isolation: "isolate", "--fc": c } as React.CSSProperties
                                             : { isolation: "isolate", backgroundColor: c, borderRadius: "3px 3px 3px 14px" };
                                     })()}
                                     className={`${isListMode
-                                        ? `group list-row-hover flex items-center gap-3 pr-4 min-h-[54px] border-b border-white/5 cursor-pointer select-none transition-colors active:bg-white/10 overflow-hidden ${!item.is_folder && incomingNoteIds.has(String(item.id)) ? "note-incoming" : ""} ${!item.is_folder && removingNoteIds.has(String(item.id)) ? "note-removing" : ""} ${isDragging ? "opacity-30" : dt?.mode === "into" ? "bg-cyan-950/60 ring-1 ring-inset ring-cyan-400" : ""} ${isSelectMode && !item.is_folder && selectedIds.has(String(item.id)) ? "bg-blue-950/50" : ""} ${editMode && !item.is_folder && String(item.id) === String(editingNote?.id) ? "bg-white/10 border-r-[3px]" : "border-r-[3px] border-r-transparent"}`
+                                        ? `group list-row-hover flex items-center gap-3 pr-4 min-h-[54px] border-b border-white/5 cursor-pointer select-none transition-colors active:bg-white/10 overflow-hidden ${!item.is_folder && incomingNoteIds.has(String(item.id)) ? "note-incoming" : ""} ${!item.is_folder && removingNoteIds.has(String(item.id)) ? "note-removing" : ""} ${isDragging ? "opacity-30" : dt?.mode === "into" ? "bg-cyan-950/60 ring-1 ring-inset ring-cyan-400" : ""} ${isSelectMode && !item.is_folder && selectedIds.has(String(item.id)) ? "bg-blue-950/50" : ""} ${editMode && !item.is_folder && String(item.id) === String(editingNote?.id) ? "border-r-[3px]" : "border-r-[3px] border-r-transparent"}`
                                         : `grid-square-tile min-w-0 cursor-pointer transition-all group ${item.is_folder ? `folder-grid-tile${item.name === "CLAUDE" ? " folder-grid-tile-claude" : ""}` : ""} ${isDragging ? "opacity-30 scale-95" : dt?.mode === "into" ? "ring-4 ring-cyan-400 ring-inset z-10" : ""} ${editMode && !item.is_folder && String(item.id) === String(editingNote?.id) ? "ring-2 ring-white/40 ring-inset" : ""}`}`}>
                                     {/* Cursor spotlight glow — DOM-only, no React state */}
                                     {isListMode && <div data-glow className="absolute inset-0 pointer-events-none z-[-1]" />}
@@ -7377,7 +7391,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                             fontSize: 22,
                                                             backgroundColor: nc,
                                                             color: "#fff",
-                                                            borderRadius: "3px 3px 3px 14px",
+                                                            borderRadius: "6px 6px 6px 16px",
                                                             boxShadow: `2px 3px 8px ${nc}55`,
                                                         }}>
                                                         {initial}
@@ -9041,10 +9055,13 @@ const fireIntegrations = (trigger: string, note: any) => {
                 </div>
             )}
 
-            {sharePickerOpen && (
-                <div className="fixed inset-0 z-[520] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setSharePickerOpen(false)}>
+            {sharePickerOpen && (() => {
+                const iconColor = appTheme === "light" ? "text-black" : "text-white";
+                const shareBtn = `w-12 h-12 flex flex-col items-center justify-center gap-0.5 rounded-xl transition hover:brightness-110 active:scale-95 ${iconColor}`;
+                return (
+                <div className="fixed inset-0 z-[520] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setSharePickerOpen(false)}>
                     <div
-                        className="bg-zinc-900 w-full max-w-sm flex flex-col overflow-hidden"
+                        className="bg-zinc-900 w-full max-w-sm flex flex-col overflow-hidden rounded-2xl"
                         style={{ border: `2px solid ${activeAccentColor}` }}
                         onClick={(e) => e.stopPropagation()}
                     >
@@ -9053,18 +9070,18 @@ const fireIntegrations = (trigger: string, note: any) => {
                             <p className="text-xs font-black text-white truncate mt-0.5">{title.trim() || editingNote?.title || "Untitled"}</p>
                         </div>
 
-                        {/* Link row — Copy · QR · Data · Burn */}
+                        {/* Link row — QR · Data · Burn */}
                         <div className="flex items-center gap-2 px-5 py-4 border-b border-white/5">
                             <p className="text-xs font-black text-white tracking-wide flex-1">Link</p>
-                            <button type="button" onClick={() => { setSharePickerOpen(false); openNoteLinkQr(); }} className="w-11 h-11 flex flex-col items-center justify-center gap-0.5 border-2 border-emerald-400/50 bg-emerald-400/10 text-emerald-400 hover:bg-emerald-400/20 transition" title="QR link">
+                            <button type="button" onClick={() => { setSharePickerOpen(false); openNoteLinkQr(); }} className={`${shareBtn} bg-emerald-500`} title="QR link">
                                 <QrCodeIcon className="w-4 h-4" />
                                 <span className="text-[8px] font-black uppercase">QR</span>
                             </button>
-                            <button type="button" onClick={() => { setSharePickerOpen(false); openNoteDataQr(); }} className="w-11 h-11 flex flex-col items-center justify-center gap-0.5 border-2 border-pink-400/50 bg-pink-400/10 text-pink-400 hover:bg-pink-400/20 transition" title="QR data">
-                                <QrCodeIcon className="w-4 h-4 text-pink-400" />
-                                <span className="text-[8px] font-black uppercase text-pink-400">Data</span>
+                            <button type="button" onClick={() => { setSharePickerOpen(false); openNoteDataQr(); }} className={`${shareBtn} bg-pink-500`} title="QR data">
+                                <QrCodeIcon className="w-4 h-4" />
+                                <span className="text-[8px] font-black uppercase">Data</span>
                             </button>
-                            <button type="button" onClick={() => { setSharePickerOpen(false); shareBurnLink(); }} className="w-11 h-11 flex flex-col items-center justify-center gap-0.5 border-2 border-orange-400/50 bg-orange-400/10 text-orange-400 hover:bg-orange-400/20 transition" title="Burn link (1×)">
+                            <button type="button" onClick={() => { setSharePickerOpen(false); shareBurnLink(); }} className={`${shareBtn} bg-orange-500`} title="Burn link (1×)">
                                 <QrCodeIcon className="w-4 h-4" />
                                 <span className="text-[8px] font-black uppercase">Burn</span>
                             </button>
@@ -9075,30 +9092,27 @@ const fireIntegrations = (trigger: string, note: any) => {
                             <p className="text-xs font-black text-white tracking-wide flex-1">Email</p>
                             <button type="button"
                                 onClick={() => { const t = encodeURIComponent(title.trim() || editingNote?.title || "Note"); const b = encodeURIComponent((content || editingNote?.content || "").slice(0, 2000)); window.open(`https://mail.google.com/mail/?view=cm&su=${t}&body=${b}`, "_blank"); setSharePickerOpen(false); }}
-                                className="w-11 h-11 flex flex-col items-center justify-center gap-0.5 border-2 border-[#EA4335]/50 bg-[#EA4335]/10 hover:bg-[#EA4335]/20 transition" title="Gmail"
-                            >
-                                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none">
-                                    <path d="M2 6a2 2 0 012-2h16a2 2 0 012 2v12a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" fill="#EA4335" opacity="0.3"/>
-                                    <path d="M2 6l10 7 10-7" stroke="#EA4335" strokeWidth="1.5" strokeLinecap="round"/>
+                                className={`${shareBtn} bg-[#EA4335]`} title="Gmail">
+                                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M20 4H4a2 2 0 00-2 2v12a2 2 0 002 2h16a2 2 0 002-2V6a2 2 0 00-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
                                 </svg>
-                                <span className="text-[8px] font-black uppercase text-[#EA4335]">Gmail</span>
+                                <span className="text-[8px] font-black uppercase">Gmail</span>
                             </button>
                             <button type="button"
                                 onClick={() => { const t = encodeURIComponent(title.trim() || editingNote?.title || "Note"); const b = encodeURIComponent((content || editingNote?.content || "").slice(0, 2000)); window.location.href = `mailto:?subject=${t}&body=${b}`; setSharePickerOpen(false); }}
-                                className="w-11 h-11 flex flex-col items-center justify-center gap-0.5 border-2 border-[#007AFF]/50 bg-[#007AFF]/10 hover:bg-[#007AFF]/20 transition" title="Mail App"
-                            >
-                                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="#007AFF" strokeWidth="1.5">
+                                className={`${shareBtn} bg-[#007AFF]`} title="Mail App">
+                                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                                     <path d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" strokeLinecap="round" strokeLinejoin="round"/>
                                 </svg>
-                                <span className="text-[8px] font-black uppercase text-[#007AFF]">Mail</span>
+                                <span className="text-[8px] font-black uppercase">Mail</span>
                             </button>
                         </div>
 
-                        {/* Mobile — Pusher push-nav to all other sessions */}
+                        {/* Mobile — push to other sessions */}
                         <div className="flex items-center gap-2 px-5 py-4 border-b border-white/5">
                             <p className="text-xs font-black text-white tracking-wide flex-1">Mobile</p>
                             <button type="button" onClick={() => { void sendToMobile(); }}
-                                className="w-11 h-11 flex flex-col items-center justify-center gap-0.5 border-2 border-sky-400/50 bg-sky-400/10 text-sky-400 hover:bg-sky-400/20 transition" title="Send to all other connected sessions">
+                                className={`${shareBtn} bg-sky-500`} title="Send to all other connected sessions">
                                 <DevicePhoneMobileIcon className="w-4 h-4" />
                                 <span className="text-[8px] font-black uppercase">Send</span>
                             </button>
@@ -9109,27 +9123,27 @@ const fireIntegrations = (trigger: string, note: any) => {
                             <p className="text-xs font-black text-white tracking-wide flex-1">Calendar</p>
                             <button type="button"
                                 onClick={() => { const today = new Date(); setCalTarget("apple"); setCalDate(`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,"0")}-${String(today.getDate()).padStart(2,"0")}`); setCalTime("09:00"); setCalRepeat("none"); setSharePickerOpen(false); setCalModalOpen(true); }}
-                                className="w-11 h-11 flex flex-col items-center justify-center gap-0.5 border-2 border-zinc-400/50 bg-zinc-400/10 text-zinc-300 hover:bg-zinc-400/20 transition" title="Add to Apple Calendar (.ics)">
+                                className={`${shareBtn} bg-zinc-600`} title="Add to Apple Calendar (.ics)">
                                 <CalendarDaysIcon className="w-4 h-4" />
                                 <span className="text-[8px] font-black uppercase">Apple</span>
                             </button>
                             <button type="button"
                                 onClick={() => { const today = new Date(); setCalTarget("google"); setCalDate(`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,"0")}-${String(today.getDate()).padStart(2,"0")}`); setCalTime("09:00"); setCalRepeat("none"); setSharePickerOpen(false); setCalModalOpen(true); }}
-                                className="w-11 h-11 flex flex-col items-center justify-center gap-0.5 border-2 border-[#4285F4]/50 bg-[#4285F4]/10 text-[#4285F4] hover:bg-[#4285F4]/20 transition" title="Add to Google Calendar">
+                                className={`${shareBtn} bg-[#4285F4]`} title="Add to Google Calendar">
                                 <CalendarDaysIcon className="w-4 h-4" />
                                 <span className="text-[8px] font-black uppercase">Google</span>
                             </button>
                         </div>
 
-                        {/* Download (mindmap only) — bottom */}
+                        {/* Download (mindmap only) */}
                         {mindmapMode && (
                         <div className="flex items-center gap-2 px-5 py-4 border-b border-white/5">
                             <p className="text-xs font-black text-white tracking-wide flex-1">Download</p>
-                            <button type="button" onClick={() => { setSharePickerOpen(false); void downloadMindmapPng(); }} className="w-11 h-11 flex flex-col items-center justify-center gap-0.5 border-2 border-green-400/50 bg-green-400/10 text-green-400 hover:bg-green-400/20 transition" title="Download PNG">
-                                <ArrowDownTrayIcon className="w-4 h-4 text-green-400" />
-                                <span className="text-[8px] font-black uppercase text-green-400">PNG</span>
+                            <button type="button" onClick={() => { setSharePickerOpen(false); void downloadMindmapPng(); }} className={`${shareBtn} bg-green-600`} title="Download PNG">
+                                <ArrowDownTrayIcon className="w-4 h-4" />
+                                <span className="text-[8px] font-black uppercase">PNG</span>
                             </button>
-                            <button type="button" onClick={() => { setSharePickerOpen(false); void downloadMindmapPdf(); }} className="w-11 h-11 flex flex-col items-center justify-center gap-0.5 border-2 border-purple-500/50 bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 transition" title="Download PDF">
+                            <button type="button" onClick={() => { setSharePickerOpen(false); void downloadMindmapPdf(); }} className={`${shareBtn} bg-purple-600`} title="Download PDF">
                                 <ArrowDownTrayIcon className="w-4 h-4" />
                                 <span className="text-[8px] font-black uppercase">PDF</span>
                             </button>
@@ -9138,13 +9152,14 @@ const fireIntegrations = (trigger: string, note: any) => {
 
                         <button type="button"
                             onClick={() => setSharePickerOpen(false)}
-                            className="mx-5 my-4 py-2.5 border border-white/15 text-zinc-400 font-black uppercase text-xs tracking-wide hover:border-white/30 hover:text-white transition"
+                            className="mx-5 my-4 py-2.5 rounded-xl border border-white/15 text-zinc-400 font-black uppercase text-xs tracking-wide hover:border-white/30 hover:text-white transition"
                         >
                             Cancel
                         </button>
                     </div>
                 </div>
-            )}
+                );
+            })()}
 
             {confirmDelete && (
                 <div className="fixed inset-0 z-[620] bg-black/90 flex items-center justify-center p-4">
