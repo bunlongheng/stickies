@@ -7,8 +7,10 @@
 // Allow Pusher HTTPS on macOS where system certs aren't in Node's bundle
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
-import { readFileSync, writeFileSync, existsSync, createReadStream } from 'fs';
+import { readFileSync, writeFileSync, existsSync, createReadStream, readdirSync, statSync } from 'fs';
 import { basename, dirname, join } from 'path';
+import * as readline from 'readline';
+import * as os from 'os';
 import { createHash } from 'crypto';
 import { fileURLToPath } from 'url';
 import sharp from 'sharp';
@@ -132,13 +134,74 @@ if (!process.env.SUPABASE_PROJECT_REF || !process.env.SUPABASE_MANAGEMENT_TOKEN)
   process.exit(1);
 }
 
-const enexFile = process.argv[2];
+async function pickEnexFile() {
+  const downloadsDir = join(os.homedir(), 'Downloads');
+  let files = [];
+  console.log(`\nScanning ~/Downloads for .enex files...`);
+  try {
+    files = readdirSync(downloadsDir)
+      .filter(f => f.endsWith('.enex'))
+      .map(f => ({ name: f, path: join(downloadsDir, f), mtime: statSync(join(downloadsDir, f)).mtimeMs }))
+      .sort((a, b) => b.mtime - a.mtime); // newest first
+  } catch {}
+
+  if (files.length === 0) {
+    console.log('\x1b[33m⚠  No .enex files detected in ~/Downloads.\x1b[0m\n');
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    return new Promise((resolve) => {
+      rl.question('\x1b[36mEnter path to .enex file:\x1b[0m ', (answer) => {
+        rl.close();
+        const p = answer.trim().replace(/^~/, os.homedir()).replace(/^['"]|['"]$/g, '');
+        if (!p) { console.log('\x1b[31m✗  No path entered.\x1b[0m'); process.exit(1); }
+        if (!existsSync(p)) { console.log(`\x1b[31m✗  File not found: ${p}\x1b[0m`); process.exit(1); }
+        if (!p.endsWith('.enex')) { console.log(`\x1b[33m⚠  Warning: file doesn't end in .enex, continuing anyway…\x1b[0m`); }
+        console.log(`\n\x1b[32m→\x1b[0m Importing \x1b[1m${basename(p)}\x1b[0m…\n`);
+        resolve(p);
+      });
+    });
+  }
+
+  console.log(`\x1b[32m✓  Found ${files.length} file${files.length !== 1 ? 's' : ''}:\x1b[0m\n`);
+  files.forEach((f, i) => {
+    const d = new Date(f.mtime).toLocaleDateString();
+    const kb = Math.round(statSync(f.path).size / 1024);
+    console.log(`  \x1b[1m${i + 1}\x1b[0m) ${f.name}  \x1b[2m${kb} KB · ${d}\x1b[0m`);
+  });
+  console.log('\n\x1b[2mPress a number to import, or Ctrl+C to cancel.\x1b[0m\n');
+
+  return new Promise((resolve) => {
+    readline.emitKeypressEvents(process.stdin);
+    if (process.stdin.isTTY) process.stdin.setRawMode(true);
+
+    const onKey = (ch, key) => {
+      // Ctrl+C / Ctrl+D
+      if (key && (key.name === 'c' || key.name === 'd') && key.ctrl) {
+        if (process.stdin.isTTY) process.stdin.setRawMode(false);
+        console.log('\nCancelled.');
+        process.exit(0);
+      }
+      if (process.stdin.isTTY) process.stdin.setRawMode(false);
+      process.stdin.removeListener('keypress', onKey);
+      process.stdin.pause();
+      const n = parseInt(ch);
+      if (!n || n < 1 || n > files.length) {
+        console.log(`\x1b[31m✗  Invalid selection "${ch}" — pick 1–${files.length}.\x1b[0m`);
+        process.exit(1);
+      }
+      console.log(`\n\x1b[32m→\x1b[0m Importing \x1b[1m${files[n - 1].name}\x1b[0m…\n`);
+      resolve(files[n - 1].path);
+    };
+
+    process.stdin.on('keypress', onKey);
+  });
+}
+
+let enexFile = process.argv[2];
 const limitArg = process.argv.find(a => a.startsWith('--limit='));
 const limit = limitArg ? parseInt(limitArg.split('=')[1]) : null;
 
 if (!enexFile) {
-  console.error('Usage: node enex-to-stickies.mjs <file.enex> [--limit=N]');
-  process.exit(1);
+  enexFile = await pickEnexFile();
 }
 
 // Derive notebook name from filename: "My Notebook.enex" → "MY NOTEBOOK"
@@ -422,16 +485,16 @@ function getImageDimensions(buf, mime) {
   return null;
 }
 
-// ── Compress image buffer via sharp (max 1200px, JPEG 82%) ───────────────────
+// ── Compress image buffer via sharp (max 800px, JPEG 72%) ────────────────────
 async function compressImage(buf, mime) {
   try {
     const img = sharp(buf).rotate(); // auto-rotate from EXIF
     const meta = await img.metadata();
-    const MAX = 1200;
+    const MAX = 800;
     if (meta.width > MAX || meta.height > MAX) {
       img.resize(MAX, MAX, { fit: 'inside', withoutEnlargement: true });
     }
-    const out = await img.jpeg({ quality: 82, mozjpeg: true }).toBuffer();
+    const out = await img.jpeg({ quality: 72, mozjpeg: true }).toBuffer();
     // Only use compressed if it's actually smaller
     if (out.length < buf.length) return { buf: out, mime: 'image/jpeg' };
   } catch (e) {
@@ -572,7 +635,14 @@ async function sbInsert(table, data) {
   const cols = Object.keys(data).map(k => `"${k}"`).join(', ');
   const vals = Object.values(data);
   const placeholders = vals.map((_, i) => `$${i + 1}`).join(', ');
-  return dbOne(`INSERT INTO "${table}" (${cols}) VALUES (${placeholders}) RETURNING *`, vals);
+  try {
+    return await dbOne(`INSERT INTO "${table}" (${cols}) VALUES (${placeholders}) RETURNING *`, vals);
+  } catch (err) {
+    // 413 = payload too large (e.g. note with many embedded images)
+    // Return null so callers can retry with stripped content
+    if (err.message?.includes('413')) return null;
+    throw err;
+  }
 }
 
 // Strip base64 image data from TipTap JSON (replace with placeholder paragraph)
@@ -648,6 +718,11 @@ async function main() {
   // Build ordered block list from sorted/filtered metadata
   const orderedBlocks = pendingMeta.map(m => blocks[m.idx]);
 
+  // Resolve owner user_id — required so notes are visible to the logged-in user
+  const ownerRow = await dbOne(`SELECT user_id FROM stickies WHERE user_id IS NOT NULL ORDER BY created_at ASC LIMIT 1`);
+  const OWNER_USER_ID = ownerRow?.user_id ?? null;
+  if (!OWNER_USER_ID) { console.error('ERROR: could not determine user_id — no existing notes found'); process.exit(1); }
+
   // Ensure EVERNOTE folder exists under Integrations
   let evernoteId = await getFolderId('EVERNOTE', 'Integrations');
   if (!evernoteId) {
@@ -658,7 +733,7 @@ async function main() {
     const f = await sbInsert('stickies', {
       is_folder: true, folder_name: 'EVERNOTE', title: 'EVERNOTE', content: '',
       folder_color: '#B0B0B8', parent_folder_name: 'Integrations',
-      folder_id: intRow?.id ?? null, order: (maxOrd?.m ?? 2000) + 1, created_at: now, updated_at: now,
+      folder_id: intRow?.id ?? null, order: (maxOrd?.m ?? 2000) + 1, created_at: now, updated_at: now, user_id: OWNER_USER_ID,
     });
     evernoteId = f?.id ? String(f.id) : null;
   }
@@ -673,7 +748,7 @@ async function main() {
     const f = await sbInsert('stickies', {
       is_folder: true, folder_name: notebook, title: notebook, content: '',
       folder_color: randomColor(), parent_folder_name: 'EVERNOTE',
-      folder_id: evernoteId, order: (maxOrd?.m ?? 2000) + 1, created_at: now, updated_at: now,
+      folder_id: evernoteId, order: (maxOrd?.m ?? 2000) + 1, created_at: now, updated_at: now, user_id: OWNER_USER_ID,
     });
     notebookId = f?.id ? String(f.id) : null;
   }
@@ -733,14 +808,18 @@ async function main() {
     // ── Spinner: converting ──
     spinStart(`${DIM}converting${RESET}  ${hex(noteColor)}${BOLD}${shortTitle}${RESET}`);
     const tiptap = await enmlToTiptap(note.enml, note.resources);
-    const imageCount = JSON.stringify(tiptap).match(/"type":"image"/g)?.length || 0;
+    const tiptapJson = JSON.stringify(tiptap);
+    const imageCount = (tiptapJson.match(/"type":"image"/g) || []).length;
+    // Pre-flight: if content > 3 MB, skip straight to strip-images retry
+    const contentTooBig = Buffer.byteLength(tiptapJson, 'utf8') > 3 * 1024 * 1024;
     spinStop();
 
     // ── Spinner: uploading ──
     spinStart(`${DIM}uploading${RESET}   ${hex(noteColor)}${BOLD}${shortTitle}${RESET}`);
-    const row = await sbInsert('stickies', {
+    const noteOrder = nextOrder++;
+    const row = contentTooBig ? null : await sbInsert('stickies', {
       title: note.title,
-      content: JSON.stringify(tiptap),
+      content: tiptapJson,
       folder_name: notebook,
       folder_color: noteColor,
       folder_id: notebookId,
@@ -748,9 +827,10 @@ async function main() {
       is_folder: false,
       list_mode: false,
       parent_folder_name: null,
-      order: nextOrder++,
+      order: noteOrder,
       created_at: note.createdAt,
       updated_at: note.updatedAt,
+      user_id: OWNER_USER_ID,
     });
     spinStop();
 
@@ -782,9 +862,10 @@ async function main() {
         is_folder: false,
         list_mode: false,
         parent_folder_name: null,
-        order: nextOrder - 1,
+        order: noteOrder,
         created_at: note.createdAt,
         updated_at: note.updatedAt,
+        user_id: OWNER_USER_ID,
       });
       spinStop();
 

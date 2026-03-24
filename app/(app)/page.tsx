@@ -1332,6 +1332,13 @@ export default function NotesMaster() {
     const [editingNote, setEditingNote] = useState<any | null>(null);
     const [showFloatCopy, setShowFloatCopy] = useState(true);
     const [title, setTitle] = useState("");
+    // Sync uncontrolled title inputs when title state changes (note load / external setTitle)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    useEffect(() => {
+        titleRaw.current = title;
+        if (titleInputRef.current) titleInputRef.current.value = title;
+        if (titleInputMobileRef.current) titleInputMobileRef.current.value = title;
+    }, [title]);
     const [content, setContent] = useState("");
     // Always-current content ref — used in saveNote on blur where React state may lag debounce
     const latestContentRef = useRef("");
@@ -1471,7 +1478,7 @@ export default function NotesMaster() {
     const colDragNoteRef = useRef<string | null>(null);
     const [colDragOver, setColDragOver] = useState<string | null>(null);
     const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set());
-    const [glowCard, setGlowCard] = useState<{ id: string; x: number; y: number } | null>(null);
+    // glowCard converted to DOM-only (no React state) to avoid re-renders on every mousemove
     const [imgPopover, setImgPopover] = useState<{ src: string; alt: string; x: number; y: number } | null>(null);
     const [now, setNow] = useState(() => new Date());
     const [showCmdK, setShowCmdK] = useState(false);
@@ -1509,6 +1516,8 @@ export default function NotesMaster() {
     const tower3dRef = useRef<HTMLDivElement | null>(null);
     const tower3dDrag = useRef({ active: false, startX: 0, startY: 0, rotX: 12, rotY: -28 });
     const titleInputRef = useRef<HTMLInputElement | null>(null);
+    const titleInputMobileRef = useRef<HTMLInputElement | null>(null);
+    const titleRaw = useRef(""); // tracks title input value without triggering re-renders
     const editorToolsRef = useRef<HTMLDivElement | null>(null);
     const folderFabShellRef = useRef<HTMLDivElement | null>(null);
     const folderFabOffsetRef = useRef({ x: 0, y: 0 });
@@ -2074,6 +2083,20 @@ export default function NotesMaster() {
         });
         if (Object.keys(fromDb).length > 0) {
             setFolderIcons((prev) => ({ ...prev, ...fromDb }));
+        }
+    }, [dbData]);
+
+    // Sync folder colors from DB — derive from first note per folder, DB wins over localStorage
+    useEffect(() => {
+        if (!dbData || dbData.length === 0) return;
+        const fromDb: Record<string, string> = {};
+        dbData.forEach((row: any) => {
+            if (!row.is_folder && row.folder_name && row.folder_color && !fromDb[row.folder_name]) {
+                fromDb[row.folder_name] = row.folder_color;
+            }
+        });
+        if (Object.keys(fromDb).length > 0) {
+            setFolderColors((prev) => ({ ...fromDb, ...prev })); // localStorage overrides DB (user's explicit choice)
         }
     }, [dbData]);
 
@@ -3150,7 +3173,7 @@ const fireIntegrations = (trigger: string, note: any) => {
             if (!isDraftDirty && !deriveTitle) return true;
             if (isDraftDirty === false && deriveTitle) {
                 // Force through for title-only derive — check if title actually needs update
-                const hasRealTitle = title.trim() && title.trim().toLowerCase() !== "untitled";
+                const hasRealTitle = titleRaw.current.trim() && titleRaw.current.trim().toLowerCase() !== "untitled";
                 if (hasRealTitle) return true; // already has real title, nothing to do
             }
             if (isSavingRef.current) return true;
@@ -3160,13 +3183,13 @@ const fireIntegrations = (trigger: string, note: any) => {
             // even when the 300ms debounce hasn't flushed to React state yet
             const saveContent = latestContentRef.current || content;
             // Auto-title: only derive when explicitly requested (Cmd+S or blur)
-            const hasRealTitle = title.trim() && title.trim().toLowerCase() !== "untitled";
+            const hasRealTitle = titleRaw.current.trim() && titleRaw.current.trim().toLowerCase() !== "untitled";
             const resolvedTitle = (deriveTitle && !hasRealTitle) ? (() => {
                 const isRich = saveContent.trimStart().startsWith("{");
                 if (isRich) return extractRichTextTitle(saveContent) || "Untitled";
                 const firstLine = saveContent.trim().split("\n").find(l => l.trim()) || "";
                 return firstLine.replace(/^#+\s*/, "").slice(0, 60).trim() || "Untitled";
-            })() : (title.trim() || "Untitled");
+            })() : (titleRaw.current.trim() || "Untitled");
             if (deriveTitle && !hasRealTitle) setTitle(resolvedTitle);
 
             const folderName = targetFolder || activeFolder || editingNote?.folder_name || "General";
@@ -3284,7 +3307,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                 isSavingRef.current = false;
             }
         },
-        [isDraftDirty, targetFolder, noteColor, activeFolder, folderStack, editingNote, title, content, folders, dbData, pendingNoteType],
+        [isDraftDirty, targetFolder, noteColor, activeFolder, folderStack, editingNote, content, folders, dbData, pendingNoteType],
     );
     // Always-current ref so other callbacks can call saveNote without stale closures
     useEffect(() => { saveNoteRef.current = saveNote; }, [saveNote]);
@@ -3334,15 +3357,16 @@ const fireIntegrations = (trigger: string, note: any) => {
         const wasChanged = noteEverDirtyRef.current;
         noteEverDirtyRef.current = false;
         void saveNote({ silent: true });
-        if (wasChanged && title.trim()) {
-            const t = title.slice(0, 10) + (title.length > 10 ? "…" : "");
+        const rawT = titleRaw.current || title;
+        if (wasChanged && rawT.trim()) {
+            const t = rawT.slice(0, 10) + (rawT.length > 10 ? "…" : "");
             const isNew = !editingNote?.id;
             showToast(isNew ? `+ "${t}"` : `"${t}" updated`, noteColor || "#34C759", isNew);
         }
         closeEditorTools();
         setEditorOpen(false);
         setImages([]);
-    }, [saveNote, closeEditorTools, editingNote?.id, title, noteColor]);
+    }, [saveNote, closeEditorTools, editingNote?.id, noteColor]);
 
     const backToRootFromEditor = useCallback(async () => {
         const wasChanged = noteEverDirtyRef.current;
@@ -3350,8 +3374,9 @@ const fireIntegrations = (trigger: string, note: any) => {
         noteEverDirtyRef.current = false;
         // Await save so folder reload only fires after the note is in the DB
         await saveNote({ silent: true });
-        if (wasChanged && title.trim()) {
-            const t = title.slice(0, 10) + (title.length > 10 ? "…" : "");
+        const rawT = titleRaw.current || title;
+        if (wasChanged && rawT.trim()) {
+            const t = rawT.slice(0, 10) + (rawT.length > 10 ? "…" : "");
             showToast(isNew ? `+ "${t}"` : `"${t}" updated`, noteColor || "#34C759", isNew);
         }
         closeEditorTools();
@@ -3364,7 +3389,7 @@ const fireIntegrations = (trigger: string, note: any) => {
             setActiveFolder(null);
         }
         setSearch("");
-    }, [saveNote, closeEditorTools, editingNote?.id, targetFolder, activeFolder, title, noteColor]);
+    }, [saveNote, closeEditorTools, editingNote?.id, targetFolder, activeFolder, noteColor]);
 
     // Pick a random palette color, avoiding the last-used one if possible
     const pickUniqueColor = useCallback(() => {
@@ -3384,14 +3409,15 @@ const fireIntegrations = (trigger: string, note: any) => {
             if ((e.metaKey || e.ctrlKey) && e.key === "s") {
                 e.preventDefault();
                 void saveNote({ silent: true, deriveTitle: true }).then(() => {
-                    const t = title.trim() ? title.slice(0, 12) + (title.length > 12 ? "…" : "") : "Saved";
+                    const rawT = titleRaw.current || title;
+                    const t = rawT.trim() ? rawT.slice(0, 12) + (rawT.length > 12 ? "…" : "") : "Saved";
                     showToast(`"${t}" saved`, noteColor || "#34C759");
                 });
             }
         };
         window.addEventListener("keydown", handler);
         return () => window.removeEventListener("keydown", handler);
-    }, [saveNote, title, noteColor]);
+    }, [saveNote, noteColor]);
 
     // Escape → exit fullscreen
     useEffect(() => {
@@ -3403,7 +3429,7 @@ const fireIntegrations = (trigger: string, note: any) => {
     // Cmd+R → refresh notes (prevents browser reload)
     useEffect(() => {
         const handler = (e: KeyboardEvent) => {
-            if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === "r") {
+            if ((e.metaKey || e.ctrlKey) && e.key === "r") {
                 e.preventDefault();
                 void sync();
                 if (activeFolder) void loadFolderNotes(activeFolder, false);
@@ -4672,9 +4698,12 @@ const fireIntegrations = (trigger: string, note: any) => {
             if (!activeFolder) return;
             setFolderColors((prev) => ({ ...prev, [activeFolder]: color }));
             setFolderStack((prev) => prev.map((f) => f.name === activeFolder ? { ...f, color } : f));
+            // Persist to DB — update all notes in this folder so other devices see the new color
+            setDbData((prev) => prev.map((r) => r.folder_name === activeFolder ? { ...r, folder_color: color } : r));
+            void notesApi.updateByFolder({ folder_name: activeFolder }, { folder_color: color });
             showToast(`${activeFolder} updated`, color);
         },
-        [activeFolder],
+        [activeFolder, dbData],
     );
 
     const randomizeFolderColors = useCallback(async () => {
@@ -6096,7 +6125,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     {noteBadgeLabel}
                                 </span>
                             )}
-                            <input ref={titleInputRef} value={title} onChange={(e) => setTitle(e.target.value)} onFocus={() => { closeEditorTools(); setShowNoteActions(false); }} autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false} className="bg-transparent border-0 appearance-none shadow-none ring-0 outline-none focus:outline-none focus:ring-0 px-1 min-w-0 flex-1 font-black tracking-tight text-xs text-white placeholder:text-zinc-500" style={{ caretColor: activeAccentColor }} placeholder="NOTE TITLE" />
+                            <input ref={titleInputRef} onChange={(e) => { titleRaw.current = e.target.value; }} onBlur={(e) => setTitle(e.target.value)} onFocus={() => { closeEditorTools(); setShowNoteActions(false); }} autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false} className="bg-transparent border-0 appearance-none shadow-none ring-0 outline-none focus:outline-none focus:ring-0 px-1 min-w-0 flex-1 font-black tracking-tight text-xs text-white placeholder:text-zinc-500" style={{ caretColor: activeAccentColor }} placeholder="NOTE TITLE" />
                         </div>
 
                         {/* Mobile: badge + title */}
@@ -6110,7 +6139,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 {noteBadgeLabel}
                             </span>
                         )}
-                        <input ref={titleInputRef} value={title} onChange={(e) => setTitle(e.target.value)} onFocus={() => { closeEditorTools(); setShowNoteActions(false); }} autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false} className="sm:hidden bg-transparent border-0 appearance-none shadow-none ring-0 outline-none focus:outline-none focus:ring-0 px-2 flex-grow min-w-0 text-sm text-white placeholder:text-zinc-500" style={{ caretColor: activeAccentColor, border: "none" }} placeholder="NOTE TITLE" />
+                        <input ref={titleInputMobileRef} onChange={(e) => { titleRaw.current = e.target.value; }} onBlur={(e) => setTitle(e.target.value)} onFocus={() => { closeEditorTools(); setShowNoteActions(false); }} autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false} className="sm:hidden bg-transparent border-0 appearance-none shadow-none ring-0 outline-none focus:outline-none focus:ring-0 px-2 flex-grow min-w-0 text-sm text-white placeholder:text-zinc-500" style={{ caretColor: activeAccentColor, border: "none" }} placeholder="NOTE TITLE" />
 
                         {mermaidMode && (
                             <div className="flex items-center gap-1 flex-shrink-0">
@@ -7105,17 +7134,12 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                     <div className="relative flex items-center gap-2 px-3 py-2.5 flex-shrink-0 overflow-hidden cursor-pointer select-none"
                                                         style={{ background: folder.name === "CLAUDE" ? "#ffffff" : accent, isolation: "isolate" }}
                                                         onClick={() => enterFolder({ id: String(folder.id), name: folder.name, color: accent })}
-                                                        onMouseEnter={(e) => { playSound("hover"); const rect = e.currentTarget.getBoundingClientRect(); setGlowCard({ id: headerId, x: ((e.clientX - rect.left) / rect.width) * 100, y: ((e.clientY - rect.top) / rect.height) * 100 }); }}
-                                                        onMouseMove={(e) => { if (glowCard?.id !== headerId) return; const rect = e.currentTarget.getBoundingClientRect(); setGlowCard(g => g ? { ...g, x: ((e.clientX - rect.left) / rect.width) * 100, y: ((e.clientY - rect.top) / rect.height) * 100 } : g); }}
-                                                        onMouseLeave={() => setGlowCard(null)}>
+                                                        onMouseEnter={(e) => { playSound("hover"); const rect = e.currentTarget.getBoundingClientRect(); const x = ((e.clientX - rect.left) / rect.width) * 100; const y = ((e.clientY - rect.top) / rect.height) * 100; const glow = e.currentTarget.querySelector<HTMLElement>("[data-glow]"); if (glow) glow.style.background = `radial-gradient(circle at ${x}% ${y}%, rgba(${hr},${hg},${hb},0.6) 0%, rgba(${hr},${hg},${hb},0.3) 50%, rgba(${hr},${hg},${hb},0.05) 100%)`; }}
+                                                        onMouseMove={(e) => { const rect = e.currentTarget.getBoundingClientRect(); const x = ((e.clientX - rect.left) / rect.width) * 100; const y = ((e.clientY - rect.top) / rect.height) * 100; const glow = e.currentTarget.querySelector<HTMLElement>("[data-glow]"); if (glow) glow.style.background = `radial-gradient(circle at ${x}% ${y}%, rgba(${hr},${hg},${hb},0.6) 0%, rgba(${hr},${hg},${hb},0.3) 50%, rgba(${hr},${hg},${hb},0.05) 100%)`; }}
+                                                        onMouseLeave={(e) => { const glow = e.currentTarget.querySelector<HTMLElement>("[data-glow]"); if (glow) glow.style.background = ""; }}>
                                                         <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage: "radial-gradient(circle, rgba(255,255,255,0.18) 1px, transparent 1px)", backgroundSize: "10px 10px" }} />
                                                         <div className="absolute inset-0 pointer-events-none" style={{ background: "linear-gradient(135deg, rgba(255,255,255,0.15) 0%, transparent 60%)" }} />
-                                                        {glowCard?.id === headerId && (<>
-                                                            <div className="absolute inset-0 pointer-events-none z-[-1]" style={{ background: `radial-gradient(circle at ${glowCard.x}% ${glowCard.y}%, rgba(${hr},${hg},${hb},0.6) 0%, rgba(${hr},${hg},${hb},0.3) 50%, rgba(${hr},${hg},${hb},0.05) 100%)`, transition: "background 0.05s" }} />
-                                                            <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 2 }}>
-                                                                <rect className="list-snake-path" x="1" y="1" width="calc(100% - 2px)" height="calc(100% - 2px)" rx="6" fill="none" stroke="rgba(255,255,255,0.8)" strokeWidth="2" pathLength="100" style={{ animationIterationCount: 1, animationTimingFunction: "ease-out", animationFillMode: "forwards" }} />
-                                                            </svg>
-                                                        </>)}
+                                                        <div data-glow className="absolute inset-0 pointer-events-none z-[-1]" />
                                                         {folder.name === "CLAUDE" && <img src="/claude-icon.png" alt="Claude" className="relative w-5 h-5 object-contain flex-shrink-0" />}
                                                         <span className={`relative text-[11px] font-bold tracking-widest uppercase truncate flex-1 drop-shadow-sm ${folder.name === "CLAUDE" ? "text-black" : "text-white"}`}>{folder.name}</span>
                                                         <span className={`relative text-[10px] font-bold tabular-nums flex-shrink-0 ${folder.name === "CLAUDE" ? "text-black/60" : "text-white/70"}`}>{totalCount}</span>
@@ -7149,17 +7173,12 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                             onClick={() => {
                                                                 void openNote(note);
                                                             }}
-                                                            onMouseEnter={(e) => { playSound("hover"); const rect = e.currentTarget.getBoundingClientRect(); setGlowCard({ id: noteCardId, x: ((e.clientX - rect.left) / rect.width) * 100, y: ((e.clientY - rect.top) / rect.height) * 100 }); }}
-                                                            onMouseMove={(e) => { if (glowCard?.id !== noteCardId) return; const rect = e.currentTarget.getBoundingClientRect(); setGlowCard(g => g ? { ...g, x: ((e.clientX - rect.left) / rect.width) * 100, y: ((e.clientY - rect.top) / rect.height) * 100 } : g); }}
-                                                            onMouseLeave={() => setGlowCard(null)}
+                                                            onMouseEnter={(e) => { playSound("hover"); const rect = e.currentTarget.getBoundingClientRect(); const x = ((e.clientX - rect.left) / rect.width) * 100; const y = ((e.clientY - rect.top) / rect.height) * 100; const glow = e.currentTarget.querySelector<HTMLElement>("[data-glow]"); if (glow) glow.style.background = `radial-gradient(circle at ${x}% ${y}%, rgba(${nr},${ng},${nb},0.4) 0%, rgba(${nr},${ng},${nb},0.2) 50%, rgba(${nr},${ng},${nb},0.03) 100%)`; }}
+                                                            onMouseMove={(e) => { const rect = e.currentTarget.getBoundingClientRect(); const x = ((e.clientX - rect.left) / rect.width) * 100; const y = ((e.clientY - rect.top) / rect.height) * 100; const glow = e.currentTarget.querySelector<HTMLElement>("[data-glow]"); if (glow) glow.style.background = `radial-gradient(circle at ${x}% ${y}%, rgba(${nr},${ng},${nb},0.4) 0%, rgba(${nr},${ng},${nb},0.2) 50%, rgba(${nr},${ng},${nb},0.03) 100%)`; }}
+                                                            onMouseLeave={(e) => { const glow = e.currentTarget.querySelector<HTMLElement>("[data-glow]"); if (glow) glow.style.background = ""; }}
                                                             className="relative cursor-pointer rounded-md transition-all active:scale-[0.98] overflow-hidden"
                                                             style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.09)", isolation: "isolate", height: 52, display: "flex", flexDirection: "column", justifyContent: "center", gap: 3, padding: "0 12px" }}>
-                                                            {glowCard?.id === noteCardId && (<>
-                                                                <div className="absolute inset-0 pointer-events-none z-[-1]" style={{ background: `radial-gradient(circle at ${glowCard.x}% ${glowCard.y}%, rgba(${nr},${ng},${nb},0.4) 0%, rgba(${nr},${ng},${nb},0.2) 50%, rgba(${nr},${ng},${nb},0.03) 100%)`, transition: "background 0.05s" }} />
-                                                                <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 2 }}>
-                                                                    <rect className="list-snake-path" x="1" y="1" width="calc(100% - 2px)" height="calc(100% - 2px)" rx="6" fill="none" stroke={accent} strokeWidth="2" pathLength="100" style={{ animationIterationCount: 1, animationTimingFunction: "ease-out", animationFillMode: "forwards" }} />
-                                                                </svg>
-                                                            </>)}
+                                                            <div data-glow className="absolute inset-0 pointer-events-none z-[-1]" />
                                                             <div className="relative text-[12px] font-semibold text-white/85 leading-none" style={{ overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>{(note.title || "Untitled").slice(0, 28)}</div>
                                                             <div className="relative text-[11px] text-white/35 leading-none" style={{ overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>{(note.content ? previewText(note.content) : "—").slice(0, 32)}</div>
                                                         </div>
@@ -7197,15 +7216,26 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     onDragEnd={handleTileDragEnd}
                                     onMouseEnter={(e) => {
                                         playSound("hover");
-                                        const r = e.currentTarget.getBoundingClientRect();
-                                        setGlowCard({ id: tileId, x: ((e.clientX - r.left) / r.width) * 100, y: ((e.clientY - r.top) / r.height) * 100 });
+                                        if (!isListMode) return;
+                                        const c = item.color || item.folder_color || "#888888";
+                                        const hex = c.replace("#", "").padEnd(6, "0");
+                                        const ri = parseInt(hex.slice(0, 2), 16), gi = parseInt(hex.slice(2, 4), 16), bi = parseInt(hex.slice(4, 6), 16);
+                                        const rect = e.currentTarget.getBoundingClientRect();
+                                        const x = ((e.clientX - rect.left) / rect.width) * 100, y = ((e.clientY - rect.top) / rect.height) * 100;
+                                        const glow = e.currentTarget.querySelector<HTMLElement>("[data-glow]");
+                                        if (glow) glow.style.background = `radial-gradient(circle at ${x}% ${y}%, rgba(${ri},${gi},${bi},0.4) 0%, rgba(${ri},${gi},${bi},0.2) 50%, rgba(${ri},${gi},${bi},0.03) 100%)`;
                                     }}
                                     onMouseMove={(e) => {
-                                        if (glowCard?.id !== tileId) return;
-                                        const r = e.currentTarget.getBoundingClientRect();
-                                        setGlowCard(g => g ? { ...g, x: ((e.clientX - r.left) / r.width) * 100, y: ((e.clientY - r.top) / r.height) * 100 } : g);
+                                        if (!isListMode) return;
+                                        const c = item.color || item.folder_color || "#888888";
+                                        const hex = c.replace("#", "").padEnd(6, "0");
+                                        const ri = parseInt(hex.slice(0, 2), 16), gi = parseInt(hex.slice(2, 4), 16), bi = parseInt(hex.slice(4, 6), 16);
+                                        const rect = e.currentTarget.getBoundingClientRect();
+                                        const x = ((e.clientX - rect.left) / rect.width) * 100, y = ((e.clientY - rect.top) / rect.height) * 100;
+                                        const glow = e.currentTarget.querySelector<HTMLElement>("[data-glow]");
+                                        if (glow) glow.style.background = `radial-gradient(circle at ${x}% ${y}%, rgba(${ri},${gi},${bi},0.4) 0%, rgba(${ri},${gi},${bi},0.2) 50%, rgba(${ri},${gi},${bi},0.03) 100%)`;
                                     }}
-                                    onMouseLeave={() => setGlowCard(null)}
+                                    onMouseLeave={(e) => { const glow = e.currentTarget.querySelector<HTMLElement>("[data-glow]"); if (glow) glow.style.background = ""; }}
                                     onTouchStart={() => {
                                         if (!isListMode) return;
                                         longPressTimer.current = setTimeout(() => {
@@ -7249,15 +7279,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     className={`${isListMode
                                         ? `group list-row-hover flex items-center gap-3 pr-4 min-h-[54px] border-b border-white/5 cursor-pointer select-none transition-colors active:bg-white/10 overflow-hidden ${!item.is_folder && incomingNoteIds.has(String(item.id)) ? "note-incoming" : ""} ${!item.is_folder && removingNoteIds.has(String(item.id)) ? "note-removing" : ""} ${isDragging ? "opacity-30" : dt?.mode === "into" ? "bg-cyan-950/60 ring-1 ring-inset ring-cyan-400" : ""} ${isSelectMode && !item.is_folder && selectedIds.has(String(item.id)) ? "bg-blue-950/50" : ""} ${editMode && !item.is_folder && String(item.id) === String(editingNote?.id) ? "bg-white/10 border-r-[3px]" : "border-r-[3px] border-r-transparent"}`
                                         : `grid-square-tile min-w-0 cursor-pointer transition-all group ${item.is_folder ? `folder-grid-tile${item.name === "CLAUDE" ? " folder-grid-tile-claude" : ""}` : ""} ${isDragging ? "opacity-30 scale-95" : dt?.mode === "into" ? "ring-4 ring-cyan-400 ring-inset z-10" : ""} ${editMode && !item.is_folder && String(item.id) === String(editingNote?.id) ? "ring-2 ring-white/40 ring-inset" : ""}`}`}>
-                                    {/* Cursor spotlight glow */}
-                                    {isListMode && glowCard?.id === tileId && (() => {
-                                        const c = item.color || item.folder_color || "#888888";
-                                        const hex = c.replace("#", "").padEnd(6, "0");
-                                        const r = parseInt(hex.substring(0, 2), 16);
-                                        const g = parseInt(hex.substring(2, 4), 16);
-                                        const b = parseInt(hex.substring(4, 6), 16);
-                                        return <div className="absolute inset-0 pointer-events-none z-[-1]" style={{ background: `radial-gradient(circle at ${glowCard.x}% ${glowCard.y}%, rgba(${r},${g},${b},0.4) 0%, rgba(${r},${g},${b},0.2) 50%, rgba(${r},${g},${b},0.03) 100%)`, transition: "background 0.05s" }} />;
-                                    })()}
+                                    {/* Cursor spotlight glow — DOM-only, no React state */}
+                                    {isListMode && <div data-glow className="absolute inset-0 pointer-events-none z-[-1]" />}
                                     {/* Insertion line indicator — before */}
                                     {dt?.mode === "before" && (
                                         <div className={`absolute z-20 bg-cyan-400 pointer-events-none ${isListMode ? "left-0 right-0 top-0 h-0.5" : "top-0 left-0 bottom-0 w-1"}`} />
