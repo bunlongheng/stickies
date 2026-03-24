@@ -476,10 +476,14 @@ export function RichTextEditor({ noteId, content, onChange, onBlur, onUploadImag
         if (!editor || editor.isDestroyed) return;
         if (!content) return;
         if (content === lastSentRef.current) return; // we sent this — don't push it back
-        isProgrammaticUpdate.current = true;
-        editor.commands.setContent(parseContent(content));
-        isProgrammaticUpdate.current = false;
-        lastSentRef.current = content;
+        // Defer setContent out of the React render cycle to avoid flushSync conflict
+        queueMicrotask(() => {
+            if (!editor || editor.isDestroyed) return;
+            isProgrammaticUpdate.current = true;
+            editor.commands.setContent(parseContent(content));
+            isProgrammaticUpdate.current = false;
+            lastSentRef.current = content;
+        });
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [noteId, content]);
 
