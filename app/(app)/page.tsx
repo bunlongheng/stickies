@@ -6564,7 +6564,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                     autoComplete="off"
                                                 />
                                             ) : (
-                                                <span className={`relative flex-1 text-left text-[12px] sm:text-sm font-bold truncate ${task.done ? "line-through text-zinc-600" : "text-white"}`}>{task.text}</span>
+                                                <span className={`relative flex-1 text-left text-[12px] sm:text-sm font-bold truncate ${task.done ? "text-zinc-600" : "text-white"}`}>{task.text}</span>
                                             )}
                                             {!task.done && activeTaskIdx === origIdx && editingTaskIdx !== origIdx && (
                                                 <button type="button"
