@@ -6498,7 +6498,11 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         onDragLeave={() => setReorderOverOrigIdx(null)}
                                         onDrop={(e) => { e.preventDefault(); if (reorderDragOrigIdx === null || reorderDragOrigIdx === origIdx) return; const from = parsedTasks[reorderDragOrigIdx].lineIdx; const to = parsedTasks[origIdx].lineIdx; reorderTask(from, to); setReorderDragOrigIdx(null); setReorderOverOrigIdx(null); }}
                                         onDragEnd={() => { setReorderDragOrigIdx(null); setReorderOverOrigIdx(null); }}
-                                        onClick={(e) => { if (e.detail === 3) { e.stopPropagation(); toggleTask(task.lineIdx); } else setActiveTaskIdx(i => i === origIdx ? null : origIdx); }}
+                                        onClick={(e) => {
+                                            if (e.detail === 3) { e.stopPropagation(); toggleTask(task.lineIdx); }
+                                            else if (e.detail === 2) { e.stopPropagation(); setEditingTaskIdx(origIdx); setEditingTaskText(task.text); setTimeout(() => editTaskInputRef.current?.focus(), 30); }
+                                            else setActiveTaskIdx(i => i === origIdx ? null : origIdx);
+                                        }}
                                         onTouchStart={(e) => {
                                             taskRowSwipeStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
                                             setDraggingTaskIdx(origIdx);
