@@ -4570,6 +4570,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         lines[lineIdx] = wasDone ? line.replace(/^\s*\[x\]\s*/i, "") : `[x] ${line}`;
         playSound(wasDone ? "uncheck" : "check");
         setContent(lines.join("\n"));
+        setEditingTaskIdx(null);
         if (!wasDone) {
             const label = noBullet.replace(/^\[.\]\s*/i, "").trim();
             showToast(`✓ ${label.length > 18 ? label.slice(0, 18) + "…" : label}`, "#34C759");
@@ -6551,7 +6552,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                     <svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="#000" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
                                                 )}
                                             </button>
-                                            {editingTaskIdx === origIdx ? (
+                                            {editingTaskIdx === origIdx && !task.done ? (
                                                 <input
                                                     ref={editTaskInputRef}
                                                     type="text"
