@@ -1185,67 +1185,62 @@ function playSound(type: SoundType) {
             g.gain.exponentialRampToValueAtTime(0.001, now + delay + dur);
             osc.start(now + delay); osc.stop(now + delay + dur + 0.02);
         };
+        // Cyberpunk / futuristic sound design — sawtooth & square oscillators, high-freq sweeps
+        const sweep = (f0: number, f1: number, delay: number, vol: number, dur: number, oscType: OscillatorType = "sawtooth") => {
+            const osc = ctx.createOscillator(); const g = ctx.createGain();
+            osc.connect(g); g.connect(ctx.destination);
+            osc.type = oscType;
+            osc.frequency.setValueAtTime(f0, now + delay);
+            osc.frequency.exponentialRampToValueAtTime(f1, now + delay + dur);
+            g.gain.setValueAtTime(0, now + delay);
+            g.gain.linearRampToValueAtTime(vol, now + delay + 0.008);
+            g.gain.exponentialRampToValueAtTime(0.001, now + delay + dur);
+            osc.start(now + delay); osc.stop(now + delay + dur + 0.02);
+        };
         if (type === "hover") {
-            tone(1200, 0, 0.028, 0.055, "sine");
+            // ultra-short digital tick
+            tone(2400, 0, 0.018, 0.030, "square");
         } else if (type === "click") {
-            const osc = ctx.createOscillator();
-            const g = ctx.createGain();
-            osc.connect(g); g.connect(ctx.destination);
-            osc.type = "triangle";
-            osc.frequency.setValueAtTime(800, now);
-            osc.frequency.exponentialRampToValueAtTime(400, now + 0.055);
-            g.gain.setValueAtTime(0.096, now);
-            g.gain.exponentialRampToValueAtTime(0.001, now + 0.065);
-            osc.start(now); osc.stop(now + 0.08);
+            // laser "pew" — sine sweep 1600→140Hz + harmonic overtone
+            sweep(1600, 140, 0,     0.18, 0.16, "sine");
+            sweep(3200, 280, 0,     0.06, 0.12, "sine"); // octave harmonic, quieter
+            sweep(1800, 160, 0.008, 0.05, 0.13, "triangle"); // slight body
         } else if (type === "navigate") {
-            tone(440, 0,    0.064, 0.10); // A4
-            tone(660, 0.07, 0.056, 0.12); // E5
+            // system dive: two-step ascending sweep
+            sweep(600, 1400, 0,    0.055, 0.09, "sawtooth");
+            sweep(900, 2000, 0.07, 0.04,  0.09, "square");
         } else if (type === "toast") {
-            tone(784, 0,    0.08, 0.14); // G5
-            tone(988, 0.09, 0.072, 0.16); // B5
-            tone(1175, 0.18, 0.056, 0.18); // D6
+            // success sequence: rising tri-tone cyber chime
+            tone(1047, 0,    0.065, 0.12, "square");  // C6
+            tone(1319, 0.08, 0.055, 0.13, "square");  // E6
+            tone(1568, 0.16, 0.045, 0.15, "sawtooth"); // G6
         } else if (type === "toast-error") {
-            const osc = ctx.createOscillator();
-            const g = ctx.createGain();
-            osc.connect(g); g.connect(ctx.destination);
-            osc.type = "sine";
-            osc.frequency.setValueAtTime(440, now);
-            osc.frequency.exponentialRampToValueAtTime(260, now + 0.20);
-            g.gain.setValueAtTime(0.08, now);
-            g.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
-            osc.start(now); osc.stop(now + 0.24);
+            // system alert: descending sawtooth glitch
+            sweep(1200, 220, 0,    0.07, 0.18, "sawtooth");
+            sweep(900,  180, 0.06, 0.05, 0.15, "square");
         } else if (type === "create") {
-            tone(523, 0,    0.112, 0.18); // C5
-            tone(659, 0.09, 0.096, 0.18); // E5
+            // spawn: ascending digital burst
+            sweep(400, 1600, 0,    0.08, 0.12, "sawtooth");
+            sweep(600, 2200, 0.05, 0.055, 0.10, "square");
         } else if (type === "add") {
-            tone(659, 0, 0.104, 0.16);   // E5 pop
+            // quick blip
+            sweep(1200, 1800, 0, 0.065, 0.07, "square");
         } else if (type === "check") {
-            tone(659, 0,    0.096, 0.13); // E5
-            tone(784, 0.07, 0.08, 0.15); // G5
+            // confirm: two rising square tones
+            tone(1319, 0,    0.07, 0.10, "square"); // E6
+            tone(1760, 0.07, 0.06, 0.12, "square"); // A6
         } else if (type === "uncheck") {
-            tone(784, 0,    0.064, 0.12); // G5
-            tone(523, 0.07, 0.056, 0.14); // C5
+            // undo: two descending square tones
+            tone(1760, 0,    0.065, 0.10, "square"); // A6
+            tone(1047, 0.07, 0.05,  0.12, "square"); // C6
         } else if (type === "delete") {
-            const osc = ctx.createOscillator();
-            const g = ctx.createGain();
-            osc.connect(g); g.connect(ctx.destination);
-            osc.type = "sine";
-            osc.frequency.setValueAtTime(380, now);
-            osc.frequency.exponentialRampToValueAtTime(160, now + 0.22);
-            g.gain.setValueAtTime(0.104, now);
-            g.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
-            osc.start(now); osc.stop(now + 0.26);
+            // disintegrate: fast saw sweep crunch
+            sweep(1800, 80, 0,    0.09, 0.20, "sawtooth");
+            sweep(1200, 60, 0.04, 0.06, 0.18, "square");
         } else if (type === "move") {
-            const osc = ctx.createOscillator();
-            const g = ctx.createGain();
-            osc.connect(g); g.connect(ctx.destination);
-            osc.type = "sine";
-            osc.frequency.setValueAtTime(440, now);
-            osc.frequency.exponentialRampToValueAtTime(720, now + 0.13);
-            g.gain.setValueAtTime(0, now);
-            g.gain.linearRampToValueAtTime(0.08, now + 0.02);
-            g.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
-            osc.start(now); osc.stop(now + 0.20);
+            // warp: smooth rising saw whoosh
+            sweep(300, 1800, 0, 0.055, 0.14, "sawtooth");
+            tone(1400, 0.10, 0.03, 0.07, "square");
         }
         setTimeout(() => ctx.close(), 800);
     } catch { /* silently ignore — sound is non-critical */ }
@@ -1492,6 +1487,9 @@ export default function NotesMaster() {
     const [findCursor, setFindCursor] = useState(0);
     const [richSearchCount, setRichSearchCount] = useState(0);
     const findInputRef = useRef<HTMLInputElement | null>(null);
+    const showFindBarRef = useRef(false);
+    const findQueryRef = useRef("");
+    const findMatchCountRef = useRef(0);
     const [showCmdB, setShowCmdB] = useState(false);
     const [cmdBQuery, setCmdBQuery] = useState("");
     const [cmdBCursor, setCmdBCursor] = useState(0);
@@ -2232,9 +2230,14 @@ export default function NotesMaster() {
                 setTimeout(() => findInputRef.current?.focus(), 30);
             }
             if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === "d") {
-                // VS Code-style: highlight selection → open find bar pre-filled
                 const sel = window.getSelection()?.toString().trim() ||
                     (() => { const ta = editorTextRef.current; return ta ? ta.value.substring(ta.selectionStart, ta.selectionEnd).trim() : ""; })();
+                // If find bar already open and same query (or no new selection) → cycle to next match
+                if (showFindBarRef.current && findMatchCountRef.current > 0 && (!sel || sel.toLowerCase() === findQueryRef.current.toLowerCase())) {
+                    e.preventDefault();
+                    setFindCursor(v => (v + 1) % findMatchCountRef.current);
+                    return;
+                }
                 if (!sel) return;
                 e.preventDefault();
                 setShowFindBar(true);
@@ -2510,7 +2513,8 @@ const fireIntegrations = (trigger: string, note: any) => {
         if (!editMode || !isDataLoaded || pendingRestoreNoteId) return;
         if (editorOpen) return; // already open
         const topNote = dbData
-            .filter((n: any) => !n.is_folder && n.folder_name !== "TRASH" && !removingNoteIds.has(String(n.id)))
+            .filter((n: any) => !n.is_folder && n.folder_name !== "TRASH" && !n.trashed_at && !removingNoteIds.has(String(n.id))
+                && (!activeFolder || n.folder_name === activeFolder))
             .sort((a: any, b: any) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")))[0];
         if (topNote) {
             // Use openNote so content is fetched if missing (list API omits the content column)
@@ -2518,7 +2522,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         }
         // If no notes yet — wait for loadFolderNotes to complete (effect re-runs when dbData updates)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [editMode, isDataLoaded, dbData, folderNotesLoading, pendingRestoreNoteId, editorOpen]);
+    }, [editMode, isDataLoaded, dbData, folderNotesLoading, pendingRestoreNoteId, editorOpen, activeFolder]);
 
     useEffect(() => {
         if (!pendingFolderQuery && !pendingNoteQuery && !pendingNoteIdQuery) return;
@@ -2872,7 +2876,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                 return 9;
             };
             return dbData
-                .filter((n) => !n.is_folder && score(n) < 9)
+                .filter((n) => !n.is_folder && !n.trashed_at && score(n) < 9)
                 .sort((a, b) => { const sd = score(a) - score(b); return sd !== 0 ? sd : byUpdated(a, b); });
         }
         if (activeFolder) {
@@ -2882,17 +2886,17 @@ const fireIntegrations = (trigger: string, note: any) => {
             const notes = dbData.filter((n) => !n.is_folder && (
                 (useUuid && String(n.folder_id) === activeFolderId) ||
                 n.folder_name === activeFolder
-            ) && (activeFolder === "TRASH" || n.folder_name !== "TRASH")).sort(byUpdated);
+            ) && (activeFolder === "TRASH" || (n.folder_name !== "TRASH" && !n.trashed_at))).sort(byUpdated);
             return [...currentLevelFolders, ...notes];
         }
         // Split view (editMode) with no active folder: show all notes sorted by updated
         if (editMode) {
-            return dbData.filter((n) => !n.is_folder && n.folder_name !== "TRASH").sort(byUpdated);
+            return dbData.filter((n) => !n.is_folder && n.folder_name !== "TRASH" && !n.trashed_at).sort(byUpdated);
         }
         // Root: files-only mode → all notes sorted by newest first, then alpha by folder/title
         if (navMode === "files-only") {
             return dbData
-                .filter((n) => !n.is_folder && n.folder_name !== "TRASH")
+                .filter((n) => !n.is_folder && n.folder_name !== "TRASH" && !n.trashed_at)
                 .sort((a, b) =>
                     String(b.created_at || "").localeCompare(String(a.created_at || "")) ||
                     String(a.folder_name || "").localeCompare(String(b.folder_name || "")) ||
@@ -3023,6 +3027,11 @@ const fireIntegrations = (trigger: string, note: any) => {
         }
         return results;
     }, [showFindBar, findQuery, content]);
+
+    // Keep refs in sync for use inside stale [] keydown handlers
+    useEffect(() => { showFindBarRef.current = showFindBar; }, [showFindBar]);
+    useEffect(() => { findQueryRef.current = findQuery; }, [findQuery]);
+    useEffect(() => { findMatchCountRef.current = findMatches.length; }, [findMatches.length]);
 
     useEffect(() => {
         if (!showFindBar || findMatches.length === 0) return;
@@ -7402,15 +7411,15 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         </>
                                     ) : (
                                         <>
-                                            {!item.is_folder && (
+                                            {!item.is_folder && pinnedIds.has(String(item.id)) && (
                                                 <>
                                                     <button
                                                         type="button"
                                                         onClick={(e) => { e.stopPropagation(); togglePin(String(item.id)); }}
-                                                        className={`absolute bottom-1 right-1 z-10 p-1 transition ${pinnedIds.has(String(item.id)) ? "text-white" : "opacity-0 group-hover:opacity-100 text-white/50 hover:text-white"}`}
-                                                        title={pinnedIds.has(String(item.id)) ? "Unpin" : "Pin"}
+                                                        className="absolute bottom-1 right-1 z-10 p-1 text-white transition"
+                                                        title="Unpin"
                                                     >
-                                                        {pinnedIds.has(String(item.id)) ? <HeartSolidIcon className="w-3.5 h-3.5" /> : <HeartIcon className="w-3.5 h-3.5" />}
+                                                        <HeartSolidIcon className="w-3.5 h-3.5" />
                                                     </button>
                                                     {looksLikeUrl(item.content || "") && (
                                                         <button
