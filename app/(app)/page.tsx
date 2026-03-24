@@ -6500,7 +6500,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         onDragEnd={() => { setReorderDragOrigIdx(null); setReorderOverOrigIdx(null); }}
                                         onClick={(e) => {
                                             if (e.detail === 3) { e.stopPropagation(); toggleTask(task.lineIdx); }
-                                            else if (e.detail === 2) { e.stopPropagation(); setEditingTaskIdx(origIdx); setEditingTaskText(task.text); setTimeout(() => editTaskInputRef.current?.focus(), 30); }
+                                            else if (e.detail === 2 && !task.done) { e.stopPropagation(); setEditingTaskIdx(origIdx); setEditingTaskText(task.text); setTimeout(() => editTaskInputRef.current?.focus(), 30); }
                                             else setActiveTaskIdx(i => i === origIdx ? null : origIdx);
                                         }}
                                         onTouchStart={(e) => {
