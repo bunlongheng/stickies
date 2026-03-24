@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useMemo, useCallback, useDeferredValue } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { createClient } from "@supabase/supabase-js";
 import { createClient as createBrowserClient } from "@/lib/supabase/client";
@@ -31,8 +31,14 @@ import QrCodeIcon from "@heroicons/react/24/outline/QrCodeIcon";
 import ExclamationTriangleIcon from "@heroicons/react/24/outline/ExclamationTriangleIcon";
 import ArrowRightOnRectangleIcon from "@heroicons/react/24/outline/ArrowRightOnRectangleIcon";
 import Cog6ToothIcon from "@heroicons/react/24/outline/Cog6ToothIcon";
+import EllipsisVerticalIcon from "@heroicons/react/24/outline/EllipsisVerticalIcon";
+import ArrowUturnLeftIcon from "@heroicons/react/24/outline/ArrowUturnLeftIcon";
+import ArrowUturnRightIcon from "@heroicons/react/24/outline/ArrowUturnRightIcon";
+import ArrowsPointingOutIcon from "@heroicons/react/24/outline/ArrowsPointingOutIcon";
+import ArrowsPointingInIcon from "@heroicons/react/24/outline/ArrowsPointingInIcon";
 import CheckIcon from "@heroicons/react/24/outline/CheckIcon";
 import ChevronDownIcon from "@heroicons/react/24/outline/ChevronDownIcon";
+import ChevronUpIcon from "@heroicons/react/24/outline/ChevronUpIcon";
 import ClipboardDocumentListIcon from "@heroicons/react/24/outline/ClipboardDocumentListIcon";
 import EyeIcon from "@heroicons/react/24/outline/EyeIcon";
 import CodeBracketIcon from "@heroicons/react/24/outline/CodeBracketIcon";
@@ -282,13 +288,19 @@ function tiptapToPlainText(node: any): string {
 function extractRichTextTitle(json: string): string {
     try {
         const doc = JSON.parse(json);
-        const texts: string[] = [];
-        const walk = (node: any) => {
-            if (node.type === "text" && node.text) texts.push(node.text);
-            if (Array.isArray(node.content)) node.content.forEach(walk);
-        };
-        walk(doc);
-        return texts.join(" ").trim().slice(0, 60);
+        // Only use the first non-empty top-level block's text
+        const blocks: any[] = doc.content ?? [];
+        for (const block of blocks) {
+            const texts: string[] = [];
+            const walk = (node: any) => {
+                if (node.type === "text" && node.text) texts.push(node.text);
+                if (Array.isArray(node.content)) node.content.forEach(walk);
+            };
+            walk(block);
+            const line = texts.join("").trim().replace(/^#+\s*/, "").slice(0, 60);
+            if (line) return line;
+        }
+        return "";
     } catch { return ""; }
 }
 
@@ -448,6 +460,24 @@ function dateGroup(dateStr: string | null): string {
     if (diff <= 7) return "This Week";
     if (diff <= 30) return "This Month";
     return "Older";
+}
+function renderFindHighlights(text: string, matches: { start: number; end: number }[], currentIdx: number): React.ReactNode {
+    if (matches.length === 0) return null;
+    const parts: React.ReactNode[] = [];
+    let last = 0;
+    matches.forEach((m, i) => {
+        if (m.start > last) parts.push(<span key={`t${i}`} style={{ color: "transparent" }}>{text.slice(last, m.start)}</span>);
+        parts.push(
+            <mark key={`m${i}`} data-find-idx={i} style={{
+                background: i === currentIdx ? "rgba(255,214,0,1)" : "rgba(255,214,0,0.35)",
+                color: "transparent", borderRadius: 3,
+                padding: "0 5px", margin: "0 -5px",
+            }}>{text.slice(m.start, m.end)}</mark>
+        );
+        last = m.end;
+    });
+    if (last < text.length) parts.push(<span key="tail" style={{ color: "transparent" }}>{text.slice(last)}</span>);
+    return parts;
 }
 const PINNED_KEY = "stickies_pinned_ids";
 const EMPTY_QUOTES =["🧠 Your second brain starts here. Write it down.", "✨ Great ideas deserve a home. Start now.", "📌 No more forgetting. Capture it.", "🚀 Dreams without notes are just wishes.", "📝 Plan it. Track it. Win it.", "🎯 Nothing works without priorities. Start here.", "💡 One note today. Clarity tomorrow.", "📚 Build your thinking system. One note at a time.", "⚡ Preparing is everything. Write first.", "🏆 Goals become real when you record them."];
@@ -808,29 +838,82 @@ function MindmapView({ title, content, onToggle }: { title: string; content: str
 
     React.useEffect(() => { setTimeout(fitToScreen, 0); }, [fitToScreen]);
 
-    // Non-passive wheel & touch listeners
+    // Non-passive wheel & touch listeners — must be non-passive to call preventDefault on iOS
     React.useEffect(() => {
         const el = containerRef.current;
         if (!el) return;
         const onWheel = (e: WheelEvent) => {
             e.preventDefault();
-            setScale(s => clampScale(s * (e.deltaY < 0 ? 1.12 : 0.88)));
+            const ratio = e.deltaY < 0 ? 1.12 : 0.88;
+            const elRect = el.getBoundingClientRect();
+            const ox = e.clientX - elRect.left - elRect.width / 2;
+            const oy = e.clientY - elRect.top - elRect.height / 2;
+            setScale(s => {
+                const next = clampScale(s * ratio);
+                setPan(p => ({
+                    x: ox - (ox - p.x) * (next / s),
+                    y: oy - (oy - p.y) * (next / s),
+                }));
+                return next;
+            });
         };
-        const onTouchMove = (e: TouchEvent) => {
+        const onTouchStart = (e: TouchEvent) => {
+            // Don't intercept taps on buttons (e.g. header ⋮ button overlapping the canvas)
+            if ((e.target as HTMLElement).closest("button, a, input")) return;
+            if (e.touches.length === 1) {
+                lastMouse.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                dragging.current = true;
+            }
             if (e.touches.length === 2) {
-                e.preventDefault();
+                dragging.current = false;
                 const dx = e.touches[0].clientX - e.touches[1].clientX;
                 const dy = e.touches[0].clientY - e.touches[1].clientY;
+                lastTouchDist.current = Math.hypot(dx, dy);
+            }
+        };
+        const onTouchMove = (e: TouchEvent) => {
+            if (!dragging.current && e.touches.length < 2) return;
+            e.preventDefault();
+            if (e.touches.length === 1 && dragging.current) {
+                const tx = e.touches[0].clientX, ty = e.touches[0].clientY;
+                const dx = tx - lastMouse.current.x, dy = ty - lastMouse.current.y;
+                setPan(p => ({ x: p.x + dx, y: p.y + dy }));
+                lastMouse.current = { x: tx, y: ty };
+            } else if (e.touches.length === 2) {
+                const t0 = e.touches[0], t1 = e.touches[1];
+                const dx = t0.clientX - t1.clientX, dy = t0.clientY - t1.clientY;
                 const dist = Math.hypot(dx, dy);
-                if (lastTouchDist.current !== null) {
-                    setScale(s => clampScale(s * (dist / lastTouchDist.current!)));
+                if (lastTouchDist.current !== null && dist > 0) {
+                    const ratio = dist / lastTouchDist.current;
+                    // Zoom toward pinch midpoint
+                    const mx = (t0.clientX + t1.clientX) / 2;
+                    const my = (t0.clientY + t1.clientY) / 2;
+                    const elRect = el.getBoundingClientRect();
+                    const ox = mx - elRect.left - elRect.width / 2;
+                    const oy = my - elRect.top - elRect.height / 2;
+                    setScale(s => {
+                        const next = clampScale(s * ratio);
+                        setPan(p => ({
+                            x: ox - (ox - p.x) * (next / s),
+                            y: oy - (oy - p.y) * (next / s),
+                        }));
+                        return next;
+                    });
                 }
                 lastTouchDist.current = dist;
             }
         };
+        const onTouchEnd = () => { dragging.current = false; lastTouchDist.current = null; };
         el.addEventListener("wheel", onWheel, { passive: false });
+        el.addEventListener("touchstart", onTouchStart, { passive: false });
         el.addEventListener("touchmove", onTouchMove, { passive: false });
-        return () => { el.removeEventListener("wheel", onWheel); el.removeEventListener("touchmove", onTouchMove); };
+        el.addEventListener("touchend", onTouchEnd);
+        return () => {
+            el.removeEventListener("wheel", onWheel);
+            el.removeEventListener("touchstart", onTouchStart);
+            el.removeEventListener("touchmove", onTouchMove);
+            el.removeEventListener("touchend", onTouchEnd);
+        };
     }, []);
 
     const onMouseDown = (e: React.MouseEvent) => {
@@ -846,31 +929,13 @@ function MindmapView({ title, content, onToggle }: { title: string; content: str
     };
     const onMouseUp = () => { dragging.current = false; };
 
-    const onTouchStart = (e: React.TouchEvent) => {
-        if (e.touches.length === 1) lastMouse.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-        if (e.touches.length === 2) {
-            const dx = e.touches[0].clientX - e.touches[1].clientX;
-            const dy = e.touches[0].clientY - e.touches[1].clientY;
-            lastTouchDist.current = Math.hypot(dx, dy);
-        }
-    };
-    const onTouchStartSingle = (e: React.TouchEvent) => {
-        if (e.touches.length === 1) {
-            const tx = e.touches[0].clientX, ty = e.touches[0].clientY;
-            setPan(p => ({ x: p.x + tx - lastMouse.current.x, y: p.y + ty - lastMouse.current.y }));
-            lastMouse.current = { x: tx, y: ty };
-        }
-    };
-    const onTouchEnd = () => { lastTouchDist.current = null; };
-
     const ZOOM_PRESETS = [0.5, 0.75, 1, 1.5, 2];
 
     return (
         <div className="relative flex-1 overflow-hidden select-none" style={{ background: "#050507" }}>
             <div ref={containerRef}
                 className="absolute inset-0 cursor-grab active:cursor-grabbing"
-                onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseUp}
-                onTouchStart={onTouchStart} onTouchMove={onTouchStartSingle} onTouchEnd={onTouchEnd}>
+                onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseUp}>
                 <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
                     <div style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})`, transformOrigin: "center center", willChange: "transform" }}>
                         <svg className="mindmap-svg" width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ display: "block" }}>
@@ -1268,6 +1333,8 @@ export default function NotesMaster() {
     const [showFloatCopy, setShowFloatCopy] = useState(true);
     const [title, setTitle] = useState("");
     const [content, setContent] = useState("");
+    // Always-current content ref — used in saveNote on blur where React state may lag debounce
+    const latestContentRef = useRef("");
     const [activeLine, setActiveLine] = useState(0);
     const [editorScrollTop, setEditorScrollTop] = useState(0);
     const [editorLineHeight, setEditorLineHeight] = useState(20);
@@ -1396,6 +1463,7 @@ export default function NotesMaster() {
     const [typeFilter, setTypeFilter] = useState<string | null>(null);
     const [pendingNoteType, setPendingNoteType] = useState<string | null>(null);
     const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
+    const [isFullscreen, setIsFullscreen] = useState(false);
     const [voiceAutoStart, setVoiceAutoStart] = useState(false);
     const [showNoteTypePicker, setShowNoteTypePicker] = useState(false);
     const [editMode, setEditMode] = useState(false);
@@ -1412,6 +1480,11 @@ export default function NotesMaster() {
     const [cmdKGlobal, setCmdKGlobal] = useState(false);
     const [cmdKInFile, setCmdKInFile] = useState(false);
     const cmdKInputRef = useRef<HTMLInputElement | null>(null);
+    const [showFindBar, setShowFindBar] = useState(false);
+    const [findQuery, setFindQuery] = useState("");
+    const [findCursor, setFindCursor] = useState(0);
+    const [richSearchCount, setRichSearchCount] = useState(0);
+    const findInputRef = useRef<HTMLInputElement | null>(null);
     const [showCmdB, setShowCmdB] = useState(false);
     const [cmdBQuery, setCmdBQuery] = useState("");
     const [cmdBCursor, setCmdBCursor] = useState(0);
@@ -1422,7 +1495,7 @@ export default function NotesMaster() {
     const [uploadingImages, setUploadingImages] = useState(false);
 
     const isSavingRef = useRef(false);
-    const saveNoteRef = useRef<((opts?: { silent?: boolean }) => Promise<boolean>) | null>(null);
+    const saveNoteRef = useRef<((opts?: { silent?: boolean; deriveTitle?: boolean }) => Promise<boolean>) | null>(null);
     const localWriteRef = useRef<Map<string, number>>(new Map()); // noteId → timestamp, self-echo guard
     const flashQueueRef = useRef<Array<{ note: any; color: string }>>([]);
     const integrationsRef = useRef<Array<{ trigger: string; condition: Record<string, string>; type: string; config: Record<string, string> }>>([]);
@@ -2102,6 +2175,7 @@ export default function NotesMaster() {
     useEffect(() => {
         if (!editorOpen || !editingNote?.id) return;
         setShowFloatCopy(true);
+        setShowFindBar(false);
         const t = setTimeout(() => setShowFloatCopy(false), 10000);
         return () => clearTimeout(t);
     }, [editorOpen, editingNote?.id]);
@@ -2129,8 +2203,29 @@ export default function NotesMaster() {
             }
             if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === "f") {
                 e.preventDefault();
-                setCmdKInFile(true); setCmdKGlobal(false);
-                setShowCmdK(v => { if (!v) { setCmdKQuery(""); setCmdKCursor(0); } return true; });
+                setShowFindBar(true);
+                setFindQuery("");
+                setFindCursor(0);
+                setTimeout(() => findInputRef.current?.focus(), 30);
+            }
+            if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === "d") {
+                // VS Code-style: highlight selection → open find bar pre-filled
+                const sel = window.getSelection()?.toString().trim() ||
+                    (() => { const ta = editorTextRef.current; return ta ? ta.value.substring(ta.selectionStart, ta.selectionEnd).trim() : ""; })();
+                if (!sel) return;
+                e.preventDefault();
+                setShowFindBar(true);
+                setFindQuery(sel);
+                // Jump to the match nearest to the current cursor position
+                const cursorPos = editorTextRef.current?.selectionStart ?? 0;
+                const txt = (latestContentRef.current || content).toLowerCase();
+                const q = sel.toLowerCase();
+                const allStarts: number[] = [];
+                let idx = txt.indexOf(q);
+                while (idx !== -1) { allStarts.push(idx); idx = txt.indexOf(q, idx + 1); }
+                const nearest = allStarts.findIndex(s => s >= cursorPos);
+                setFindCursor(nearest >= 0 ? nearest : 0);
+                setTimeout(() => findInputRef.current?.focus(), 30);
             }
             if ((e.metaKey || e.ctrlKey) && e.key === "b") {
                 e.preventDefault();
@@ -2728,9 +2823,13 @@ const fireIntegrations = (trigger: string, note: any) => {
     }, [folders, folderStack, activeFolder, dbData]);
 
     const displayItems = useMemo(() => {
-        const byUpdated = (a: any, b: any) =>
-            String(b.updated_at || b.created_at || "").localeCompare(String(a.updated_at || a.created_at || "")) ||
-            String(a.title || a.name || "").localeCompare(String(b.title || b.name || ""));
+        const byUpdated = (a: any, b: any) => {
+            // New optimistic notes pin to top until server confirms them
+            if (a._pinnedToTop && !b._pinnedToTop) return -1;
+            if (b._pinnedToTop && !a._pinnedToTop) return 1;
+            return String(b.updated_at || b.created_at || "").localeCompare(String(a.updated_at || a.created_at || "")) ||
+                String(a.title || a.name || "").localeCompare(String(b.title || b.name || ""));
+        };
         if (search.trim()) {
             const q = search.toLowerCase();
             const score = (n: any): number => {
@@ -2782,8 +2881,12 @@ const fireIntegrations = (trigger: string, note: any) => {
     }, [dbData, editMode, activeFolder, folderStack, search, currentLevelFolders, pendingNoteOrder, pinnedIds, navMode]);
 
     // Available type chips for the filter row (only types present in current view, notes only)
-    // Rich text stats — deferred so JSON parse + tree walk never blocks typing
-    const deferredContent = useDeferredValue(content);
+    // Debounced content — heavy computations (JSON parse, tree walk, line split) only run 400ms after typing stops
+    const [deferredContent, setDeferredContent] = useState(content);
+    useEffect(() => {
+        const t = setTimeout(() => setDeferredContent(content), 400);
+        return () => clearTimeout(t);
+    }, [content]);
     const richStatsChips = useMemo(() => {
         if (!deferredContent.trimStart().startsWith("{")) return [];
         let tiptap: any = null;
@@ -2883,6 +2986,46 @@ const fireIntegrations = (trigger: string, note: any) => {
         return [...matchingFolders, ...scored.map(x => x.e._orig)];
     }, [cmdKIndex, deferredCmdKQuery, pinnedIds, folders, cmdKInFile, content]);
 
+    const findMatches = useMemo(() => {
+        if (!showFindBar || !findQuery.trim()) return [] as { start: number; end: number }[];
+        const q = findQuery.toLowerCase();
+        const text = content || "";
+        const results: { start: number; end: number }[] = [];
+        let i = 0;
+        while (i <= text.length - q.length) {
+            const pos = text.toLowerCase().indexOf(q, i);
+            if (pos === -1) break;
+            results.push({ start: pos, end: pos + q.length });
+            i = pos + 1;
+        }
+        return results;
+    }, [showFindBar, findQuery, content]);
+
+    useEffect(() => {
+        if (!showFindBar || findMatches.length === 0) return;
+        const match = findMatches[findCursor];
+        if (!match) return;
+
+        // Plain-text textarea: scroll parent container to the matched line
+        const textarea = editorTextRef.current;
+        if (textarea) {
+            const lineHeight = 19;
+            const paddingTop = 8;
+            const lineNumber = content.substring(0, match.start).split("\n").length - 1;
+            const matchTop = paddingTop + lineNumber * lineHeight;
+            const scrollable = textarea.parentElement;
+            if (scrollable) {
+                const center = matchTop - scrollable.clientHeight / 2 + lineHeight;
+                scrollable.scrollTo({ top: Math.max(0, center), behavior: "smooth" });
+            }
+            // Select the match text so the user sees exactly what's highlighted
+            textarea.focus();
+            textarea.setSelectionRange(match.start, match.end);
+            // Return focus to find bar after a tick so user can keep typing
+            setTimeout(() => findInputRef.current?.focus(), 50);
+        }
+    }, [findCursor, findMatches, showFindBar]);
+
     const cmdBResults = useMemo(() => {
         if (!cmdBQuery.trim()) return bookmarksData.slice(0, 12);
         const q = cmdBQuery.toLowerCase();
@@ -2958,6 +3101,8 @@ const fireIntegrations = (trigger: string, note: any) => {
         prevContentForHashRef.current = deferredContent;
         const content = deferredContent;
         if (!prev && !content) return;
+        // Note just opened — content jumped from empty/old to full note body, not a user keystroke
+        if (content.length > prev.length + 10) return;
 
         // Detect newly typed `#`
         if (content.length === prev.length + 1) {
@@ -2999,22 +3144,30 @@ const fireIntegrations = (trigger: string, note: any) => {
     }, [content, title, editorOpen]);
 
     const saveNote = useCallback(
-        async ({ silent = false }: { silent?: boolean } = {}) => {
+        async ({ silent = false, deriveTitle = false }: { silent?: boolean; deriveTitle?: boolean } = {}) => {
             // Never save a note with no content
             if (!content.trim()) return true;
-            if (!isDraftDirty) return true;
+            if (!isDraftDirty && !deriveTitle) return true;
+            if (isDraftDirty === false && deriveTitle) {
+                // Force through for title-only derive — check if title actually needs update
+                const hasRealTitle = title.trim() && title.trim().toLowerCase() !== "untitled";
+                if (hasRealTitle) return true; // already has real title, nothing to do
+            }
             if (isSavingRef.current) return true;
             if ((editingNote as any)?._external) return true; // read-only external note
             isSavingRef.current = true;
-            // Auto-title: if no title, derive from first non-empty content line
-            const resolvedTitle = title.trim() || (() => {
-                const isRich = content.trimStart().startsWith("{");
-                if (isRich) return extractRichTextTitle(content) || "Untitled";
-                const firstLine = content.trim().split("\n").find(l => l.trim()) || "";
+            // Use latestContentRef so blur-triggered saves get the current editor content
+            // even when the 300ms debounce hasn't flushed to React state yet
+            const saveContent = latestContentRef.current || content;
+            // Auto-title: only derive when explicitly requested (Cmd+S or blur)
+            const hasRealTitle = title.trim() && title.trim().toLowerCase() !== "untitled";
+            const resolvedTitle = (deriveTitle && !hasRealTitle) ? (() => {
+                const isRich = saveContent.trimStart().startsWith("{");
+                if (isRich) return extractRichTextTitle(saveContent) || "Untitled";
+                const firstLine = saveContent.trim().split("\n").find(l => l.trim()) || "";
                 return firstLine.replace(/^#+\s*/, "").slice(0, 60).trim() || "Untitled";
-            })();
-            if (!title.trim()) setTitle(resolvedTitle);
-            const saveContent = content;
+            })() : (title.trim() || "Untitled");
+            if (deriveTitle && !hasRealTitle) setTitle(resolvedTitle);
 
             const folderName = targetFolder || activeFolder || editingNote?.folder_name || "General";
             const activeFolderRow = folderStack.at(-1);
@@ -3052,12 +3205,14 @@ const fireIntegrations = (trigger: string, note: any) => {
             const optimisticId = existingNoteIdStr || `local-${Date.now()}`;
             const existingSnapshot = existingNoteIdStr ? dbData.find((n) => String(n.id) === existingNoteIdStr) || null : null;
 
+            const isNewNote = !existingNoteIdStr;
             const optimisticNote = {
                 ...(editingNote || {}),
                 id: optimisticId,
                 ...payload,
                 created_at: editingNote?.created_at || new Date().toISOString(),
                 updated_at: new Date().toISOString(),
+                ...(isNewNote ? { _pinnedToTop: true } : {}),
             };
 
             setDbData((prev) => {
@@ -3228,7 +3383,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         const handler = (e: KeyboardEvent) => {
             if ((e.metaKey || e.ctrlKey) && e.key === "s") {
                 e.preventDefault();
-                void saveNote({ silent: true }).then(() => {
+                void saveNote({ silent: true, deriveTitle: true }).then(() => {
                     const t = title.trim() ? title.slice(0, 12) + (title.length > 12 ? "…" : "") : "Saved";
                     showToast(`"${t}" saved`, noteColor || "#34C759");
                 });
@@ -3237,6 +3392,13 @@ const fireIntegrations = (trigger: string, note: any) => {
         window.addEventListener("keydown", handler);
         return () => window.removeEventListener("keydown", handler);
     }, [saveNote, title, noteColor]);
+
+    // Escape → exit fullscreen
+    useEffect(() => {
+        const handler = (e: KeyboardEvent) => { if (e.key === "Escape") setIsFullscreen(false); };
+        window.addEventListener("keydown", handler);
+        return () => window.removeEventListener("keydown", handler);
+    }, []);
 
     // Cmd+R → refresh notes (prevents browser reload)
     useEffect(() => {
@@ -3942,7 +4104,9 @@ const fireIntegrations = (trigger: string, note: any) => {
         setPendingNoteType(null); // reset so noteType comes from note.type, not prior mode
         setEditingNote(note);
         const rawTitle = note.title || "";
-        setTitle(rawTitle.trimStart().startsWith("{") ? extractRichTextTitle(rawTitle) : rawTitle);
+        const loadedTitle = rawTitle.trimStart().startsWith("{") ? extractRichTextTitle(rawTitle) : rawTitle;
+        // Treat "Untitled" as no title so first-line auto-derive runs on next save
+        setTitle(loadedTitle.toLowerCase() === "untitled" ? "" : loadedTitle);
         setContent(note.content != null ? (note.type === "mermaid" || detectMermaid(note.content || "") ? cleanMermaidContent(note.content) : note.content) : "");
         setImages((note as any).images ?? []);
         setTargetFolder(note.folder_name || activeFolder || "General");
@@ -5435,7 +5599,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                 }
                 @keyframes spin { to { transform: rotate(360deg); } }
                 .rich-editor { display: flex; flex-direction: column; }
-                .rich-editor .tiptap { flex: 1; min-height: 100%; outline: none; padding: 1rem 2rem; color: #e4e4e7; line-height: 1.7; font-family: ui-sans-serif, system-ui, sans-serif; font-size: 13px; }
+                .rich-editor .tiptap { flex: 1; min-height: 100%; outline: none; padding: 1rem 2rem; color: #d1d1d1; line-height: 1.65; font-family: ui-sans-serif, system-ui, sans-serif; font-size: 17px; background: #252525; }
                 .rich-editor .tiptap p { margin: 0.5em 0; }
                 .rich-editor .tiptap p.is-editor-empty:first-child::before { content: attr(data-placeholder); color: #52525b; pointer-events: none; float: left; height: 0; }
                 .rich-editor .tiptap h1,.rich-editor .tiptap h2,.rich-editor .tiptap h3 { font-weight: 900; text-transform: uppercase; letter-spacing: -0.02em; color: #fff; margin: 1em 0 0.4em; }
@@ -5872,7 +6036,7 @@ const fireIntegrations = (trigger: string, note: any) => {
             <div className={`flex-1 min-h-0 overflow-hidden flex ${editMode ? "flex-row" : "flex-col"}`}>
 
                 {/* RIGHT PANEL: editor — only shown in edit mode or when a note is open (mobile nav) */}
-                <div className={`flex-1 flex flex-col overflow-hidden ${editMode ? "order-last flex" : editorOpen ? "flex" : "hidden"}`}>
+                <div className={`flex-1 flex flex-col overflow-hidden ${editMode ? "order-last flex" : editorOpen ? "flex" : "hidden"} ${isFullscreen ? "fixed inset-0 z-[9999]" : ""}`} style={{ background: "#252525" }}>
                 {editorOpen ? (
                 <section className="flex-1 min-h-0 flex flex-col overflow-hidden overscroll-none" onClick={(e) => e.stopPropagation()}>
                     {pendingShare && (
@@ -5893,8 +6057,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                             </div>
                         </div>
                     )}
-                    <div className="safe-top-bar shrink-0 bg-black" />
-                    <div className="relative h-auto min-h-[3.5rem] sm:min-h-[4rem] px-2 sm:px-4 bg-zinc-900 border-b border-white/10 flex items-center gap-1 sm:gap-2 shrink-0">
+                    <div className="safe-top-bar shrink-0" style={{ background: "#2a2a2a" }} />
+                    <div className="relative h-auto min-h-[3.5rem] sm:min-h-[4rem] px-2 sm:px-4 border-b border-white/10 flex items-center gap-1 sm:gap-2 shrink-0" style={{ background: "#2a2a2a" }}>
                         {/* Back button — hidden on desktop or in edit mode (left panel always visible) */}
                         <button
                             onClick={(e) => { e.stopPropagation(); void backToRootFromEditor(); }}
@@ -5912,7 +6076,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     <button type="button"
                                         onClick={() => { goToIndex(i); void backToRootFromEditor(); }}
                                         className="flex items-center gap-1 font-black tracking-tight text-zinc-400 hover:text-white transition flex-shrink-0 text-xs px-0.5">
-                                        <span className="w-6 h-6 flex-shrink-0 flex items-center justify-center text-sm font-black leading-none overflow-hidden" style={{ background: "#fff", color: folderColors[frame.name] || frame.color, borderRadius: 4 } as React.CSSProperties}>
+                                        <span className="w-6 h-6 flex-shrink-0 flex items-center justify-center text-sm font-black leading-none overflow-hidden" style={{ background: frame.name === "CLAUDE" ? "#fff" : (folderColors[frame.name] || frame.color || "#888"), color: frame.name === "CLAUDE" ? (folderColors[frame.name] || "#888") : "#fff", borderRadius: 4 } as React.CSSProperties}>
                                             {frame.name === "CLAUDE"
                                                 ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-0.5" />
                                                 : <FolderIconDisplay value={folderIcons[frame.name] || ""} folderName={frame.name} className="w-3.5 h-3.5" />}
@@ -5979,15 +6143,29 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 {TYPE_BADGE[noteType].label}
                             </span>
                         ) : null}
-                        {/* Plain / Rich mode toggle */}
-                        {(noteType === "text" || noteType === "rich") && (
-                            <HeaderIconBtn
-                                icon={PencilSquareIcon}
-                                label={noteType === "rich" ? "Switch to Plain text" : "Switch to Rich editor"}
-                                active={noteType === "rich"}
-                                onClick={noteType === "text" ? switchToRich : switchToPlain}
-                            />
-                        )}
+                        {/* Undo */}
+                        <button type="button"
+                            onClick={() => { document.execCommand("undo"); }}
+                            className="p-2 sm:p-3 text-zinc-500 hover:text-zinc-200 active:text-white transition flex-shrink-0"
+                            title="Undo (⌘Z)">
+                            <ArrowUturnLeftIcon className="w-[22px] h-[22px] sm:w-5 sm:h-5" />
+                        </button>
+                        {/* Redo */}
+                        <button type="button"
+                            onClick={() => { document.execCommand("redo"); }}
+                            className="p-2 sm:p-3 text-zinc-500 hover:text-zinc-200 active:text-white transition flex-shrink-0"
+                            title="Redo (⌘⇧Z)">
+                            <ArrowUturnRightIcon className="w-[22px] h-[22px] sm:w-5 sm:h-5" />
+                        </button>
+                        {/* Fullscreen */}
+                        <button type="button"
+                            onClick={() => setIsFullscreen(v => !v)}
+                            className="p-2 sm:p-3 text-zinc-500 hover:text-zinc-200 active:text-white transition flex-shrink-0"
+                            title={isFullscreen ? "Exit fullscreen (Esc)" : "Fullscreen"}>
+                            {isFullscreen
+                                ? <ArrowsPointingInIcon className="w-[22px] h-[22px] sm:w-5 sm:h-5" />
+                                : <ArrowsPointingOutIcon className="w-[22px] h-[22px] sm:w-5 sm:h-5" />}
+                        </button>
                         <button type="button"
                             onClick={() => { setVoiceAutoStart(true); setShowVoiceRecorder(true); }}
                             className="p-2 sm:p-3 text-red-500/70 hover:text-red-400 active:text-red-300 transition flex-shrink-0"
@@ -5995,10 +6173,10 @@ const fireIntegrations = (trigger: string, note: any) => {
                             <MicrophoneIcon className="w-[29px] h-[29px] sm:w-7 sm:h-7" />
                         </button>
                         <button type="button"
-                            onClick={() => { setIsGlobalSettings(false); setShowFolderActions(true); closeEditorTools(); }}
+                            onClick={() => { setShowNoteActions(v => !v); closeEditorTools(); }}
                             className="p-2 sm:p-3 text-zinc-300 hover:text-white active:text-white transition flex-shrink-0"
-                            title="Note settings">
-                            <Cog6ToothIcon className="w-[29px] h-[29px] sm:w-7 sm:h-7" />
+                            title="Note options">
+                            <EllipsisVerticalIcon className="w-[29px] h-[29px] sm:w-7 sm:h-7" />
                         </button>
                     </div>
                     <div className="relative flex-1 flex overflow-hidden bg-black font-mono">
@@ -6015,7 +6193,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                             document.body
                         )}
                         {/* ── Float copy pill — fades after 10s of editing ── */}
-                        {showFloatCopy && !showNoteActions && content.trim() && !listMode && !graphMode && !mindmapMode && !stackMode && !voiceNote && noteType !== "rich" && noteType !== "html" && (
+                        {showFloatCopy && !isFullscreen && !showNoteActions && !showFindBar && content.trim() && !listMode && !graphMode && !mindmapMode && !stackMode && !voiceNote && noteType !== "rich" && noteType !== "html" && (
                         <div className="absolute top-3 right-3 z-[2147483647] pointer-events-auto">
                             <button type="button"
                                 onClick={() => {
@@ -6027,6 +6205,33 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 className="h-7 w-7 flex items-center justify-center bg-zinc-800/90 border border-white/10 text-zinc-400 hover:text-white hover:bg-zinc-700/90 transition backdrop-blur-sm">
                                 <ClipboardIcon className="w-3.5 h-3.5" />
                             </button>
+                        </div>
+                        )}
+                        {/* ── Inline find bar (Cmd+F) ── */}
+                        {showFindBar && (
+                        <div className="absolute top-2 right-2 z-[2147483647] pointer-events-auto flex items-center gap-1 border border-white/10 shadow-2xl backdrop-blur-sm px-2 py-1.5" style={{ minWidth: 240, background: "rgba(24,24,27,0.97)" }}>
+                            <MagnifyingGlassIcon className="w-3 h-3 text-zinc-500 flex-shrink-0" />
+                            <input
+                                ref={findInputRef}
+                                value={findQuery}
+                                onChange={(e) => { setFindQuery(e.target.value); setFindCursor(0); }}
+                                onKeyDown={(e) => {
+                                    if (e.key === "Escape") { e.preventDefault(); setShowFindBar(false); editorTextRef.current?.focus(); }
+                                    else if (e.key === "Enter" && e.shiftKey) { e.preventDefault(); if (findMatches.length > 0) setFindCursor(v => (v - 1 + findMatches.length) % findMatches.length); }
+                                    else if (e.key === "Enter") { e.preventDefault(); if (findMatches.length > 0) setFindCursor(v => (v + 1) % findMatches.length); }
+                                }}
+                                placeholder="Find in note…"
+                                className="bg-transparent text-xs text-white outline-none placeholder-zinc-600 flex-1 font-mono"
+                                style={{ minWidth: 130 }}
+                            />
+                            {findQuery.trim() && (
+                                <span className="text-[10px] font-mono flex-shrink-0" style={{ color: findMatches.length > 0 ? "#71717a" : "#ef4444" }}>
+                                    {findMatches.length > 0 ? `${findCursor + 1}/${findMatches.length}` : "no match"}
+                                </span>
+                            )}
+                            <button type="button" onClick={() => { if (findMatches.length > 0) setFindCursor(v => (v - 1 + findMatches.length) % findMatches.length); }} className="p-0.5 text-zinc-500 hover:text-white transition" title="Previous (Shift+Enter)"><ChevronUpIcon className="w-3 h-3" /></button>
+                            <button type="button" onClick={() => { if (findMatches.length > 0) setFindCursor(v => (v + 1) % findMatches.length); }} className="p-0.5 text-zinc-500 hover:text-white transition" title="Next (Enter)"><ChevronDownIcon className="w-3 h-3" /></button>
+                            <button type="button" onClick={() => { setShowFindBar(false); editorTextRef.current?.focus(); }} className="p-0.5 text-zinc-500 hover:text-white transition ml-0.5" title="Close (Esc)"><XMarkIcon className="w-3 h-3" /></button>
                         </div>
                         )}
                         {mindmapMode ? (
@@ -6347,8 +6552,11 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 code={content}
                                 language="mermaid"
                                 editing={codeEditMode}
+                                searchTerm={showFindBar ? findQuery : ""}
+                                searchIndex={findCursor}
+                                onSearchResults={setRichSearchCount}
                                 onChange={setContent}
-                                onBlur={() => { setCodeEditMode(false); void saveNote({ silent: true }); }}
+                                onBlur={() => { setCodeEditMode(false); void saveNote({ silent: true, deriveTitle: true }); }}
                                 onClick={() => setCodeEditMode(true)}
                             />
                         ) : markdownMode ? (
@@ -6424,8 +6632,11 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 code={content}
                                 language={noteType}
                                 editing={codeEditMode}
+                                searchTerm={showFindBar ? findQuery : ""}
+                                searchIndex={findCursor}
+                                onSearchResults={setRichSearchCount}
                                 onChange={setContent}
-                                onBlur={() => { setCodeEditMode(false); void saveNote({ silent: true }); }}
+                                onBlur={() => { setCodeEditMode(false); void saveNote({ silent: true, deriveTitle: true }); }}
                                 onClick={() => setCodeEditMode(true)}
                             />
                         ) : jsonMode ? (
@@ -6434,8 +6645,11 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 language="json"
                                 editing={codeEditMode}
                                 wordWrap={!codeEditMode}
+                                searchTerm={showFindBar ? findQuery : ""}
+                                searchIndex={findCursor}
+                                onSearchResults={setRichSearchCount}
                                 onChange={setContent}
-                                onBlur={() => { setCodeEditMode(false); void saveNote({ silent: true }); }}
+                                onBlur={() => { setCodeEditMode(false); void saveNote({ silent: true, deriveTitle: true }); }}
                                 onClick={() => setCodeEditMode(true)}
                             />
                         ) : plainMode ? (
@@ -6458,21 +6672,27 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             code={content}
                                             language={detectedLang ?? "javascript"}
                                             editing={true}
+                                            searchTerm={showFindBar ? findQuery : ""}
+                                            searchIndex={findCursor}
+                                            onSearchResults={setRichSearchCount}
                                             onChange={(val) => setContent(val)}
-                                            onBlur={() => { if (currentNoteId) void saveNote({ silent: true }); }}
+                                            onBlur={() => { if (currentNoteId) void saveNote({ silent: true, deriveTitle: true }); }}
                                         />
                                         </>
                                     );
                                 })()}
                             </div>
                         ) : noteType === "rich" ? (
-                            <div className="relative flex-1 min-h-0 flex flex-col" style={{ background: "#000000" }}>
+                            <div className="relative flex-1 min-h-0 flex flex-col" style={{ background: "#252525" }}>
                                 <RichTextEditor
                                     key={currentNoteId ?? "new"}
                                     noteId={currentNoteId}
                                     content={content}
-                                    onChange={(html) => setContent(html)}
-                                    onBlur={() => void saveNote({ silent: true })}
+                                    onChange={(html) => { latestContentRef.current = html; setContent(html); }}
+                                    onBlur={() => void saveNote({ silent: true, deriveTitle: true })}
+                                    searchTerm={showFindBar ? findQuery : ""}
+                                    searchIndex={findCursor}
+                                    onSearchResults={setRichSearchCount}
                                     onUploadImage={async (file) => {
                                         const token = await getAuthToken();
                                         const fd = new FormData();
@@ -6488,29 +6708,32 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     editMode={true}
                                     onDelete={fastDeleteNote}
                                 />
-                                {/* Rich text live stats bar — uses memoized deferred content to avoid blocking typing */}
-                                {richStatsChips.length > 0 && (
-                                    <div className="shrink-0 flex items-center gap-2 px-3 py-1 border-t border-white/[0.06] bg-black/60 overflow-x-auto" style={{ fontSize: 9, opacity: 0.55 }}>
-                                        {richStatsChips.map((c, i) => (
-                                            <span key={i} className="flex items-center gap-1.5 whitespace-nowrap">
-                                                {i > 0 && <span className="text-zinc-700">·</span>}
-                                                <span className="text-zinc-400">{c}</span>
-                                            </span>
-                                        ))}
-                                    </div>
-                                )}
                             </div>
                         ) : (
-                            <div className="flex-1 flex overflow-auto" style={{ background: "#000" }}>
+                            <div className="flex-1 flex overflow-auto relative" style={{ background: "#000" }}>
+                                {/* Highlight backdrop for find-in-note */}
+                                {showFindBar && findMatches.length > 0 && (
+                                    <div aria-hidden="true" style={{
+                                        position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
+                                        pointerEvents: "none",
+                                        fontFamily: "ui-monospace,'Fira Code','Cascadia Code',monospace",
+                                        fontSize: 13, lineHeight: "19px",
+                                        paddingTop: 8, paddingBottom: 24, paddingLeft: 16, paddingRight: 24,
+                                        whiteSpace: "pre-wrap", overflowWrap: "break-word", wordBreak: "break-word",
+                                        color: "transparent", zIndex: 0,
+                                    }}>
+                                        {renderFindHighlights(content || "", findMatches, findCursor)}
+                                    </div>
+                                )}
                                 {/* Native textarea — no cursor jump */}
                                 <textarea
                                     ref={editorTextRef}
                                     value={content}
-                                    onChange={(e) => { setContent(e.target.value); handleCursorUpdate(e); }}
+                                    onChange={(e) => { latestContentRef.current = e.target.value; setContent(e.target.value); handleCursorUpdate(e); }}
                                     onKeyUp={handleCursorUpdate}
                                     onClick={(e) => { closeEditorTools(); handleCursorUpdate(e); }}
                                     onFocus={(e) => { closeEditorTools(); handleCursorUpdate(e); }}
-                                    onBlur={() => void saveNote({ silent: true })}
+                                    onBlur={() => void saveNote({ silent: true, deriveTitle: true })}
                                     onPaste={handleEditorPaste}
                                     className="ios-editor-scroll overscroll-none touch-pan-y"
                                     style={{
@@ -6521,6 +6744,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         outline: "none", resize: "none", caretColor: "#f8f8f2",
                                         whiteSpace: "pre-wrap", overflowWrap: "break-word", wordBreak: "break-word",
                                         minHeight: "100%", overflow: "hidden",
+                                        position: "relative", zIndex: 1,
                                     }}
                                     placeholder="START TYPING..."
                                 />
@@ -6562,14 +6786,65 @@ const fireIntegrations = (trigger: string, note: any) => {
                         : null;
                     return (
                         <div className="shrink-0 flex items-center justify-between px-3 select-none border-t border-white/[0.06]"
-                            style={{ height: 22, background: "#0a0a0a", fontSize: 10 }}>
-                            <span className="font-mono text-zinc-600 whitespace-nowrap">{edited ?? ""}</span>
+                            style={{ height: 22, background: "#1e1e1e", fontSize: 10 }}>
+                            {showFindBar && findQuery.trim() && (codeMode || mermaidMode || jsonMode || plainMode || noteType === "rich" ? richSearchCount > 0 : findMatches.length > 0) ? (
+                                // Find mode — show match info in status bar
+                                (() => {
+                                    const usesCodeViewer = codeMode || mermaidMode || jsonMode || plainMode || noteType === "rich";
+                                    const total = usesCodeViewer ? richSearchCount : findMatches.length;
+                                    const match = !usesCodeViewer ? findMatches[findCursor] : null;
+                                    const line = match ? content.substring(0, match.start).split("\n").length : null;
+                                    return (
+                                        <div className="flex items-center gap-2 font-mono">
+                                            <span style={{ color: "#FFD600" }} className="font-black">{findQuery}</span>
+                                            <span className="text-zinc-500">—</span>
+                                            <span className="text-zinc-400">{findCursor + 1} <span className="text-zinc-600">of</span> {total}</span>
+                                            {line != null && <span className="text-zinc-600">· Ln {line}</span>}
+                                            <span className="text-zinc-700 text-[9px]">↩ next · ⇧↩ prev · Esc close</span>
+                                        </div>
+                                    );
+                                })()
+                            ) : (
+                                <div className="flex items-center gap-2 font-mono overflow-x-auto" style={{ fontSize: 9 }}>
+                                    {richStatsChips.length > 0 ? (
+                                        richStatsChips.map((c, i) => (
+                                            <span key={i} className="flex items-center gap-1.5 whitespace-nowrap">
+                                                {i > 0 && <span className="text-zinc-700">·</span>}
+                                                <span className="text-zinc-500">{c}</span>
+                                            </span>
+                                        ))
+                                    ) : (
+                                        <span className="text-zinc-600 whitespace-nowrap">{edited ?? ""}</span>
+                                    )}
+                                    {richStatsChips.length > 0 && edited && (
+                                        <><span className="text-zinc-700">·</span><span className="text-zinc-700 whitespace-nowrap">{edited}</span></>
+                                    )}
+                                </div>
+                            )}
                             <div className="flex items-center gap-2">
                                 {(() => {
                                     const badge = TYPE_BADGE[noteType] ?? TYPE_BADGE["text"];
                                     if (!badge) return null;
                                     const label = noteType === "mermaid" ? mermaidSubType(content) : badge.label;
-                                    return <span className="font-mono font-black uppercase tracking-wide whitespace-nowrap px-1.5 py-px rounded-full" style={{ fontSize: 8, background: `${badge.color}22`, color: badge.color, border: `1px solid ${badge.color}44` }}>{label}</span>;
+                                    const canToggle = noteType === "text" || noteType === "rich";
+                                    const handleBadgeClick = canToggle ? (noteType === "text" ? switchToRich : switchToPlain) : undefined;
+                                    return (
+                                        <span
+                                            onClick={handleBadgeClick}
+                                            title={canToggle ? (noteType === "rich" ? "Switch to Plain text" : "Switch to Rich editor") : undefined}
+                                            className="font-mono font-black uppercase tracking-wide whitespace-nowrap px-1.5 py-px rounded-full"
+                                            style={{
+                                                fontSize: 8,
+                                                background: `${badge.color}22`,
+                                                color: badge.color,
+                                                border: `1px solid ${badge.color}44`,
+                                                cursor: canToggle ? "pointer" : "default",
+                                                transition: "background 0.15s, opacity 0.15s",
+                                            }}
+                                            onMouseEnter={canToggle ? (e) => { (e.target as HTMLElement).style.background = `${badge.color}44`; } : undefined}
+                                            onMouseLeave={canToggle ? (e) => { (e.target as HTMLElement).style.background = `${badge.color}22`; } : undefined}
+                                        >{label}</span>
+                                    );
                                 })()}
                             </div>
                         </div>
@@ -6577,18 +6852,35 @@ const fireIntegrations = (trigger: string, note: any) => {
                 })()}
                 </section>
                 ) : (
-                    /* Desktop empty state — select a note */
-                    <div className="flex-1 flex flex-col items-center justify-center select-none text-center px-8">
-                        <p className="text-sm font-semibold leading-relaxed tracking-tight text-white/40 max-w-xs">{EMPTY_QUOTES[quoteIndex]}</p>
+                    /* Desktop empty state */
+                    <div className="flex-1 flex flex-col items-center justify-center select-none text-center px-12 gap-8" style={{ background: "#252525" }}>
+                        {/* Animated icon grid */}
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10, opacity: 0.15 }}>
+                            {["#FF3B30","#FF9500","#FFCC00","#34C759","#32ADE6","#AF52DE","#FF2D55","#00C7BE","#5856D6"].map((c, i) => (
+                                <div key={i} style={{
+                                    width: 28, height: 28, borderRadius: 7, background: c,
+                                    animation: `pulse 2.4s ease-in-out ${i * 0.18}s infinite`,
+                                }}/>
+                            ))}
+                        </div>
+                        {/* CTA text */}
+                        <div style={{ maxWidth: 340 }}>
+                            <p style={{ fontSize: 22, fontWeight: 800, color: "rgba(255,255,255,0.82)", letterSpacing: "-0.03em", lineHeight: 1.25, marginBottom: 10 }}>
+                                {EMPTY_QUOTES[quoteIndex]}
+                            </p>
+                            <p style={{ fontSize: 13, color: "rgba(255,255,255,0.28)", fontWeight: 500, lineHeight: 1.6 }}>
+                                Press <kbd style={{ background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 4, padding: "1px 6px", fontSize: 11, fontFamily: "monospace" }}>⌘N</kbd> or tap <span style={{ color: "rgba(255,255,255,0.5)", fontWeight: 700 }}>+</span> to create your first note.
+                            </p>
+                        </div>
                     </div>
                 )}
                 </div>{/* ── end right panel ── */}
 
                 {/* LEFT PANEL: slim notes list */}
-                <div className={`bg-black flex flex-col relative ${editMode ? "order-first w-[30%] min-w-[260px] max-w-[420px] flex-shrink-0 border-r border-white/10" : editorOpen ? "hidden" : "flex-1 overflow-hidden"}`}>
+                <div className={`flex flex-col relative ${editMode ? "order-first w-[30%] min-w-[260px] max-w-[420px] flex-shrink-0 border-r border-white/10" : editorOpen ? "hidden" : "flex-1 overflow-hidden"}`} style={{ background: "#1c1c1c" }}>
                 <>
-                    <div className="safe-top-bar shrink-0 bg-black sticky top-0 z-40" />
-                    <header className="ios-mobile-header relative h-auto min-h-[4rem] px-4 flex items-center gap-2 sticky top-0 bg-black z-40 shrink-0">
+                    <div className="safe-top-bar shrink-0 sticky top-0 z-40" style={{ background: "#1c1c1c" }} />
+                    <header className="ios-mobile-header relative h-auto min-h-[4rem] px-4 flex items-center gap-2 sticky top-0 z-40 shrink-0" style={{ background: "#1c1c1c" }}>
                         {/* Notebook picker — split view only */}
                         {editMode && (
                             <div className="relative flex-shrink-0 flex items-center">
@@ -6664,7 +6956,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                                 window.history.replaceState({}, "", window.location.pathname);
                                                             }}
                                                             className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-xs font-bold hover:bg-white/10 transition ${activeFolder === f.name ? "text-white" : "text-zinc-400"}`}>
-                                                            <span className="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded overflow-hidden" style={{ background: "#fff", color: folderColors[f.name] || (f as any).color || "#888" } as React.CSSProperties}>
+                                                            <span className="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded overflow-hidden" style={{ background: f.name === "CLAUDE" ? "#fff" : (folderColors[f.name] || (f as any).color || "#888"), color: f.name === "CLAUDE" ? (folderColors[f.name] || "#888") : "#fff" } as React.CSSProperties}>
                                                                 {f.name === "CLAUDE" ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-0.5" /> : <FolderIconDisplay value={folderIcons[f.name] || ""} folderName={f.name} className="w-3 h-3" />}
                                                             </span>
                                                             <span className="uppercase truncate">{f.name}</span>
@@ -6706,7 +6998,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 }}
                                                 className={`flex items-center gap-1.5 font-black tracking-tight truncate sm:max-w-[150px] flex-shrink-0 px-0.5 sm:px-1 transition text-xs ${i === folderStack.length - 1 ? "text-white hover:text-zinc-300" : "text-zinc-400 hover:text-white"}`}
                                                 title={i === folderStack.length - 1 ? `${frame.name} settings` : frame.name}>
-                                                <span className="flex-shrink-0 w-6 h-6 flex items-center justify-center text-sm font-black leading-none overflow-hidden" style={{ background: "#fff", color: folderColors[frame.name] || frame.color, borderRadius: 4 } as React.CSSProperties}>
+                                                <span className="flex-shrink-0 w-6 h-6 flex items-center justify-center text-sm font-black leading-none overflow-hidden" style={{ background: frame.name === "CLAUDE" ? "#fff" : (folderColors[frame.name] || frame.color || "#888"), color: frame.name === "CLAUDE" ? (folderColors[frame.name] || "#888") : "#fff", borderRadius: 4 } as React.CSSProperties}>
                                                     {frame.name === "CLAUDE" ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-0.5" /> : <FolderIconDisplay value={folderIcons[frame.name] || ""} folderName={frame.name} className="w-3.5 h-3.5" />}
                                                 </span>
                                                 <span className={`uppercase ${i === folderStack.length - 1 && folderStack.length <= 2 ? "inline" : "hidden sm:inline"}`}>{frame.name}</span>
@@ -7195,11 +7487,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     key={`fab-${depth}`}
                                     type="button"
                                     onClick={() => {
-                                        if (activeFolder) {
-                                            openNewNote();
-                                        } else {
-                                            openCreateFolder();
-                                        }
+                                        openNewNote();
                                     }}
                                     className="fab-alive rounded-full flex items-center justify-center text-black"
                                     style={{

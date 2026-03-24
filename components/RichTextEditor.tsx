@@ -20,6 +20,51 @@ import { TableHeader } from '@tiptap/extension-table-header';
 import { marked } from 'marked';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import type { EditorState, Transaction } from '@tiptap/pm/state';
+import { Plugin, PluginKey } from '@tiptap/pm/state';
+import { Decoration, DecorationSet } from '@tiptap/pm/view';
+import { Extension } from '@tiptap/core';
+
+// ── Inline search-highlight extension ─────────────────────────────────────────
+const searchPluginKey = new PluginKey<{ decos: DecorationSet; results: number[][] }>('stickiesSearch');
+
+function buildSearchDecos(doc: EditorState['doc'], term: string, currentIdx: number) {
+    if (!term) return { decos: DecorationSet.empty, results: [] as number[][] };
+    const q = term.toLowerCase();
+    const results: number[][] = [];
+    doc.descendants((node, pos) => {
+        if (!node.isText || !node.text) return;
+        const text = node.text.toLowerCase();
+        let i = text.indexOf(q);
+        while (i !== -1) { results.push([pos + i, pos + i + q.length]); i = text.indexOf(q, i + 1); }
+    });
+    const decos = results.map(([from, to], idx) =>
+        Decoration.inline(from, to, {
+            style: idx === currentIdx
+                ? 'background:rgba(255,214,0,1);color:#000;border-radius:3px;padding:0 3px;margin:0 -3px;'
+                : 'background:rgba(255,214,0,0.35);border-radius:3px;padding:0 3px;margin:0 -3px;',
+        })
+    );
+    return { decos: DecorationSet.create(doc, decos), results };
+}
+
+const SearchHighlight = Extension.create({
+    name: 'stickiesSearch',
+    addProseMirrorPlugins() {
+        return [new Plugin({
+            key: searchPluginKey,
+            state: {
+                init: (_, state) => buildSearchDecos(state.doc, '', 0),
+                apply(tr, prev) {
+                    const meta = tr.getMeta(searchPluginKey);
+                    if (meta !== undefined) return buildSearchDecos(tr.doc, meta.term ?? '', meta.idx ?? 0);
+                    if (tr.docChanged) return { ...prev, decos: prev.decos.map(tr.mapping, tr.doc) };
+                    return prev;
+                },
+            },
+            props: { decorations(state) { return searchPluginKey.getState(state)?.decos ?? DecorationSet.empty; } },
+        })];
+    },
+});
 
 /** Detect TipTap JSON format */
 function isTiptapJson(s: string): boolean {
@@ -247,6 +292,9 @@ interface Props {
     onDelete?: () => void;
     accentColor: string;
     editMode?: boolean;
+    searchTerm?: string;
+    searchIndex?: number;
+    onSearchResults?: (count: number) => void;
 }
 
 // ── Code block node view with floating copy button ────────────────────────────
@@ -286,12 +334,28 @@ const CodeBlockWithCopy = CodeBlockLowlight.extend({
     },
 });
 
-export function RichTextEditor({ noteId, content, onChange, onBlur, onUploadImage, onDelete, accentColor, editMode }: Props) {
+export function RichTextEditor({ noteId, content, onChange, onBlur, onUploadImage, onDelete, accentColor, editMode, searchTerm, searchIndex, onSearchResults }: Props) {
     const [uploading, setUploading] = useState(false);
     const [dragPos, setDragPos] = useState<{ x: number; y: number } | null>(null);
     const [fontOpen, setFontOpen] = useState(false);
+    const [hasSelection, setHasSelection] = useState(false);
     const fontRef = useRef<HTMLDivElement>(null);
     const isProgrammaticUpdate = useRef(false);
+    // Keep latest callbacks in refs so debounced timer always calls the current version
+    const onChangeRef = useRef(onChange);
+    useEffect(() => { onChangeRef.current = onChange; }, [onChange]);
+    const onBlurRef = useRef(onBlur);
+    useEffect(() => { onBlurRef.current = onBlur; }, [onBlur]);
+    const onUpdateTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    // Tracks the last JSON we sent to parent — used to skip re-sync when content came from us
+    const lastSentRef = useRef('');
+    const flushOnChange = useCallback((editor: { getJSON(): unknown }) => {
+        if (onUpdateTimer.current) { clearTimeout(onUpdateTimer.current); onUpdateTimer.current = null; }
+        const json = JSON.stringify(editor.getJSON());
+        if (json === lastSentRef.current) return;
+        lastSentRef.current = json;
+        onChangeRef.current(json);
+    }, []);
 
     const uploadAndCompress = async (file: File) => onUploadImage(await compressImage(file));
 
@@ -353,10 +417,25 @@ export function RichTextEditor({ noteId, content, onChange, onBlur, onUploadImag
             TableRow,
             TableHeader,
             TableCell,
+            SearchHighlight,
         ],
         content: parseContent(content),
-        onUpdate: ({ editor }) => { if (!isProgrammaticUpdate.current) onChange(JSON.stringify(editor.getJSON())); },
-        onBlur: () => onBlur(),
+        onUpdate: ({ editor }) => {
+            if (isProgrammaticUpdate.current) return;
+            // Debounce: serialization + React state update deferred 300ms after last keystroke
+            if (onUpdateTimer.current) clearTimeout(onUpdateTimer.current);
+            onUpdateTimer.current = setTimeout(() => {
+                onUpdateTimer.current = null;
+                const json = JSON.stringify(editor.getJSON());
+                if (json === lastSentRef.current) return;
+                lastSentRef.current = json;
+                onChangeRef.current(json);
+            }, 300);
+        },
+        onSelectionUpdate: ({ editor }) => {
+            setHasSelection(!editor.state.selection.empty);
+        },
+        onBlur: ({ editor }) => { flushOnChange(editor); onBlurRef.current(); setHasSelection(false); },
         editorProps: {
             handlePaste(view, event) {
                 const items = Array.from(event.clipboardData?.items ?? []);
@@ -391,21 +470,36 @@ export function RichTextEditor({ noteId, content, onChange, onBlur, onUploadImag
         },
     });
 
-    // Re-sync content when switching notes OR when content arrives async after remount
+    // Re-sync content when switching notes OR when content arrives async after remount.
+    // Skip if content came from this editor (lastSentRef) — avoids a re-sync loop on every save.
     useEffect(() => {
         if (!editor || editor.isDestroyed) return;
-        if (!content) return; // don't wipe editor with empty during initial load
-        const parsed = parseContent(content);
-        const current = JSON.stringify(editor.getJSON());
-        const incoming = isTiptapJson(content) ? content : null;
-        if (incoming ? current !== incoming : true) {
-            // Suppress onUpdate during programmatic sync to prevent spurious isDraftDirty
-            isProgrammaticUpdate.current = true;
-            editor.commands.setContent(parsed);
-            isProgrammaticUpdate.current = false;
-        }
+        if (!content) return;
+        if (content === lastSentRef.current) return; // we sent this — don't push it back
+        isProgrammaticUpdate.current = true;
+        editor.commands.setContent(parseContent(content));
+        isProgrammaticUpdate.current = false;
+        lastSentRef.current = content;
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [noteId, content]);
+
+    // Search highlight — dispatch to ProseMirror plugin whenever term or index changes
+    useEffect(() => {
+        if (!editor || editor.isDestroyed) return;
+        const term = searchTerm ?? '';
+        const idx = searchIndex ?? 0;
+        const tr = editor.state.tr.setMeta(searchPluginKey, { term, idx });
+        editor.view.dispatch(tr);
+        // State is updated synchronously after dispatch
+        const ps = searchPluginKey.getState(editor.state);
+        const results: number[][] = ps?.results ?? [];
+        onSearchResults?.(results.length);
+        const match = results[idx];
+        if (match) {
+            editor.commands.setTextSelection({ from: match[0], to: match[1] });
+            editor.commands.scrollIntoView();
+        }
+    }, [searchTerm, searchIndex, editor]);
 
     const FONTS = [
         { label: 'Default',    value: '' },
@@ -481,8 +575,8 @@ export function RichTextEditor({ noteId, content, onChange, onBlur, onUploadImag
 
     return (
         <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-            {/* ── Formatting toolbar — only in pencil/edit mode ── */}
-            {tb && editMode && (
+            {/* ── Formatting toolbar — only when text is selected ── */}
+            {tb && editMode && hasSelection && (
                 <div style={{
                     display: 'flex', alignItems: 'center', gap: 2,
                     padding: '5px 8px',
