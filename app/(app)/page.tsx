@@ -1354,6 +1354,7 @@ export default function NotesMaster() {
     const [content, setContent] = useState("");
     // Always-current content ref — used in saveNote on blur where React state may lag debounce
     const latestContentRef = useRef("");
+    const richEditorSetContentTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [activeLine, setActiveLine] = useState(0);
     const [editorScrollTop, setEditorScrollTop] = useState(0);
     const [editorLineHeight, setEditorLineHeight] = useState(20);
@@ -2999,6 +3000,13 @@ const fireIntegrations = (trigger: string, note: any) => {
         return () => clearTimeout(t);
     }, [cmdKQuery]);
 
+    // Pre-built folder name → db row map — avoids O(n×m) dbData.find() inside cmdKResults
+    const folderLookup = useMemo(() => {
+        const map = new Map<string, any>();
+        dbData.forEach((r: any) => { if (r.is_folder) map.set(r.folder_name || r.name, r); });
+        return map;
+    }, [dbData]);
+
     const cmdKResults = useMemo(() => {
         // In-file mode: search lines of the current note
         if (cmdKInFile) {
@@ -3017,7 +3025,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         const matchingFolders = folders
             .filter(f => {
                 if (f.name.toUpperCase() === "BOOKMARKS") return false;
-                const dbRow = dbData.find((r: any) => r.is_folder && (r.folder_name === f.name || r.name === f.name));
+                const dbRow = folderLookup.get(f.name);
                 if (dbRow?.parent_folder_name?.toUpperCase() === "BOOKMARKS") return false;
                 return f.name.toLowerCase().includes(q);
             })
@@ -3037,22 +3045,28 @@ const fireIntegrations = (trigger: string, note: any) => {
             .sort((a, b) => a.s !== b.s ? a.s - b.s : b.e.date.localeCompare(a.e.date))
             .slice(0, 30);
         return [...matchingFolders, ...scored.map(x => x.e._orig)];
-    }, [cmdKIndex, deferredCmdKQuery, pinnedIds, folders, cmdKInFile, content]);
+    }, [cmdKIndex, deferredCmdKQuery, pinnedIds, folders, cmdKInFile, content, folderLookup]);
+
+    const [deferredFindQuery, setDeferredFindQuery] = useState(findQuery);
+    useEffect(() => {
+        const t = setTimeout(() => setDeferredFindQuery(findQuery), 120);
+        return () => clearTimeout(t);
+    }, [findQuery]);
 
     const findMatches = useMemo(() => {
-        if (!showFindBar || !findQuery.trim()) return [] as { start: number; end: number }[];
-        const q = findQuery.toLowerCase();
-        const text = content || "";
+        if (!showFindBar || !deferredFindQuery.trim()) return [] as { start: number; end: number }[];
+        const q = deferredFindQuery.toLowerCase();
+        const text = (content || "").toLowerCase(); // pre-lowercase once
         const results: { start: number; end: number }[] = [];
         let i = 0;
         while (i <= text.length - q.length) {
-            const pos = text.toLowerCase().indexOf(q, i);
+            const pos = text.indexOf(q, i);
             if (pos === -1) break;
             results.push({ start: pos, end: pos + q.length });
             i = pos + 1;
         }
         return results;
-    }, [showFindBar, findQuery, content]);
+    }, [showFindBar, deferredFindQuery, content]);
 
     // Keep refs in sync for use inside stale [] keydown handlers
     useEffect(() => { showFindBarRef.current = showFindBar; }, [showFindBar]);
@@ -4332,9 +4346,10 @@ const fireIntegrations = (trigger: string, note: any) => {
 
     // Note stats for bottom status bar
     // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Uses deferredContent (400ms debounce) — avoids JSON tree-walk on every keystroke
     const noteStats = useMemo(() => {
         if (!editorOpen) return null;
-        const bytes = content.length;
+        const bytes = deferredContent.length;
         const sizeStr = bytes >= 1_048_576 ? `${(bytes / 1_048_576).toFixed(1)} MB`
             : bytes >= 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${bytes} B`;
         const editedStr = editingNote?.updated_at
@@ -4342,7 +4357,7 @@ const fireIntegrations = (trigger: string, note: any) => {
             : null;
         if (noteType !== "rich") return [editedStr, sizeStr].filter(Boolean) as string[];
         let tiptap: any = null;
-        try { tiptap = JSON.parse(content); } catch {}
+        try { tiptap = JSON.parse(deferredContent); } catch {}
         const topNodes: any[] = tiptap?.content ?? [];
         let paragraphs = 0, images = 0, codeBlocks = 0, tables = 0;
         const walk = (nodes: any[]) => { for (const n of nodes) { if (n.type === "paragraph") paragraphs++; else if (n.type === "image") images++; else if (n.type === "codeBlock") codeBlocks++; else if (n.type === "table") tables++; if (n.content) walk(n.content); } };
@@ -4351,7 +4366,7 @@ const fireIntegrations = (trigger: string, note: any) => {
             images > 0 ? `${images} img` : null, codeBlocks > 0 ? `${codeBlocks} code` : null,
             tables > 0 ? `${tables} tbl` : null, paragraphs > 0 ? `${paragraphs} ¶` : null,
         ].filter(Boolean) as string[];
-    }, [editorOpen, noteType, content, editingNote?.updated_at]);
+    }, [editorOpen, noteType, deferredContent, editingNote?.updated_at]);
 
     const saveFolderIconToDb = useCallback(async (folderName: string, icon: string) => {
         try {
@@ -6792,7 +6807,11 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     key={currentNoteId ?? "new"}
                                     noteId={currentNoteId}
                                     content={content}
-                                    onChange={(html) => { latestContentRef.current = html; setContent(html); }}
+                                    onChange={(html) => {
+                                        latestContentRef.current = html;
+                                        if (richEditorSetContentTimer.current) clearTimeout(richEditorSetContentTimer.current);
+                                        richEditorSetContentTimer.current = setTimeout(() => setContent(html), 100);
+                                    }}
                                     onBlur={() => void saveNote({ silent: true, deriveTitle: true })}
                                     searchTerm={showFindBar ? findQuery : ""}
                                     searchIndex={findCursor}
