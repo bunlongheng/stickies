@@ -2450,6 +2450,9 @@ const fireIntegrations = (trigger: string, note: any) => {
             .on("postgres_changes", { event: "INSERT", schema: "public", table: "stickies" }, (payload: any) => {
                 const note = { ...payload.new, updated_at: payload.new?.updated_at || new Date().toISOString() };
                 if (!note?.id) return;
+                // Skip own inserts — we already have the optimistic note in the list
+                const lastWrite = localWriteRef.current.get(String(note.id));
+                if (lastWrite && Date.now() - lastWrite < 5000) return;
                 setDbData((prev) => {
                     if (prev.some((r) => String(r.id) === String(note.id))) return prev;
                     return [...prev, note];
@@ -3351,6 +3354,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                     } else {
                         const { note: data } = await notesApi.insert(payload);
                         if (data) {
+                            // Mark as own-insert so Realtime INSERT handler skips it
+                            localWriteRef.current.set(String(data.id), Date.now());
                             setPendingNoteType(null);
                             // Only take editingNote if user hasn't already switched to a different note
                             setEditingNote((prev: any) => (prev === null || String(prev.id) === optimisticId) ? data : prev);
