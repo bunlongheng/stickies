@@ -1359,10 +1359,6 @@ export default function NotesMaster() {
     // Always-current content ref — used in saveNote on blur where React state may lag debounce
     const latestContentRef = useRef("");
     const richEditorSetContentTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const [activeLine, setActiveLine] = useState(0);
-    const [editorScrollTop, setEditorScrollTop] = useState(0);
-    const [editorLineHeight, setEditorLineHeight] = useState(20);
-    const [editorPaddingTop, setEditorPaddingTop] = useState(12);
     const [pendingRestoreNoteId, setPendingRestoreNoteId] = useState<string | null>(null);
     const [pendingFolderQuery, setPendingFolderQuery] = useState<string | null>(null);
     const [pendingNoteQuery, setPendingNoteQuery] = useState<string | null>(null);
@@ -1908,8 +1904,6 @@ export default function NotesMaster() {
                     setNoteColor(palette12[0]);
                     setShowColorPicker(false);
                     setShowSwitcher(false);
-                    setActiveLine(0);
-                    setEditorScrollTop(0);
                     shouldFocusTitleOnOpenRef.current = true;
                     setEditorOpen(true);
                     window.history.replaceState({}, "", window.location.pathname);
@@ -1934,8 +1928,6 @@ export default function NotesMaster() {
                     setPendingShare(sharedContent ? { content: sharedContent } : null);
                     setShowColorPicker(false);
                     setShowSwitcher(false);
-                    setActiveLine(0);
-                    setEditorScrollTop(0);
                     shouldFocusTitleOnOpenRef.current = true;
                     setEditorOpen(true);
                     window.history.replaceState({}, "", window.location.pathname);
@@ -2255,8 +2247,6 @@ export default function NotesMaster() {
                 setContent(pd.content);
                 setNoteColor(pd.noteColor);
                 setTargetFolder(pd.targetFolder);
-                setActiveLine(0);
-                setEditorScrollTop(0);
                 setEditorOpen(true);
                 showToast("Restored", pd.noteColor || "#34C759");
                 return;
@@ -2639,8 +2629,6 @@ const fireIntegrations = (trigger: string, note: any) => {
             setImages((matchedNote as any).images ?? []);
             setTargetFolder(matchedNote.folder_name || matchedFolder || "General");
             setNoteColor(matchedNote.folder_color || palette12[0]);
-            setActiveLine(0);
-            setEditorScrollTop(0);
             setEditorOpen(true);
         } else if (matchedDraft) {
             const draftFolder = matchedDraft.folder_name || matchedFolder || "General";
@@ -2650,8 +2638,6 @@ const fireIntegrations = (trigger: string, note: any) => {
             setContent(matchedDraft.content || "");
             setTargetFolder(draftFolder);
             setNoteColor(matchedDraft.folder_color || palette12[0]);
-            setActiveLine(0);
-            setEditorScrollTop(0);
             setEditorOpen(true);
         } else if (matchedFolder) {
             if (folderSegments.length <= 1) {
@@ -3540,8 +3526,6 @@ const fireIntegrations = (trigger: string, note: any) => {
         setNoteColor(pickUniqueColor());
         shouldFocusTitleOnOpenRef.current = !isStandup;
         closeEditorTools();
-        setActiveLine(0);
-        setEditorScrollTop(0);
         setEditorOpen(true);
         playSound("create");
     }, [activeFolder, editMode, closeEditorTools, pickUniqueColor]);
@@ -3754,26 +3738,8 @@ const fireIntegrations = (trigger: string, note: any) => {
         }
     }
 
-    const handleCursorUpdate = (e: any) => {
-        const target = e.target as HTMLTextAreaElement;
-        const styles = window.getComputedStyle(target);
-        const nextLineHeight = parseFloat(styles.lineHeight);
-        const nextPaddingTop = parseFloat(styles.paddingTop);
-        if (!Number.isNaN(nextLineHeight)) setEditorLineHeight(nextLineHeight);
-        if (!Number.isNaN(nextPaddingTop)) setEditorPaddingTop(nextPaddingTop);
-        const textBeforeCursor = target.value.substring(0, target.selectionStart || 0);
-        setActiveLine(textBeforeCursor.split("\n").length - 1);
-    };
-
-    const handleEditorScroll = (e: any) => {
-        const target = e.target as HTMLTextAreaElement;
-        const styles = window.getComputedStyle(target);
-        const nextLineHeight = parseFloat(styles.lineHeight);
-        const nextPaddingTop = parseFloat(styles.paddingTop);
-        if (!Number.isNaN(nextLineHeight)) setEditorLineHeight(nextLineHeight);
-        if (!Number.isNaN(nextPaddingTop)) setEditorPaddingTop(nextPaddingTop);
-        setEditorScrollTop(target.scrollTop || 0);
-    };
+    // handleCursorUpdate removed — activeLine/editorLineHeight/editorPaddingTop were never read
+    // getComputedStyle + 3 setState calls per keystroke was the main typing lag cause
 
     const copyCurrentNoteLink = async () => {
         const noteTitle = title.trim() || editingNote?.title || "untitled";
@@ -4008,8 +3974,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                 setEditingNote(null);
                 setTitle("");
                 setContent("");
-                setActiveLine(0);
-                setEditorScrollTop(0);
                 setEditorOpen(false);
                 showToast(`"${label}" deleted`, resolvedColor);
                 return;
@@ -4042,8 +4006,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                 setEditingNote(null);
                 setTitle("");
                 setContent("");
-                setActiveLine(0);
-                setEditorScrollTop(0);
                 setEditorOpen(false);
                 playSound("delete");
             } catch (err) {
@@ -4082,8 +4044,6 @@ const fireIntegrations = (trigger: string, note: any) => {
         setEditingNote(null);
         setTitle("");
         setContent("");
-        setActiveLine(0);
-        setEditorScrollTop(0);
         setEditorOpen(false);
         playSound("delete");
         if (alreadyInTrash) {
@@ -4120,8 +4080,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                 setEditingNote(null);
                 setTitle("");
                 setContent("");
-                setActiveLine(0);
-                setEditorScrollTop(0);
                 setEditorOpen(false);
                 if (!isTrash) {
                     setFolderColors((prev) => { const next = { ...prev }; delete next[folderName]; return next; });
@@ -4201,8 +4159,6 @@ const fireIntegrations = (trigger: string, note: any) => {
         setNoteColor(note.folder_color || folders.find((f: any) => f.name === (note.folder_name || activeFolder))?.color || palette12[0]);
         setShowColorPicker(false);
         setShowSwitcher(false);
-        setActiveLine(0);
-        setEditorScrollTop(0);
         setEditorOpen(true);
 
         // Always fetch full content — list API omits the content column
@@ -5398,19 +5354,6 @@ const fireIntegrations = (trigger: string, note: any) => {
         return () => cancelAnimationFrame(frame);
     }, [editorOpen]);
 
-    useEffect(() => {
-        if (!editorOpen) return;
-        const frame = requestAnimationFrame(() => {
-            const el = editorTextRef.current;
-            if (!el) return;
-            const styles = window.getComputedStyle(el);
-            const lh = parseFloat(styles.lineHeight);
-            const pt = parseFloat(styles.paddingTop);
-            if (!Number.isNaN(lh)) setEditorLineHeight(lh);
-            if (!Number.isNaN(pt)) setEditorPaddingTop(pt);
-        });
-        return () => cancelAnimationFrame(frame);
-    }, [editorOpen]);
 
     if (!mounted || isUrlChecking) return (
         <div className="h-screen bg-black flex flex-col items-center justify-center gap-8 overflow-hidden">
@@ -6850,10 +6793,9 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 <textarea
                                     ref={editorTextRef}
                                     value={content}
-                                    onChange={(e) => { latestContentRef.current = e.target.value; startContentTransition(() => setContent(e.target.value)); handleCursorUpdate(e); }}
-                                    onKeyUp={handleCursorUpdate}
-                                    onClick={(e) => { closeEditorTools(); handleCursorUpdate(e); }}
-                                    onFocus={(e) => { closeEditorTools(); handleCursorUpdate(e); }}
+                                    onChange={(e) => { latestContentRef.current = e.target.value; startContentTransition(() => setContent(e.target.value)); }}
+                                    onClick={() => closeEditorTools()}
+                                    onFocus={() => closeEditorTools()}
                                     onBlur={() => void saveNote({ silent: true, deriveTitle: true })}
                                     onPaste={handleEditorPaste}
                                     className="ios-editor-scroll overscroll-none touch-pan-y"
