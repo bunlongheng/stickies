@@ -2232,30 +2232,48 @@ export default function NotesMaster() {
         } catch { /* ignore */ }
     }, []);
 
-    // Cmd+K / Cmd+J global shortcut
+    // Global keydown — Cmd+K/F/D/B, Escape fullscreen, Cmd+Z undo-delete (all [] deps, ref-based)
     useEffect(() => {
         const handler = (e: KeyboardEvent) => {
-            if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+            const mod = e.metaKey || e.ctrlKey;
+            // Escape → exit fullscreen
+            if (e.key === "Escape") { setIsFullscreen(false); return; }
+            // Cmd+Z → undo note deletion
+            if (mod && e.key === "z" && pendingDeleteRef.current) {
+                e.preventDefault();
+                const pd = pendingDeleteRef.current;
+                clearTimeout(pd.timeoutId);
+                pendingDeleteRef.current = null;
+                setDbData((prev) => [pd.note, ...prev.filter((r) => String(r.id) !== String(pd.note.id))]);
+                setEditingNote(pd.note);
+                setTitle(pd.title);
+                setContent(pd.content);
+                setNoteColor(pd.noteColor);
+                setTargetFolder(pd.targetFolder);
+                setActiveLine(0);
+                setEditorScrollTop(0);
+                setEditorOpen(true);
+                showToast("Restored", pd.noteColor || "#34C759");
+                return;
+            }
+            if (!mod) return;
+            if (e.key === "k") {
                 e.preventDefault();
                 setCmdKGlobal(true); setCmdKInFile(false);
                 setShowCmdK(v => { if (!v) { setCmdKQuery(""); setCmdKCursor(0); } return !v; });
-            }
-            if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "f") {
+            } else if (e.shiftKey && e.key.toLowerCase() === "f") {
                 e.preventDefault();
                 setCmdKGlobal(true); setCmdKInFile(false);
                 setShowCmdK(v => { if (!v) { setCmdKQuery(""); setCmdKCursor(0); } return true; });
-            }
-            if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === "f") {
+            } else if (!e.shiftKey && e.key.toLowerCase() === "f") {
                 e.preventDefault();
                 setShowFindBar(true);
                 setFindQuery("");
                 setFindCursor(0);
                 setTimeout(() => findInputRef.current?.focus(), 30);
-            }
-            if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === "d") {
+            } else if (!e.shiftKey && e.key.toLowerCase() === "d") {
                 const sel = window.getSelection()?.toString().trim() ||
                     (() => { const ta = editorTextRef.current; return ta ? ta.value.substring(ta.selectionStart, ta.selectionEnd).trim() : ""; })();
-                // If find bar already open and same query (or no new selection) → cycle to next match
                 if (showFindBarRef.current && findMatchCountRef.current > 0 && (!sel || sel.toLowerCase() === findQueryRef.current.toLowerCase())) {
                     e.preventDefault();
                     setFindCursor(v => (v + 1) % findMatchCountRef.current);
@@ -2265,7 +2283,6 @@ export default function NotesMaster() {
                 e.preventDefault();
                 setShowFindBar(true);
                 setFindQuery(sel);
-                // Jump to the match nearest to the current cursor position
                 const cursorPos = editorTextRef.current?.selectionStart ?? 0;
                 const txt = (latestContentRef.current || content).toLowerCase();
                 const q = sel.toLowerCase();
@@ -2275,8 +2292,7 @@ export default function NotesMaster() {
                 const nearest = allStarts.findIndex(s => s >= cursorPos);
                 setFindCursor(nearest >= 0 ? nearest : 0);
                 setTimeout(() => findInputRef.current?.focus(), 30);
-            }
-            if ((e.metaKey || e.ctrlKey) && e.key === "b") {
+            } else if (e.key === "b") {
                 e.preventDefault();
                 setShowCmdB(v => { if (!v) { setCmdBQuery(""); setCmdBCursor(0); } return !v; });
             }
@@ -3484,12 +3500,6 @@ const fireIntegrations = (trigger: string, note: any) => {
         return () => window.removeEventListener("keydown", handler);
     }, [saveNote, noteColor]);
 
-    // Escape → exit fullscreen
-    useEffect(() => {
-        const handler = (e: KeyboardEvent) => { if (e.key === "Escape") setIsFullscreen(false); };
-        window.addEventListener("keydown", handler);
-        return () => window.removeEventListener("keydown", handler);
-    }, []);
 
     // Cmd+R → refresh notes (prevents browser reload)
     useEffect(() => {
@@ -3505,30 +3515,6 @@ const fireIntegrations = (trigger: string, note: any) => {
         return () => window.removeEventListener("keydown", handler);
     }, [activeFolder, loadFolderNotes]);
 
-    // Cmd+Z → undo note deletion (pending delete within window)
-    useEffect(() => {
-        const handler = (e: KeyboardEvent) => {
-            if (!pendingDeleteRef.current) return;
-            if ((e.metaKey || e.ctrlKey) && e.key === "z") {
-                e.preventDefault();
-                const pd = pendingDeleteRef.current;
-                clearTimeout(pd.timeoutId);
-                pendingDeleteRef.current = null;
-                setDbData((prev) => [pd.note, ...prev.filter((r) => String(r.id) !== String(pd.note.id))]);
-                setEditingNote(pd.note);
-                setTitle(pd.title);
-                setContent(pd.content);
-                setNoteColor(pd.noteColor);
-                setTargetFolder(pd.targetFolder);
-                setActiveLine(0);
-                setEditorScrollTop(0);
-                setEditorOpen(true);
-                showToast("Restored", pd.noteColor || "#34C759");
-            }
-        };
-        window.addEventListener("keydown", handler);
-        return () => window.removeEventListener("keydown", handler);
-    }, []);
 
     const openNewNote = useCallback((type?: string) => {
         noteEverDirtyRef.current = false;
@@ -4332,9 +4318,10 @@ const fireIntegrations = (trigger: string, note: any) => {
     // Folder stats for bottom status bar (active folder view, no note open)
     const folderStats = useMemo(() => {
         if (!activeFolder || editorOpen) return null;
+        const activeFolderObj = folders.find(f => f.name === activeFolder);
         const folderNotes = dbData.filter(r => !r.is_folder && (
             r.folder_name === activeFolder ||
-            (r.folder_id && folders.find(f => f.name === activeFolder)?.id && String(r.folder_id) === String(folders.find(f => f.name === activeFolder)?.id))
+            (r.folder_id && activeFolderObj?.id && String(r.folder_id) === String(activeFolderObj.id))
         ));
         if (folderNotes.length === 0) return null;
         // Approximate UTF-8 byte size using char length (avoids encoding every note on every render)
