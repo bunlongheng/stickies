@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { createClient } from "@supabase/supabase-js";
 import { createClient as createBrowserClient } from "@/lib/supabase/client";
@@ -1342,6 +1342,7 @@ export default function NotesMaster() {
     const [incomingNoteIds, setIncomingNoteIds] = useState<Set<string>>(new Set());
     const [removingNoteIds, setRemovingNoteIds] = useState<Set<string>>(new Set());
 
+    const [, startContentTransition] = useTransition();
     const [editorOpen, setEditorOpen] = useState(false);
     const [noteContentLoading, setNoteContentLoading] = useState(false);
     const [editingNote, setEditingNote] = useState<any | null>(null);
@@ -3524,6 +3525,9 @@ const fireIntegrations = (trigger: string, note: any) => {
 
     const openNewNote = useCallback((type?: string) => {
         noteEverDirtyRef.current = false;
+        // Cancel any pending autosave and clear stale content ref — prevents ghost "Untitled" saves
+        if (autoSaveTimerRef.current) { clearTimeout(autoSaveTimerRef.current); autoSaveTimerRef.current = null; }
+        latestContentRef.current = "";
         const isStandup = (activeFolder || "").toLowerCase() === "standup";
         const today = new Date();
         const dateStr = `${today.getMonth() + 1}/${today.getDate()}/${String(today.getFullYear()).slice(-2)}`;
@@ -6846,7 +6850,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 <textarea
                                     ref={editorTextRef}
                                     value={content}
-                                    onChange={(e) => { latestContentRef.current = e.target.value; setContent(e.target.value); handleCursorUpdate(e); }}
+                                    onChange={(e) => { latestContentRef.current = e.target.value; startContentTransition(() => setContent(e.target.value)); handleCursorUpdate(e); }}
                                     onKeyUp={handleCursorUpdate}
                                     onClick={(e) => { closeEditorTools(); handleCursorUpdate(e); }}
                                     onFocus={(e) => { closeEditorTools(); handleCursorUpdate(e); }}
