@@ -6,7 +6,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 const LOCAL_GALLERY_URL = "http://10.0.0.138:3002";
-const PROD_GALLERY_URL  = "https://mermaid-bheng.vercel.app";
+const PROD_GALLERY_URL  = "https://diagram-bheng.vercel.app";
 
 function getGalleryBaseUrl(req: Request): string {
     const host = req.headers.get("host") ?? new URL(req.url).hostname;
@@ -16,8 +16,8 @@ function getGalleryBaseUrl(req: Request): string {
 
 function getSupabase() {
     return createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY!,
+        process.env.BHENG_SUPABASE_URL!,
+        process.env.BHENG_SUPABASE_SERVICE_ROLE_KEY!,
     );
 }
 

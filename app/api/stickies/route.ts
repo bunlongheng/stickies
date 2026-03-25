@@ -77,7 +77,7 @@ async function fetchExternalIdeas(req: Request, folderName: string): Promise<Rec
 async function fetchDiagrams(req: Request): Promise<Record<string, unknown>[]> {
     try {
         const { createClient: createSb } = await import("@supabase/supabase-js");
-        const sb = createSb(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+        const sb = createSb(process.env.BHENG_SUPABASE_URL!, process.env.BHENG_SUPABASE_SERVICE_ROLE_KEY!);
         const { data, error } = await sb
             .from("diagrams")
             .select("id, title, slug, diagram_type, code, created_at, updated_at")
@@ -85,7 +85,7 @@ async function fetchDiagrams(req: Request): Promise<Record<string, unknown>[]> {
         if (error || !data) return [];
         const host = req.headers.get("host") ?? "";
         const isLocal = host.startsWith("localhost") || host.startsWith("10.") || host.startsWith("192.168.");
-        const baseUrl = isLocal ? "http://10.0.0.138:3002" : "https://mermaid-bheng.vercel.app";
+        const baseUrl = isLocal ? "http://10.0.0.138:3002" : "https://diagram-bheng.vercel.app";
         return data.map((d: any, i: number) => {
             const galleryUrl = `${baseUrl}/?id=${d.id}&view=1`;
             return {
@@ -387,7 +387,7 @@ export async function GET(req: Request) {
                 // diagrams: count rows in stickies diagrams table
                 (async () => {
                     const { createClient: createSb } = await import("@supabase/supabase-js");
-                    const sb = createSb(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+                    const sb = createSb(process.env.BHENG_SUPABASE_URL!, process.env.BHENG_SUPABASE_SERVICE_ROLE_KEY!);
                     const { count } = await sb.from("diagrams").select("*", { count: "exact", head: true });
                     return count ?? 0;
                 })(),
