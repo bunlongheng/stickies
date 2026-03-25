@@ -196,6 +196,14 @@ const notesApi = {
 
 const palette12 = ["#FF3B30", "#FF6B4E", "#FF9500", "#FFCC00", "#D4E157", "#34C759", "#00C7BE", "#32ADE6", "#007AFF", "#5856D6", "#AF52DE", "#FF2D55"];
 
+/** Module-level hex→RGB cache — avoids re-parsing the same 12 colors on every mouse event */
+const _hexRgbCache: Record<string, [number, number, number]> = {};
+function hexToRgb(hex: string): [number, number, number] {
+    if (_hexRgbCache[hex]) return _hexRgbCache[hex];
+    const h = hex.replace("#", "").padEnd(6, "0");
+    return _hexRgbCache[hex] = [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+}
+
 const VIVID12 = palette12.slice(0, 12);
 
 /** Step through the curated palette at even intervals so fewer items get
@@ -269,7 +277,7 @@ const TYPE_BADGE: Record<string, { label: string; color: string }> = {
     markdown:   { label: "Markdown",    color: "#a78bfa" },
     html:       { label: "HTML",        color: "#f43f5e" },
     json:       { label: "JSON",        color: "#fbbf24" },
-    mermaid:    { label: "Mermaid",     color: "#06b6d4" },
+    mermaid:    { label: "Diagram",     color: "#06b6d4" },
     voice:      { label: "Voice",       color: "#ef4444" },
     checklist:  { label: "Checklist",   color: "#22c55e" },
 };
@@ -361,7 +369,7 @@ function cleanMermaidContent(text: string): string {
 function mermaidSubType(text: string): string {
     const t = extractMermaid(text);
     const m = t.match(/^(flowchart|graph|sequenceDiagram|classDiagram|stateDiagram(-v2)?|erDiagram|gantt|pie|gitGraph|mindmap|timeline|xychart(-beta)?|quadrantChart|requirementDiagram|zenuml|sankey(-beta)?|block(-beta)?|packet(-beta)?|kanban|architecture(-beta)?|c4container|c4component|c4dynamic|c4deployment)\b/im);
-    if (!m) return "Mermaid";
+    if (!m) return "Diagram";
     const map: Record<string, string> = {
         flowchart: "Flow", graph: "Flow", sequencediagram: "Sequence",
         classdiagram: "Class", statediagram: "State", "statediagram-v2": "State",
@@ -1165,6 +1173,14 @@ const secureCopy = (text: string) => {
 
 type SoundType = "create" | "delete" | "move" | "add" | "check" | "uncheck" | "hover" | "click" | "toast" | "toast-error" | "navigate";
 let _lastHoverSoundAt = 0;
+let _sharedAudioCtx: AudioContext | null = null;
+function getAudioCtx(): AudioContext {
+    if (!_sharedAudioCtx || _sharedAudioCtx.state === "closed") {
+        _sharedAudioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    }
+    if (_sharedAudioCtx.state === "suspended") _sharedAudioCtx.resume();
+    return _sharedAudioCtx;
+}
 function playSound(type: SoundType) {
     try {
         if (type === "hover") {
@@ -1172,7 +1188,7 @@ function playSound(type: SoundType) {
             if (now - _lastHoverSoundAt < 80) return;
             _lastHoverSoundAt = now;
         }
-        const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const ctx = getAudioCtx();
         const now = ctx.currentTime;
         const tone = (freq: number, delay: number, vol: number, dur: number, oscType: OscillatorType = "sine") => {
             const osc = ctx.createOscillator();
@@ -1242,9 +1258,10 @@ function playSound(type: SoundType) {
             sweep(300, 1800, 0, 0.055, 0.14, "sawtooth");
             tone(1400, 0.10, 0.03, 0.07, "square");
         }
-        setTimeout(() => ctx.close(), 800);
     } catch { /* silently ignore — sound is non-critical */ }
 }
+
+const _CODE_TYPES = new Set(["mermaid","javascript","typescript","python","css","sql","bash","html","json","markdown"]);
 
 export default function NotesMaster() {
     const [mounted, setMounted] = useState(false);
@@ -2825,6 +2842,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                 count: noteCountByFolder.get(folderName) || 0,
                 subfolderCount: subfolderCountByFolder.get(folderName) || 0,
                 icon: folderIcons[folderName] || "",
+                parent_folder_name: null as string | null,
             }));
 
         const all = [...foldersFromRows, ...missingFolders];
@@ -2847,14 +2865,13 @@ const fireIntegrations = (trigger: string, note: any) => {
     const currentLevelFolders = useMemo(() => {
         return folders
             .filter((f) => {
-                const row = dbData.find((r) => r.is_folder && String(r.id) === String(f.id));
-                if (folderStack.length === 0) {
-                    return (row?.parent_folder_name ?? null) === null;
-                }
-                return (row?.parent_folder_name ?? null) === activeFolder;
+                // f.parent_folder_name is already set in the folders useMemo — no dbData.find() needed
+                const parentName = f.parent_folder_name ?? null;
+                if (folderStack.length === 0) return parentName === null;
+                return parentName === activeFolder;
             })
             .map((f) => ({ ...f, is_folder: true as const }));
-    }, [folders, folderStack, activeFolder, dbData]);
+    }, [folders, folderStack, activeFolder]);
 
     const displayItems = useMemo(() => {
         const byUpdated = (a: any, b: any) => {
@@ -2937,7 +2954,7 @@ const fireIntegrations = (trigger: string, note: any) => {
             }
         };
         walk(topNodes);
-        const bytes = new TextEncoder().encode(deferredContent).length;
+        const bytes = deferredContent.length;
         const sizeStr = bytes >= 1_048_576 ? `${(bytes / 1_048_576).toFixed(1)} MB` : bytes >= 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${bytes} B`;
         return [`${topNodes.length} blocks`, `${words} words`, sizeStr, images > 0 ? `${images} img` : null, codeBlocks > 0 ? `${codeBlocks} code` : null, tables > 0 ? `${tables} tbl` : null].filter(Boolean) as string[];
     }, [deferredContent]);
@@ -2960,6 +2977,7 @@ const fireIntegrations = (trigger: string, note: any) => {
 
 
     // Search index — rebuilt only when data changes, not on every keystroke
+    // Pre-sorted by date descending so the empty-query case is O(1) slice
     const cmdKIndex = useMemo(() =>
         dbData
             .filter((n: any) => !n.is_folder)
@@ -2970,13 +2988,14 @@ const fireIntegrations = (trigger: string, note: any) => {
                 // Only index first 400 chars of content — enough for a match signal
                 c: (n.content || "").slice(0, 400).toLowerCase(),
                 date: String(n.updated_at || ""),
-            })),
+            }))
+            .sort((a, b) => b.date.localeCompare(a.date)),
     [dbData]);
 
-    // Debounced: wait 2s after user stops typing before running search
+    // Debounced: wait 120ms after user stops typing before running search
     const [deferredCmdKQuery, setDeferredCmdKQuery] = useState(cmdKQuery);
     useEffect(() => {
-        const t = setTimeout(() => setDeferredCmdKQuery(cmdKQuery), 2000);
+        const t = setTimeout(() => setDeferredCmdKQuery(cmdKQuery), 120);
         return () => clearTimeout(t);
     }, [cmdKQuery]);
 
@@ -2990,9 +3009,9 @@ const fireIntegrations = (trigger: string, note: any) => {
                 .filter(item => item.text.toLowerCase().includes(q))
                 .slice(0, 100);
         }
-        const byDate = (a: any, b: any) => b.date.localeCompare(a.date);
         if (!deferredCmdKQuery.trim()) {
-            return cmdKIndex.slice().sort(byDate).slice(0, 30).map(x => x._orig);
+            // Index is pre-sorted by date — no sort needed
+            return cmdKIndex.slice(0, 30).map(x => x._orig);
         }
         const q = deferredCmdKQuery.toLowerCase();
         const matchingFolders = folders
@@ -3080,8 +3099,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         // Use server-side counts (from ?counts=1) for accuracy — dbData only has lazily-loaded notes
         const totalFromCounts = Object.values(folderCounts).reduce((s, c) => s + c, 0);
         const noteCount = totalFromCounts > 0 ? totalFromCounts : dbData.filter(r => !r.is_folder).length;
-        const enc  = new TextEncoder();
-        const bytes = dbData.reduce((acc, r) => acc + enc.encode(r.title || "").byteLength + enc.encode(r.content || "").byteLength, 0);
+        const bytes = dbData.reduce((acc, r) => acc + (r.title || "").length + (r.content || "").length, 0);
         const size  = bytes >= 1_048_576 ? `${(bytes / 1_048_576).toFixed(1)} MB` : `${(bytes / 1024).toFixed(1)} KB`;
         return { folderCount, noteCount, size };
     }, [dbData, folderCounts]);
@@ -4263,7 +4281,7 @@ const fireIntegrations = (trigger: string, note: any) => {
     const detectedType = useMemo(() => detectNoteType(content), [content]);
     // If DB type is null but content is clearly a code/mermaid type, trust the detection
     // so the toggle never shows and the correct renderer is used. Never downgrade a code type.
-    const CODE_TYPES = new Set(["mermaid","javascript","typescript","python","css","sql","bash","html","json","markdown"]);
+    const CODE_TYPES = _CODE_TYPES;
     const effectiveDbType = dbType ?? (CODE_TYPES.has(detectedType) ? detectedType : null);
     const noteType: string = pendingNoteType ?? effectiveDbType ?? detectedType;
 
@@ -4293,7 +4311,7 @@ const fireIntegrations = (trigger: string, note: any) => {
     }, [noteType, listMode, content]);
 
     // Unified active mode label
-    const noteViewMode = stackMode ? "Stack" : mindmapMode ? "Mindmap" : graphMode ? "Graph" : listMode ? "Checklist" : mermaidMode ? "Mermaid" : voiceNote ? "Voice" : codeMode ? noteType : markdownMode ? "Markdown" : htmlMode ? "HTML" : noteType === "rich" ? "Rich" : "Text";
+    const noteViewMode = stackMode ? "Stack" : mindmapMode ? "Mindmap" : graphMode ? "Graph" : listMode ? "Checklist" : mermaidMode ? "Diagram" : voiceNote ? "Voice" : codeMode ? noteType : markdownMode ? "Markdown" : htmlMode ? "HTML" : noteType === "rich" ? "Rich" : "Text";
     // Rich note = TipTap JSON format
     const isRichNote = !listMode && !graphMode && !mindmapMode && !stackMode && noteType === "rich";
 
@@ -4305,8 +4323,8 @@ const fireIntegrations = (trigger: string, note: any) => {
             (r.folder_id && folders.find(f => f.name === activeFolder)?.id && String(r.folder_id) === String(folders.find(f => f.name === activeFolder)?.id))
         ));
         if (folderNotes.length === 0) return null;
-        const enc = new TextEncoder();
-        const bytes = folderNotes.reduce((acc, r) => acc + enc.encode(r.content || "").byteLength, 0);
+        // Approximate UTF-8 byte size using char length (avoids encoding every note on every render)
+        const bytes = folderNotes.reduce((acc, r) => acc + (r.content || "").length, 0);
         const sizeStr = bytes >= 1_048_576 ? `${(bytes / 1_048_576).toFixed(1)} MB`
             : bytes >= 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${bytes} B`;
         return [`${folderNotes.length} files`, sizeStr];
@@ -4316,7 +4334,7 @@ const fireIntegrations = (trigger: string, note: any) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     const noteStats = useMemo(() => {
         if (!editorOpen) return null;
-        const bytes = new TextEncoder().encode(content).length;
+        const bytes = content.length;
         const sizeStr = bytes >= 1_048_576 ? `${(bytes / 1_048_576).toFixed(1)} MB`
             : bytes >= 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${bytes} B`;
         const editedStr = editingNote?.updated_at
@@ -6178,24 +6196,26 @@ const fireIntegrations = (trigger: string, note: any) => {
                         {mermaidMode && (
                             <div className="flex items-center gap-1 flex-shrink-0">
                                 <button type="button"
-                                    onClick={() => {
+                                    onClick={async () => {
                                         const mapUrl = (editingNote as any)?._mapUrl;
                                         if (mapUrl) {
                                             // External note — open its source app link (local or prod)
                                             window.open(mapUrl, "_blank");
                                         } else {
-                                            // Regular mermaid note — open in mermaid editor (local or prod)
-                                            const encoded = LZString.compressToEncodedURIComponent(extractMermaid(content));
                                             const h = window.location.hostname;
                                             const isLocal = h === "localhost" || h === "127.0.0.1";
-                                            const url = isLocal
-                                                ? `http://localhost:3002/?data=${encoded}`
-                                                : `https://mermaid-bheng.vercel.app/?data=${encoded}`;
+                                            const apiBase = isLocal ? "http://localhost:3002" : "https://diagram-bheng.vercel.app";
+                                            const res = await fetch(`${apiBase}/api/share`, {
+                                                method: "POST",
+                                                headers: { "Content-Type": "application/json" },
+                                                body: JSON.stringify({ code: extractMermaid(content) }),
+                                            });
+                                            const { url } = await res.json();
                                             window.open(url, "_blank");
                                         }
                                     }}
                                     className="p-2 sm:p-3 text-zinc-400 hover:text-purple-400 active:text-purple-400 transition flex-shrink-0"
-                                    title={(editingNote as any)?._source === "stickies:diagrams" ? "Open in Sequence Diagram" : (editingNote as any)?._external ? "Open in Mind Map" : "Open in Mermaid editor"}>
+                                    title={(editingNote as any)?._source === "stickies:diagrams" ? "Open in Sequence Diagram" : (editingNote as any)?._external ? "Open in Mind Map" : "Open in Diagram editor"}>
                                     <SparklesIcon className="w-[29px] h-[29px] sm:w-7 sm:h-7" />
                                 </button>
                             </div>
@@ -6857,7 +6877,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                     )}
                 {/* ── Bottom status bar ── */}
                 {editingNote && (() => {
-                    const bytes = new TextEncoder().encode(content).length;
+                    const bytes = content.length;
                     const sizeStr = bytes >= 1024 ? `${(bytes / 1024).toFixed(1)} KB` : bytes > 0 ? `${bytes} B` : null;
                     const extMap: Record<string, string> = {
                         text: ".txt", markdown: ".md", mermaid: ".mmd", json: ".json",
@@ -7114,13 +7134,13 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-white/35 w-6 h-6 pointer-events-none" />
                                     <span className="w-full pl-12 pr-3 py-3 text-sm font-black tracking-tight text-white/30">SEARCH</span>
                                 </button>
-                                <div className="ml-auto flex items-center gap-1">
+                                <div className="ml-auto flex items-center gap-2">
                                     {!editMode && <HeaderIconBtn icon={mainListMode === "list" ? Bars3Icon : Squares2X2Icon} label={mainListMode === "list" ? "List" : "Thumb"} active={!kanbanMode} onClick={() => { setMainListMode(v => v === "thumb" ? "list" : "thumb"); setKanbanMode(false); }} />}
                                     <HeaderIconBtn icon={Cog6ToothIcon} label="Settings" onClick={() => { const hueInt = integrationsRef.current.find(ig => ig.type === "hue"); setLightMode((hueInt?.config?.mode as any) ?? "flash"); setIsGlobalSettings(true); setShowFolderActions(true); }} />
                                 </div>
                             </>
                         ) : (
-                            <div className="ml-auto flex items-center gap-1">
+                            <div className="ml-auto flex items-center gap-2">
                                 {isSelectMode ? (
                                     <div className="flex items-center gap-2">
                                         <span className="text-xs font-bold text-blue-400 select-none">{selectedIds.size} selected</span>
@@ -7285,9 +7305,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     onMouseEnter={(e) => {
                                         playSound("hover");
                                         if (!isListMode) return;
-                                        const c = item.color || item.folder_color || "#888888";
-                                        const hex = c.replace("#", "").padEnd(6, "0");
-                                        const ri = parseInt(hex.slice(0, 2), 16), gi = parseInt(hex.slice(2, 4), 16), bi = parseInt(hex.slice(4, 6), 16);
+                                        const [ri, gi, bi] = hexToRgb(item.color || item.folder_color || "#888888");
                                         const rect = e.currentTarget.getBoundingClientRect();
                                         const x = ((e.clientX - rect.left) / rect.width) * 100, y = ((e.clientY - rect.top) / rect.height) * 100;
                                         const glow = e.currentTarget.querySelector<HTMLElement>("[data-glow]");
@@ -7295,9 +7313,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     }}
                                     onMouseMove={(e) => {
                                         if (!isListMode) return;
-                                        const c = item.color || item.folder_color || "#888888";
-                                        const hex = c.replace("#", "").padEnd(6, "0");
-                                        const ri = parseInt(hex.slice(0, 2), 16), gi = parseInt(hex.slice(2, 4), 16), bi = parseInt(hex.slice(4, 6), 16);
+                                        const [ri, gi, bi] = hexToRgb(item.color || item.folder_color || "#888888");
                                         const rect = e.currentTarget.getBoundingClientRect();
                                         const x = ((e.clientX - rect.left) / rect.width) * 100, y = ((e.clientY - rect.top) / rect.height) * 100;
                                         const glow = e.currentTarget.querySelector<HTMLElement>("[data-glow]");
