@@ -196,6 +196,9 @@ const notesApi = {
 
 const palette12 = ["#FF3B30", "#FF6B4E", "#FF9500", "#FFCC00", "#D4E157", "#34C759", "#00C7BE", "#32ADE6", "#007AFF", "#5856D6", "#AF52DE", "#FF2D55"];
 
+/** True on phones (no physical keyboard expected) — skip attaching keydown shortcuts */
+const IS_PHONE = typeof navigator !== "undefined" && navigator.maxTouchPoints > 1 && typeof screen !== "undefined" && Math.min(screen.width, screen.height) < 768;
+
 /** Module-level hex→RGB cache — avoids re-parsing the same 12 colors on every mouse event */
 const _hexRgbCache: Record<string, [number, number, number]> = {};
 function hexToRgb(hex: string): [number, number, number] {
@@ -2234,6 +2237,7 @@ export default function NotesMaster() {
 
     // Global keydown — Cmd+K/F/D/B, Escape fullscreen, Cmd+Z undo-delete (all [] deps, ref-based)
     useEffect(() => {
+        if (IS_PHONE) return;
         const handler = (e: KeyboardEvent) => {
             const mod = e.metaKey || e.ctrlKey;
             // Escape → exit fullscreen
@@ -3486,6 +3490,7 @@ const fireIntegrations = (trigger: string, note: any) => {
 
     // Cmd+S → save + toast
     useEffect(() => {
+        if (IS_PHONE) return;
         const handler = (e: KeyboardEvent) => {
             if ((e.metaKey || e.ctrlKey) && e.key === "s") {
                 e.preventDefault();
@@ -3503,6 +3508,7 @@ const fireIntegrations = (trigger: string, note: any) => {
 
     // Cmd+R → refresh notes (prevents browser reload)
     useEffect(() => {
+        if (IS_PHONE) return;
         const handler = (e: KeyboardEvent) => {
             if ((e.metaKey || e.ctrlKey) && e.key === "r") {
                 e.preventDefault();
@@ -3538,6 +3544,7 @@ const fireIntegrations = (trigger: string, note: any) => {
 
     // Cmd+N — open new note (always global, but can't override OS-level browser new-tab)
     useEffect(() => {
+        if (IS_PHONE) return;
         const handler = (e: KeyboardEvent) => {
             if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === "n") {
                 e.preventDefault();
@@ -4656,7 +4663,7 @@ const fireIntegrations = (trigger: string, note: any) => {
     }, []);
 
     useEffect(() => {
-        if (!showAddTask) return;
+        if (IS_PHONE || !showAddTask) return;
         const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setShowAddTask(false); };
         window.addEventListener("keydown", onKey);
         return () => window.removeEventListener("keydown", onKey);
@@ -5331,11 +5338,11 @@ const fireIntegrations = (trigger: string, note: any) => {
 
         document.addEventListener("mousedown", onPointerDown);
         document.addEventListener("touchstart", onPointerDown, { passive: true });
-        document.addEventListener("keydown", onKeyDown);
+        if (!IS_PHONE) document.addEventListener("keydown", onKeyDown);
         return () => {
             document.removeEventListener("mousedown", onPointerDown);
             document.removeEventListener("touchstart", onPointerDown);
-            document.removeEventListener("keydown", onKeyDown);
+            if (!IS_PHONE) document.removeEventListener("keydown", onKeyDown);
         };
     }, [editorOpen, showColorPicker, showSwitcher, closeEditorTools, goBack]);
 
