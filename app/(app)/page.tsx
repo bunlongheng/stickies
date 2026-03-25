@@ -3987,24 +3987,18 @@ const fireIntegrations = (trigger: string, note: any) => {
             const existingNote = dbData.find((r) => String(r.id) === noteId);
             const alreadyInTrash = existingNote?.folder_name === "TRASH";
             try {
-                // Animate out first
-                setRemovingNoteIds((prev) => new Set([...prev, noteId]));
-                await new Promise(r => setTimeout(r, 360));
-                setRemovingNoteIds((prev) => { const s = new Set(prev); s.delete(noteId); return s; });
-
+                const trashedAt = new Date().toISOString();
+                // Remove from list immediately, fire API in background
                 if (permanent || alreadyInTrash) {
-                    // Permanent delete — only for notes already in TRASH
-                    await notesApi.delete(noteId);
                     setDbData((prev) => prev.filter((row) => String(row.id) !== noteId));
                     if (existingNote?.folder_name) removeFromCachedNotes(String(existingNote.folder_name), noteId);
                     showToast(`"${label}" deleted`, "#FF3B30");
+                    void notesApi.delete(noteId);
                 } else {
-                    // Soft delete — move to TRASH
-                    const trashedAt = new Date().toISOString();
-                    await notesApi.update(noteId, { folder_name: "TRASH", trashed_at: trashedAt });
                     setDbData((prev) => prev.map((r) => String(r.id) === noteId ? { ...r, folder_name: "TRASH", trashed_at: trashedAt } : r));
                     if (existingNote?.folder_name) removeFromCachedNotes(String(existingNote.folder_name), noteId);
                     showToast(`"${label}" → Trash`, resolvedColor);
+                    void notesApi.update(noteId, { folder_name: "TRASH", trashed_at: trashedAt });
                 }
                 localStorage.removeItem(ACTIVE_DRAFT_KEY);
                 setPendingShare(null);
@@ -4035,15 +4029,12 @@ const fireIntegrations = (trigger: string, note: any) => {
             void notesApi.update(String(pendingDeleteRef.current.note.id), { folder_name: "TRASH", trashed_at: new Date().toISOString() });
             pendingDeleteRef.current = null;
         }
-        // Slide-out animation, then update state
-        setRemovingNoteIds((prev) => new Set([...prev, noteId]));
-        setTimeout(() => {
-            setRemovingNoteIds((prev) => { const s = new Set(prev); s.delete(noteId); return s; });
-            setDbData((prev) => alreadyInTrash
-                ? prev.filter((r) => String(r.id) !== noteId)
-                : prev.map((r) => String(r.id) === noteId ? { ...r, folder_name: "TRASH", trashed_at: new Date().toISOString() } : r)
-            );
-        }, 360);
+        // Remove from list immediately — don't wait for animation or API
+        const trashedAt = new Date().toISOString();
+        setDbData((prev) => alreadyInTrash
+            ? prev.filter((r) => String(r.id) !== noteId)
+            : prev.map((r) => String(r.id) === noteId ? { ...r, folder_name: "TRASH", trashed_at: trashedAt } : r)
+        );
         localStorage.removeItem(ACTIVE_DRAFT_KEY);
         setPendingShare(null);
         closeEditorTools();
