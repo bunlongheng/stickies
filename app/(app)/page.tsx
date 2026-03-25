@@ -3254,15 +3254,16 @@ const fireIntegrations = (trigger: string, note: any) => {
             // Use latestContentRef so blur-triggered saves get the current editor content
             // even when the 300ms debounce hasn't flushed to React state yet
             const saveContent = latestContentRef.current || content;
-            // Auto-title: only derive when explicitly requested (Cmd+S or blur)
             const hasRealTitle = titleRaw.current.trim() && titleRaw.current.trim().toLowerCase() !== "untitled";
-            const resolvedTitle = (deriveTitle && !hasRealTitle) ? (() => {
+            // For new notes with no title, always derive from content — never save as bare "Untitled"
+            const shouldDerive = deriveTitle || (isNewNoteDraft && !hasRealTitle);
+            const resolvedTitle = (shouldDerive && !hasRealTitle) ? (() => {
                 const isRich = saveContent.trimStart().startsWith("{");
                 if (isRich) return extractRichTextTitle(saveContent) || "Untitled";
                 const firstLine = saveContent.trim().split("\n").find(l => l.trim()) || "";
                 return firstLine.replace(/^#+\s*/, "").slice(0, 60).trim() || "Untitled";
             })() : (titleRaw.current.trim() || "Untitled");
-            if (deriveTitle && !hasRealTitle) setTitle(resolvedTitle);
+            if (shouldDerive && !hasRealTitle) setTitle(resolvedTitle);
 
             const folderName = targetFolder || activeFolder || editingNote?.folder_name || "General";
             const activeFolderRow = folderStack.at(-1);
