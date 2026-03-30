@@ -3818,10 +3818,8 @@ const fireIntegrations = (trigger: string, note: any) => {
 
     const openNoteLinkQr = useCallback(() => {
         const base = typeof window !== "undefined" ? window.location.origin : "";
-        const folder = targetFolder || activeFolder || editingNote?.folder_name || "General";
-        const noteTitle = title.trim() || editingNote?.title || "Untitled";
         const noteId = editingNote?.id ? String(editingNote.id) : "";
-        const url = `${base}/?folder=${encodeURIComponent(folder.toLowerCase())}&note=${encodeURIComponent(noteTitle.toLowerCase())}${noteId ? `&noteId=${noteId}` : ""}`;
+        const url = noteId ? `${base}/?noteId=${noteId}` : base;
         setQrData(url);
         setQrIsBurn(false);
         setQrType("link");
