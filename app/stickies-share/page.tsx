@@ -171,7 +171,7 @@ export default function StickiesShare() {
                 margin: 0,
                 padding: "16px 20px 40px 20px",
                 fontFamily: "'Fira Code', 'Consolas', 'Menlo', monospace",
-                fontSize: "clamp(9px, 1.8vw, 11px)",
+                fontSize: "clamp(7px, 1.4vw, 9px)",
                 lineHeight: 1.7,
                 color: "#111",
                 whiteSpace: "pre-wrap",
