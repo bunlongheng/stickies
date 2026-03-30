@@ -4190,7 +4190,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         const loadedTitle = rawTitle.trimStart().startsWith("{") ? extractRichTextTitle(rawTitle) : rawTitle;
         // Treat "Untitled" as no title so first-line auto-derive runs on next save
         setTitle(loadedTitle.toLowerCase() === "untitled" ? "" : loadedTitle);
-        setContent(note.content != null ? (note.type === "mermaid" || detectMermaid(note.content || "") ? cleanMermaidContent(note.content) : note.content) : "");
+        setContent(note.content != null ? (note.type === "mermaid" || detectMermaid(note.content || "") ? cleanMermaidContent(note.content) : (note.type !== "rich" ? (() => { try { const p = JSON.parse(note.content); if (p?.type === "doc") return tiptapToPlainText(p).replace(/\n{3,}/g, "\n\n").trim(); } catch {} return note.content; })() : note.content)) : "");
         setImages((note as any).images ?? []);
         setTargetFolder(note.folder_name || activeFolder || "General");
         setNoteColor(note.folder_color || folders.find((f: any) => f.name === (note.folder_name || activeFolder))?.color || palette12[0]);
@@ -4213,7 +4213,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                         if (openingNoteIdRef.current !== noteId) return;
                         setDbData((prev: any[]) => prev.map((r) => String(r.id) === noteId ? { ...r, ...fetched } : r));
                         setEditingNote(fetched);
-                        const body = (fetched.type === "mermaid" || detectMermaid(fetched.content || "")) ? cleanMermaidContent(fetched.content || "") : (fetched.content || "");
+                        const body = (fetched.type === "mermaid" || detectMermaid(fetched.content || "")) ? cleanMermaidContent(fetched.content || "") : (fetched.type !== "rich" ? (() => { try { const p = JSON.parse(fetched.content || ""); if (p?.type === "doc") return tiptapToPlainText(p).replace(/\n{3,}/g, "\n\n").trim(); } catch {} return fetched.content || ""; })() : (fetched.content || ""));
                         setContent(body);
                         if (fetched.id && looksLikeMarkdown(fetched.content || "")) setMarkdownModeNotes((p: Set<string>) => new Set([...p, String(fetched.id)]));
                         if (fetched.id && (fetched.list_mode || fetched.type === "checklist")) setListModeNotes((p: Set<string>) => new Set([...p, String(fetched.id)]));
@@ -9096,28 +9096,46 @@ const fireIntegrations = (trigger: string, note: any) => {
                         <div className="flex items-center gap-3 px-5 py-4 border-b border-white/5">
                             <div className="flex-1">
                                 <p className="text-xs font-black text-white tracking-wide">Public</p>
-                                <p className="text-[10px] text-zinc-500 mt-0.5">Anyone with the link can view</p>
+                                <p className="text-[10px] text-zinc-500 mt-0.5">
+                                    {publicLinkCopied ? "Link copied to clipboard ✓" : "Anyone with the link can view"}
+                                </p>
                             </div>
+                            {/* Toggle switch */}
                             <button
                                 type="button"
+                                role="switch"
+                                aria-checked={publicLinkCopied}
                                 onClick={() => {
                                     const noteId = editingNote?.id ? String(editingNote.id) : "";
                                     if (!noteId) return;
                                     const url = `${window.location.origin}/?noteId=${noteId}`;
                                     secureCopy(url).then(() => {
                                         setPublicLinkCopied(true);
-                                        setTimeout(() => setPublicLinkCopied(false), 2500);
+                                        setTimeout(() => setPublicLinkCopied(false), 3000);
                                     });
                                 }}
-                                className="flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wide transition-all"
+                                className="flex-shrink-0 relative transition-all duration-200"
                                 style={{
-                                    background: publicLinkCopied ? "#22c55e" : activeAccentColor,
-                                    color: "#000",
-                                    minWidth: 80,
-                                    justifyContent: "center",
+                                    width: 44,
+                                    height: 26,
+                                    borderRadius: 13,
+                                    background: publicLinkCopied ? "#22c55e" : "rgba(255,255,255,0.12)",
+                                    border: "none",
+                                    cursor: "pointer",
+                                    padding: 0,
                                 }}
                             >
-                                {publicLinkCopied ? "✓ Copied" : "Copy Link"}
+                                <span style={{
+                                    position: "absolute",
+                                    top: 3,
+                                    left: publicLinkCopied ? 21 : 3,
+                                    width: 20,
+                                    height: 20,
+                                    borderRadius: "50%",
+                                    background: "#fff",
+                                    transition: "left 0.2s cubic-bezier(0.4,0,0.2,1)",
+                                    boxShadow: "0 1px 4px rgba(0,0,0,0.3)",
+                                }} />
                             </button>
                         </div>
 
