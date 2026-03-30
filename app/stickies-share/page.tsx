@@ -22,6 +22,20 @@ export default function StickiesShare() {
 
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
+
+        const noteId = params.get("noteId");
+        if (noteId) {
+            fetch(`/api/stickies/public?noteId=${encodeURIComponent(noteId)}`)
+                .then(async (res) => {
+                    if (!res.ok) { setState("error"); return; }
+                    const data = await res.json();
+                    setNote({ title: data.title ?? "", content: data.content ?? "", color: data.folder_color ?? "", folder_name: "" });
+                    setState("ready");
+                })
+                .catch(() => setState("error"));
+            return;
+        }
+
         const token = params.get("token");
         if (token) {
             setIsBurnLink(true);
