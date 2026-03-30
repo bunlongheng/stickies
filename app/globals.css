@@ -137,6 +137,20 @@ body {
   min-width: 0;
 }
 
+/* Force all elements inside editor to 10px — override browser heading defaults */
+.ProseMirror h1, .tiptap h1,
+.ProseMirror h2, .tiptap h2,
+.ProseMirror h3, .tiptap h3,
+.ProseMirror h4, .tiptap h4,
+.ProseMirror p,  .tiptap p,
+.ProseMirror li, .tiptap li,
+.ProseMirror td, .tiptap td,
+.ProseMirror th, .tiptap th,
+.ProseMirror blockquote, .tiptap blockquote {
+  font-size: 10px !important;
+  line-height: 1.6 !important;
+}
+
 /* Images — always shrink to fit */
 .ProseMirror img,
 .tiptap img,
