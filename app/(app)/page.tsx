@@ -1401,6 +1401,7 @@ export default function NotesMaster() {
     const [qrType, setQrType] = useState<"link" | "data" | "burn">("link");
     const [qrLinkCopied, setQrLinkCopied] = useState(false);
     const [sharePickerOpen, setSharePickerOpen] = useState(false);
+    const [publicLinkCopied, setPublicLinkCopied] = useState(false);
     const [calModalOpen, setCalModalOpen] = useState(false);
     const [calTarget, setCalTarget] = useState<"apple" | "google">("google");
     const [calDate, setCalDate] = useState("");
@@ -9089,6 +9090,35 @@ const fireIntegrations = (trigger: string, note: any) => {
                         <div className="px-5 py-4 border-b border-white/10">
                             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400">Share Note</p>
                             <p className="text-xs font-black text-white truncate mt-0.5">{title.trim() || editingNote?.title || "Untitled"}</p>
+                        </div>
+
+                        {/* Public toggle */}
+                        <div className="flex items-center gap-3 px-5 py-4 border-b border-white/5">
+                            <div className="flex-1">
+                                <p className="text-xs font-black text-white tracking-wide">Public</p>
+                                <p className="text-[10px] text-zinc-500 mt-0.5">Anyone with the link can view</p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    const noteId = editingNote?.id ? String(editingNote.id) : "";
+                                    if (!noteId) return;
+                                    const url = `${window.location.origin}/?noteId=${noteId}`;
+                                    secureCopy(url).then(() => {
+                                        setPublicLinkCopied(true);
+                                        setTimeout(() => setPublicLinkCopied(false), 2500);
+                                    });
+                                }}
+                                className="flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wide transition-all"
+                                style={{
+                                    background: publicLinkCopied ? "#22c55e" : activeAccentColor,
+                                    color: "#000",
+                                    minWidth: 80,
+                                    justifyContent: "center",
+                                }}
+                            >
+                                {publicLinkCopied ? "✓ Copied" : "Copy Link"}
+                            </button>
                         </div>
 
                         {/* Link row — QR · Data · Burn */}
