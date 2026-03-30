@@ -23,8 +23,8 @@ export async function middleware(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser()
 
-  // If not logged in and a noteId is present, redirect to public share page
-  if (!user) {
+  // If not logged in and a noteId is present on a page route, redirect to public share page
+  if (!user && !request.nextUrl.pathname.startsWith('/api/')) {
     const noteId = request.nextUrl.searchParams.get('noteId')
     if (noteId) {
       const url = request.nextUrl.clone()
