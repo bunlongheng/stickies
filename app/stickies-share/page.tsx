@@ -139,44 +139,37 @@ export default function StickiesShare() {
 
     return (
         <div style={{ background: "#fff", minHeight: "100vh", position: "relative" }}>
-            {/* Minimal top bar */}
-            <div style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                padding: "10px 16px",
-                borderBottom: "1px solid #e5e5e5",
-            }}>
-                {isBurnLink && (
-                    <span style={{ color: "#bbb", fontFamily: "monospace", fontSize: 11 }}>🔥 burn link</span>
-                )}
-                <button
-                    ref={copyBtnRef}
-                    type="button"
-                    onClick={handleCopy}
-                    disabled={hasBurned}
-                    style={{
-                        background: copied ? "#f0fdf4" : "#f5f5f5",
-                        border: `1px solid ${copied ? "#bbf7d0" : "#e0e0e0"}`,
-                        color: copied ? "#16a34a" : "#555",
-                        fontFamily: "monospace",
-                        fontSize: 11,
-                        padding: "4px 10px",
-                        cursor: hasBurned ? "not-allowed" : "pointer",
-                        opacity: hasBurned ? 0.4 : 1,
-                        transition: "all 0.15s",
-                    }}
-                >
-                    {copied ? "copied" : "copy"}
-                </button>
-            </div>
+            {/* Floating copy button — top right */}
+            <button
+                ref={copyBtnRef}
+                type="button"
+                onClick={handleCopy}
+                disabled={hasBurned}
+                style={{
+                    position: "fixed",
+                    top: 12,
+                    right: 14,
+                    background: copied ? "#f0fdf4" : "#f5f5f5",
+                    border: `1px solid ${copied ? "#bbf7d0" : "#e0e0e0"}`,
+                    color: copied ? "#16a34a" : "#555",
+                    fontFamily: "monospace",
+                    fontSize: 10,
+                    padding: "3px 9px",
+                    cursor: hasBurned ? "not-allowed" : "pointer",
+                    opacity: hasBurned ? 0.4 : 1,
+                    transition: "all 0.15s",
+                    zIndex: 10,
+                }}
+            >
+                {copied ? "✓ copied" : isBurnLink ? "🔥 copy" : "copy"}
+            </button>
 
             {/* Raw content */}
             <pre style={{
                 margin: 0,
-                padding: "24px 20px",
+                padding: "16px 20px",
                 fontFamily: "'Fira Code', 'Consolas', 'Menlo', monospace",
-                fontSize: 11,
+                fontSize: 10,
                 lineHeight: 1.65,
                 color: "#111",
                 whiteSpace: "pre-wrap",
