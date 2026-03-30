@@ -3594,7 +3594,7 @@ const fireIntegrations = (trigger: string, note: any) => {
             color: noteColor || editingNote?.color || "",
         };
         const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
-        setQrData(`${base}/stickies-share?data=${encoded}`);
+        setQrData(`${base}/share?data=${encoded}`);
         setQrIsBurn(false);
         setQrLinkCopied(false);
         setQrModalOpen(true);
@@ -3617,7 +3617,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         const text = [noteTitle, noteContent].filter(Boolean).join("\n\n").slice(0, 1500);
         const base64 = btoa(unescape(encodeURIComponent(text)));
         const base = typeof window !== "undefined" ? window.location.origin : "https://bheng.vercel.app";
-        setQrData(`${base}/stickies-share?clip=${base64}`);
+        setQrData(`${base}/share?clip=${base64}`);
         setQrIsBurn(false);
         setQrType("data");
         setQrLinkCopied(false);
@@ -3777,7 +3777,7 @@ const fireIntegrations = (trigger: string, note: any) => {
             if (!res.ok) { showToast("Failed to create link"); return; }
             const { token } = await res.json();
             const base = typeof window !== "undefined" ? window.location.origin : "https://bheng.vercel.app";
-            const burnUrl = `${base}/stickies-share?token=${token}`;
+            const burnUrl = `${base}/share?token=${token}`;
             setQrData(burnUrl);
             setQrIsBurn(true);
             setQrType("burn");
