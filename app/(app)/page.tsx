@@ -1640,13 +1640,6 @@ export default function NotesMaster() {
                 // If there's no session on first load, mark that we're waiting for login
                 if (!session) sawInitialSession = true;
             }
-            if (event === "SIGNED_OUT") {
-                // Session expired or logged out — redirect to login, preserve noteId if one is open
-                const noteId = new URLSearchParams(window.location.search).get("noteId");
-                const login = noteId ? `/login?next=${encodeURIComponent(`/?noteId=${noteId}`)}` : "/login";
-                window.location.href = login;
-                return;
-            }
             if (event === "SIGNED_IN" && (sawInitialSession || !syncHadTokenRef.current)) {
                 // Fresh login — sync() may have fired before session was ready, re-run it now
                 sessionStorage.removeItem("stickies:session-started");
