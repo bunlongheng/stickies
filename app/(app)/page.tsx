@@ -9,7 +9,6 @@ import dynamic from "next/dynamic";
 import LZString from "lz-string";
 const RichTextEditor = dynamic(() => import("@/components/RichTextEditor").then(m => m.RichTextEditor), { ssr: false });
 const MermaidRenderer = dynamic(() => import("@/components/MermaidRenderer").then(m => m.MermaidRenderer), { ssr: false });
-const VoiceRecorder = dynamic(() => import("@/components/VoiceRecorder").then(m => m.VoiceRecorder), { ssr: false });
 const MarkdownWithMermaid = dynamic(() => import("@/components/MarkdownWithMermaid").then(m => m.MarkdownWithMermaid), { ssr: false });
 const CodeViewer = dynamic(() => import("@/components/CodeViewer").then(m => m.CodeViewer), { ssr: false });
 
@@ -59,7 +58,6 @@ import Squares2X2Icon from "@heroicons/react/24/outline/Squares2X2Icon";
 import ViewColumnsIcon from "@heroicons/react/24/outline/ViewColumnsIcon";
 import HeartIcon from "@heroicons/react/24/outline/HeartIcon";
 import HeartSolidIcon from "@heroicons/react/24/solid/HeartIcon";
-import MicrophoneIcon from "@heroicons/react/24/outline/MicrophoneIcon";
 import XMarkIcon from "@heroicons/react/24/outline/XMarkIcon";
 import ArrowTopRightOnSquareIcon from "@heroicons/react/24/outline/ArrowTopRightOnSquareIcon";
 import ComputerDesktopIcon from "@heroicons/react/24/outline/ComputerDesktopIcon";
@@ -291,7 +289,6 @@ const TYPE_BADGE: Record<string, { label: string; color: string }> = {
     html:       { label: "HTML",        color: "#f43f5e" },
     json:       { label: "JSON",        color: "#fbbf24" },
     mermaid:    { label: "Diagram",     color: "#06b6d4" },
-    voice:      { label: "Voice",       color: "#ef4444" },
     checklist:  { label: "Checklist",   color: "#22c55e" },
 };
 
@@ -329,12 +326,6 @@ function extractRichTextTitle(json: string): string {
 function detectNoteType(content: string): string {
     const t = content.trim();
     if (!t) return "text";
-    if (t.startsWith('{"_type":"voice"') || t.startsWith('[{"_type":"voice"')) {
-        try {
-            const p = JSON.parse(t);
-            if (p?._type === "voice" || (Array.isArray(p) && p[0]?._type === "voice")) return "voice";
-        } catch {}
-    }
     // TipTap JSON — must check before generic JSON detection
     try { const p = JSON.parse(t); if (p?.type === "doc" && Array.isArray(p.content)) return "rich"; } catch {}
     if (MERMAID_KEYWORDS.test(extractMermaid(t))) return "mermaid";
@@ -417,17 +408,6 @@ function detectMarkdown(text: string): boolean {
 /** Strip base64 images and HTML tags for safe single-line preview text */
 function previewText(raw: string): string {
     const t = raw.trim();
-    // Voice notes: show summary or transcript
-    if (t.startsWith('{"_type":"voice"') || t.startsWith('[{"_type":"voice"')) {
-        try {
-            const p = JSON.parse(t);
-            const entries = Array.isArray(p) ? p : [p];
-            if (entries[0]?._type === "voice") {
-                const all = entries.map((v: any) => v.transcript || v.summary).filter(Boolean).join(" · ");
-                return all || `🎙 ${entries.length} voice note${entries.length > 1 ? "s" : ""}`;
-            }
-        } catch {}
-    }
     return raw
         .replace(/!\[[^\]]*\]\(data:[^)]+\)/g, "[image]") // base64 images → placeholder
         .replace(/<[^>]+>/g, "")                           // HTML tags
@@ -632,207 +612,6 @@ function layoutMindmap(title: string, roots: MindNode[]): { nodes: PlacedNode[];
     });
 
     return { nodes: placed, width: svgW, height: svgH, nodeW };
-}
-
-// ── Voice Note Player ─────────────────────────────────────────────────────────
-function VoiceNotePlayer({ data, index, onTranscriptChange, onDelete, onConvertToText }: {
-    data: { audioUrl: string; transcript: string; summary: string; duration: number; recordedAt: string };
-    index: number;
-    onTranscriptChange?: (t: string) => void;
-    onDelete?: () => void;
-    onConvertToText: () => void;
-}) {
-    const [playing, setPlaying] = useState(false);
-    const [currentTime, setCurrentTime] = useState(0);
-    const [transcript, setTranscript] = useState(data.transcript || "");
-    const audioRef = useRef<HTMLAudioElement>(null);
-    const canvasRef = useRef<HTMLCanvasElement>(null);
-    const txRef = useRef<HTMLTextAreaElement>(null);
-
-    // Auto-size transcript on mount so full text is visible without focus
-    useEffect(() => {
-        const el = txRef.current;
-        if (el) { el.style.height = "auto"; el.style.height = el.scrollHeight + "px"; }
-    }, [transcript]);
-
-    const fmt = (s: number) => `${Math.floor(s / 60).toString().padStart(2, "0")}:${Math.floor(s % 60).toString().padStart(2, "0")}`;
-
-    // Karaoke: split transcript into words and highlight proportionally
-    const words = transcript.trim().split(/(\s+)/);
-    const nonSpaceWords = words.filter(w => w.trim().length > 0);
-    const progress = data.duration > 0 ? currentTime / data.duration : 0;
-    const highlightedCount = Math.ceil(progress * nonSpaceWords.length);
-    let wordIdx = 0;
-
-    // Seed bars from transcript length for a unique-looking static waveform
-    const staticBars = React.useMemo(() => {
-        const seed = data.transcript?.length || data.duration * 10 || 42;
-        return Array.from({ length: 40 }, (_, i) => {
-            const x = Math.sin(i * 0.7 + seed * 0.01) * 0.5 + 0.5;
-            return 0.08 + x * 0.75;
-        });
-    }, [data.transcript, data.duration]);
-
-    const drawBars = React.useCallback((progress = 0, analyser?: AnalyserNode) => {
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) return;
-        const W = canvas.width;
-        const H = canvas.height;
-        ctx.clearRect(0, 0, W, H);
-
-        const count = 40;
-        const barW = (W / count) - 2;
-
-        let freqData: Uint8Array<ArrayBuffer> | null = null;
-        if (analyser) {
-            freqData = new Uint8Array(analyser.frequencyBinCount) as Uint8Array<ArrayBuffer>;
-            analyser.getByteFrequencyData(freqData);
-        }
-
-        for (let i = 0; i < count; i++) {
-            const played = i / count < progress;
-            let h: number;
-            if (freqData) {
-                const idx = Math.floor((i / count) * (freqData.length * 0.6));
-                h = Math.max(3, (freqData[idx] / 255) * H * 0.95);
-            } else {
-                h = staticBars[i] * H;
-            }
-            const x = i * (W / count);
-            const y = (H - h) / 2;
-            ctx.fillStyle = played ? "#ef4444" : "rgba(255,255,255,0.18)";
-            if (played) { ctx.shadowBlur = 4; ctx.shadowColor = "#ef4444"; }
-            else ctx.shadowBlur = 0;
-            ctx.beginPath();
-            ctx.roundRect(x + 1, y, barW, h, 2);
-            ctx.fill();
-        }
-        ctx.shadowBlur = 0;
-    }, [staticBars]);
-
-    // Redraw bars on time update
-    useEffect(() => {
-        drawBars(currentTime / (data.duration || 1));
-    }, [currentTime, data.duration, drawBars]);
-
-    const toggle = () => {
-        const a = audioRef.current;
-        if (!a) return;
-        if (playing) {
-            a.pause();
-            setPlaying(false);
-        } else {
-            a.play().then(() => setPlaying(true)).catch((err) => console.warn("Audio play failed:", err));
-        }
-    };
-
-    return (
-        <div className="flex flex-col px-5 py-4 border-b border-zinc-800/40 gap-3">
-            <audio ref={audioRef} src={data.audioUrl} preload="metadata"
-                onTimeUpdate={(e) => setCurrentTime((e.target as HTMLAudioElement).currentTime)}
-                onEnded={() => { setPlaying(false); setCurrentTime(0); }}
-                onError={(e) => console.warn("Audio load error:", (e.target as HTMLAudioElement).error)} />
-
-            {/* Top row: play + waveform + duration + spacer + timestamp + actions */}
-            <div className="flex items-center gap-3">
-                {/* Row number */}
-                <span className="text-[10px] font-black text-zinc-600 w-5 flex-shrink-0 select-none tabular-nums">{index + 1}</span>
-
-                {/* Play button */}
-                <button onClick={toggle}
-                    className="w-10 h-10 flex-shrink-0 rounded-full flex items-center justify-center bg-red-500 hover:bg-red-400 active:scale-95 transition-all"
-                    style={{ boxShadow: "0 0 14px rgba(239,68,68,0.5)" }}>
-                    {playing
-                        ? <span className="flex gap-[3px]"><span className="w-[3px] h-3.5 bg-white rounded-full" /><span className="w-[3px] h-3.5 bg-white rounded-full" /></span>
-                        : <span className="w-0 h-0 border-t-[6px] border-b-[6px] border-l-[11px] border-t-transparent border-b-transparent border-l-white ml-0.5" />}
-                </button>
-
-                {/* Waveform */}
-                <canvas ref={canvasRef} width={240} height={48} style={{ background: "transparent", width: 80, height: 22, flexShrink: 0 }} />
-
-                {/* Duration */}
-                <span className="text-[11px] font-mono text-zinc-500 flex-shrink-0 tabular-nums">{fmt(currentTime > 0 ? currentTime : data.duration)}</span>
-
-                <div className="flex-1" />
-
-                {/* Timestamp */}
-                {data.recordedAt && (
-                    <span className="text-[9px] text-zinc-600 font-mono flex-shrink-0 hidden sm:block">
-                        {new Date(data.recordedAt).toLocaleString()}
-                    </span>
-                )}
-
-                {/* Action buttons */}
-                <div className="flex items-center gap-1 flex-shrink-0">
-                    <a
-                        href={data.audioUrl}
-                        download={`voice-${data.recordedAt ? new Date(data.recordedAt).toISOString().slice(0,19).replace(/[:.]/g,"-") : index + 1}.webm`}
-                        className="w-10 h-10 flex items-center justify-center text-zinc-500 hover:text-cyan-400 transition-colors"
-                        title="Download">
-                        <ArrowDownTrayIcon className="w-5 h-5" />
-                    </a>
-                    {transcript && (
-                        <button
-                            onClick={() => navigator.clipboard.writeText(transcript)}
-                            className="w-10 h-10 flex items-center justify-center text-zinc-500 hover:text-emerald-400 transition-colors"
-                            title="Copy transcript">
-                            <DocumentDuplicateIcon className="w-5 h-5" />
-                        </button>
-                    )}
-                    {onDelete && (
-                        <button onClick={onDelete}
-                            className="w-10 h-10 flex items-center justify-center text-zinc-500 hover:text-red-500 transition-colors"
-                            title="Delete">
-                            <XMarkIcon className="w-5 h-5" />
-                        </button>
-                    )}
-                </div>
-            </div>
-
-            {/* Transcript */}
-            <div className="ml-8 flex flex-col gap-1">
-                {playing && transcript ? (
-                    <p className="text-[12px] leading-relaxed text-zinc-400" style={{ fontFamily: "inherit" }}>
-                        {words.map((chunk, i) => {
-                            if (!chunk.trim()) return <span key={i}>{chunk}</span>;
-                            const isHighlighted = wordIdx < highlightedCount;
-                            const isCurrent = wordIdx === highlightedCount - 1;
-                            wordIdx++;
-                            return (
-                                <span key={i} style={{
-                                    color: isHighlighted ? "#ffffff" : "#52525b",
-                                    background: isCurrent ? "rgba(239,68,68,0.25)" : "transparent",
-                                    borderRadius: 2,
-                                    transition: "color 0.1s, background 0.1s",
-                                    padding: isCurrent ? "0 2px" : undefined,
-                                }}>{chunk}</span>
-                            );
-                        })}
-                    </p>
-                ) : (
-                    <textarea
-                        ref={txRef}
-                        value={transcript}
-                        onChange={(e) => {
-                            setTranscript(e.target.value);
-                            onTranscriptChange?.(e.target.value);
-                            e.target.style.height = "auto";
-                            e.target.style.height = e.target.scrollHeight + "px";
-                        }}
-                        placeholder="No transcript…"
-                        className="w-full bg-transparent text-[12px] text-zinc-300 leading-relaxed resize-none outline-none border-none placeholder:text-zinc-600 overflow-hidden"
-                        rows={1}
-                        style={{ fontFamily: "inherit", height: "auto", minHeight: "1.5rem" }}
-                    />
-                )}
-                {data.summary && (
-                    <p className="text-[11px] text-zinc-600 leading-snug italic">{data.summary}</p>
-                )}
-            </div>
-        </div>
-    );
 }
 
 function MindmapView({ title, content, onToggle }: { title: string; content: string; onToggle?: (nodeIdx: number) => void }) {
@@ -1062,7 +841,6 @@ const FOLDER_HERO_ICONS: { key: string; label: string; Icon: React.ComponentType
     { key: "SparklesIcon",             label: "sparkles",     Icon: SparklesIcon },
     { key: "FireIcon",                 label: "fire",         Icon: FireIcon },
     { key: "LightBulbIcon",            label: "idea",         Icon: LightBulbIcon },
-    { key: "MicrophoneIcon",           label: "mic",          Icon: MicrophoneIcon },
     { key: "MusicalNoteIcon",          label: "music",        Icon: MusicalNoteIcon },
     { key: "CameraIcon",               label: "camera",       Icon: CameraIcon },
     { key: "FilmIcon",                 label: "film",         Icon: FilmIcon },
@@ -1508,9 +1286,7 @@ export default function NotesMaster() {
     const [codeEditMode, setCodeEditMode] = useState(false);
     const [typeFilter, setTypeFilter] = useState<string | null>(null);
     const [pendingNoteType, setPendingNoteType] = useState<string | null>(null);
-    const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
     const [isFullscreen, setIsFullscreen] = useState(false);
-    const [voiceAutoStart, setVoiceAutoStart] = useState(false);
     const [showNoteTypePicker, setShowNoteTypePicker] = useState(false);
     const [editMode, setEditMode] = useState(false);
     const [showAddMenu, setShowAddMenu] = useState(false);
@@ -4297,10 +4073,6 @@ const fireIntegrations = (trigger: string, note: any) => {
     const jsonMode     = baseMode && noteType === "json" && !mermaidMode;
     const codeMode     = baseMode && ["javascript","typescript","python","css","sql","bash"].includes(noteType);
     const plainMode    = baseMode && !!currentNoteId && plainModeNotes.has(currentNoteId) && noteType === "rich";
-    type VoiceEntry = { _type: "voice"; audioUrl: string; transcript: string; summary: string; duration: number; recordedAt: string };
-    const voiceNote = useMemo(() => baseMode && noteType === "voice"
-        ? (() => { try { const p = JSON.parse(content); return (Array.isArray(p) ? p : [p]) as VoiceEntry[]; } catch { return null; } })()
-        : null, [baseMode, noteType, content]);
     // jsonDetect kept for JSON syntax highlight fallback
     const jsonDetect = useMemo(() => jsonMode ? detectJson(content) : { ok: false, parsed: null }, [jsonMode, content]);
 
@@ -4315,7 +4087,7 @@ const fireIntegrations = (trigger: string, note: any) => {
     }, [noteType, listMode, content]);
 
     // Unified active mode label
-    const noteViewMode = stackMode ? "Stack" : mindmapMode ? "Mindmap" : graphMode ? "Graph" : listMode ? "Checklist" : mermaidMode ? "Diagram" : voiceNote ? "Voice" : codeMode ? noteType : markdownMode ? "Markdown" : htmlMode ? "HTML" : noteType === "rich" ? "Rich" : "Text";
+    const noteViewMode = stackMode ? "Stack" : mindmapMode ? "Mindmap" : graphMode ? "Graph" : listMode ? "Checklist" : mermaidMode ? "Diagram" : codeMode ? noteType : markdownMode ? "Markdown" : htmlMode ? "HTML" : noteType === "rich" ? "Rich" : "Text";
     // Rich note = TipTap JSON format
     const isRichNote = !listMode && !graphMode && !mindmapMode && !stackMode && noteType === "rich";
 
@@ -6227,12 +5999,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 ? <ArrowsPointingInIcon className="w-[22px] h-[22px] sm:w-5 sm:h-5" />
                                 : <ArrowsPointingOutIcon className="w-[22px] h-[22px] sm:w-5 sm:h-5" />}
                         </button>
-                        <button type="button"
-                            onClick={() => { setVoiceAutoStart(true); setShowVoiceRecorder(true); }}
-                            className="p-2 sm:p-3 text-red-500/70 hover:text-red-400 active:text-red-300 transition flex-shrink-0"
-                            title="Voice recording">
-                            <MicrophoneIcon className="w-[29px] h-[29px] sm:w-7 sm:h-7" />
-                        </button>
                         {/* Checklist toggle — direct toolbar button */}
                         <button type="button"
                             onClick={() => {
@@ -6269,7 +6035,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                             </div>
                         )}
                         {/* ── Float copy pill — fades after 10s of editing ── */}
-                        {showFloatCopy && !isFullscreen && !showNoteActions && !showFindBar && content.trim() && !listMode && !graphMode && !mindmapMode && !stackMode && !voiceNote && noteType !== "rich" && noteType !== "html" && (
+                        {showFloatCopy && !isFullscreen && !showNoteActions && !showFindBar && content.trim() && !listMode && !graphMode && !mindmapMode && !stackMode && noteType !== "rich" && noteType !== "html" && (
                         <div className="absolute top-3 right-3 z-[2147483647] pointer-events-auto">
                             <button type="button"
                                 onClick={() => {
@@ -6702,32 +6468,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     title="HTML Preview"
                                 />
                             </div>
-                        ) : voiceNote ? (
-                            <div className="flex-1 overflow-y-auto flex flex-col">
-                                {voiceNote.map((entry, idx) => (
-                                    <VoiceNotePlayer
-                                        key={entry.audioUrl}
-                                        index={idx}
-                                        data={entry}
-                                        onTranscriptChange={(t) => {
-                                            const updated = voiceNote.map((e, i) => i === idx ? { ...e, transcript: t } : e);
-                                            setContent(JSON.stringify(updated.length === 1 ? updated[0] : updated));
-                                            void saveNote({ silent: true });
-                                        }}
-                                        onDelete={() => {
-                                            const updated = voiceNote.filter((_, i) => i !== idx);
-                                            showError(`Recording #${idx + 1} deleted`);
-                                            if (updated.length === 0) {
-                                                setContent("");
-                                                setShowNoteTypePicker(true);
-                                            } else {
-                                                setContent(JSON.stringify(updated.length === 1 ? updated[0] : updated));
-                                                void saveNote({ silent: true });
-                                            }
-                                        }}
-                                        onConvertToText={() => {}} />
-                                ))}
-                            </div>
                         ) : codeMode ? (
                             <CodeViewer
                                 code={content}
@@ -6882,7 +6622,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                     const extMap: Record<string, string> = {
                         text: ".txt", markdown: ".md", mermaid: ".mmd", json: ".json",
                         javascript: ".js", typescript: ".ts", python: ".py", css: ".css",
-                        sql: ".sql", bash: ".sh", html: ".html", voice: ".webm", rich: ".rtf",
+                        sql: ".sql", bash: ".sh", html: ".html", rich: ".rtf",
                     };
                     const ext = extMap[noteType] ?? ".txt";
                     const edited = editingNote.updated_at
@@ -7639,7 +7379,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                 </div>
             )}
 
-            {/* NOTE TYPE PICKER — Type vs Voice */}
+            {/* NOTE TYPE PICKER */}
             {showNoteTypePicker && (
                 <div className="fixed inset-0 z-[600] flex items-center justify-center bg-black/80 backdrop-blur-sm"
                     onClick={() => setShowNoteTypePicker(false)}>
@@ -7661,70 +7401,10 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 <span className="text-xs font-black uppercase tracking-widest text-white">Type</span>
                             </button>
 
-                            {/* VOICE ball */}
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setShowNoteTypePicker(false);
-                                    setEditingNote(null);
-                                    setTitle("Voice Note");
-                                    setContent("");
-                                    setImages([]);
-                                    setTargetFolder(activeFolder || "General");
-                                    setNoteColor(pickUniqueColor());
-                                                    setVoiceAutoStart(true);
-                                        setShowVoiceRecorder(true);
-                                }}
-                                className="flex flex-col items-center gap-3 group"
-                            >
-                                <div className="w-28 h-28 rounded-full flex items-center justify-center transition-transform active:scale-95 group-hover:scale-105"
-                                    style={{ background: "linear-gradient(135deg, #ef4444 0%, #b91c1c 100%)", boxShadow: "0 0 40px rgba(239,68,68,0.5), 0 8px 32px rgba(0,0,0,0.5)", animation: "pulse 2s infinite" }}>
-                                    <MicrophoneIcon className="w-12 h-12 text-white" />
-                                </div>
-                                <span className="text-xs font-black uppercase tracking-widest text-red-400">Voice</span>
-                            </button>
                         </div>
                         <div className="text-[10px] text-zinc-600 uppercase tracking-widest">or tap outside to cancel</div>
                     </div>
                 </div>
-            )}
-
-            {/* Fixed mic FAB — always bottom-right when note type is voice */}
-            {noteType === "voice" && editorOpen && !showVoiceRecorder && (
-                <button
-                    type="button"
-                    onClick={() => { setVoiceAutoStart(true); setShowVoiceRecorder(true); }}
-                    className="fixed bottom-6 right-6 z-[500] w-12 h-12 rounded-full flex items-center justify-center bg-red-500 hover:bg-red-400 transition"
-                    style={{ boxShadow: "0 0 24px rgba(239,68,68,0.55)" }}
-                    title="Add Recording">
-                    <MicrophoneIcon className="w-5 h-5 text-white" />
-                </button>
-            )}
-
-            {showVoiceRecorder && (
-                <VoiceRecorder
-                    noteId={currentNoteId}
-                    getToken={getAuthToken}
-                    onComplete={(voiceData) => {
-                        if (!title.trim()) setTitle("Voice Note");
-                        // Append to existing voice entries if note is already a voice note
-                        setContent(prev => {
-                            try {
-                                const existing = JSON.parse(prev);
-                                const entries = Array.isArray(existing) ? existing : [existing];
-                                if (entries[0]?._type === "voice") {
-                                    return JSON.stringify([...entries, voiceData]);
-                                }
-                            } catch {}
-                            return JSON.stringify(voiceData);
-                        });
-                        setShowVoiceRecorder(false);
-                        setVoiceAutoStart(false);
-                        setEditorOpen(true);
-                    }}
-                    autoStart={voiceAutoStart}
-                    onCancel={() => { setShowVoiceRecorder(false); setVoiceAutoStart(false); }}
-                />
             )}
 
             {showNoteActions && (

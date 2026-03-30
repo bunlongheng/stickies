@@ -406,6 +406,17 @@ export async function GET(req: Request) {
         const offsetParam = parseInt(url.searchParams.get("offset") ?? "0");
         const sinceParam = url.searchParams.get("since"); // ISO timestamp — delta sync
 
+        // ── Copy: return title+content only, max 25 ──────────────────────────
+        if (url.searchParams.get("copy") === "1") {
+            const { sql, params } = withUser(
+                `SELECT id, title, content FROM "${table}" WHERE is_folder = false AND folder_name = $1`,
+                [folderFilter],
+                userId
+            );
+            const rows = await query<Record<string, unknown>>(`${sql} ORDER BY updated_at DESC LIMIT 25`, params);
+            return NextResponse.json({ notes: rows });
+        }
+
         // ── Delta sync: only return notes changed since last sync ─────────────
         if (sinceParam) {
             const sinceDate = new Date(sinceParam);
@@ -573,10 +584,11 @@ export async function POST(req: Request) {
                     if (!name) { results.push({ type: "folder", data: null, error: "name required" }); continue; }
                     const folder_color = pickColor(item.color as string);
                     const parent_folder_name = String(item.parent_folder ?? "").trim() || null;
+                    const folderIcon = String(item.icon ?? "").trim();
                     const row = await queryOne(
                         `INSERT INTO "stickies" (is_folder, folder_name, title, content, folder_color, parent_folder_name, "order", created_at, updated_at, user_id)
-                         VALUES (true, $1, $2, '', $3, $4, $5, $6, $7, $8) RETURNING *`,
-                        [name, name, folder_color, parent_folder_name, nextOrder++, now, now, userId]
+                         VALUES (true, $1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+                        [name, name, folderIcon, folder_color, parent_folder_name, nextOrder++, now, now, userId]
                     );
                     results.push({ type: "folder", data: row as Record<string, unknown> });
                 } else {
@@ -620,14 +632,15 @@ export async function POST(req: Request) {
 
         const rawColor = String(url.searchParams.get("color") || (bodyForFolderCheck?.color as string) || "").trim();
         const parentFolder = String(url.searchParams.get("parent") || (bodyForFolderCheck?.parent_folder as string) || "").trim() || null;
+        const folderIcon = String(url.searchParams.get("icon") || (bodyForFolderCheck?.icon as string) || "").trim();
         const folder_color = await pickLeastUsedFolderColor(userId, rawColor);
         const nextOrder = await getNextOrder(userId, true);
         const now = new Date().toISOString();
 
         const data = await queryOne(
             `INSERT INTO "stickies" (is_folder, folder_name, title, content, folder_color, parent_folder_name, "order", created_at, updated_at, user_id)
-             VALUES (true, $1, $2, '', $3, $4, $5, $6, $7, $8) RETURNING *`,
-            [name, name, folder_color, parentFolder, nextOrder, now, now, userId]
+             VALUES (true, $1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+            [name, name, folderIcon, folder_color, parentFolder, nextOrder, now, now, userId]
         );
 
         if (!data) { return NextResponse.json({ error: "Database error" }, { status: 500 }); }
@@ -856,15 +869,12 @@ export async function DELETE(req: Request) {
 }
 
 // ── Note type detection ──────────────────────────────────────────────────────
-const VALID_TYPES = new Set(["text","markdown","html","json","mermaid","javascript","typescript","python","css","sql","bash","voice","checklist","rich"]);
+const VALID_TYPES = new Set(["text","markdown","html","json","mermaid","javascript","typescript","python","css","sql","bash","checklist","rich"]);
 
 export function detectType(content: string, title?: string): string {
     const t = content.trim();
     if (!t) return "text";
 
-    if (t.startsWith('{"_type":"voice"')) {
-        try { if (JSON.parse(t)?._type === "voice") return "voice"; } catch {}
-    }
     if (/^```(?:mermaid)?\s*\n[\s\S]*?```\s*$/im.test(t)) return "mermaid";
     if (/^(flowchart|graph|sequenceDiagram|classDiagram|stateDiagram(-v2)?|erDiagram|gantt|pie|gitGraph|mindmap|timeline|xychart(-beta)?|quadrantChart|requirementDiagram|zenuml|sankey|block-beta)\b/im.test(t)) return "mermaid";
     if ((t.startsWith("{") || t.startsWith("[")) && (() => { try { JSON.parse(t); return true; } catch { return false; } })()) return "json";
