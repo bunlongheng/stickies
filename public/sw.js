@@ -1,5 +1,5 @@
 // Stickies Service Worker
-const CACHE = 'stickies-v1'
+const CACHE = 'stickies-v2'
 
 self.addEventListener('install', (e) => {
   self.skipWaiting()
