@@ -125,6 +125,8 @@ body {
   word-break: break-word;
   overflow-wrap: break-word;
   box-sizing: border-box;
+  font-size: 12px;
+  line-height: 1.6;
 }
 
 /* Every block-level child stays in bounds */
@@ -332,10 +334,10 @@ body {
   background: rgba(253,151,31,0.45);
 }
 
-/* Folder icon badge — always solid folder color, white icon */
+/* Folder icon badge — solid folder color, icon color adapts for light bg */
 .folder-icon-badge {
   background: var(--fc, #888);
-  color: #fff;
+  color: var(--ic, #fff);
   border-radius: 6px;
   transition: background 0.15s, color 0.15s, opacity 0.15s;
 }
@@ -365,7 +367,7 @@ body {
 }
 .folder-grid-tile .folder-icon-badge {
   background: rgba(255,255,255,0.2);
-  color: #fff;
+  color: var(--ic, #fff);
 }
 .folder-grid-tile .folder-grid-initial {
   color: #fff !important;

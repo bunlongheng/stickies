@@ -437,6 +437,10 @@ export function RichTextEditor({ noteId, content, onChange, onBlur, onUploadImag
         },
         onBlur: ({ editor }) => { flushOnChange(editor); onBlurRef.current(); setHasSelection(false); },
         editorProps: {
+            transformPastedHTML(html) {
+                // Strip empty <p> tags that RTF/Word paste inserts as spacing
+                return html.replace(/<p[^>]*>\s*(<br\s*\/?>)?\s*<\/p>/gi, '');
+            },
             handlePaste(view, event) {
                 const items = Array.from(event.clipboardData?.items ?? []);
                 const imageFiles = items
