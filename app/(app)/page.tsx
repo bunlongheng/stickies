@@ -6909,7 +6909,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                         style={kanbanMode && isFolderGridView
                             ? { display: "flex", flexDirection: "column", height: "100%", overflowX: "auto", overflowY: "hidden" }
                             : isListMode
-                                ? { display: "block", paddingTop: "12px" }
+                                ? { display: "block" }
                                 : { display: "grid", gridTemplateColumns: `repeat(${gridCols}, 1fr)`, gap: "6px", alignContent: "start", alignItems: "start" }}
                     >
                         {kanbanMode && isFolderGridView && (
