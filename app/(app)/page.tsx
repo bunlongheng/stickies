@@ -5999,7 +5999,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 ? <ArrowsPointingInIcon className="w-[22px] h-[22px] sm:w-5 sm:h-5" />
                                 : <ArrowsPointingOutIcon className="w-[22px] h-[22px] sm:w-5 sm:h-5" />}
                         </button>
-                        {/* Checklist toggle — direct toolbar button */}
+                        {/* Checklist toggle — only when eligible or already on */}
+                        {(canToggleChecklist || listMode) && (
                         <button type="button"
                             onClick={() => {
                                 if (!listMode && noteType === "rich") switchToPlain();
@@ -6010,6 +6011,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                             title={listMode ? "Exit checklist" : "Checklist"}>
                             <CheckCircleIcon className="w-[26px] h-[26px] sm:w-6 sm:h-6" />
                         </button>
+                        )}
                         {/* Share — always visible */}
                         <button type="button"
                             onClick={() => { setSharePickerOpen(true); setShowNoteActions(false); closeEditorTools(); }}
@@ -6017,6 +6019,15 @@ const fireIntegrations = (trigger: string, note: any) => {
                             title="Share">
                             <PaperAirplaneIcon className="w-[24px] h-[24px] sm:w-[22px] sm:h-[22px]" />
                         </button>
+                        {/* Delete — quick access */}
+                        {editingNote?.id && (
+                        <button type="button"
+                            onClick={() => { setShowNoteActions(false); closeEditorTools(); setConfirmDelete({ type: "note", noteId: String(editingNote.id), noteName: (title.trim() || editingNote.title || "Untitled").trim(), noteColor: noteColor || editingNote.folder_color || "#71717a" }); }}
+                            className="p-2 sm:p-3 text-zinc-600 hover:text-red-400 active:text-red-400 transition flex-shrink-0"
+                            title="Delete note">
+                            <TrashIcon className="w-[24px] h-[24px] sm:w-[22px] sm:h-[22px]" />
+                        </button>
+                        )}
                         <button type="button"
                             onClick={() => { setShowNoteActions(v => !v); closeEditorTools(); }}
                             className="p-2 sm:p-3 text-zinc-300 hover:text-white active:text-white transition flex-shrink-0"
@@ -6666,6 +6677,9 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 </div>
                             )}
                             <div className="flex items-center gap-2">
+                                {editingNote?.is_public && (
+                                    <GlobeAltIcon className="w-3 h-3 text-emerald-400 flex-shrink-0" title="Public note" />
+                                )}
                                 {(() => {
                                     const badge = TYPE_BADGE[noteType] ?? TYPE_BADGE["text"];
                                     if (!badge) return null;
@@ -6787,7 +6801,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 </>
                             ) : (
                                 <>
-                                    <div className="safe-top-bar shrink-0" />
+                                    <div className="safe-top-bar shrink-0" style={{ background: "black" }} />
                                     <header className="shrink-0 flex items-center h-[4rem] px-4 border-b border-white/[0.06]">
                                         {folderStack.length > 0 && (
                                             <>
@@ -8773,51 +8787,62 @@ const fireIntegrations = (trigger: string, note: any) => {
                         </div>
 
                         {/* Public toggle */}
-                        <div className="flex items-center gap-3 px-5 py-4 border-b border-white/5">
-                            <div className="flex-1">
-                                <p className="text-xs font-black text-white tracking-wide">Public</p>
-                                <p className="text-[10px] text-zinc-500 mt-0.5">
-                                    {publicLinkCopied ? "Link copied to clipboard ✓" : "Anyone with the link can view"}
-                                </p>
+                        {(() => {
+                            const isOn = !!(editingNote?.is_public);
+                            return (
+                            <div className="flex items-center gap-3 px-5 py-4 border-b border-white/5">
+                                <div className="flex-1">
+                                    <p className="text-xs font-black text-white tracking-wide">Public</p>
+                                    <p className="text-[10px] text-zinc-500 mt-0.5">
+                                        {publicLinkCopied ? "Link copied to clipboard ✓" : "Anyone with the link can view"}
+                                    </p>
+                                </div>
+                                {/* Toggle switch */}
+                                <button
+                                    type="button"
+                                    role="switch"
+                                    aria-checked={isOn}
+                                    onClick={() => {
+                                        const noteId = editingNote?.id ? String(editingNote.id) : "";
+                                        if (!noteId) return;
+                                        const newPublic = !isOn;
+                                        void notesApi.update(noteId, { is_public: newPublic });
+                                        setEditingNote((prev: any) => prev ? { ...prev, is_public: newPublic } : prev);
+                                        setDbData((prev: any[]) => prev.map((r: any) => String(r.id) === noteId ? { ...r, is_public: newPublic } : r));
+                                        if (newPublic) {
+                                            const url = `${window.location.origin}/?noteId=${noteId}`;
+                                            secureCopy(url).then(() => {
+                                                setPublicLinkCopied(true);
+                                                setTimeout(() => setPublicLinkCopied(false), 3000);
+                                            });
+                                        }
+                                    }}
+                                    className="flex-shrink-0 relative transition-all duration-200"
+                                    style={{
+                                        width: 44,
+                                        height: 26,
+                                        borderRadius: 13,
+                                        background: isOn ? "#22c55e" : "rgba(255,255,255,0.12)",
+                                        border: "none",
+                                        cursor: "pointer",
+                                        padding: 0,
+                                    }}
+                                >
+                                    <span style={{
+                                        position: "absolute",
+                                        top: 3,
+                                        left: isOn ? 21 : 3,
+                                        width: 20,
+                                        height: 20,
+                                        borderRadius: "50%",
+                                        background: "#fff",
+                                        transition: "left 0.2s cubic-bezier(0.4,0,0.2,1)",
+                                        boxShadow: "0 1px 4px rgba(0,0,0,0.3)",
+                                    }} />
+                                </button>
                             </div>
-                            {/* Toggle switch */}
-                            <button
-                                type="button"
-                                role="switch"
-                                aria-checked={publicLinkCopied}
-                                onClick={() => {
-                                    const noteId = editingNote?.id ? String(editingNote.id) : "";
-                                    if (!noteId) return;
-                                    const url = `${window.location.origin}/?noteId=${noteId}`;
-                                    secureCopy(url).then(() => {
-                                        setPublicLinkCopied(true);
-                                        setTimeout(() => setPublicLinkCopied(false), 3000);
-                                    });
-                                }}
-                                className="flex-shrink-0 relative transition-all duration-200"
-                                style={{
-                                    width: 44,
-                                    height: 26,
-                                    borderRadius: 13,
-                                    background: publicLinkCopied ? "#22c55e" : "rgba(255,255,255,0.12)",
-                                    border: "none",
-                                    cursor: "pointer",
-                                    padding: 0,
-                                }}
-                            >
-                                <span style={{
-                                    position: "absolute",
-                                    top: 3,
-                                    left: publicLinkCopied ? 21 : 3,
-                                    width: 20,
-                                    height: 20,
-                                    borderRadius: "50%",
-                                    background: "#fff",
-                                    transition: "left 0.2s cubic-bezier(0.4,0,0.2,1)",
-                                    boxShadow: "0 1px 4px rgba(0,0,0,0.3)",
-                                }} />
-                            </button>
-                        </div>
+                            );
+                        })()}
 
                         {/* Link row — QR · Data · Burn */}
                         <div className="flex items-center gap-2 px-5 py-4 border-b border-white/5">
