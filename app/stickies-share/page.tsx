@@ -138,7 +138,7 @@ export default function StickiesShare() {
     }
 
     return (
-        <div style={{ background: "#fff", minHeight: "100vh", position: "relative" }}>
+        <div style={{ background: "#fff", minHeight: "100vh", overflowY: "auto", WebkitOverflowScrolling: "touch" } as React.CSSProperties}>
             {/* Floating copy button — top right */}
             <button
                 ref={copyBtnRef}
@@ -153,12 +153,14 @@ export default function StickiesShare() {
                     border: `1px solid ${copied ? "#bbf7d0" : "#e0e0e0"}`,
                     color: copied ? "#16a34a" : "#555",
                     fontFamily: "monospace",
-                    fontSize: 10,
-                    padding: "3px 9px",
+                    fontSize: 11,
+                    padding: "5px 12px",
                     cursor: hasBurned ? "not-allowed" : "pointer",
                     opacity: hasBurned ? 0.4 : 1,
                     transition: "all 0.15s",
                     zIndex: 10,
+                    borderRadius: 4,
+                    boxShadow: "0 1px 4px rgba(0,0,0,0.08)",
                 }}
             >
                 {copied ? "✓ copied" : isBurnLink ? "🔥 copy" : "copy"}
@@ -167,14 +169,17 @@ export default function StickiesShare() {
             {/* Raw content */}
             <pre style={{
                 margin: 0,
-                padding: "16px 20px",
+                padding: "16px 20px 40px 20px",
                 fontFamily: "'Fira Code', 'Consolas', 'Menlo', monospace",
-                fontSize: 10,
-                lineHeight: 1.65,
+                fontSize: "clamp(9px, 1.8vw, 11px)",
+                lineHeight: 1.7,
                 color: "#111",
                 whiteSpace: "pre-wrap",
                 wordBreak: "break-word",
                 overflowWrap: "break-word",
+                maxWidth: 860,
+                boxSizing: "border-box",
+                width: "100%",
             }}>
                 {extractText(note.content)}
             </pre>
