@@ -98,13 +98,15 @@ export default function StickiesShare() {
         }
     }, []);
 
+    const preRef = useRef<HTMLPreElement>(null);
+
     const handleCopy = async () => {
         if (!note || hasBurned) return;
         try {
             await navigator.clipboard.writeText(extractText(note.content));
         } catch {
             const ta = document.createElement("textarea");
-            ta.value = note.content;
+            ta.value = extractText(note.content);
             ta.style.cssText = "position:fixed;opacity:0";
             document.body.appendChild(ta);
             ta.select();
@@ -118,6 +120,30 @@ export default function StickiesShare() {
             setHasBurned(true);
         }
     };
+
+    // Cmd+C anywhere → copy full content; Cmd+A → select only the <pre>
+    useEffect(() => {
+        if (!note) return;
+        const handler = (e: KeyboardEvent) => {
+            if (e.metaKey || e.ctrlKey) {
+                if (e.key === "c") {
+                    handleCopy();
+                } else if (e.key === "a") {
+                    e.preventDefault();
+                    if (preRef.current) {
+                        const range = document.createRange();
+                        range.selectNodeContents(preRef.current);
+                        const sel = window.getSelection();
+                        sel?.removeAllRanges();
+                        sel?.addRange(range);
+                    }
+                }
+            }
+        };
+        window.addEventListener("keydown", handler);
+        return () => window.removeEventListener("keydown", handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [note, hasBurned, burnToken, isBurnLink]);
 
     if (state === "loading") return <div style={{ background: "#fff", minHeight: "100vh" }} />;
 
@@ -161,13 +187,14 @@ export default function StickiesShare() {
                     zIndex: 10,
                     borderRadius: 4,
                     boxShadow: "0 1px 4px rgba(0,0,0,0.08)",
+                    userSelect: "none",
                 }}
             >
                 {copied ? "✓ copied" : isBurnLink ? "🔥 copy" : "copy"}
             </button>
 
             {/* Raw content */}
-            <pre style={{
+            <pre ref={preRef} style={{
                 margin: 0,
                 padding: "16px 20px 40px 20px",
                 fontFamily: "'Fira Code', 'Consolas', 'Menlo', monospace",
