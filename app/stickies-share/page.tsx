@@ -78,35 +78,35 @@ export default function StickiesShare() {
         }
     };
 
-    if (state === "loading") return <div style={{ background: "#0d0d0d", minHeight: "100vh" }} />;
+    if (state === "loading") return <div style={{ background: "#fff", minHeight: "100vh" }} />;
 
     if (state === "burned") {
         return (
-            <div style={{ background: "#0d0d0d", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <p style={{ color: "#555", fontFamily: "monospace", fontSize: 13 }}>This note has been destroyed.</p>
+            <div style={{ background: "#fff", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <p style={{ color: "#999", fontFamily: "monospace", fontSize: 13 }}>This note has been destroyed.</p>
             </div>
         );
     }
 
     if (state === "error" || !note) {
         return (
-            <div style={{ background: "#0d0d0d", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <p style={{ color: "#555", fontFamily: "monospace", fontSize: 13 }}>Invalid or expired link.</p>
+            <div style={{ background: "#fff", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <p style={{ color: "#999", fontFamily: "monospace", fontSize: 13 }}>Invalid or expired link.</p>
             </div>
         );
     }
 
     return (
-        <div style={{ background: "#0d0d0d", minHeight: "100vh", position: "relative" }}>
+        <div style={{ background: "#fff", minHeight: "100vh", position: "relative" }}>
             {/* Minimal top bar */}
             <div style={{
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "space-between",
                 padding: "10px 16px",
-                borderBottom: "1px solid #1e1e1e",
+                borderBottom: "1px solid #e5e5e5",
             }}>
-                <span style={{ color: "#444", fontFamily: "monospace", fontSize: 11 }}>
+                <span style={{ color: "#bbb", fontFamily: "monospace", fontSize: 11 }}>
                     {isBurnLink ? "🔥 burn link" : "stickies"}
                 </span>
                 <button
@@ -115,9 +115,9 @@ export default function StickiesShare() {
                     onClick={handleCopy}
                     disabled={hasBurned}
                     style={{
-                        background: copied ? "#1a3a1a" : "#1a1a1a",
-                        border: `1px solid ${copied ? "#2d6a2d" : "#2a2a2a"}`,
-                        color: copied ? "#4ade80" : "#888",
+                        background: copied ? "#f0fdf4" : "#f5f5f5",
+                        border: `1px solid ${copied ? "#bbf7d0" : "#e0e0e0"}`,
+                        color: copied ? "#16a34a" : "#555",
                         fontFamily: "monospace",
                         fontSize: 11,
                         padding: "4px 10px",
@@ -135,9 +135,9 @@ export default function StickiesShare() {
                 margin: 0,
                 padding: "24px 20px",
                 fontFamily: "'Fira Code', 'Consolas', 'Menlo', monospace",
-                fontSize: 13,
+                fontSize: 11,
                 lineHeight: 1.65,
-                color: "#c9c9c9",
+                color: "#111",
                 whiteSpace: "pre-wrap",
                 wordBreak: "break-word",
                 overflowWrap: "break-word",
