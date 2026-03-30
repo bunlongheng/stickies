@@ -3565,7 +3565,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         setTitle(isStandup ? dateStr : "");
         setContent("");
         setImages([]);
-        setPendingNoteType(type ?? (editMode ? "rich" : null));
+        setPendingNoteType(type ?? "text");
         setTargetFolder(activeFolder || (editMode ? "Work" : "CLAUDE"));
         setNoteColor(pickUniqueColor());
         shouldFocusTitleOnOpenRef.current = !isStandup;
