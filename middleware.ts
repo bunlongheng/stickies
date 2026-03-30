@@ -21,14 +21,24 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  // Refresh session so it doesn't expire mid-session
-  await supabase.auth.getUser()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  // If not logged in and a noteId is present, redirect to public share page
+  if (!user) {
+    const noteId = request.nextUrl.searchParams.get('noteId')
+    if (noteId) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/stickies-share'
+      url.search = `?noteId=${encodeURIComponent(noteId)}`
+      return NextResponse.redirect(url)
+    }
+  }
 
   return supabaseResponse
 }
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|icon\\.svg|apple-icon\\.svg|api/auth/callback|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|icon\\.svg|apple-icon\\.svg|api/auth/callback|stickies-share|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }
