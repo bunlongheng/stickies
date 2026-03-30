@@ -6030,7 +6030,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                         {editingNote?.id && (
                         <button type="button"
                             onClick={() => { setShowNoteActions(false); closeEditorTools(); setConfirmDelete({ type: "note", noteId: String(editingNote.id), noteName: (title.trim() || editingNote.title || "Untitled").trim(), noteColor: noteColor || editingNote.folder_color || "#71717a" }); }}
-                            className="p-2 sm:p-3 text-zinc-600 hover:text-red-400 active:text-red-400 transition flex-shrink-0"
+                            className="p-2 sm:p-3 text-red-500 hover:text-red-400 active:text-red-300 transition flex-shrink-0"
                             title="Delete note">
                             <TrashIcon className="w-[24px] h-[24px] sm:w-[22px] sm:h-[22px]" />
                         </button>
