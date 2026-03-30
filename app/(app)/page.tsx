@@ -6652,7 +6652,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     style={{
                                         flex: 1, background: "transparent", color: "#f8f8f2",
                                         fontFamily: "ui-monospace,'Fira Code','Cascadia Code',monospace",
-                                        fontSize: 13, lineHeight: "19px",
+                                        fontSize: 10, lineHeight: "16px",
                                         paddingTop: 8, paddingBottom: 24, paddingLeft: 16, paddingRight: 24,
                                         outline: "none", resize: "none", caretColor: "#f8f8f2",
                                         whiteSpace: "pre-wrap", overflowWrap: "break-word", wordBreak: "break-word",
@@ -6822,7 +6822,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
                                         pointerEvents: "none",
                                         fontFamily: "ui-monospace,'Fira Code','Cascadia Code',monospace",
-                                        fontSize: 13, lineHeight: "19px",
+                                        fontSize: 10, lineHeight: "16px",
                                         paddingTop: 8, paddingBottom: 24, paddingLeft: 16, paddingRight: 24,
                                         whiteSpace: "pre-wrap", overflowWrap: "break-word", wordBreak: "break-word",
                                         color: "transparent", zIndex: 0,
@@ -6843,7 +6843,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     style={{
                                         flex: 1, background: "transparent", color: "#f8f8f2",
                                         fontFamily: "ui-monospace,'Fira Code','Cascadia Code',monospace",
-                                        fontSize: 13, lineHeight: "19px",
+                                        fontSize: 10, lineHeight: "16px",
                                         paddingTop: 8, paddingBottom: 24, paddingLeft: 16, paddingRight: 24,
                                         outline: "none", resize: "none", caretColor: "#f8f8f2",
                                         whiteSpace: "pre-wrap", overflowWrap: "break-word", wordBreak: "break-word",
