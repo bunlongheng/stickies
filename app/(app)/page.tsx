@@ -6217,20 +6217,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 {TYPE_BADGE[noteType].label}
                             </span>
                         ) : null}
-                        {/* Undo */}
-                        <button type="button"
-                            onClick={() => { document.execCommand("undo"); }}
-                            className="hidden sm:flex p-2 sm:p-3 text-zinc-500 hover:text-zinc-200 active:text-white transition flex-shrink-0"
-                            title="Undo (⌘Z)">
-                            <ArrowUturnLeftIcon className="w-[22px] h-[22px] sm:w-5 sm:h-5" />
-                        </button>
-                        {/* Redo */}
-                        <button type="button"
-                            onClick={() => { document.execCommand("redo"); }}
-                            className="hidden sm:flex p-2 sm:p-3 text-zinc-500 hover:text-zinc-200 active:text-white transition flex-shrink-0"
-                            title="Redo (⌘⇧Z)">
-                            <ArrowUturnRightIcon className="w-[22px] h-[22px] sm:w-5 sm:h-5" />
-                        </button>
                         {/* Fullscreen */}
                         <button type="button"
                             onClick={() => setIsFullscreen(v => !v)}
