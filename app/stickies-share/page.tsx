@@ -23,7 +23,7 @@ function extractText(content: string): string {
             }
         };
         if (doc?.content) walk(doc.content);
-        return lines.join("").replace(/\n{3,}/g, "\n\n").trim();
+        return lines.join("").replace(/\n{2,}/g, "\n").trim();
     } catch {
         return content;
     }
@@ -147,9 +147,9 @@ export default function StickiesShare() {
                 padding: "10px 16px",
                 borderBottom: "1px solid #e5e5e5",
             }}>
-                <span style={{ color: "#bbb", fontFamily: "monospace", fontSize: 11 }}>
-                    {isBurnLink ? "🔥 burn link" : "stickies"}
-                </span>
+                {isBurnLink && (
+                    <span style={{ color: "#bbb", fontFamily: "monospace", fontSize: 11 }}>🔥 burn link</span>
+                )}
                 <button
                     ref={copyBtnRef}
                     type="button"
