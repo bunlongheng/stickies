@@ -11,7 +11,7 @@ export async function GET(req: Request) {
     if (!noteId) return NextResponse.json({ error: "Missing noteId" }, { status: 400 });
 
     const { data, error } = await supabase
-        .from("notes")
+        .from("stickies")
         .select("title, content, type, folder_color")
         .eq("id", noteId)
         .is("trashed_at", null)

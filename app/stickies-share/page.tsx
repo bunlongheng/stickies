@@ -2,6 +2,33 @@
 
 import { useEffect, useRef, useState } from "react";
 
+function extractText(content: string): string {
+    try {
+        const doc = JSON.parse(content);
+        const lines: string[] = [];
+        const walk = (nodes: any[]) => {
+            for (const n of nodes) {
+                if (n.type === "text") lines.push(n.text ?? "");
+                else if (n.type === "hardBreak") lines.push("\n");
+                else if (n.content) {
+                    if (["paragraph","heading","listItem","blockquote"].includes(n.type)) {
+                        walk(n.content);
+                        lines.push("\n");
+                    } else {
+                        walk(n.content);
+                    }
+                } else {
+                    lines.push("\n");
+                }
+            }
+        };
+        if (doc?.content) walk(doc.content);
+        return lines.join("").replace(/\n{3,}/g, "\n\n").trim();
+    } catch {
+        return content;
+    }
+}
+
 interface SharedNote {
     title: string;
     content: string;
@@ -74,7 +101,7 @@ export default function StickiesShare() {
     const handleCopy = async () => {
         if (!note || hasBurned) return;
         try {
-            await navigator.clipboard.writeText(note.content);
+            await navigator.clipboard.writeText(extractText(note.content));
         } catch {
             const ta = document.createElement("textarea");
             ta.value = note.content;
@@ -156,7 +183,7 @@ export default function StickiesShare() {
                 wordBreak: "break-word",
                 overflowWrap: "break-word",
             }}>
-                {note.content}
+                {extractText(note.content)}
             </pre>
         </div>
     );
