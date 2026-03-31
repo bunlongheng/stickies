@@ -7,7 +7,6 @@ import { createClient as createBrowserClient } from "@/lib/supabase/client";
 import { usePageMeta } from "@/lib/usePageMeta";
 import dynamic from "next/dynamic";
 import LZString from "lz-string";
-const RichTextEditor = dynamic(() => import("@/components/RichTextEditor").then(m => m.RichTextEditor), { ssr: false });
 const MermaidRenderer = dynamic(() => import("@/components/MermaidRenderer").then(m => m.MermaidRenderer), { ssr: false });
 const MarkdownWithMermaid = dynamic(() => import("@/components/MarkdownWithMermaid").then(m => m.MarkdownWithMermaid), { ssr: false });
 const CodeViewer = dynamic(() => import("@/components/CodeViewer").then(m => m.CodeViewer), { ssr: false });
@@ -278,7 +277,6 @@ const MERMAID_KEYWORDS = /^(flowchart|graph|sequenceDiagram|classDiagram|stateDi
 
 const TYPE_BADGE: Record<string, { label: string; color: string }> = {
     text:       { label: "TXT",         color: "#71717a" },
-    rich:       { label: "RTF",         color: "#9ca3af" },
     javascript: { label: "Javascript",  color: "#f97316" },
     typescript: { label: "Typescript",  color: "#3b82f6" },
     python:     { label: "Python",      color: "#eab308" },
@@ -302,32 +300,10 @@ function tiptapToPlainText(node: any): string {
     return block.includes(node.type) ? inner + "\n" : inner;
 }
 
-/** Extract plain text from TipTap/ProseMirror JSON — returns first meaningful text */
-function extractRichTextTitle(json: string): string {
-    try {
-        const doc = JSON.parse(json);
-        // Only use the first non-empty top-level block's text
-        const blocks: any[] = doc.content ?? [];
-        for (const block of blocks) {
-            const texts: string[] = [];
-            const walk = (node: any) => {
-                if (node.type === "text" && node.text) texts.push(node.text);
-                if (Array.isArray(node.content)) node.content.forEach(walk);
-            };
-            walk(block);
-            const line = texts.join("").trim().replace(/^#+\s*/, "").slice(0, 60);
-            if (line) return line;
-        }
-        return "";
-    } catch { return ""; }
-}
-
 /** Client-side fallback type detection — used only when DB type is null (legacy notes) */
 function detectNoteType(content: string): string {
     const t = content.trim();
     if (!t) return "text";
-    // TipTap JSON — must check before generic JSON detection
-    try { const p = JSON.parse(t); if (p?.type === "doc" && Array.isArray(p.content)) return "rich"; } catch {}
     if (MERMAID_KEYWORDS.test(extractMermaid(t))) return "mermaid";
     if ((t.startsWith("{") || t.startsWith("[")) && detectJson(t).ok) return "json";
     if (/^\s*<!DOCTYPE\s+html/i.test(t) || /^\s*<html[\s>]/i.test(t)) return "html";
@@ -501,7 +477,6 @@ const MARKDOWN_MODE_KEY = "stickies:markdown-mode-notes:v1";
 const HTML_MODE_KEY = "stickies:html-mode-notes:v1";
 const MINDMAP_MODE_KEY = "stickies:mindmap-mode-notes:v1";
 const STACK_MODE_KEY = "stickies:stack-mode-notes:v1";
-const PLAIN_MODE_KEY  = "stickies:plain-mode-notes:v1";
 const DEFAULT_FOLDER_KEY = "stickies:default-folder:v1";
 const LAST_FOLDER_KEY = "stickies:last-folder:v1"; // persists last active folder across sessions
 const DB_CACHE_KEY = "stickies:db-cache:v1";
@@ -1155,7 +1130,6 @@ export default function NotesMaster() {
     const [content, setContent] = useState("");
     // Always-current content ref — used in saveNote on blur where React state may lag debounce
     const latestContentRef = useRef("");
-    const richEditorSetContentTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [pendingRestoreNoteId, setPendingRestoreNoteId] = useState<string | null>(null);
     const [pendingFolderQuery, setPendingFolderQuery] = useState<string | null>(null);
     const [pendingNoteQuery, setPendingNoteQuery] = useState<string | null>(null);
@@ -1219,7 +1193,6 @@ export default function NotesMaster() {
     const [htmlModeNotes, setHtmlModeNotes] = useState<Set<string>>(new Set());
     const [mindmapModeNotes, setMindmapModeNotes] = useState<Set<string>>(new Set());
     const [stackModeNotes, setStackModeNotes] = useState<Set<string>>(new Set());
-    const [plainModeNotes, setPlainModeNotes] = useState<Set<string>>(new Set());
     const [copiedContent, setCopiedContent] = useState(false);
     const [showAddTask, setShowAddTask] = useState(false);
     const [newTaskText, setNewTaskText] = useState("");
@@ -1305,7 +1278,6 @@ export default function NotesMaster() {
     const [showFindBar, setShowFindBar] = useState(false);
     const [findQuery, setFindQuery] = useState("");
     const [findCursor, setFindCursor] = useState(0);
-    const [richSearchCount, setRichSearchCount] = useState(0);
     const findInputRef = useRef<HTMLInputElement | null>(null);
     const showFindBarRef = useRef(false);
     const findQueryRef = useRef("");
@@ -1826,10 +1798,6 @@ export default function NotesMaster() {
             if (rawStack) { const arr = JSON.parse(rawStack); if (Array.isArray(arr)) setStackModeNotes(new Set(arr)); }
         } catch { /* ignore */ }
         try {
-            const rawPlain = localStorage.getItem(PLAIN_MODE_KEY);
-            if (rawPlain) { const arr = JSON.parse(rawPlain); if (Array.isArray(arr)) setPlainModeNotes(new Set(arr)); }
-        } catch { /* ignore */ }
-        try {
             const rawMainList = localStorage.getItem(MAIN_LIST_MODE_KEY);
             if (rawMainList) {
                 const v = rawMainList === "true" ? "list" : rawMainList === "false" ? "thumb" : rawMainList;
@@ -1958,12 +1926,6 @@ export default function NotesMaster() {
             localStorage.setItem(MINDMAP_MODE_KEY, JSON.stringify([...mindmapModeNotes]));
         } catch { /* ignore */ }
     }, [mindmapModeNotes]);
-
-    useEffect(() => {
-        try {
-            localStorage.setItem(PLAIN_MODE_KEY, JSON.stringify([...plainModeNotes]));
-        } catch { /* ignore */ }
-    }, [plainModeNotes]);
 
     useEffect(() => {
         try {
@@ -2749,27 +2711,6 @@ const fireIntegrations = (trigger: string, note: any) => {
         const t = setTimeout(() => setDeferredContent(content), 400);
         return () => clearTimeout(t);
     }, [content]);
-    const richStatsChips = useMemo(() => {
-        if (!deferredContent.trimStart().startsWith("{")) return [];
-        let tiptap: any = null;
-        try { tiptap = JSON.parse(deferredContent); } catch { return []; }
-        const topNodes: any[] = tiptap?.content ?? [];
-        let words = 0, images = 0, codeBlocks = 0, tables = 0;
-        const walk = (nodes: any[]) => {
-            for (const n of nodes) {
-                if (n.type === "text" && n.text) words += n.text.trim().split(/\s+/).filter(Boolean).length;
-                else if (n.type === "image") images++;
-                else if (n.type === "codeBlock") codeBlocks++;
-                else if (n.type === "table") tables++;
-                if (n.content) walk(n.content);
-            }
-        };
-        walk(topNodes);
-        const bytes = deferredContent.length;
-        const sizeStr = bytes >= 1_048_576 ? `${(bytes / 1_048_576).toFixed(1)} MB` : bytes >= 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${bytes} B`;
-        return [`${topNodes.length} blocks`, `${words} words`, sizeStr, images > 0 ? `${images} img` : null, codeBlocks > 0 ? `${codeBlocks} code` : null, tables > 0 ? `${tables} tbl` : null].filter(Boolean) as string[];
-    }, [deferredContent]);
-
     const availableTypeChips = useMemo(() => {
         const counts: Record<string, number> = {};
         for (const item of displayItems) {
@@ -3076,8 +3017,6 @@ const fireIntegrations = (trigger: string, note: any) => {
             // For new notes with no title, always derive from content — never save as bare "Untitled"
             const shouldDerive = deriveTitle || (isNewNoteDraft && !hasRealTitle);
             const resolvedTitle = (shouldDerive && !hasRealTitle) ? (() => {
-                const isRich = saveContent.trimStart().startsWith("{");
-                if (isRich) return extractRichTextTitle(saveContent) || "Untitled";
                 const firstLine = saveContent.trim().split("\n").find(l => l.trim()) || "";
                 return firstLine.replace(/^#+\s*/, "").slice(0, 60).trim() || "Untitled";
             })() : (titleRaw.current.trim() || "Untitled");
@@ -3467,32 +3406,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         const imageItems = items.filter((i) => i.type.startsWith("image/"));
         const htmlData = e.clipboardData.getData("text/html");
 
-        // Rich HTML paste (Notion, Google Docs, etc.)
-        // Always convert if HTML contains images (images can't be plain text).
-        // Skip for non-image rich text if note is explicitly in plain text mode.
         const nid = editingNote?.id ? String(editingNote.id) : null;
-        const isPlainTextMode = nid ? markdownModeNotes.has(nid) : false;
-        const htmlHasImages = htmlData.includes("<img");
-        if (htmlData && htmlData.includes("<") && (htmlHasImages || htmlData.includes("<h") || htmlData.includes("<strong") || htmlData.includes("<li") || htmlData.includes("<p")) && (!isPlainTextMode || htmlHasImages)) {
-            e.preventDefault();
-            const textarea = e.currentTarget;
-            const start = textarea.selectionStart ?? content.length;
-            const end = textarea.selectionEnd ?? content.length;
-            showToast("Converting rich text…", "#32ADE6");
-            try {
-                const { htmlToMarkdown } = await import("@/lib/htmlToMarkdown");
-                const token = await getAuthToken();
-                const md = await htmlToMarkdown(htmlData, nid ?? "paste", token);
-                const newContent = content.slice(0, start) + md + content.slice(end);
-                setContent(newContent);
-                if (nid) setMarkdownModeNotes(prev => { const next = new Set(prev); next.delete(nid); return next; });
-                showToast("Rich text pasted ✓", "#34C759");
-            } catch (err) {
-                console.error("Rich paste failed:", err);
-                showError("Paste failed");
-            }
-            return;
-        }
 
         // Direct image file paste → upload to Google Drive (fallback: Supabase), embed as short URL
         if (imageItems.length > 0) {
@@ -3554,7 +3468,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         } catch {}
         // Auto-detect and tag language
         const detected = detectNoteType(text);
-        if (detected && detected !== "text" && detected !== "rich") {
+        if (detected && detected !== "text") {
             setPendingNoteType(detected);
         }
     }
@@ -3952,8 +3866,6 @@ const fireIntegrations = (trigger: string, note: any) => {
         }
         // Cancel pending auto-save timer so the stale closure can't fire a second INSERT
         if (autoSaveTimerRef.current) { clearTimeout(autoSaveTimerRef.current); autoSaveTimerRef.current = null; }
-        // Cancel pending rich-editor content timer — prevents old note's content overwriting the new one
-        if (richEditorSetContentTimer.current) { clearTimeout(richEditorSetContentTimer.current); richEditorSetContentTimer.current = null; }
 
         // Stamp this open so concurrent stale fetches don't overwrite the latest result
         const noteId = String(note.id);
@@ -3963,10 +3875,9 @@ const fireIntegrations = (trigger: string, note: any) => {
         setPendingNoteType(null); // reset so noteType comes from note.type, not prior mode
         setEditingNote(note);
         const rawTitle = note.title || "";
-        const loadedTitle = rawTitle.trimStart().startsWith("{") ? extractRichTextTitle(rawTitle) : rawTitle;
         // Treat "Untitled" as no title so first-line auto-derive runs on next save
-        setTitle(loadedTitle.toLowerCase() === "untitled" ? "" : loadedTitle);
-        setContent(note.content != null ? (note.type === "mermaid" || detectMermaid(note.content || "") ? cleanMermaidContent(note.content) : (note.type !== "rich" ? (() => { try { const p = JSON.parse(note.content); if (p?.type === "doc") return tiptapToPlainText(p).replace(/\n{3,}/g, "\n\n").trim(); } catch {} return note.content; })() : note.content)) : "");
+        setTitle(rawTitle.toLowerCase() === "untitled" ? "" : rawTitle);
+        setContent(note.content != null ? (note.type === "mermaid" || detectMermaid(note.content || "") ? cleanMermaidContent(note.content) : (() => { try { const p = JSON.parse(note.content); if (p?.type === "doc") return tiptapToPlainText(p).replace(/\n{3,}/g, "\n\n").trim(); } catch {} return note.content; })()) : "");
         setImages((note as any).images ?? []);
         setTargetFolder(note.folder_name || activeFolder || "General");
         setNoteColor(note.folder_color || folders.find((f: any) => f.name === (note.folder_name || activeFolder))?.color || palette12[0]);
@@ -3989,7 +3900,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                         if (openingNoteIdRef.current !== noteId) return;
                         setDbData((prev: any[]) => prev.map((r) => String(r.id) === noteId ? { ...r, ...fetched } : r));
                         setEditingNote(fetched);
-                        const body = (fetched.type === "mermaid" || detectMermaid(fetched.content || "")) ? cleanMermaidContent(fetched.content || "") : (fetched.type !== "rich" ? (() => { try { const p = JSON.parse(fetched.content || ""); if (p?.type === "doc") return tiptapToPlainText(p).replace(/\n{3,}/g, "\n\n").trim(); } catch {} return fetched.content || ""; })() : (fetched.content || ""));
+                        const body = (fetched.type === "mermaid" || detectMermaid(fetched.content || "")) ? cleanMermaidContent(fetched.content || "") : (() => { try { const p = JSON.parse(fetched.content || ""); if (p?.type === "doc") return tiptapToPlainText(p).replace(/\n{3,}/g, "\n\n").trim(); } catch {} return fetched.content || ""; })();
                         setContent(body);
                         if (fetched.id && looksLikeMarkdown(fetched.content || "")) setMarkdownModeNotes((p: Set<string>) => new Set([...p, String(fetched.id)]));
                         if (fetched.id && (fetched.list_mode || fetched.type === "checklist")) setListModeNotes((p: Set<string>) => new Set([...p, String(fetched.id)]));
@@ -4072,7 +3983,6 @@ const fireIntegrations = (trigger: string, note: any) => {
     const htmlMode     = baseMode && (noteType === "html" || (!!currentNoteId && htmlModeNotes.has(currentNoteId)));
     const jsonMode     = baseMode && noteType === "json" && !mermaidMode;
     const codeMode     = baseMode && ["javascript","typescript","python","css","sql","bash"].includes(noteType);
-    const plainMode    = baseMode && !!currentNoteId && plainModeNotes.has(currentNoteId) && noteType === "rich";
     // jsonDetect kept for JSON syntax highlight fallback
     const jsonDetect = useMemo(() => jsonMode ? detectJson(content) : { ok: false, parsed: null }, [jsonMode, content]);
 
@@ -4087,9 +3997,7 @@ const fireIntegrations = (trigger: string, note: any) => {
     }, [noteType, listMode, content]);
 
     // Unified active mode label
-    const noteViewMode = stackMode ? "Stack" : mindmapMode ? "Mindmap" : graphMode ? "Graph" : listMode ? "Checklist" : mermaidMode ? "Diagram" : codeMode ? noteType : markdownMode ? "Markdown" : htmlMode ? "HTML" : noteType === "rich" ? "Rich" : "Text";
-    // Rich note = TipTap JSON format
-    const isRichNote = !listMode && !graphMode && !mindmapMode && !stackMode && noteType === "rich";
+    const noteViewMode = stackMode ? "Stack" : mindmapMode ? "Mindmap" : graphMode ? "Graph" : listMode ? "Checklist" : mermaidMode ? "Diagram" : codeMode ? noteType : markdownMode ? "Markdown" : htmlMode ? "HTML" : "Text";
 
     // Folder stats for bottom status bar (active folder view, no note open)
     const folderStats = useMemo(() => {
@@ -4118,18 +4026,8 @@ const fireIntegrations = (trigger: string, note: any) => {
         const editedStr = editingNote?.updated_at
             ? `Edited ${new Date(editingNote.updated_at as string).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
             : null;
-        if (noteType !== "rich") return [editedStr, sizeStr].filter(Boolean) as string[];
-        let tiptap: any = null;
-        try { tiptap = JSON.parse(deferredContent); } catch {}
-        const topNodes: any[] = tiptap?.content ?? [];
-        let paragraphs = 0, images = 0, codeBlocks = 0, tables = 0;
-        const walk = (nodes: any[]) => { for (const n of nodes) { if (n.type === "paragraph") paragraphs++; else if (n.type === "image") images++; else if (n.type === "codeBlock") codeBlocks++; else if (n.type === "table") tables++; if (n.content) walk(n.content); } };
-        walk(topNodes);
-        return [editedStr, sizeStr, `${topNodes.length} lines`,
-            images > 0 ? `${images} img` : null, codeBlocks > 0 ? `${codeBlocks} code` : null,
-            tables > 0 ? `${tables} tbl` : null, paragraphs > 0 ? `${paragraphs} ¶` : null,
-        ].filter(Boolean) as string[];
-    }, [editorOpen, noteType, deferredContent, editingNote?.updated_at]);
+        return [editedStr, sizeStr].filter(Boolean) as string[];
+    }, [editorOpen, deferredContent, editingNote?.updated_at]);
 
     const saveFolderIconToDb = useCallback(async (folderName: string, icon: string) => {
         try {
@@ -4206,66 +4104,6 @@ const fireIntegrations = (trigger: string, note: any) => {
             return next;
         });
     }, [currentNoteId, listModeNotes]);
-
-    const togglePlainMode = useCallback(() => {
-        if (!currentNoteId) return;
-        // Cancel any pending autosave to prevent stale-closure saves during mode switch
-        if (autoSaveTimerRef.current) { clearTimeout(autoSaveTimerRef.current); autoSaveTimerRef.current = null; }
-        const turningOn = !plainModeNotes.has(currentNoteId);
-        if (turningOn) {
-            // Convert TipTap JSON → plain text so the user sees clean content
-            try {
-                const parsed = JSON.parse(content);
-                if (parsed?.type === "doc" && Array.isArray(parsed.content)) {
-                    const plain = tiptapToPlainText(parsed).replace(/\n{3,}/g, "\n\n").trim();
-                    setContent(plain);
-                }
-            } catch {}
-            setPlainModeNotes((prev) => new Set([...prev, currentNoteId]));
-        } else {
-            setPlainModeNotes((prev) => { const next = new Set(prev); next.delete(currentNoteId); return next; });
-        }
-    }, [currentNoteId, content, plainModeNotes]);
-
-    const switchToPlain = useCallback(() => {
-        const plainContent = (() => {
-            try {
-                const parsed = JSON.parse(content);
-                if (parsed?.type === "doc") return tiptapToPlainText(parsed).replace(/\n{3,}/g, "\n\n").trim();
-            } catch {}
-            return content;
-        })();
-        if (autoSaveTimerRef.current) { clearTimeout(autoSaveTimerRef.current); autoSaveTimerRef.current = null; }
-        setContent(plainContent);
-        setPendingNoteType("text");
-        setPlainModeNotes((prev) => { const next = new Set(prev); if (currentNoteId) next.delete(currentNoteId); return next; });
-        if (currentNoteId) {
-            void notesApi.update(currentNoteId, { type: "text", content: plainContent });
-            setDbData((prev) => prev.map((n) => String(n.id) === currentNoteId ? { ...n, type: "text", content: plainContent } : n));
-            setEditingNote((prev: any) => prev ? { ...prev, type: "text", content: plainContent } : prev);
-        }
-    }, [currentNoteId, content]);
-
-    const switchToRich = useCallback(() => {
-        // Convert plain text → TipTap JSON paragraphs
-        const richContent = JSON.stringify({
-            type: "doc",
-            content: content.trim()
-                ? content.split("\n").map(line => ({
-                    type: "paragraph",
-                    content: line.trim() ? [{ type: "text", text: line }] : [],
-                }))
-                : [{ type: "paragraph" }],
-        });
-        if (autoSaveTimerRef.current) { clearTimeout(autoSaveTimerRef.current); autoSaveTimerRef.current = null; }
-        setContent(richContent);
-        setPendingNoteType("rich");
-        if (currentNoteId) {
-            void notesApi.update(currentNoteId, { type: "rich", content: richContent });
-            setDbData((prev) => prev.map((n) => String(n.id) === currentNoteId ? { ...n, type: "rich", content: richContent } : n));
-            setEditingNote((prev: any) => prev ? { ...prev, type: "rich", content: richContent } : prev);
-        }
-    }, [currentNoteId, content]);
 
     const toggleMarkdownMode = useCallback(() => {
         if (!currentNoteId) return;
@@ -5439,39 +5277,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                         );
                 }
                 @keyframes spin { to { transform: rotate(360deg); } }
-                .rich-editor { display: flex; flex-direction: column; }
-                .rich-editor .tiptap { flex: 1; min-height: 100%; outline: none; padding: 1rem 2rem; color: #d1d1d1; line-height: 1.65; font-family: ui-sans-serif, system-ui, sans-serif; font-size: 17px; background: #252525; }
-                .rich-editor .tiptap p { margin: 0.5em 0; }
-                .rich-editor .tiptap p.is-editor-empty:first-child::before { content: attr(data-placeholder); color: #52525b; pointer-events: none; float: left; height: 0; }
-                .rich-editor .tiptap h1,.rich-editor .tiptap h2,.rich-editor .tiptap h3 { font-weight: 900; text-transform: uppercase; letter-spacing: -0.02em; color: #fff; margin: 1em 0 0.4em; }
-                .rich-editor .tiptap h1 { font-size: 1.4rem; border-bottom: 2px solid rgba(255,255,255,0.12); padding-bottom: 0.3em; }
-                .rich-editor .tiptap h2 { font-size: 1.1rem; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 0.2em; }
-                .rich-editor .tiptap h3 { font-size: 0.95rem; }
-                .rich-editor .tiptap ul,.rich-editor .tiptap ol { padding-left: 1.5em; margin: 0.5em 0; }
-                .rich-editor .tiptap li { margin: 0.2em 0; }
-                .rich-editor .tiptap ul li { list-style-type: disc; }
-                .rich-editor .tiptap ol li { list-style-type: decimal; }
-                .rich-editor .tiptap li::marker { color: #71717a; }
-                .rich-editor .tiptap strong { font-weight: 900; color: #fff; }
-                .rich-editor .tiptap em { font-style: italic; color: #d4d4d8; }
-                .rich-editor .tiptap code { font-family: ui-monospace, monospace; font-size: 0.85em; background: rgba(255,255,255,0.08); padding: 0.15em 0.4em; border-radius: 3px; color: #67e8f9; }
-                .rich-editor .tiptap pre { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); padding: 1em; margin: 0.75em 0; overflow-x: auto; border-radius: 4px; }
-                .rich-editor .tiptap pre code { background: none; padding: 0; color: #a5f3fc; }
-                .rich-editor .tiptap blockquote { border-left: 3px solid rgba(255,255,255,0.2); padding-left: 1em; margin: 0.75em 0; color: #71717a; font-style: italic; }
-                .rich-editor .tiptap a { color: #38bdf8; text-decoration: underline; cursor: pointer; }
-                .rich-editor .tiptap img { max-width: 100%; height: auto; border-radius: 6px; margin: 0.75em 0; display: block; border: 1px solid rgba(255,255,255,0.08); cursor: pointer; }
-                .rich-editor .tiptap hr { border: none; border-top: 1px solid rgba(255,255,255,0.1); margin: 1.5em 0; }
-                .rich-editor .tiptap ul[data-type="taskList"] { list-style: none; padding-left: 0.5em; }
-                .rich-editor .tiptap ul[data-type="taskList"] li { display: flex; align-items: flex-start; gap: 0.5em; }
-                .rich-editor .tiptap ul[data-type="taskList"] li > label { flex-shrink: 0; margin-top: 0.2em; }
-                .rich-editor .tiptap ul[data-type="taskList"] li input[type="checkbox"] { accent-color: #38bdf8; cursor: pointer; }
-                .rich-editor .tiptap table { border-collapse: collapse; width: 100%; margin: 0.75em 0; table-layout: fixed; }
-                .rich-editor .tiptap th, .rich-editor .tiptap td { border: 1px solid rgba(255,255,255,0.15); padding: 0.5em 0.75em; text-align: left; vertical-align: top; min-width: 60px; position: relative; }
-                .rich-editor .tiptap th { background: rgba(255,255,255,0.06); font-weight: 900; font-size: 0.8em; text-transform: uppercase; letter-spacing: 0.05em; color: #a1a1aa; }
-                .rich-editor .tiptap td { background: transparent; }
-                .rich-editor .tiptap td p, .rich-editor .tiptap th p { margin: 0; }
-                .rich-editor .tiptap td img, .rich-editor .tiptap th img { margin: 0; border-radius: 3px; }
-                .rich-editor .tiptap .selectedCell:after { background: rgba(255,255,255,0.1); content: ""; left: 0; right: 0; top: 0; bottom: 0; pointer-events: none; position: absolute; z-index: 2; }
                 .md-preview { color: #e4e4e7; line-height: 1.6; font-family: ui-sans-serif, system-ui, sans-serif; font-size: 9px; text-align: left; }
                 .md-preview h1,.md-preview h2,.md-preview h3,.md-preview h4,.md-preview h5,.md-preview h6 { font-weight: 900; text-transform: uppercase; letter-spacing: -0.02em; color: #fff; margin: 1em 0 0.4em; line-height: 1.2; text-align: left; }
                 .md-preview h1 { font-size: 1.3rem; border-bottom: 2px solid rgba(255,255,255,0.12); padding-bottom: 0.3em; }
@@ -6003,7 +5808,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                         {(canToggleChecklist || listMode) && (
                         <button type="button"
                             onClick={() => {
-                                if (!listMode && noteType === "rich") switchToPlain();
                                 toggleListMode();
                             }}
                             className="p-2 sm:p-3 transition flex-shrink-0"
@@ -6046,7 +5850,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                             </div>
                         )}
                         {/* ── Float copy pill — fades after 10s of editing ── */}
-                        {showFloatCopy && !isFullscreen && !showNoteActions && !showFindBar && content.trim() && !listMode && !graphMode && !mindmapMode && !stackMode && noteType !== "rich" && noteType !== "html" && (
+                        {showFloatCopy && !isFullscreen && !showNoteActions && !showFindBar && content.trim() && !listMode && !graphMode && !mindmapMode && !stackMode && noteType !== "html" && (
                         <div className="absolute top-3 right-3 z-[2147483647] pointer-events-auto">
                             <button type="button"
                                 onClick={() => {
@@ -6410,7 +6214,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 editing={codeEditMode}
                                 searchTerm={showFindBar ? findQuery : ""}
                                 searchIndex={findCursor}
-                                onSearchResults={setRichSearchCount}
+                                onSearchResults={() => {}}
                                 onChange={setContent}
                                 onBlur={() => { setCodeEditMode(false); void saveNote({ silent: true, deriveTitle: true }); }}
                                 onClick={() => setCodeEditMode(true)}
@@ -6486,7 +6290,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 editing={codeEditMode}
                                 searchTerm={showFindBar ? findQuery : ""}
                                 searchIndex={findCursor}
-                                onSearchResults={setRichSearchCount}
+                                onSearchResults={() => {}}
                                 onChange={setContent}
                                 onBlur={() => { setCodeEditMode(false); void saveNote({ silent: true, deriveTitle: true }); }}
                                 onClick={() => setCodeEditMode(true)}
@@ -6499,72 +6303,11 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 wordWrap={!codeEditMode}
                                 searchTerm={showFindBar ? findQuery : ""}
                                 searchIndex={findCursor}
-                                onSearchResults={setRichSearchCount}
+                                onSearchResults={() => {}}
                                 onChange={setContent}
                                 onBlur={() => { setCodeEditMode(false); void saveNote({ silent: true, deriveTitle: true }); }}
                                 onClick={() => setCodeEditMode(true)}
                             />
-                        ) : plainMode ? (
-                            <div onPaste={handlePlainModePaste} className="flex-1 flex flex-col min-h-0">
-                                {(() => {
-                                    const rawDetected = detectedType;
-                                    const detectedLang = (rawDetected !== "text" && rawDetected !== "rich") ? rawDetected : null;
-                                    return (
-                                        <>
-                                        {detectedLang && TYPE_BADGE[detectedLang] && (
-                                            <div className="flex items-center gap-2 px-3 py-1.5 border-b border-white/5" style={{ background: "#1a1a1a" }}>
-                                                <span className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-full"
-                                                    style={{ background: `${TYPE_BADGE[detectedLang].color}20`, color: TYPE_BADGE[detectedLang].color, border: `1px solid ${TYPE_BADGE[detectedLang].color}40` }}>
-                                                    {TYPE_BADGE[detectedLang].label}
-                                                </span>
-                                                <span className="text-[9px] text-zinc-600 uppercase tracking-widest">detected — paste to replace or type freely</span>
-                                            </div>
-                                        )}
-                                        <CodeViewer
-                                            code={content}
-                                            language={detectedLang ?? "javascript"}
-                                            editing={true}
-                                            searchTerm={showFindBar ? findQuery : ""}
-                                            searchIndex={findCursor}
-                                            onSearchResults={setRichSearchCount}
-                                            onChange={(val) => setContent(val)}
-                                            onBlur={() => { if (currentNoteId) void saveNote({ silent: true, deriveTitle: true }); }}
-                                        />
-                                        </>
-                                    );
-                                })()}
-                            </div>
-                        ) : noteType === "rich" ? (
-                            <div className="relative flex-1 min-h-0 flex flex-col" style={{ background: "#222222" }}>
-                                <RichTextEditor
-                                    key={currentNoteId ?? "new"}
-                                    noteId={currentNoteId}
-                                    content={content}
-                                    onChange={(html) => {
-                                        latestContentRef.current = html;
-                                        if (richEditorSetContentTimer.current) clearTimeout(richEditorSetContentTimer.current);
-                                        richEditorSetContentTimer.current = setTimeout(() => setContent(html), 100);
-                                    }}
-                                    onBlur={() => void saveNote({ silent: true, deriveTitle: true })}
-                                    searchTerm={showFindBar ? findQuery : ""}
-                                    searchIndex={findCursor}
-                                    onSearchResults={setRichSearchCount}
-                                    onUploadImage={async (file) => {
-                                        const token = await getAuthToken();
-                                        const fd = new FormData();
-                                        fd.append("file", file, `image.${file.type.split("/")[1] ?? "png"}`);
-                                        if (currentNoteId) fd.append("noteId", currentNoteId);
-                                        const r1 = await fetch("/api/stickies/gdrive", { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd });
-                                        if (r1.ok) { const d = await r1.json(); if (d.url) return d.url as string; }
-                                        const r2 = await fetch("/api/stickies/upload", { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd });
-                                        const d2 = await r2.json();
-                                        return (d2.url as string) ?? "";
-                                    }}
-                                    accentColor={activeAccentColor}
-                                    editMode={true}
-                                    onDelete={fastDeleteNote}
-                                />
-                            </div>
                         ) : (
                             <div className="flex-1 flex overflow-auto relative" style={{ background: "#000" }}>
                                 {/* Highlight backdrop for find-in-note */}
@@ -6633,7 +6376,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                     const extMap: Record<string, string> = {
                         text: ".txt", markdown: ".md", mermaid: ".mmd", json: ".json",
                         javascript: ".js", typescript: ".ts", python: ".py", css: ".css",
-                        sql: ".sql", bash: ".sh", html: ".html", rich: ".rtf",
+                        sql: ".sql", bash: ".sh", html: ".html",
                     };
                     const ext = extMap[noteType] ?? ".txt";
                     const edited = editingNote.updated_at
@@ -6642,12 +6385,11 @@ const fireIntegrations = (trigger: string, note: any) => {
                     return (
                         <div className="shrink-0 flex items-center justify-between px-3 select-none border-t border-white/[0.06]"
                             style={{ height: 22, background: "#1e1e1e", fontSize: 10 }}>
-                            {showFindBar && findQuery.trim() && (codeMode || mermaidMode || jsonMode || plainMode || noteType === "rich" ? richSearchCount > 0 : findMatches.length > 0) ? (
+                            {showFindBar && findQuery.trim() && findMatches.length > 0 ? (
                                 // Find mode — show match info in status bar
                                 (() => {
-                                    const usesCodeViewer = codeMode || mermaidMode || jsonMode || plainMode || noteType === "rich";
-                                    const total = usesCodeViewer ? richSearchCount : findMatches.length;
-                                    const match = !usesCodeViewer ? findMatches[findCursor] : null;
+                                    const total = findMatches.length;
+                                    const match = findMatches[findCursor] ?? null;
                                     const line = match ? content.substring(0, match.start).split("\n").length : null;
                                     return (
                                         <div className="flex items-center gap-2 font-mono">
@@ -6661,19 +6403,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 })()
                             ) : (
                                 <div className="flex items-center gap-2 font-mono overflow-x-auto" style={{ fontSize: 9 }}>
-                                    {richStatsChips.length > 0 ? (
-                                        richStatsChips.map((c, i) => (
-                                            <span key={i} className="flex items-center gap-1.5 whitespace-nowrap">
-                                                {i > 0 && <span className="text-zinc-700">·</span>}
-                                                <span className="text-zinc-500">{c}</span>
-                                            </span>
-                                        ))
-                                    ) : (
-                                        <span className="text-zinc-600 whitespace-nowrap">{edited ?? ""}</span>
-                                    )}
-                                    {richStatsChips.length > 0 && edited && (
-                                        <><span className="text-zinc-700">·</span><span className="text-zinc-700 whitespace-nowrap">{edited}</span></>
-                                    )}
+                                    <span className="text-zinc-600 whitespace-nowrap">{edited ?? ""}</span>
                                 </div>
                             )}
                             <div className="flex items-center gap-2">
@@ -6684,23 +6414,17 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     const badge = TYPE_BADGE[noteType] ?? TYPE_BADGE["text"];
                                     if (!badge) return null;
                                     const label = noteType === "mermaid" ? mermaidSubType(content) : badge.label;
-                                    const canToggle = noteType === "text" || noteType === "rich";
-                                    const handleBadgeClick = canToggle ? (noteType === "text" ? switchToRich : switchToPlain) : undefined;
                                     return (
                                         <span
-                                            onClick={handleBadgeClick}
-                                            title={canToggle ? (noteType === "rich" ? "Switch to Plain text" : "Switch to Rich editor") : undefined}
                                             className="font-mono font-black uppercase tracking-wide whitespace-nowrap px-1.5 py-px rounded-full"
                                             style={{
                                                 fontSize: 8,
                                                 background: `${badge.color}22`,
                                                 color: badge.color,
                                                 border: `1px solid ${badge.color}44`,
-                                                cursor: canToggle ? "pointer" : "default",
+                                                cursor: "default",
                                                 transition: "background 0.15s, opacity 0.15s",
                                             }}
-                                            onMouseEnter={canToggle ? (e) => { (e.target as HTMLElement).style.background = `${badge.color}44`; } : undefined}
-                                            onMouseLeave={canToggle ? (e) => { (e.target as HTMLElement).style.background = `${badge.color}22`; } : undefined}
                                         >{label}</span>
                                     );
                                 })()}
@@ -7414,7 +7138,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                     <div className="flex flex-col items-center gap-6 px-6" onClick={(e) => e.stopPropagation()}>
                         <div className="text-[10px] font-black uppercase tracking-[0.25em] text-zinc-500">New Note</div>
                         <div className="flex items-center gap-8">
-                            {/* TYPE ball → rich editor */}
                             <button
                                 type="button"
                                 onClick={() => { setShowNoteTypePicker(false); openNewNote(); }}
@@ -7609,8 +7332,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                         if (graphMode) toggleGraphMode();
                                                         if (mindmapMode) toggleMindmapMode();
                                                         if (stackMode) toggleStackMode();
-                                                        // Rich note → convert to plain first, then checklist
-                                                        if (!listMode && noteType === "rich") switchToPlain();
                                                         toggleListMode();
                                                     } else {
                                                         if (listMode) toggleListMode();
