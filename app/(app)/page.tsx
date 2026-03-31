@@ -5937,7 +5937,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     <div className="absolute inset-0 flex items-center justify-center" style={{ fontSize: breadcrumbTotal >= 10 ? 9 : 11, color: "#fff" }}>{breadcrumbTotal}</div>
                                 </div>
                             ) : (
-                                <span className="w-6 h-6 flex-shrink-0 flex items-center justify-center font-black leading-none tracking-tight" style={{ backgroundColor: activeAccentColor, color: "#fff", borderRadius: "2px 2px 2px 10px", fontSize: noteBadgeFontSize }}>
+                                <span className="w-6 h-6 flex-shrink-0 flex items-center justify-center font-black leading-none tracking-tight" style={{ backgroundColor: activeAccentColor, color: isLightColor(activeAccentColor) ? "#000" : "#fff", borderRadius: "2px 2px 2px 10px", fontSize: noteBadgeFontSize }}>
                                     {noteBadgeLabel}
                                 </span>
                             )}
@@ -5951,7 +5951,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 <div className="absolute inset-0 flex items-center justify-center" style={{ fontSize: breadcrumbTotal >= 10 ? 9 : 11, color: "#fff" }}>{breadcrumbTotal}</div>
                             </div>
                         ) : (
-                            <span className="sm:hidden w-[30px] h-[30px] inline-flex items-center justify-center font-black leading-none tracking-tight flex-shrink-0" style={{ backgroundColor: activeAccentColor, color: "#fff", borderRadius: "2px 2px 2px 10px", fontSize: noteBadgeFontSize }}>
+                            <span className="sm:hidden w-[30px] h-[30px] inline-flex items-center justify-center font-black leading-none tracking-tight flex-shrink-0" style={{ backgroundColor: activeAccentColor, color: isLightColor(activeAccentColor) ? "#000" : "#fff", borderRadius: "2px 2px 2px 10px", fontSize: noteBadgeFontSize }}>
                                 {noteBadgeLabel}
                             </span>
                         )}
