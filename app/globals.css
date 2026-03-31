@@ -377,21 +377,22 @@ body {
   filter: brightness(1.12);
 }
 .folder-grid-tile .folder-grid-name {
-  color: #fff !important;
+  color: var(--tc, #fff) !important;
 }
 .folder-grid-tile .folder-icon-badge {
   background: rgba(255,255,255,0.2);
   color: var(--ic, #fff);
 }
 .folder-grid-tile .folder-grid-initial {
-  color: #fff !important;
+  color: var(--tc, #fff) !important;
 }
 /* CLAUDE grid tile stays white */
 .folder-grid-tile-claude {
   background: #fff !important;
 }
-.folder-grid-tile-claude .folder-grid-name {
-  color: var(--fc, #888) !important;
+.folder-grid-tile-claude .folder-grid-name,
+.folder-grid-tile-claude .folder-grid-initial {
+  color: #1a1a1a !important;
 }
 .folder-grid-tile-claude .folder-icon-badge {
   background: #fff !important;

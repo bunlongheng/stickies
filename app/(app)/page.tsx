@@ -6730,15 +6730,15 @@ const fireIntegrations = (trigger: string, note: any) => {
                         void loadFolderNotes(fn, false);
                     };
                     return (
-                        <div className="flex flex-col flex-shrink-0 overflow-hidden relative"
+                        <div className={`flex flex-col flex-shrink-0 overflow-hidden relative ${!editMode && editorOpen ? "hidden" : ""}`}
                              style={{ background: editMode ? "#0f0f0f" : "black", width: editMode ? "calc(52px + 30%)" : undefined, minWidth: editMode ? "312px" : undefined, maxWidth: editMode ? "432px" : undefined }}>
 
                             {/* SIDEBAR STRIP — editMode only, absolutely positioned on left */}
                             {editMode && (
-                                <div className="absolute top-0 left-0 bottom-0 w-[52px] flex flex-col" style={{ background: "#0f0f0f", zIndex: 10 }}>
+                                <div className="absolute top-0 left-0 bottom-0 w-[52px] flex flex-col items-center" style={{ background: "#0f0f0f", zIndex: 10 }}>
                                     <div className="safe-top-bar shrink-0" style={{ background: "#0f0f0f" }} />
                                     <div className="shrink-0" style={{ height: "4rem", background: "#0f0f0f" }} />
-                                    <div className="flex-1 overflow-y-auto py-2 flex flex-col items-center gap-2">
+                                    <div className="flex-1 overflow-y-auto py-2 flex flex-col items-center gap-2 w-full">
                                         {/* All Notes */}
                                         <button type="button"
                                             onMouseEnter={(e) => { playSound("hover"); const r = e.currentTarget.getBoundingClientRect(); setSidebarTooltip({ name: "All Notes", color: "#aaaaaa", y: r.top + r.height / 2 }); }}
@@ -6772,6 +6772,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         })}
                                     </div>
                                     {/* TRASH — pinned to bottom */}
+                                    <div className="shrink-0 flex flex-col items-center pb-3 pt-1 w-full">
                                     {rootFolders.filter((f: any) => f.name === "TRASH").map((f: any) => {
                                         const isActiveRoot = activeRoot === "TRASH";
                                         return (
@@ -6779,7 +6780,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 onMouseEnter={(e) => { playSound("hover"); const r = e.currentTarget.getBoundingClientRect(); setSidebarTooltip({ name: "TRASH", color: "#3a3a3a", y: r.top + r.height / 2 }); }}
                                                 onMouseLeave={() => setSidebarTooltip(null)}
                                                 onClick={() => navigateTo(f)}
-                                                className={`relative w-9 h-9 flex items-center justify-center transition-all mb-3 flex-shrink-0 ${isActiveRoot ? "scale-110" : "opacity-20 hover:opacity-90 hover:scale-105"}`}
+                                                className={`relative w-9 h-9 flex items-center justify-center transition-all flex-shrink-0 ${isActiveRoot ? "scale-110" : "opacity-20 hover:opacity-90 hover:scale-105"}`}
                                                 style={{ background: "#3a3a3a", borderRadius: 8, boxShadow: isActiveRoot ? "0 0 0 1.5px #3a3a3a, 0 0 12px 4px #ffffff33" : "none" }}>
                                                 <TrashIcon className="w-4 h-4 text-white" />
                                                 <div className="absolute top-1/2 -translate-y-1/2 w-[3px] h-[3px] rounded-full pointer-events-none transition-all duration-300"
@@ -6787,6 +6788,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             </button>
                                         );
                                     })}
+                                    </div>
                                 </div>
                             )}
 
@@ -7087,7 +7089,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             return { position: "relative", isolation: "isolate", "--row-color": c, "--fc": c, ...(isActive && !item.is_folder ? { borderRightColor: c, background: `${c}35` } : isActive ? { borderRightColor: c } : {}), ...(item.is_folder ? { background: `${c}18` } : {}) } as unknown as React.CSSProperties;
                                         }
                                         return item.is_folder
-                                            ? { isolation: "isolate", "--fc": c } as React.CSSProperties
+                                            ? { isolation: "isolate", "--fc": c, "--tc": isLightColor(c) ? "#000" : "#fff" } as React.CSSProperties
                                             : { isolation: "isolate", backgroundColor: c, borderRadius: "3px 3px 3px 14px" };
                                     })()}
                                     className={`${isListMode
@@ -7233,9 +7235,9 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                                 ? <div style={{ fontSize: item.icon.startsWith("__hero:") ? undefined : "2.8rem", lineHeight: 1 }} className="relative z-10 flex items-center justify-center">
                                                                     <FolderIconDisplay value={item.icon} folderName={item.name || "F"} className="w-12 h-12" />
                                                                   </div>
-                                                                : <div style={{ fontSize: "3rem", lineHeight: 1, color: item.color || item.folder_color || palette12[0] }} className="folder-grid-initial font-black relative z-10">{meaningfulInitial(item.name, "F")}</div>
+                                                                : <div style={{ fontSize: "3rem", lineHeight: 1 }} className="folder-grid-initial font-black relative z-10">{meaningfulInitial(item.name, "F")}</div>
                                                         }
-                                                        <div className="folder-grid-name mt-0.5 font-bold line-clamp-1 w-full text-center relative z-10 text-[11px]" style={{ color: item.name === "CLAUDE" ? "#000" : (item.color || item.folder_color || palette12[0]) }}>
+                                                        <div className="folder-grid-name mt-0.5 font-bold line-clamp-1 w-full text-center relative z-10 text-[11px]">
                                                             <span className="uppercase">{item.name}</span> <span className="opacity-50 font-normal text-[10px]">({(item.subfolderCount || 0) + (item.count || 0)})</span>
                                                         </div>
                                                     </>
@@ -7307,7 +7309,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                         const fabSize = 48;
                         const iconSize = 24;
                         return (
-                            <div className="absolute bottom-5 right-4 z-[130]" style={{ filter: "drop-shadow(0 6px 20px rgba(0,0,0,0.55))" }}>
+                            <div className={`${editMode ? "absolute" : "fixed"} bottom-5 right-4 z-[130]`} style={{ filter: "drop-shadow(0 6px 20px rgba(0,0,0,0.55))" }}>
                                 <button
                                     key={`fab-${depth}`}
                                     type="button"
@@ -8357,7 +8359,15 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 )}
                                 {/* SPLIT LAYOUT TOGGLE */}
                                 <div className="px-6 py-2 border-b border-white/[0.06]">
-                                    <button type="button" onClick={() => { setEditMode(v => !v); setShowFolderActions(false); }}
+                                    <button type="button" onClick={() => {
+                                        // When disabling split view at root (no folder selected),
+                                        // navigate into the open note's folder so the user doesn't land on bare root
+                                        if (editMode && folderStack.length === 0 && editingNote?.folder_name) {
+                                            const folderRow = dbData.find((r: any) => r.is_folder && r.folder_name === editingNote.folder_name);
+                                            enterFolder({ id: folderRow ? String(folderRow.id) : `virtual-${editingNote.folder_name}`, name: editingNote.folder_name, color: folderColors[editingNote.folder_name] || folderRow?.folder_color || palette12[0] });
+                                        }
+                                        setEditMode(v => !v); setShowFolderActions(false);
+                                    }}
                                         className="w-full flex items-center justify-between">
                                         <div className="flex items-center gap-2">
                                             <ViewColumnsIcon className="w-4 h-4 text-zinc-400" />
