@@ -7131,11 +7131,11 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 );
                                             })()}
                                             <div className="flex-1 min-w-0">
-                                                <div className="text-[13px] font-semibold tracking-tight text-white truncate">
-                                                    {item.is_folder ? <><span className="uppercase folder-name-text">{item.name}</span><span className="text-white/30 font-light ml-0.5">/</span></> : (item.title?.length > 50 ? item.title.slice(0, 50) + "…" : item.title)}
+                                                <div className="text-[13px] font-bold tracking-tight text-white truncate">
+                                                    {item.is_folder ? <><span className="uppercase">{item.name}</span><span className="text-white/30 ml-0.5">/</span></> : (item.title?.length > 50 ? item.title.slice(0, 50) + "…" : item.title)}
                                                 </div>
                                                 {item.is_folder ? (
-                                                    <div className="text-[13px] sm:text-[13px] text-zinc-500 font-medium folder-name-text">
+                                                    <div className="text-[11px] text-zinc-500">
                                                         {item.subfolderCount > 0 && <span>{item.subfolderCount} folder{item.subfolderCount !== 1 ? "s" : ""}{item.count > 0 ? " · " : ""}</span>}
                                                         {item.count > 0 && <span>{item.count} note{item.count !== 1 ? "s" : ""}</span>}
                                                     </div>
@@ -7177,12 +7177,10 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 </span>
                                             )}
                                             {!item.is_folder && !(item as any).trashed_at && item.updated_at && (
-                                                <span className="text-[11px] text-zinc-500 font-medium whitespace-nowrap flex-shrink-0">{timeAgo(item.updated_at)}</span>
+                                                <span className="text-[11px] text-zinc-500 whitespace-nowrap flex-shrink-0">{timeAgo(item.updated_at)}</span>
                                             )}
                                             {item.is_folder && item.latestUpdatedAt && (
-                                                <div className="flex items-center justify-end" style={{ width: "15%", flexShrink: 0 }}>
-                                                    <span className="text-[11px] text-zinc-500 font-medium whitespace-nowrap">{timeAgo(item.latestUpdatedAt)}</span>
-                                                </div>
+                                                <span className="text-[11px] text-zinc-500 whitespace-nowrap flex-shrink-0">{timeAgo(item.latestUpdatedAt)}</span>
                                             )}
                                         </>
                                     ) : (
