@@ -7131,7 +7131,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 );
                                             })()}
                                             <div className="flex-1 min-w-0">
-                                                <div className="text-[13px] font-bold tracking-tight text-white truncate">
+                                                <div className="text-[13px] font-normal tracking-tight text-white truncate">
                                                     {item.is_folder ? <><span className="uppercase">{item.name}</span><span className="text-white/30 ml-0.5">/</span></> : (item.title?.length > 50 ? item.title.slice(0, 50) + "…" : item.title)}
                                                 </div>
                                                 {item.is_folder ? (
