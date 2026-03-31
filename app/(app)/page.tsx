@@ -887,13 +887,13 @@ function FolderIconDisplay({ value, folderName, className = "w-4 h-4" }: { value
     if (value.startsWith("__hero:")) {
         const key = value.slice(7);
         const Ic = HERO_ICON_MAP[key];
-        return Ic ? <Ic className={className} /> : <span>{folderName.charAt(0).toUpperCase()}</span>;
+        return Ic ? <Ic className={className} /> : <span className="font-black">{folderName.charAt(0).toUpperCase()}</span>;
     }
     if (value.startsWith("data:image/") || value.startsWith("http://") || value.startsWith("https://")) {
         return <img src={value} alt={folderName} className={className} style={{ objectFit: "contain", borderRadius: 2, filter: "brightness(0) invert(1)" }} />;
     }
     if (value) return <span>{value}</span>;
-    return <span>{folderName.charAt(0).toUpperCase()}</span>;
+    return <span className="font-black">{folderName.charAt(0).toUpperCase()}</span>;
 }
 
 const FOLDER_ICON_EMOJIS = [
