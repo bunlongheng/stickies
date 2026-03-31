@@ -6750,9 +6750,9 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             <div className="absolute top-1/2 -translate-y-1/2 w-[3px] h-[3px] rounded-full pointer-events-none transition-all duration-300"
                                                 style={{ right: -5, background: !folderStack.length ? "rgba(255,255,255,0.85)" : "transparent", zIndex: 200 }} />
                                         </button>
-                                        {rootFolders.map((f: any) => {
+                                        {rootFolders.filter((f: any) => f.name !== "TRASH").map((f: any) => {
                                             const fn = f.name;
-                                            const fc = fn === "TRASH" ? "#3a3a3a" : (folderColors[fn] || f.color || "#888");
+                                            const fc = folderColors[fn] || f.color || "#888";
                                             const ftc = isLightColor(fc) ? "#000" : "#fff";
                                             const isActiveRoot = activeRoot === fn;
                                             return (
@@ -6764,8 +6764,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                     style={{ background: fc, color: ftc, borderRadius: 8, boxShadow: isActiveRoot ? `0 0 0 1.5px ${fc}, 0 0 12px 4px ${fc}bb, 0 0 28px 10px ${fc}88, 0 0 48px 18px ${fc}44` : "none" }}>
                                                     {fn === "CLAUDE"
                                                         ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-1" />
-                                                        : fn === "TRASH"
-                                                        ? <TrashIcon className="w-4 h-4" style={{ color: ftc }} />
                                                         : <FolderIconDisplay value={folderIcons[fn] || f.icon || ""} folderName={fn} className="w-4 h-4" />}
                                                     <div className="absolute top-1/2 -translate-y-1/2 w-[3px] h-[3px] rounded-full pointer-events-none transition-all duration-300"
                                                         style={{ right: -5, background: isActiveRoot ? "rgba(255,255,255,0.85)" : "transparent", zIndex: 200 }} />
@@ -6773,6 +6771,22 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             );
                                         })}
                                     </div>
+                                    {/* TRASH — pinned to bottom */}
+                                    {rootFolders.filter((f: any) => f.name === "TRASH").map((f: any) => {
+                                        const isActiveRoot = activeRoot === "TRASH";
+                                        return (
+                                            <button key={f.id} type="button"
+                                                onMouseEnter={(e) => { playSound("hover"); const r = e.currentTarget.getBoundingClientRect(); setSidebarTooltip({ name: "TRASH", color: "#3a3a3a", y: r.top + r.height / 2 }); }}
+                                                onMouseLeave={() => setSidebarTooltip(null)}
+                                                onClick={() => navigateTo(f)}
+                                                className={`relative w-9 h-9 flex items-center justify-center transition-all mb-3 flex-shrink-0 ${isActiveRoot ? "scale-110" : "opacity-20 hover:opacity-90 hover:scale-105"}`}
+                                                style={{ background: "#3a3a3a", borderRadius: 8, boxShadow: isActiveRoot ? "0 0 0 1.5px #3a3a3a, 0 0 12px 4px #ffffff33" : "none" }}>
+                                                <TrashIcon className="w-4 h-4 text-white" />
+                                                <div className="absolute top-1/2 -translate-y-1/2 w-[3px] h-[3px] rounded-full pointer-events-none transition-all duration-300"
+                                                    style={{ right: -5, background: isActiveRoot ? "rgba(255,255,255,0.85)" : "transparent", zIndex: 200 }} />
+                                            </button>
+                                        );
+                                    })}
                                 </div>
                             )}
 
