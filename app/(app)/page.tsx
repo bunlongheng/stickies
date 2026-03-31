@@ -8391,19 +8391,17 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         ))}
                                     </div>
                                 </div>
-                                {isAdmin && (
-                                    <button type="button" className="w-full flex items-center gap-4 px-6 py-4 text-left text-zinc-300 hover:bg-white/5 hover:text-white active:bg-white/10 transition"
-                                        onClick={() => { setIntegrationsSnapshot([...integrationsRef.current]); setShowIntegrationsPanel(true); }}>
-                                        <PuzzlePieceIcon className="w-5 h-5 flex-shrink-0" />
-                                        <span className="text-xs font-black tracking-wide flex-1">Integrations</span>
-                                        <div className="flex items-center gap-2">
-                                            {integrationsRef.current.length > 0 && (
-                                                <span className="text-[10px] font-black text-emerald-400">{integrationsRef.current.length} active</span>
-                                            )}
-                                            <ArrowRightIcon className="w-4 h-4 text-zinc-600 flex-shrink-0" />
-                                        </div>
-                                    </button>
-                                )}
+                                <button type="button" className="w-full flex items-center gap-4 px-6 py-4 text-left text-zinc-300 hover:bg-white/5 hover:text-white active:bg-white/10 transition"
+                                    onClick={() => { setIntegrationsSnapshot([...integrationsRef.current]); setShowIntegrationsPanel(true); }}>
+                                    <PuzzlePieceIcon className="w-5 h-5 flex-shrink-0" />
+                                    <span className="text-xs font-black tracking-wide flex-1">Integrations</span>
+                                    <div className="flex items-center gap-2">
+                                        {integrationsRef.current.length > 0 && (
+                                            <span className="text-[10px] font-black text-emerald-400">{integrationsRef.current.length} active</span>
+                                        )}
+                                        <ArrowRightIcon className="w-4 h-4 text-zinc-600 flex-shrink-0" />
+                                    </div>
+                                </button>
                             </>)}
                         </div>
                         <div className="border-t border-white/10 p-4 flex gap-3">
