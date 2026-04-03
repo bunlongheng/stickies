@@ -40,8 +40,8 @@ function mindmapNodesToJSON(name: string, nodes: any[]): string {
 }
 
 async function fetchExternalIdeas(req: Request, folderName: string): Promise<Record<string, unknown>[]> {
-    const ref   = process.env.BHENG_SUPABASE_PROJECT_REF;
-    const token = process.env.BHENG_SUPABASE_MANAGEMENT_TOKEN;
+    const ref   = process.env.SUPABASE_PROJECT_REF;
+    const token = process.env.SUPABASE_MANAGEMENT_TOKEN;
     if (!ref || !token) return [];
     try {
         const res = await fetch(`https://api.supabase.com/v1/projects/${ref}/database/query`, {
@@ -77,7 +77,7 @@ async function fetchExternalIdeas(req: Request, folderName: string): Promise<Rec
 async function fetchDiagrams(req: Request): Promise<Record<string, unknown>[]> {
     try {
         const { createClient: createSb } = await import("@supabase/supabase-js");
-        const sb = createSb(process.env.BHENG_SUPABASE_URL!, process.env.BHENG_SUPABASE_SERVICE_ROLE_KEY!);
+        const sb = createSb(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
         const { data, error } = await sb
             .from("diagrams")
             .select("id, title, slug, diagram_type, code, created_at, updated_at")
@@ -159,11 +159,9 @@ function broadcastRequest(req: Request, auth: AuthResult, extra?: Record<string,
 
 // ── Hue trigger — only called for external (AI/script) requests ──────────────
 function triggerHue(color: string) {
-    // VERCEL_PROJECT_PRODUCTION_URL is auto-set by Vercel to the stable prod domain
-    // Fall back to NEXT_PUBLIC_APP_BASE_URL for local dev
-    const base = process.env.VERCEL_PROJECT_PRODUCTION_URL
-        ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
-        : (process.env.NEXT_PUBLIC_APP_BASE_URL ?? "http://localhost:4444").replace(/\/$/, "");
+    // Local bridge only — skip on Vercel (can't reach home network)
+    if (process.env.VERCEL) return;
+    const base = (process.env.NEXT_PUBLIC_APP_BASE_URL ?? "http://localhost:4444").replace(/\/$/, "");
     fetch(`${base}/api/hue/trigger`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -201,16 +199,10 @@ function blockExternalKey(req: Request): NextResponse | null {
 }
 
 async function authenticate(req: Request): Promise<AuthResult | null> {
-    // Dev bypass: in development, always authenticate as owner — no login needed locally
-    if (process.env.NODE_ENV === "development") {
-        return { type: "owner", userId: process.env.OWNER_USER_ID?.trim() ?? "" };
-    }
-
     const auth = req.headers.get("authorization") ?? "";
     const bearer = auth.startsWith("Bearer ") ? auth.slice(7) : "";
-    if (!bearer) return null;
 
-    // Static API key → external caller (AI, scripts, automations)
+    // Static API key → external caller (AI, scripts, automations) — checked first, even in dev
     const apiKey = process.env.STICKIES_API_KEY;
     if (apiKey) {
         const expected = `Bearer ${apiKey}`;
@@ -222,6 +214,13 @@ async function authenticate(req: Request): Promise<AuthResult | null> {
             } catch {}
         }
     }
+
+    // Dev bypass: no login needed in development (browser requests without API key)
+    if (process.env.NODE_ENV === "development" && !bearer) {
+        return { type: "owner", userId: process.env.OWNER_USER_ID?.trim() ?? "" };
+    }
+
+    if (!bearer) return null;
 
     // Supabase JWT → verify via auth service (not database)
     const { data: { user } } = await getSupabaseAuth().auth.getUser(bearer);
@@ -387,7 +386,7 @@ export async function GET(req: Request) {
                 // diagrams: count rows in stickies diagrams table
                 (async () => {
                     const { createClient: createSb } = await import("@supabase/supabase-js");
-                    const sb = createSb(process.env.BHENG_SUPABASE_URL!, process.env.BHENG_SUPABASE_SERVICE_ROLE_KEY!);
+                    const sb = createSb(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
                     const { count } = await sb.from("diagrams").select("*", { count: "exact", head: true });
                     return count ?? 0;
                 })(),
@@ -401,7 +400,7 @@ export async function GET(req: Request) {
     }
 
     if (folderFilter) {
-        const FOLDER_COLS = `id, title, folder_name, folder_color, folder_id, parent_folder_name, "order", updated_at, created_at, type, is_folder, is_public`;
+        const FOLDER_COLS = `id, title, folder_name, folder_color, folder_id, parent_folder_name, "order", updated_at, created_at, type, is_folder, is_public, trashed_at`;
         const limitParam = parseInt(url.searchParams.get("limit") ?? "0");
         const offsetParam = parseInt(url.searchParams.get("offset") ?? "0");
         const sinceParam = url.searchParams.get("since"); // ISO timestamp — delta sync
@@ -461,7 +460,7 @@ export async function GET(req: Request) {
     }
 
     if (q) {
-        const SEARCH_COLS = `id, title, folder_name, folder_color, folder_id, parent_folder_name, "order", updated_at, created_at, type, is_folder, is_public`;
+        const SEARCH_COLS = `id, title, folder_name, folder_color, folder_id, parent_folder_name, "order", updated_at, created_at, type, is_folder, is_public, trashed_at`;
         const { sql, params } = withUser(
             `SELECT ${SEARCH_COLS} FROM "${table}" WHERE is_folder = false AND (title ILIKE $1 OR content ILIKE $1)`,
             [`%${q}%`],
@@ -493,7 +492,7 @@ export async function GET(req: Request) {
         return NextResponse.json({ notes: rows, total: rows.length });
     }
 
-    const LIST_COLS = `id, title, folder_name, folder_color, folder_id, parent_folder_name, "order", updated_at, created_at, type, is_folder, is_public`;
+    const LIST_COLS = `id, title, folder_name, folder_color, folder_id, parent_folder_name, "order", updated_at, created_at, type, is_folder, is_public, trashed_at`;
     const { sql, params } = withUser(
         `SELECT ${LIST_COLS} FROM "${table}" WHERE is_folder = false`,
         [],
@@ -869,7 +868,7 @@ export async function DELETE(req: Request) {
 }
 
 // ── Note type detection ──────────────────────────────────────────────────────
-const VALID_TYPES = new Set(["text","markdown","html","json","mermaid","javascript","typescript","python","css","sql","bash","checklist","rich"]);
+const VALID_TYPES = new Set(["text","markdown","html","json","mermaid","javascript","typescript","python","css","sql","bash","checklist"]);
 
 export function detectType(content: string, title?: string): string {
     const t = content.trim();

@@ -83,8 +83,6 @@ export function detectNoteType(content: string): string {
             if (p?._type === "voice" || (Array.isArray(p) && (p as any[])[0]?._type === "voice")) return "voice";
         } catch { /* fall through */ }
     }
-    // TipTap JSON — must check before generic JSON detection
-    try { const p = JSON.parse(t); if ((p as any)?.type === "doc" && Array.isArray((p as any).content)) return "rich"; } catch { /* fall through */ }
     if (MERMAID_KEYWORDS.test(extractMermaid(t))) return "mermaid";
     if ((t.startsWith("{") || t.startsWith("[")) && detectJson(t).ok) return "json";
     if (/^\s*<!DOCTYPE\s+html/i.test(t) || /^\s*<html[\s>]/i.test(t)) return "html";

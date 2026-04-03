@@ -1,8 +1,8 @@
 import { authorizeOwner } from "@/app/api/stickies/_auth";
 import { NextResponse } from "next/server";
 
-const PROJECT_REF = process.env.BHENG_SUPABASE_PROJECT_REF!;
-const MGMT_TOKEN = process.env.BHENG_SUPABASE_MANAGEMENT_TOKEN!;
+const PROJECT_REF = process.env.SUPABASE_PROJECT_REF!;
+const MGMT_TOKEN = process.env.SUPABASE_MANAGEMENT_TOKEN!;
 
 const LOCAL_IDEAS_URL = "http://10.0.0.138:5173";
 const PROD_IDEAS_URL  = "https://ideas-bheng.vercel.app";

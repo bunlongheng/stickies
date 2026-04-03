@@ -16,8 +16,8 @@ function getGalleryBaseUrl(req: Request): string {
 
 function getSupabase() {
     return createClient(
-        process.env.BHENG_SUPABASE_URL!,
-        process.env.BHENG_SUPABASE_SERVICE_ROLE_KEY!,
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!,
     );
 }
 

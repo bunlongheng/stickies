@@ -20,5 +20,25 @@
       "type": "image/png",
       "purpose": "any maskable"
     }
+  ],
+  "shortcuts": [
+    {
+      "name": "Quick Create",
+      "short_name": "Quick",
+      "url": "/quick",
+      "description": "Quickly create multiple stickies",
+      "icons": [
+        {
+          "src": "/icons/stickies/quick-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        },
+        {
+          "src": "/icons/stickies/quick-512.png",
+          "sizes": "512x512",
+          "type": "image/png"
+        }
+      ]
+    }
   ]
 }
