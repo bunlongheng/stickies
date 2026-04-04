@@ -1,10 +1,10 @@
 /**
- * POST /api/stickies/upload
- * Proxies file uploads to Google Drive via /api/stickies/gdrive
+ * GET /api/stickies/gdrive/status
+ * Returns whether Google Drive is connected.
  */
 import crypto from "crypto";
 import { createClient } from "@supabase/supabase-js";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 function getSupabase() {
     return createClient(
@@ -13,7 +13,7 @@ function getSupabase() {
     );
 }
 
-async function isAuthorized(req: Request): Promise<boolean> {
+async function isAuthorized(req: NextRequest): Promise<boolean> {
     const auth = req.headers.get("authorization") ?? "";
     const bearer = auth.startsWith("Bearer ") ? auth.slice(7) : "";
     const candidates = [
@@ -36,22 +36,18 @@ async function isAuthorized(req: Request): Promise<boolean> {
     return false;
 }
 
-export async function POST(req: Request) {
+export async function GET(req: NextRequest) {
     if (!await isAuthorized(req)) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Forward to gdrive route internally
-    const formData = await req.formData();
-    const baseUrl = process.env.NEXT_PUBLIC_APP_BASE_URL || "http://localhost:4444";
+    const { data } = await getSupabase()
+        .from("integrations")
+        .select("refresh_token, active")
+        .eq("type", "gdrive")
+        .single();
 
-    const res = await fetch(`${baseUrl}/api/stickies/gdrive`, {
-        method: "POST",
-        headers: { Authorization: req.headers.get("authorization") || "" },
-        body: formData,
+    return NextResponse.json({
+        connected: !!(data?.refresh_token && data?.active),
     });
-
-    const data = await res.json();
-    if (!res.ok) return NextResponse.json(data, { status: res.status });
-    return NextResponse.json(data);
 }

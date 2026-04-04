@@ -1214,6 +1214,7 @@ export default function NotesMaster() {
     const [isGlobalSettings, setIsGlobalSettings] = useState(false);
     const [lightMode, setLightMode] = useState<"off" | "flash" | "ambient">("flash");
     const [devMode, setDevMode] = useState(true);
+    const [gdriveConnected, setGdriveConnected] = useState(false);
     const [apiTimings, setApiTimings] = useState<Record<string, number>>({});
     const [aiConfirmPending, setAiConfirmPending] = useState<"magic" | "grammar" | null>(null);
     const [isEditingFolderTitle, setIsEditingFolderTitle] = useState(false);
@@ -1545,6 +1546,8 @@ export default function NotesMaster() {
                 // Sync lightMode from persisted Hue config on initial load
                 const hueInt = integrationsResult.find((ig: any) => ig.type === "hue");
                 if (hueInt?.config?.mode) setLightMode(hueInt.config.mode as any);
+                const gdriveInt = integrationsResult.find((ig: any) => ig.type === "gdrive");
+                setGdriveConnected(!!(gdriveInt?.refresh_token && gdriveInt?.active));
             }
         } finally {
             setIsDataLoaded(true);
@@ -1826,6 +1829,14 @@ export default function NotesMaster() {
             const navParam = urlParams.get("nav");
             if (navParam === "folders" || navParam === "folders-and-files") setNavMode("folders-and-files");
             else if (navParam === "files" || navParam === "files-only") setNavMode("files-only");
+            const gdriveParam = urlParams.get("gdrive");
+            if (gdriveParam === "connected") {
+                setTimeout(() => { showToast("Google Drive connected", "#34d399"); setGdriveConnected(true); }, 500);
+                window.history.replaceState({}, "", window.location.pathname);
+            } else if (gdriveParam === "error") {
+                setTimeout(() => showError("Google Drive connection failed"), 500);
+                window.history.replaceState({}, "", window.location.pathname);
+            }
         } catch { /* ignore */ }
 
         if (!shouldWaitForInitialTarget) setIsUrlChecking(false);
@@ -3339,8 +3350,7 @@ const fireIntegrations = (trigger: string, note: any) => {
     async function uploadImage(file: File): Promise<{ url: string; name: string; type: string }> {
         const fd = new FormData();
         fd.append("file", file);
-        const noteId = editingNote?.id;
-        if (noteId) fd.append("noteId", String(noteId));
+        fd.append("folder", targetFolder || activeFolder || "unsorted");
         const res = await fetch("/api/stickies/upload", {
             method: "POST",
             headers: { Authorization: `Bearer ${await getAuthToken()}` },
@@ -6323,8 +6333,15 @@ const fireIntegrations = (trigger: string, note: any) => {
                         <div className="flex items-center gap-2 px-3 py-2 flex-wrap border-t border-white/[0.06] shrink-0 bg-black">
                             {images.map((img, i) => (
                                 <div key={i} className="relative group w-16 h-16 rounded-lg overflow-hidden shrink-0 cursor-pointer"
-                                     onClick={() => setLightboxUrl(img.url)}>
-                                    <img src={img.url} alt={img.name} className="w-full h-full object-cover" />
+                                     onClick={() => img.type === "application/pdf" ? window.open(img.url, "_blank") : setLightboxUrl(img.url)}>
+                                    {img.type === "application/pdf" ? (
+                                        <div className="w-full h-full bg-red-950/60 flex flex-col items-center justify-center gap-0.5">
+                                            <span className="text-red-400 text-lg">PDF</span>
+                                            <span className="text-[7px] text-white/50 truncate max-w-[56px] px-0.5">{img.name}</span>
+                                        </div>
+                                    ) : (
+                                        <img src={img.url} alt={img.name} className="w-full h-full object-cover" />
+                                    )}
                                     <button
                                         onClick={(ev) => { ev.stopPropagation(); removeImage(i); }}
                                         className="absolute top-0.5 right-0.5 opacity-0 group-hover:opacity-100 w-4 h-4 rounded-full bg-black/70 text-white text-[9px] flex items-center justify-center leading-none">✕</button>
@@ -6503,22 +6520,61 @@ const fireIntegrations = (trigger: string, note: any) => {
                         onDoubleClick={(e) => { if ((e.target as HTMLElement) === e.currentTarget) openNewNote(); }}
                         onDragOver={(e) => { if (Array.from(e.dataTransfer.items).some(i => i.kind === "file")) e.preventDefault(); }}
                         onDrop={(e) => {
-                            const file = Array.from(e.dataTransfer.files).find(f => f.name.endsWith(".mermaid") || f.name.endsWith(".mmd"));
-                            if (!file) return;
+                            const files = Array.from(e.dataTransfer.files);
+                            if (!files.length) return;
                             e.preventDefault();
-                            const reader = new FileReader();
-                            reader.onload = (ev) => {
-                                const text = (ev.target?.result as string) ?? "";
+
+                            const isAttachment = (f: File) => f.type.startsWith("image/") || f.type === "application/pdf";
+                            const attachmentFiles = files.filter(isAttachment);
+                            const textFiles = files.filter(f => !isAttachment(f));
+
+                            // Attachments (images/PDFs) → if editor open, attach to current note
+                            if (attachmentFiles.length && editorOpen) {
+                                addImages(attachmentFiles);
+                                return;
+                            }
+
+                            // Text/code files → open as note content
+                            const extToType: Record<string, string> = {
+                                ".js": "javascript", ".jsx": "javascript", ".ts": "typescript", ".tsx": "typescript",
+                                ".py": "python", ".css": "css", ".sql": "sql", ".sh": "bash", ".bash": "bash",
+                                ".html": "html", ".htm": "html", ".json": "json", ".md": "markdown", ".mdx": "markdown",
+                            };
+                            if (textFiles.length) {
+                                const file = textFiles[0];
+                                const reader = new FileReader();
+                                reader.onload = (ev) => {
+                                    const text = (ev.target?.result as string) ?? "";
+                                    const ext = file.name.includes(".") ? "." + file.name.split(".").pop()!.toLowerCase() : "";
+                                    const noteType = extToType[ext] || "text";
+                                    setEditingNote(null);
+                                    setTitle(file.name.replace(/\.[^.]+$/, ""));
+                                    setContent(text);
+                                    setPendingNoteType(noteType);
+                                    setTargetFolder(activeFolder || "");
+                                    setNoteColor(pickUniqueColor());
+                                    shouldFocusTitleOnOpenRef.current = false;
+                                    setEditorOpen(true);
+                                    playSound("create");
+                                    // Also attach any images/PDFs dropped alongside
+                                    if (attachmentFiles.length) setTimeout(() => addImages(attachmentFiles), 300);
+                                };
+                                reader.readAsText(file);
+                            } else if (attachmentFiles.length) {
+                                // Only attachments, no editor open — create new note and attach
+                                const name = attachmentFiles.length === 1
+                                    ? attachmentFiles[0].name.replace(/\.[^.]+$/, "")
+                                    : `Dropped ${attachmentFiles.length} files`;
                                 setEditingNote(null);
-                                setTitle(file.name.replace(/\.(mermaid|mmd)$/i, ""));
-                                setContent(text);
-                                setTargetFolder(activeFolder || "General");
-                                setNoteColor(palette12[0]);
-                                setMermaidShowCode(true);
+                                setTitle(name);
+                                setContent("");
+                                setTargetFolder(activeFolder || "");
+                                setNoteColor(pickUniqueColor());
                                 shouldFocusTitleOnOpenRef.current = false;
                                 setEditorOpen(true);
-                            };
-                            reader.readAsText(file);
+                                playSound("create");
+                                setTimeout(() => addImages(attachmentFiles), 300);
+                            }
                         }}
                         className={`ios-mobile-main relative flex-1 ${kanbanMode && isFolderGridView ? "overflow-x-auto overflow-y-hidden touch-pan-x" : "overflow-x-hidden overflow-y-auto touch-pan-y"} overscroll-none bg-black ${!(kanbanMode && isFolderGridView) ? "pb-24 sm:pb-32" : ""} ${!isListMode && !(kanbanMode && isFolderGridView) ? "p-1.5 sm:p-2" : ""}`}
                         style={kanbanMode && isFolderGridView
@@ -7978,6 +8034,20 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         ))}
                                     </div>
                                 </div>
+                                <button type="button" className="w-full flex items-center gap-4 px-6 py-4 text-left text-zinc-300 hover:bg-white/5 hover:text-white active:bg-white/10 transition"
+                                    onClick={() => {
+                                        if (gdriveConnected) {
+                                            showToast("Google Drive already connected", "#34d399");
+                                        } else {
+                                            window.location.href = "/api/stickies/gdrive/auth";
+                                        }
+                                    }}>
+                                    <svg className="w-5 h-5 flex-shrink-0" viewBox="0 0 24 24" fill="none"><path d="M4.433 22l-3.424-5.932L9.067 2h6.858l-8.058 13.958L4.433 22z" fill="#0066DA"/><path d="M23 16.068L19.576 22H4.434l3.424-5.932H23z" fill="#00AC47"/><path d="M15.925 2l3.424 5.932L11.292 22h-3.434L15.925 2z" fill="#EA4335"/><path d="M7.858 16.068L15.925 2H9.067L1.009 16.068h6.849z" fill="#00832D"/><path d="M15.925 2l3.424 5.932-4.057 7.026L11.859 22h3.434" fill="#2684FC"/><path d="M19.576 22l3.424-5.932h-6.85l-4.291 5.932h7.717z" fill="#FFBA00"/></svg>
+                                    <span className="text-xs font-black tracking-wide flex-1">Google Drive</span>
+                                    <span className={`text-[10px] font-black ${gdriveConnected ? "text-emerald-400" : "text-zinc-600"}`}>
+                                        {gdriveConnected ? "Connected" : "Connect"}
+                                    </span>
+                                </button>
                                 <button type="button" className="w-full flex items-center gap-4 px-6 py-4 text-left text-zinc-300 hover:bg-white/5 hover:text-white active:bg-white/10 transition"
                                     onClick={() => { setIntegrationsSnapshot([...integrationsRef.current]); setShowIntegrationsPanel(true); }}>
                                     <PuzzlePieceIcon className="w-5 h-5 flex-shrink-0" />
