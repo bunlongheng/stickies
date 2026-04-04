@@ -982,10 +982,9 @@ function playSound(type: SoundType) {
             // ultra-short digital tick
             tone(2400, 0, 0.018, 0.030, "square");
         } else if (type === "click") {
-            // laser "pew" — sine sweep 1600→140Hz + harmonic overtone
-            sweep(1600, 140, 0,     0.18, 0.16, "sine");
-            sweep(3200, 280, 0,     0.06, 0.12, "sine"); // octave harmonic, quieter
-            sweep(1800, 160, 0.008, 0.05, 0.13, "triangle"); // slight body
+            // soft digital tap — short rising chime
+            tone(880, 0, 0.10, 0.08, "sine");      // A5 base tap
+            tone(1320, 0.02, 0.06, 0.10, "sine");   // E6 harmonic shimmer
         } else if (type === "navigate") {
             // system dive: two-step ascending sweep
             sweep(600, 1400, 0,    0.055, 0.09, "sawtooth");
@@ -4656,14 +4655,14 @@ const fireIntegrations = (trigger: string, note: any) => {
     );
 
 
+    const dragDidMoveRef = useRef(false);
     const handleTileDragStart = useCallback(
         (event: React.DragEvent<HTMLDivElement>, item: any) => {
             const id = String(item?.id || "");
             if (!id) return;
             if (!isFolderGridView && !isNoteGridView) return;
-            suppressOpenRef.current = true;
+            dragDidMoveRef.current = false;
             draggingTileIdRef.current = id;
-            setDraggingTileId(id);
             event.dataTransfer.effectAllowed = "move";
             event.dataTransfer.setData("text/plain", id);
         },
@@ -4677,6 +4676,11 @@ const fireIntegrations = (trigger: string, note: any) => {
             if (!dragging || !targetId || dragging === targetId) return;
             event.preventDefault();
             event.dataTransfer.dropEffect = "move";
+            if (!dragDidMoveRef.current) {
+                dragDidMoveRef.current = true;
+                suppressOpenRef.current = true;
+                setDraggingTileId(dragging);
+            }
             const rect = (event.currentTarget as HTMLDivElement).getBoundingClientRect();
             let mode: "before" | "after" | "into" = "after";
             if (isListMode) {
@@ -4701,7 +4705,10 @@ const fireIntegrations = (trigger: string, note: any) => {
         draggingTileIdRef.current = null;
         setDraggingTileId(null);
         setDropTarget(null);
-        window.setTimeout(() => { suppressOpenRef.current = false; }, 0);
+        if (dragDidMoveRef.current) {
+            window.setTimeout(() => { suppressOpenRef.current = false; }, 0);
+        }
+        dragDidMoveRef.current = false;
     }, []);
 
     const handleTileDrop = useCallback(
@@ -6917,7 +6924,15 @@ const fireIntegrations = (trigger: string, note: any) => {
                         );
                     })()}
 
-                    {/* STATS BOTTOM BAR */}
+                    {/* STATS BOTTOM BAR — mobile: date+time only */}
+                    <div className="fixed bottom-4 left-0 right-0 z-[120] flex sm:hidden justify-center items-center select-none pointer-events-none tabular-nums" style={{ fontSize: 9, opacity: 0.7 }}>
+                        <span className="flex items-center gap-1.5 px-3 py-1 rounded-full" style={{ border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.04)", backdropFilter: "blur(8px)" }}>
+                            <span className="text-white/70 font-bold">{now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                            <span className="text-zinc-600">/</span>
+                            <span className="text-white/50 uppercase tracking-wide font-bold">{now.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}</span>
+                        </span>
+                    </div>
+                    {/* STATS BOTTOM BAR — desktop: full stats */}
                     <div className="fixed bottom-4 left-0 right-0 z-[120] hidden sm:flex justify-center items-center select-none pointer-events-none tabular-nums" style={{ fontSize: 9, opacity: 0.7 }}>
                         <span className="flex items-center gap-1.5 px-3 py-1 rounded-full" style={{ border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.04)", backdropFilter: "blur(8px)" }}>
                             {/* Clock */}
