@@ -253,7 +253,7 @@ const RAW_INSERT_ALLOWED_COLS = new Set([
 // ── Allowed columns for PATCH updates ────────────────────────────────────────
 const PATCH_ALLOWED_COLS = new Set([
     "title", "content", "folder_name", "folder_color", "is_folder", "type",
-    "order", "updated_at", "parent_folder_name", "folder_id", "list_mode", "tags", "trashed_at", "is_public",
+    "order", "updated_at", "parent_folder_name", "folder_id", "list_mode", "tags", "trashed_at", "is_public", "icon",
 ]);
 
 // ── Color helpers ────────────────────────────────────────────────────────────
@@ -400,7 +400,7 @@ export async function GET(req: Request) {
     }
 
     if (folderFilter) {
-        const FOLDER_COLS = `id, title, folder_name, folder_color, folder_id, parent_folder_name, "order", updated_at, created_at, type, is_folder, is_public, trashed_at`;
+        const FOLDER_COLS = `id, title, folder_name, folder_color, folder_id, parent_folder_name, "order", updated_at, created_at, type, is_folder, is_public, trashed_at, icon`;
         const limitParam = parseInt(url.searchParams.get("limit") ?? "0");
         const offsetParam = parseInt(url.searchParams.get("offset") ?? "0");
         const sinceParam = url.searchParams.get("since"); // ISO timestamp — delta sync
@@ -460,7 +460,7 @@ export async function GET(req: Request) {
     }
 
     if (q) {
-        const SEARCH_COLS = `id, title, folder_name, folder_color, folder_id, parent_folder_name, "order", updated_at, created_at, type, is_folder, is_public, trashed_at`;
+        const SEARCH_COLS = `id, title, folder_name, folder_color, folder_id, parent_folder_name, "order", updated_at, created_at, type, is_folder, is_public, trashed_at, icon`;
         const { sql, params } = withUser(
             `SELECT ${SEARCH_COLS} FROM "${table}" WHERE is_folder = false AND (title ILIKE $1 OR content ILIKE $1)`,
             [`%${q}%`],
@@ -492,7 +492,7 @@ export async function GET(req: Request) {
         return NextResponse.json({ notes: rows, total: rows.length });
     }
 
-    const LIST_COLS = `id, title, folder_name, folder_color, folder_id, parent_folder_name, "order", updated_at, created_at, type, is_folder, is_public, trashed_at`;
+    const LIST_COLS = `id, title, folder_name, folder_color, folder_id, parent_folder_name, "order", updated_at, created_at, type, is_folder, is_public, trashed_at, icon`;
     const { sql, params } = withUser(
         `SELECT ${LIST_COLS} FROM "${table}" WHERE is_folder = false`,
         [],
