@@ -183,7 +183,19 @@ export async function POST(req: Request) {
             ? `https://lh3.googleusercontent.com/d/${uploaded.data.id}`
             : uploaded.data.webViewLink || `https://drive.google.com/file/d/${uploaded.data.id}/view`;
 
-        return NextResponse.json({ url, name: file.name, type: file.type });
+        // Extract text from PDFs
+        let extractedText = "";
+        if (file.type === "application/pdf") {
+            try {
+                const pdfParse = (await import("pdf-parse")).default;
+                const pdfData = await pdfParse(buffer);
+                extractedText = pdfData.text || "";
+            } catch (e) {
+                console.error("[gdrive] PDF text extraction failed:", e);
+            }
+        }
+
+        return NextResponse.json({ url, name: file.name, type: file.type, extractedText });
     } catch (err: any) {
         console.error("[gdrive upload]", err?.message || err);
         return NextResponse.json({ error: err?.message || "Upload failed" }, { status: 500 });

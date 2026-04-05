@@ -1726,6 +1726,7 @@ export default function NotesMaster() {
                 sessionStorage.setItem("stickies:session-started", "1");
                 setActiveFolder(null); // Always start at All Notes on login
                 setMainListMode("list"); // list as default
+                localStorage.setItem(LAST_FOLDER_KEY, "__all__"); // persist so sync() honors it
             } else {
                 try {
                     const raw = localStorage.getItem(VIEW_STATE_KEY);
@@ -3347,11 +3348,11 @@ const fireIntegrations = (trigger: string, note: any) => {
         return () => window.removeEventListener("stickies-toast", handler);
     }, []);
 
-    async function uploadImage(file: File): Promise<{ url: string; name: string; type: string }> {
+    async function uploadImage(file: File): Promise<{ url: string; name: string; type: string; extractedText?: string }> {
         const fd = new FormData();
         fd.append("file", file);
         fd.append("folder", targetFolder || activeFolder || "unsorted");
-        const res = await fetch("/api/stickies/upload", {
+        const res = await fetch("/api/stickies/gdrive", {
             method: "POST",
             headers: { Authorization: `Bearer ${await getAuthToken()}` },
             body: fd,
@@ -3364,8 +3365,13 @@ const fireIntegrations = (trigger: string, note: any) => {
         setUploadingImages(true);
         try {
             const uploads = await Promise.all(Array.from(files).map(uploadImage));
+            // If any PDF had extracted text and the note body is empty, populate it
+            const pdfText = uploads.filter(u => u.extractedText).map(u => u.extractedText!).join("\n\n");
+            if (pdfText && !content.trim()) {
+                setContent(pdfText);
+            }
             setImages((prev) => {
-                const updated = [...prev, ...uploads];
+                const updated = [...prev, ...uploads.map(({ extractedText: _, ...rest }) => rest)];
                 const noteId = editingNote?.id;
                 if (noteId) notesApi.update(String(noteId), { images: updated }).catch(console.error);
                 return updated;
@@ -6430,7 +6436,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                 {/* LEFT NOTE LIST PANEL */}
                 {(() => {
                     return (
-                        <div className={`flex flex-col flex-shrink-0 overflow-hidden relative ${editorOpen ? "hidden" : ""}`}
+                        <div className={`flex flex-col flex-1 min-h-0 overflow-hidden relative ${editorOpen ? "hidden" : ""}`}
                              style={{ background: "black" }}>
 
                             {/* TOP HEADER — breadcrumbs + buttons */}
