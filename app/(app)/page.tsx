@@ -790,6 +790,13 @@ function MindmapView({ title, content, onToggle }: { title: string; content: str
     );
 }
 
+// Custom robot icon (Meteor Icons style — stroke-based, matches Heroicons)
+const RobotIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}>
+        <rect width="20" height="14" x="2" y="9" rx="4"/><circle cx="12" cy="3" r="2"/><path d="M12 5v4m-3 8v-2m6 0v2"/>
+    </svg>
+);
+
 // Hero icon entries for folder icon picker
 // Stored as "__hero:StarIcon" in folderIcons map
 const FOLDER_HERO_ICONS: { key: string; label: string; Icon: React.ComponentType<React.SVGProps<SVGSVGElement>> }[] = [
@@ -837,7 +844,8 @@ const FOLDER_HERO_ICONS: { key: string; label: string; Icon: React.ComponentType
     { key: "FolderIcon",               label: "folder",       Icon: FolderIcon },
     { key: "SwatchIcon",               label: "palette",      Icon: SwatchIcon },
     { key: "ShareIcon",                label: "share",        Icon: ShareIcon },
-    { key: "CpuChipIcon",              label: "robot",        Icon: CpuChipIcon },
+    { key: "CpuChipIcon",              label: "chip",         Icon: CpuChipIcon },
+    { key: "RobotIcon",               label: "robot",        Icon: RobotIcon as any },
     { key: "FaceSmileIcon",            label: "smile",        Icon: FaceSmileIcon },
     { key: "EyeIcon",                  label: "eye",          Icon: EyeIcon },
     { key: "PhotoIcon",                label: "photo",        Icon: PhotoIcon },
@@ -886,10 +894,10 @@ const FOLDER_ICON_EMOJIS = [
 // ── Note icon auto-assign via keyword matching ──────────────────────────────
 const NOTE_ICON_KEYWORDS: [string[], string][] = [
     [["deploy","ship","release","launch","rocket","vercel","netlify","ci","cd"], "RocketLaunchIcon"],
-    [["ai","llm","gpt","claude","anthropic","openai","ml","model","neural","brain"], "CpuChipIcon"],
+    [["ai","llm","gpt","claude","anthropic","openai","ml","model","neural","brain","bot","robot","chatbot","automation"], "RobotIcon"],
     [["docker","container","kubernetes","k8s","pod"], "CubeTransparentIcon"],
     [["security","hack","kali","pentest","vuln","xss","csrf","auth","owasp","shield"], "KeyIcon"],
-    [["test","quality","qa","jest","vitest","playwright","coverage","lint"], "ClipboardDocumentListIcon"],
+    [["todo","checklist","task","test","quality","qa","jest","vitest","playwright","coverage","lint"], "ClipboardDocumentListIcon"],
     [["database","db","postgres","sql","supabase","mongo","redis","migration"], "TableCellsIcon"],
     [["api","rest","graphql","endpoint","route","fetch","webhook","http"], "GlobeAltIcon"],
     [["terminal","bash","shell","cli","command","script","zsh","sh"], "CodeBracketIcon"],
@@ -917,9 +925,9 @@ const NOTE_ICON_KEYWORDS: [string[], string][] = [
     [["star","favorite","important","priority","bookmark"], "StarIcon"],
 ];
 function matchNoteIcon(title: string, content?: string): string | null {
-    const text = `${title} ${(content || "").slice(0, 200)}`.toLowerCase();
+    const text = ` ${title} ${(content || "").slice(0, 200)} `.toLowerCase();
     for (const [keywords, icon] of NOTE_ICON_KEYWORDS) {
-        if (keywords.some(kw => text.includes(kw))) return `__hero:${icon}`;
+        if (keywords.some(kw => kw.length <= 3 ? text.includes(` ${kw} `) || text.includes(`${kw}/`) || text.includes(`/${kw}`) : text.includes(kw))) return `__hero:${icon}`;
     }
     return null;
 }
@@ -2691,11 +2699,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         if (navMode === "files-only") {
             return dbData
                 .filter((n) => !n.is_folder && n.folder_name !== "TRASH" && !n.trashed_at)
-                .sort((a, b) =>
-                    String(b.created_at || "").localeCompare(String(a.created_at || "")) ||
-                    String(a.folder_name || "").localeCompare(String(b.folder_name || "")) ||
-                    String(a.title || "").localeCompare(String(b.title || ""))
-                );
+                .sort(byUpdated);
         }
         // Root: show folders
         return currentLevelFolders;
@@ -3235,20 +3239,32 @@ const fireIntegrations = (trigger: string, note: any) => {
 
 
     const autoAssignNoteIcons = useCallback(() => {
-        const notes = dbData.filter(n => !n.is_folder && n.title);
         let count = 0;
-        const updates: Record<string, string> = {};
-        for (const note of notes) {
+        const noteUpdates: Record<string, string> = {};
+        const folderUpdates: Record<string, string> = {};
+        // Auto-assign icons to notes
+        for (const note of dbData.filter(n => !n.is_folder && n.title)) {
             const id = String(note.id);
-            if (noteIcons[id]) continue; // already has icon
+            if (noteIcons[id]) continue;
             const icon = matchNoteIcon(note.title, note.content);
-            if (icon) { updates[id] = icon; count++; }
+            if (icon) { noteUpdates[id] = icon; count++; }
+        }
+        // Auto-assign icons to folders — based on note titles inside
+        for (const folder of dbData.filter(n => n.is_folder && (n.folder_name || n.title))) {
+            const name = String(folder.folder_name || folder.title);
+            if (folderIcons[name]) continue;
+            const folderId = String(folder.id);
+            const notesInside = dbData.filter(n => !n.is_folder && (String(n.folder_id) === folderId || n.folder_name === name));
+            const titles = notesInside.map(n => String(n.title || "")).join(" ");
+            const icon = matchNoteIcon("", titles);
+            if (icon) { folderUpdates[name] = icon; count++; }
         }
         if (count === 0) { showToast("All notes already have icons", "#71717a"); return; }
-        setNoteIcons(prev => ({ ...prev, ...updates }));
+        if (Object.keys(noteUpdates).length) setNoteIcons(prev => ({ ...prev, ...noteUpdates }));
+        if (Object.keys(folderUpdates).length) setFolderIcons(prev => ({ ...prev, ...folderUpdates }));
         playSound("create");
         showToast(`Auto-assigned ${count} icon${count !== 1 ? "s" : ""}`, "#34d399");
-    }, [dbData, noteIcons]);
+    }, [dbData, noteIcons, folderIcons]);
 
     const openNewNote = useCallback((type?: string) => {
         noteEverDirtyRef.current = false;
@@ -6184,14 +6200,14 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             <TrashIcon className="w-5 h-5 text-white" />
                                         </div>
                                         {/* Sliding content */}
-                                        <div className="flex items-center gap-3 px-4 py-3 min-h-[78px] sm:min-h-[70px] relative overflow-hidden"
+                                        <div className="flex items-center gap-3 px-4 py-1 min-h-[34px] sm:min-h-[32px] relative overflow-hidden"
                                             style={{
                                                 background: task.done ? "rgba(255,255,255,0.04)" : `${c}50`,
                                                 transform: `translateX(-${rowOffset}px)`,
                                                 transition: isDragging ? "none" : "transform 0.25s cubic-bezier(0.25,1,0.5,1)",
                                             }}>
                                             <span className="task-card-pattern absolute inset-0 pointer-events-none" />
-                                            {!task.done && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[52px] font-black leading-none pointer-events-none select-none" style={{ color: "rgba(255,255,255,0.07)", fontFamily: "monospace" }}>{String(sortedIdx + 1).padStart(2, "0")}</span>}
+                                            {!task.done && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[36px] font-black leading-none pointer-events-none select-none" style={{ color: "rgba(255,255,255,0.25)", fontFamily: "monospace" }}>{String(sortedIdx + 1).padStart(2, "0")}</span>}
                                             <button type="button" onClick={() => toggleTask(task.lineIdx)} className="relative flex-shrink-0 w-5 h-5 rounded-sm border-2 flex items-center justify-center transition-all" style={{ borderColor: task.done ? "rgba(255,255,255,0.25)" : c, backgroundColor: task.done ? "rgba(255,255,255,0.15)" : "transparent" }}>
                                                 {task.done && (
                                                     <svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="#000" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
