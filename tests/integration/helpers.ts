@@ -17,7 +17,7 @@ export const ENV = {
     PUSHER_CLUSTER:             "us2",
 };
 
-/** Build a Request with API key auth */
+/** Build a Request with API key auth — uses /ext path to bypass browser-only gate */
 export function apiReq(
     path: string,
     opts: { method?: string; body?: unknown; headers?: Record<string, string> } = {}
@@ -32,7 +32,9 @@ export function apiReq(
         },
     };
     if (body !== undefined) init.body = JSON.stringify(body);
-    return new Request(`http://localhost:4444${path}`, init);
+    // API key must use /ext path; rewrite /api/stickies to /api/stickies/ext
+    const extPath = path.replace("/api/stickies", "/api/stickies/ext");
+    return new Request(`http://localhost:4444${extPath}`, init);
 }
 
 /** Build a Request with user JWT auth */

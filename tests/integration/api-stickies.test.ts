@@ -105,11 +105,12 @@ describe("Auth enforcement", () => {
         expect(call).not.toContain("users_stickies");
     });
 
-    it("User JWT auth uses 'users_stickies' table", async () => {
+    it("User JWT auth uses 'stickies' table with user_id filter", async () => {
         mockQuery.mockResolvedValue([folderRow()]);
         await GET(userReq("/api/stickies?folders=1"));
         const call = mockQuery.mock.calls[0][0] as string;
-        expect(call).toContain('"users_stickies"');
+        expect(call).toContain('"stickies"');
+        expect(call).toContain("user_id");
     });
 
     it("User JWT auth appends user_id to query", async () => {
@@ -167,21 +168,21 @@ describe("GET /api/stickies", () => {
 
     describe("?folder=name", () => {
         it("returns notes for the given folder", async () => {
-            const notes = [noteRow(), noteRow({ id: "n2", title: "Second" })];
-            mockQuery.mockResolvedValueOnce(notes);    // notes
-            mockQueryOne.mockResolvedValue({ count: "2" }); // count
+            const notes = [
+                { ...noteRow(), _total: "2" },
+                { ...noteRow({ id: "n2", title: "Second" }), _total: "2" },
+            ];
+            mockQuery.mockResolvedValueOnce(notes);
             const body = await json(await GET(apiReq("/api/stickies?folder=Work")));
             expect(body.notes).toHaveLength(2);
             expect(body.total).toBe(2);
         });
 
         it("respects limit and offset pagination", async () => {
-            mockQuery.mockResolvedValue([noteRow()]);
-            mockQueryOne.mockResolvedValue({ count: "50" });
+            mockQuery.mockResolvedValue([{ ...noteRow(), _total: "50" }]);
             const body = await json(await GET(apiReq("/api/stickies?folder=Work&limit=20&offset=0")));
             expect(body.notes).toHaveLength(1);
             expect(body.total).toBe(50);
-            // SQL should contain LIMIT / OFFSET
             const sql = mockQuery.mock.calls[0][0] as string;
             expect(sql).toMatch(/LIMIT/);
             expect(sql).toMatch(/OFFSET/);
@@ -189,7 +190,6 @@ describe("GET /api/stickies", () => {
 
         it("returns empty notes array for empty folder", async () => {
             mockQuery.mockResolvedValue([]);
-            mockQueryOne.mockResolvedValue({ count: "0" });
             const body = await json(await GET(apiReq("/api/stickies?folder=Empty")));
             expect(body.notes).toEqual([]);
             expect(body.total).toBe(0);
@@ -279,7 +279,7 @@ describe("POST /api/stickies", () => {
         });
 
         it("returns 400 for invalid JSON body", async () => {
-            const res = await POST(new Request("http://localhost:4444/api/stickies", {
+            const res = await POST(new Request("http://localhost:4444/api/stickies/ext", {
                 method: "POST",
                 headers: {
                     Authorization: `Bearer ${API_KEY}`,
