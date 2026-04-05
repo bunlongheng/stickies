@@ -451,6 +451,7 @@ const VIEW_STATE_KEY = "stickies:last-view:v1";
 const ACTIVE_DRAFT_KEY = "stickies:active-draft:v1";
 const FOLDER_COLOR_KEY = "stickies:folder-colors:v1";
 const FOLDER_ICON_KEY = "stickies:folder-icons:v1";
+const NOTE_ICON_KEY = "stickies:note-icons:v1";
 const looksLikeMarkdown = (text: string) =>
     /^#{1,6}\s|\*\*|^[*-]\s|^>\s|`|\[.+\]\(/.test(text);
 const looksLikeHtml = (text: string) =>
@@ -882,6 +883,47 @@ const FOLDER_ICON_EMOJIS = [
     // Nature
     "🌿","🌺","🌊","🔥","⚡","❄️","☀️","🌙","⭐","🌈","🦋","🐾",
 ];
+// ── Note icon auto-assign via keyword matching ──────────────────────────────
+const NOTE_ICON_KEYWORDS: [string[], string][] = [
+    [["deploy","ship","release","launch","rocket","vercel","netlify","ci","cd"], "RocketLaunchIcon"],
+    [["ai","llm","gpt","claude","anthropic","openai","ml","model","neural","brain"], "CpuChipIcon"],
+    [["docker","container","kubernetes","k8s","pod"], "CubeTransparentIcon"],
+    [["security","hack","kali","pentest","vuln","xss","csrf","auth","owasp","shield"], "KeyIcon"],
+    [["test","quality","qa","jest","vitest","playwright","coverage","lint"], "ClipboardDocumentListIcon"],
+    [["database","db","postgres","sql","supabase","mongo","redis","migration"], "TableCellsIcon"],
+    [["api","rest","graphql","endpoint","route","fetch","webhook","http"], "GlobeAltIcon"],
+    [["terminal","bash","shell","cli","command","script","zsh","sh"], "CodeBracketIcon"],
+    [["cloud","aws","gcp","azure","s3","lambda","serverless"], "CloudIcon"],
+    [["network","dns","proxy","nginx","gateway","mcp","socket","websocket"], "GlobeAmericasIcon"],
+    [["config","env","settings","setup","install","dotenv","yaml","toml"], "WrenchIcon"],
+    [["git","github","branch","commit","merge","pr","repo"], "FolderIcon"],
+    [["bug","fix","error","debug","issue","crash","exception"], "FireIcon"],
+    [["design","ui","ux","figma","css","style","theme","color","layout"], "SwatchIcon"],
+    [["meeting","standup","sync","agenda","notes","minutes"], "ChatBubbleLeftRightIcon"],
+    [["idea","brainstorm","plan","strategy","think","concept"], "LightBulbIcon"],
+    [["money","budget","cost","price","billing","invoice","payment"], "BanknotesIcon"],
+    [["user","team","people","member","org","staff","hire"], "UserGroupIcon"],
+    [["calendar","schedule","deadline","date","event","reminder"], "CalendarDaysIcon"],
+    [["link","url","bookmark","resource","reference"], "LinkIcon"],
+    [["photo","image","screenshot","pic","camera"], "PhotoIcon"],
+    [["music","audio","sound","podcast","spotify"], "MusicalNoteIcon"],
+    [["video","film","youtube","stream","record"], "FilmIcon"],
+    [["book","read","docs","documentation","wiki","readme"], "BookOpenIcon"],
+    [["chart","analytics","metrics","data","dashboard","graph"], "ChartBarIcon"],
+    [["home","house","personal","family","life"], "HomeIcon"],
+    [["work","office","job","career","project","task"], "BriefcaseIcon"],
+    [["code","dev","program","function","module","component","react","next"], "CodeBracketIcon"],
+    [["phone","mobile","ios","android","app","pwa"], "DevicePhoneMobileIcon"],
+    [["star","favorite","important","priority","bookmark"], "StarIcon"],
+];
+function matchNoteIcon(title: string, content?: string): string | null {
+    const text = `${title} ${(content || "").slice(0, 200)}`.toLowerCase();
+    for (const [keywords, icon] of NOTE_ICON_KEYWORDS) {
+        if (keywords.some(kw => text.includes(kw))) return `__hero:${icon}`;
+    }
+    return null;
+}
+
 const FLOATING_FAB_VIEWPORT_PAD = 8;
 const toUrlToken = (value: string) =>
     String(value || "")
@@ -1133,6 +1175,7 @@ export default function NotesMaster() {
     const [noteColor, setNoteColor] = useState(palette12[0]);
     const [folderColors, setFolderColors] = useState<Record<string, string>>({});
     const [folderIcons, setFolderIcons] = useState<Record<string, string>>({});
+    const [noteIcons, setNoteIcons] = useState<Record<string, string>>({});
     const [iconPickerFolder, setIconPickerFolder] = useState<string | null>(null);
     const [pendingShare, setPendingShare] = useState<{ content: string } | null>(null);
     const [qrModalOpen, setQrModalOpen] = useState(false);
@@ -1764,6 +1807,11 @@ export default function NotesMaster() {
                 const parsedIcons = JSON.parse(rawIcons);
                 if (parsedIcons && typeof parsedIcons === "object") setFolderIcons(parsedIcons);
             }
+            const rawNoteIcons = localStorage.getItem(NOTE_ICON_KEY);
+            if (rawNoteIcons) {
+                const parsed = JSON.parse(rawNoteIcons);
+                if (parsed && typeof parsed === "object") setNoteIcons(parsed);
+            }
         } catch { /* ignore */ }
         try {
             const rawList = localStorage.getItem(LIST_MODE_KEY);
@@ -1855,6 +1903,9 @@ export default function NotesMaster() {
     useEffect(() => {
         try { localStorage.setItem(FOLDER_ICON_KEY, JSON.stringify(folderIcons)); } catch { /* ignore */ }
     }, [folderIcons]);
+    useEffect(() => {
+        try { localStorage.setItem(NOTE_ICON_KEY, JSON.stringify(noteIcons)); } catch { /* ignore */ }
+    }, [noteIcons]);
 
     // Sync folder icons from DB (content field on is_folder rows) — DB wins over localStorage
     useEffect(() => {
@@ -3182,6 +3233,22 @@ const fireIntegrations = (trigger: string, note: any) => {
         return () => window.removeEventListener("keydown", handler);
     }, [activeFolder, loadFolderNotes]);
 
+
+    const autoAssignNoteIcons = useCallback(() => {
+        const notes = dbData.filter(n => !n.is_folder && n.title);
+        let count = 0;
+        const updates: Record<string, string> = {};
+        for (const note of notes) {
+            const id = String(note.id);
+            if (noteIcons[id]) continue; // already has icon
+            const icon = matchNoteIcon(note.title, note.content);
+            if (icon) { updates[id] = icon; count++; }
+        }
+        if (count === 0) { showToast("All notes already have icons", "#71717a"); return; }
+        setNoteIcons(prev => ({ ...prev, ...updates }));
+        playSound("create");
+        showToast(`Auto-assigned ${count} icon${count !== 1 ? "s" : ""}`, "#34d399");
+    }, [dbData, noteIcons]);
 
     const openNewNote = useCallback((type?: string) => {
         noteEverDirtyRef.current = false;
@@ -6490,6 +6557,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                     <button type="button" onClick={() => openNewNote()} className="p-2 mx-1 rounded-full bg-white/15 hover:bg-white/25 text-white transition" title="New note" aria-label="New note">
                                                         <PlusIcon className="w-6 h-6 stroke-[2.5]" />
                                                     </button>
+                                                    <HeaderIconBtn icon={SparklesIcon} label="Auto-icon" onClick={autoAssignNoteIcons} />
                                                     <HeaderIconBtn icon={mainListMode === "list" ? Bars3Icon : Squares2X2Icon} label={mainListMode === "list" ? "List" : "Thumb"} active={!kanbanMode} onClick={() => { setMainListMode(v => v === "thumb" ? "list" : "thumb"); setKanbanMode(false); }} />
                                                     <HeaderIconBtn icon={Cog6ToothIcon} label="Settings" onClick={() => { const hueInt = integrationsRef.current.find(ig => ig.type === "hue"); setLightMode((hueInt?.config?.mode as any) ?? "flash"); setIsGlobalSettings(true); setShowFolderActions(true); }} />
                                                 </div>
@@ -6510,6 +6578,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                         <button type="button" onClick={() => openNewNote()} className="p-2 mx-1 rounded-full bg-white/15 hover:bg-white/25 text-white transition" title="New note" aria-label="New note">
                                                             <PlusIcon className="w-6 h-6 stroke-[2.5]" />
                                                         </button>
+                                                        <HeaderIconBtn icon={SparklesIcon} label="Auto-icon" onClick={autoAssignNoteIcons} />
                                                         <HeaderIconBtn icon={mainListMode === "list" ? Bars3Icon : Squares2X2Icon} label={mainListMode === "list" ? "List" : "Thumb"} active={!kanbanMode} onClick={() => { setMainListMode(v => v === "thumb" ? "list" : "thumb"); setKanbanMode(false); }} />
                                                         <HeaderIconBtn icon={Cog6ToothIcon} label="Settings" onClick={() => { const hueInt = integrationsRef.current.find(ig => ig.type === "hue"); setLightMode((hueInt?.config?.mode as any) ?? "flash"); setIsGlobalSettings(false); setShowFolderActions(true); }} />
                                                     </>
@@ -6803,6 +6872,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 const isChecklistItem = (item as any).type === "checklist" || listModeNotes.has(String(item.id));
                                                 const nc = (item as any).color || (item as any).folder_color || "#71717a";
                                                 const initial = meaningfulInitial(item.title || "", "N");
+                                                const nIcon = noteIcons[String(item.id)];
                                                 return (
                                                     <button type="button"
                                                         onClick={(e) => { e.stopPropagation(); void openNote(item); closeEditorTools(); }}
@@ -6814,7 +6884,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                             borderRadius: "6px 6px 6px 16px",
                                                             boxShadow: `2px 3px 8px ${nc}55`,
                                                         }}>
-                                                        {initial}
+                                                        {nIcon ? <FolderIconDisplay value={nIcon} folderName={item.title || "N"} className="w-6 h-6" /> : initial}
                                                     </button>
                                                 );
                                             })()}
@@ -6918,7 +6988,11 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                         {(item as any).flag && (
                                                             <span className="absolute top-1 left-1 text-sm leading-none">{(item as any).flag}</span>
                                                         )}
-                                                        <div style={{ fontSize: "3rem", lineHeight: 1 }} className="font-black text-white relative z-10">{meaningfulInitial(item.title || "", "N")}</div>
+                                                        <div style={{ fontSize: "3rem", lineHeight: 1 }} className="font-black text-white relative z-10">
+                                                            {noteIcons[String(item.id)]
+                                                                ? <FolderIconDisplay value={noteIcons[String(item.id)]} folderName={item.title || "N"} className="w-10 h-10" />
+                                                                : meaningfulInitial(item.title || "", "N")}
+                                                        </div>
                                                         <div className="font-semibold text-white leading-tight mt-0.5 line-clamp-2 w-full text-[8px]">{item.title?.trim() || "Untitled"}</div>
                                                     </>
                                                 )}
