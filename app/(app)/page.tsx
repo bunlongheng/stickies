@@ -5769,7 +5769,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     {i > 0 && <span className="text-zinc-700 text-[10px] flex-shrink-0">/</span>}
                                     <button type="button"
                                         onClick={() => { goToIndex(i); void backToRootFromEditor(); }}
-                                        className="flex items-center gap-1 font-black tracking-tight text-zinc-400 hover:text-white transition flex-shrink-0 text-xs px-0.5">
+                                        className="flex items-center gap-1 font-normal tracking-tight text-white hover:text-zinc-300 transition flex-shrink-0 text-xs px-0.5">
                                         <span className="w-6 h-6 flex-shrink-0 flex items-center justify-center text-sm font-black leading-none overflow-hidden" style={{ background: frame.name === "CLAUDE" ? "#fff" : (folderColors[frame.name] || frame.color || "#888"), color: frame.name === "CLAUDE" ? (folderColors[frame.name] || "#888") : (isLightColor(folderColors[frame.name] || frame.color || "#888") ? "#000" : "#fff"), borderRadius: 4 } as React.CSSProperties}>
                                             {frame.name === "CLAUDE"
                                                 ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-0.5" />
@@ -6300,7 +6300,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     style={{
                                         flex: 1, background: "transparent", color: "#f8f8f2",
                                         fontFamily: "ui-monospace,'Fira Code','Cascadia Code',monospace",
-                                        fontSize: 10, lineHeight: "16px",
+                                        fontSize: 14, lineHeight: "22px",
                                         paddingTop: 8, paddingBottom: 24, paddingLeft: 24, paddingRight: 24,
                                         outline: "none", resize: "none", caretColor: "#f8f8f2",
                                         whiteSpace: "pre-wrap", overflowWrap: "break-word", wordBreak: "break-word",
@@ -6383,7 +6383,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
                                         pointerEvents: "none",
                                         fontFamily: "ui-monospace,'Fira Code','Cascadia Code',monospace",
-                                        fontSize: 10, lineHeight: "16px",
+                                        fontSize: 14, lineHeight: "22px",
                                         paddingTop: 8, paddingBottom: 24, paddingLeft: 24, paddingRight: 24,
                                         whiteSpace: "pre-wrap", overflowWrap: "break-word", wordBreak: "break-word",
                                         color: "transparent", zIndex: 0,
@@ -6404,7 +6404,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     style={{
                                         flex: 1, background: "transparent", color: "#f8f8f2",
                                         fontFamily: "ui-monospace,'Fira Code','Cascadia Code',monospace",
-                                        fontSize: 10, lineHeight: "16px",
+                                        fontSize: 14, lineHeight: "22px",
                                         paddingTop: 8, paddingBottom: 24, paddingLeft: 24, paddingRight: 24,
                                         outline: "none", resize: "none", caretColor: "#f8f8f2",
                                         whiteSpace: "pre-wrap", overflowWrap: "break-word", wordBreak: "break-word",
@@ -6549,7 +6549,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                                         goToIndex(i);
                                                                     }
                                                                 }}
-                                                                className={`flex items-center gap-1.5 font-black tracking-tight truncate sm:max-w-[150px] flex-shrink-0 px-0.5 sm:px-1 transition text-xs ${i === folderStack.length - 1 ? "text-white hover:text-zinc-300" : "text-zinc-400 hover:text-white"}`}
+                                                                className={`flex items-center gap-1.5 font-normal tracking-tight truncate sm:max-w-[150px] flex-shrink-0 px-0.5 sm:px-1 transition text-xs ${i === folderStack.length - 1 ? "text-white hover:text-zinc-300" : "text-white hover:text-zinc-300"}`}
                                                                 title={i === folderStack.length - 1 ? `${frame.name} settings` : frame.name}>
                                                                 <span className="flex-shrink-0 w-6 h-6 flex items-center justify-center text-sm font-black leading-none overflow-hidden" style={{ background: frame.name === "CLAUDE" ? "#fff" : (folderColors[frame.name] || frame.color || "#888"), color: frame.name === "CLAUDE" ? (folderColors[frame.name] || "#888") : (isLightColor(folderColors[frame.name] || frame.color || "#888") ? "#000" : "#fff"), borderRadius: 4 } as React.CSSProperties}>
                                                                     {frame.name === "CLAUDE" ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-0.5" /> : <FolderIconDisplay value={folderIcons[frame.name] || ""} folderName={frame.name} className="w-3.5 h-3.5" />}
@@ -6905,11 +6905,11 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 );
                                             })()}
                                             <div className="flex-1 min-w-0">
-                                                <div className="text-[13px] font-normal tracking-tight text-white truncate">
+                                                <div className="text-[14px] font-normal tracking-tight text-white truncate">
                                                     {item.is_folder ? <><span className="uppercase">{item.name}</span><span className="text-white/30 ml-0.5">/</span></> : ((item.title?.trim() || "Untitled").length > 50 ? (item.title?.trim() || "Untitled").slice(0, 50) + "…" : (item.title?.trim() || "Untitled"))}
                                                 </div>
                                                 {item.is_folder ? (
-                                                    <div className="text-[11px] text-zinc-500">
+                                                    <div className="text-[10px] text-zinc-500">
                                                         {item.subfolderCount > 0 && <span>{item.subfolderCount} folder{item.subfolderCount !== 1 ? "s" : ""}{item.count > 0 ? " · " : ""}</span>}
                                                         {item.count > 0 && <span>{item.count} note{item.count !== 1 ? "s" : ""}</span>}
                                                     </div>
@@ -6946,12 +6946,12 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             {item.is_folder && !!activeFolder && <ArrowRightIcon className="w-4 h-4 text-zinc-600 flex-shrink-0" />}
                                             {/* Date only — badge moved to bottom status bar */}
                                             {!item.is_folder && (item as any).trashed_at && (
-                                                <span className="text-[11px] text-red-500/70 font-medium whitespace-nowrap flex-shrink-0">
+                                                <span className="text-sm text-red-500/70 font-medium whitespace-nowrap flex-shrink-0">
                                                     {(() => { const days = 7 - Math.floor((Date.now() - new Date((item as any).trashed_at).getTime()) / 86400000); return days > 0 ? `${days}d left` : "expiring"; })()}
                                                 </span>
                                             )}
                                             {!item.is_folder && !(item as any).trashed_at && item.updated_at && (
-                                                <span className="text-[11px] text-zinc-500 whitespace-nowrap flex-shrink-0">{timeAgo(item.updated_at)}</span>
+                                                <span className="text-sm text-zinc-500 whitespace-nowrap flex-shrink-0">{timeAgo(item.updated_at)}</span>
                                             )}
                                             {item.is_folder && item.latestUpdatedAt && (
                                                 <span className="text-[11px] text-zinc-500 whitespace-nowrap flex-shrink-0">{timeAgo(item.latestUpdatedAt)}</span>
@@ -6995,21 +6995,22 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                                   </div>
                                                                 : <div style={{ fontSize: "3rem", lineHeight: 1 }} className="folder-grid-initial font-black relative z-10">{meaningfulInitial(item.name, "F")}</div>
                                                         }
-                                                        <div className="folder-grid-name mt-0.5 font-bold line-clamp-1 w-full text-center relative z-10 text-[11px]">
-                                                            <span className="uppercase">{item.name}</span> <span className="opacity-50 font-normal text-[10px]">({(item.subfolderCount || 0) + (item.count || 0)})</span>
-                                                        </div>
+                                                        <div className="folder-grid-name mt-0.5 font-bold line-clamp-1 w-full text-center relative z-10 text-[11px] uppercase">{item.name}</div>
+                                                        <div className="opacity-50 font-normal text-center relative z-10 text-[9px]">{(item.subfolderCount || 0) + (item.count || 0)}</div>
                                                     </>
                                                 ) : (
                                                     <>
                                                         {(item as any).flag && (
                                                             <span className="absolute top-1 left-1 text-sm leading-none">{(item as any).flag}</span>
                                                         )}
-                                                        <div style={{ fontSize: "3rem", lineHeight: 1 }} className="font-black text-white relative z-10">
+                                                        {(() => { const tc = isLightColor(item.color || item.folder_color || "#888") ? "#000" : "#fff"; return (<>
+                                                        <div style={{ fontSize: "3rem", lineHeight: 1, color: tc }} className="font-black relative z-10">
                                                             {noteIcons[String(item.id)]
                                                                 ? <FolderIconDisplay value={noteIcons[String(item.id)]} folderName={item.title || "N"} className="w-10 h-10" />
                                                                 : meaningfulInitial(item.title || "", "N")}
                                                         </div>
-                                                        <div className="font-semibold text-white leading-tight mt-0.5 line-clamp-2 w-full text-[8px]">{item.title?.trim() || "Untitled"}</div>
+                                                        <div className="font-semibold leading-tight mt-0.5 line-clamp-1 w-full text-[8px]" style={{ color: tc }}>{item.title?.trim() || "Untitled"}</div>
+                                                        </>); })()}
                                                     </>
                                                 )}
                                             </div>
