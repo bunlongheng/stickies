@@ -22,9 +22,9 @@ describe("detectType (server-side)", () => {
         expect(detectType("Just some plain text here")).toBe("text");
     });
 
-    // ── voice ─────────────────────────────────────────────────────────────────
-    it("returns 'voice' for voice JSON", () => {
-        expect(detectType('{"_type":"voice","transcript":"hello"}')).toBe("voice");
+    // ── voice (removed — now detected as json) ────────────────────────────────
+    it("returns 'json' for voice-like JSON (voice type removed)", () => {
+        expect(detectType('{"_type":"voice","transcript":"hello"}')).toBe("json");
     });
 
     // ── mermaid ───────────────────────────────────────────────────────────────
@@ -144,7 +144,7 @@ describe("detectType (server-side)", () => {
     });
 
     // ── all VALID_TYPES are reachable ─────────────────────────────────────────
-    const allTypes = ["text","markdown","html","json","mermaid","javascript","typescript","python","css","sql","bash","voice","checklist"];
+    const allTypes = ["text","markdown","html","json","mermaid","javascript","typescript","python","css","sql","bash","checklist"];
     it.each(allTypes)("type '%s' is detectable", (type) => {
         const samples: Record<string, () => string> = {
             text:       () => "plain text",
