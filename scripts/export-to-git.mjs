@@ -10,19 +10,14 @@
  *     ...
  */
 
-import { createClient } from "@supabase/supabase-js";
+import pg from "pg";
 import { execSync } from "child_process";
 import { mkdirSync, writeFileSync, existsSync } from "fs";
 import { join } from "path";
 import * as dotenv from "dotenv";
 dotenv.config({ path: ".env.local" });
 
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
-
-const sb = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY,
-);
+const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
 
 const EXPORT_DIR = join(process.env.HOME, "stickies-export");
 
@@ -65,15 +60,10 @@ function stripTiptapHtml(html) {
 }
 
 async function main() {
-    console.log("Fetching notes from Supabase…");
-    const { data: notes, error } = await sb
-        .from("stickies")
-        .select("id, title, content, folder_name, type, updated_at")
-        .eq("is_folder", false)
-        .order("folder_name", { ascending: true })
-        .order("updated_at", { ascending: false });
-
-    if (error) { console.error("Fetch error:", error.message); process.exit(1); }
+    console.log("Fetching notes from Postgres…");
+    const { rows: notes } = await pool.query(
+        `SELECT id, title, content, folder_name, type, updated_at FROM "stickies" WHERE is_folder = false ORDER BY folder_name ASC, updated_at DESC`
+    );
 
     const codeNotes = notes;
     console.log(`Found ${notes.length} notes.`);
@@ -166,4 +156,4 @@ async function main() {
     console.log(`\nDone! Your stickies are at:\n  ${EXPORT_DIR}\n`);
 }
 
-main();
+main().finally(() => pool.end());
