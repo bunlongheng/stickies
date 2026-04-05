@@ -903,7 +903,7 @@ const NOTE_ICON_KEYWORDS: [string[], string][] = [
     [["terminal","bash","shell","cli","command","script","zsh","sh"], "CodeBracketIcon"],
     [["cloud","aws","gcp","azure","s3","lambda","serverless"], "CloudIcon"],
     [["network","dns","proxy","nginx","gateway","mcp","socket","websocket"], "GlobeAmericasIcon"],
-    [["config","env","settings","setup","install","dotenv","yaml","toml"], "WrenchIcon"],
+    [["config","env","settings","setup","install","dotenv","yaml","toml","integrations","integration","plugin","extension"], "WrenchIcon"],
     [["git","github","branch","commit","merge","pr","repo"], "FolderIcon"],
     [["bug","fix","error","debug","issue","crash","exception"], "FireIcon"],
     [["design","ui","ux","figma","css","style","theme","color","layout"], "SwatchIcon"],
@@ -923,6 +923,8 @@ const NOTE_ICON_KEYWORDS: [string[], string][] = [
     [["code","dev","program","function","module","component","react","next"], "CodeBracketIcon"],
     [["phone","mobile","ios","android","app","pwa"], "DevicePhoneMobileIcon"],
     [["star","favorite","important","priority","bookmark"], "StarIcon"],
+    [["trash","delete","removed","archived","recycle"], "ArchiveBoxIcon"],
+    [["demo","example","sample","tutorial","showcase"], "PuzzlePieceIcon"],
 ];
 function matchNoteIcon(title: string, content?: string): string | null {
     const text = ` ${title} ${(content || "").slice(0, 200)} `.toLowerCase();
@@ -1929,17 +1931,38 @@ export default function NotesMaster() {
         }
     }, [dbData]);
 
-    // Sync folder colors from DB — derive from first note per folder, DB wins over localStorage
+    // Sync note icons from DB (icon column) — DB wins over localStorage
     useEffect(() => {
         if (!dbData || dbData.length === 0) return;
         const fromDb: Record<string, string> = {};
+        dbData.forEach((row: any) => {
+            if (!row.is_folder && row.icon && row.icon.trim()) {
+                fromDb[String(row.id)] = row.icon.trim();
+            }
+        });
+        if (Object.keys(fromDb).length > 0) {
+            setNoteIcons((prev) => ({ ...prev, ...fromDb }));
+        }
+    }, [dbData]);
+
+    // Sync folder colors from DB — folder rows (is_folder=true) are authoritative
+    useEffect(() => {
+        if (!dbData || dbData.length === 0) return;
+        const fromDb: Record<string, string> = {};
+        // Use folder row's color as authoritative source
+        dbData.forEach((row: any) => {
+            if (row.is_folder && row.folder_name && row.folder_color) {
+                fromDb[String(row.folder_name)] = row.folder_color;
+            }
+        });
+        // Fallback: for virtual folders (no is_folder row), use first note's color
         dbData.forEach((row: any) => {
             if (!row.is_folder && row.folder_name && row.folder_color && !fromDb[row.folder_name]) {
                 fromDb[row.folder_name] = row.folder_color;
             }
         });
         if (Object.keys(fromDb).length > 0) {
-            setFolderColors((prev) => ({ ...fromDb, ...prev })); // localStorage overrides DB (user's explicit choice)
+            setFolderColors((prev) => ({ ...prev, ...fromDb })); // DB wins — folder row is authoritative
         }
     }, [dbData]);
 
@@ -3242,29 +3265,50 @@ const fireIntegrations = (trigger: string, note: any) => {
         let count = 0;
         const noteUpdates: Record<string, string> = {};
         const folderUpdates: Record<string, string> = {};
-        // Auto-assign icons to notes
+        // Auto-assign icons to notes — keyword match first, then fall back to note type
+        const TYPE_ICON: Record<string, string> = {
+            checklist: "__hero:ClipboardDocumentListIcon", code: "__hero:CodeBracketIcon",
+            javascript: "__hero:CodeBracketIcon", typescript: "__hero:CodeBracketIcon",
+            python: "__hero:CodeBracketIcon", css: "__hero:CodeBracketIcon",
+            sql: "__hero:TableCellsIcon", bash: "__hero:CodeBracketIcon",
+            markdown: "__hero:BookOpenIcon", mermaid: "__hero:ChartBarIcon",
+            json: "__hero:WrenchIcon", html: "__hero:GlobeAltIcon",
+        };
         for (const note of dbData.filter(n => !n.is_folder && n.title)) {
             const id = String(note.id);
             if (noteIcons[id]) continue;
-            const icon = matchNoteIcon(note.title, note.content);
+            const icon = matchNoteIcon(note.title, note.content) || TYPE_ICON[(note as any).type] || null;
             if (icon) { noteUpdates[id] = icon; count++; }
         }
-        // Auto-assign icons to folders — based on note titles inside
-        for (const folder of dbData.filter(n => n.is_folder && (n.folder_name || n.title))) {
-            const name = String(folder.folder_name || folder.title);
+        // Auto-assign icons to folders — uses derived folders array (includes virtual folders)
+        for (const folder of folders) {
+            const name = String(folder.name);
             if (folderIcons[name]) continue;
-            const folderId = String(folder.id);
-            const notesInside = dbData.filter(n => !n.is_folder && (String(n.folder_id) === folderId || n.folder_name === name));
-            const titles = notesInside.map(n => String(n.title || "")).join(" ");
-            const icon = matchNoteIcon("", titles);
+            // Try folder name first
+            let icon = matchNoteIcon(name, "");
+            if (!icon) {
+                // Fall back to note titles inside
+                const folderId = String(folder.id);
+                const notesInside = dbData.filter(n => !n.is_folder && (String(n.folder_id) === folderId || n.folder_name === name));
+                const titles = notesInside.map(n => String(n.title || "")).join(" ");
+                icon = matchNoteIcon("", titles);
+            }
             if (icon) { folderUpdates[name] = icon; count++; }
         }
         if (count === 0) { showToast("All notes already have icons", "#71717a"); return; }
-        if (Object.keys(noteUpdates).length) setNoteIcons(prev => ({ ...prev, ...noteUpdates }));
+        if (Object.keys(noteUpdates).length) {
+            setNoteIcons(prev => ({ ...prev, ...noteUpdates }));
+            // Persist note icons to DB
+            void (async () => {
+                for (const [id, icon] of Object.entries(noteUpdates)) {
+                    void notesApi.update(id, { icon });
+                }
+            })();
+        }
         if (Object.keys(folderUpdates).length) setFolderIcons(prev => ({ ...prev, ...folderUpdates }));
         playSound("create");
         showToast(`Auto-assigned ${count} icon${count !== 1 ? "s" : ""}`, "#34d399");
-    }, [dbData, noteIcons, folderIcons]);
+    }, [dbData, noteIcons, folderIcons, folders]);
 
     const openNewNote = useCallback((type?: string) => {
         noteEverDirtyRef.current = false;
@@ -4421,9 +4465,10 @@ const fireIntegrations = (trigger: string, note: any) => {
             if (!activeFolder) return;
             setFolderColors((prev) => ({ ...prev, [activeFolder]: color }));
             setFolderStack((prev) => prev.map((f) => f.name === activeFolder ? { ...f, color } : f));
-            // Persist to DB — only update the folder row itself (is_folder=true), not the notes inside
+            // Persist to DB — update the folder row (is_folder=true)
+            const folderRow = dbData.find((r) => r.is_folder && r.folder_name === activeFolder);
             setDbData((prev) => prev.map((r) => r.folder_name === activeFolder && r.is_folder ? { ...r, folder_color: color } : r));
-            void getSupabase().from("stickies").update({ folder_color: color }).eq("folder_name", activeFolder).eq("is_folder", true);
+            if (folderRow) void notesApi.update(String(folderRow.id), { folder_color: color });
             showToast(`${activeFolder} updated`, color);
         },
         [activeFolder, dbData],
@@ -6989,6 +7034,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                     <>
                                                         {item.name === "CLAUDE"
                                                             ? <img src="/claude-icon.png" alt="Claude" className="w-14 h-14 object-contain relative z-10" />
+                                                            : item.name === "TRASH"
+                                                            ? <div className="relative z-10 flex items-center justify-center"><TrashIcon className="w-12 h-12 text-white" /></div>
                                                             : item.icon
                                                                 ? <div style={{ fontSize: item.icon.startsWith("__hero:") ? undefined : "2.8rem", lineHeight: 1 }} className="relative z-10 flex items-center justify-center">
                                                                     <FolderIconDisplay value={item.icon} folderName={item.name || "F"} className="w-12 h-12" />
