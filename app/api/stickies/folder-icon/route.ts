@@ -1,58 +1,20 @@
-import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
-import crypto from "crypto";
+import { query, execute } from "@/lib/db-driver";
+import { authorizeOwner } from "@/app/api/stickies/_auth";
 
-function getSupabase() {
-    return createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY!
-    );
-}
+const OWNER = () => process.env.OWNER_USER_ID?.trim() ?? "";
 
-type AuthResult = { type: "apikey" } | { type: "user"; userId: string };
-
-async function authenticate(req: Request): Promise<AuthResult | null> {
-    if (process.env.NODE_ENV === "development") return { type: "user", userId: process.env.OWNER_USER_ID?.trim() ?? "" };
-    const auth = req.headers.get("authorization") ?? "";
-    const bearer = auth.startsWith("Bearer ") ? auth.slice(7) : "";
-    if (!bearer) return null;
-
-    const apiKey = process.env.STICKIES_API_KEY;
-    if (apiKey) {
-        const expected = `Bearer ${apiKey}`;
-        if (auth.length === expected.length) {
-            try {
-                if (crypto.timingSafeEqual(Buffer.from(auth), Buffer.from(expected))) return { type: "apikey" };
-            } catch {}
-        }
-    }
-
-    const { data: { user } } = await getSupabase().auth.getUser(bearer);
-    if (user) {
-        const ownerUserId = process.env.OWNER_USER_ID?.trim();
-        if (ownerUserId && user.id === ownerUserId) return { type: "apikey" };
-        return { type: "user", userId: user.id };
-    }
-    return null;
-}
-
-// GET /api/stickies/folder-icon — read all folder icons { [folderName]: emoji }
+// GET /api/stickies/folder-icon — read all folder icons
 export async function GET(req: Request) {
-    const auth = await authenticate(req);
-    if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!await authorizeOwner(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const supabase = getSupabase();
-    let q = supabase.from("stickies").select("folder_name, content").eq("is_folder", true);
-    if (auth.type === "user") q = (q as any).eq("user_id", (auth as any).userId);
-    const { data, error } = await q;
-
-    if (error) {
-        console.error("[stickies/folder-icon GET]", error);
-        return NextResponse.json({ error: "Database error" }, { status: 500 });
-    }
+    const rows = await query<{ folder_name: string; content: string }>(
+        `SELECT folder_name, content FROM "stickies" WHERE is_folder = true AND user_id = $1`,
+        [OWNER()]
+    );
 
     const icons: Record<string, string> = {};
-    (data ?? []).forEach((row: any) => {
+    rows.forEach((row) => {
         if (row.folder_name && row.content && row.content.trim()) {
             icons[String(row.folder_name)] = row.content.trim();
         }
@@ -60,10 +22,9 @@ export async function GET(req: Request) {
     return NextResponse.json({ icons });
 }
 
-// PATCH /api/stickies/folder-icon — save emoji icon for a folder
+// PATCH /api/stickies/folder-icon — save icon for a folder
 export async function PATCH(req: Request) {
-    const auth = await authenticate(req);
-    if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!await authorizeOwner(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     let folderName: string, icon: string;
     try {
@@ -74,19 +35,12 @@ export async function PATCH(req: Request) {
         return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
     }
 
-    if (!folderName) {
-        return NextResponse.json({ error: "folderName required" }, { status: 400 });
-    }
+    if (!folderName) return NextResponse.json({ error: "folderName required" }, { status: 400 });
 
-    const supabase = getSupabase();
-    let q = supabase.from("stickies").update({ content: icon, updated_at: new Date().toISOString() }).eq("is_folder", true).eq("folder_name", folderName);
-    if (auth.type === "user") q = (q as any).eq("user_id", (auth as any).userId);
-    const { error } = await q;
-
-    if (error) {
-        console.error("[stickies/folder-icon PATCH]", error);
-        return NextResponse.json({ error: "Database error" }, { status: 500 });
-    }
+    await execute(
+        `UPDATE "stickies" SET content = $1, updated_at = $2 WHERE is_folder = true AND folder_name = $3 AND user_id = $4`,
+        [icon, new Date().toISOString(), folderName, OWNER()]
+    );
 
     return NextResponse.json({ ok: true });
 }

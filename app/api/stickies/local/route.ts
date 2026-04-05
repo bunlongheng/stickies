@@ -1,7 +1,7 @@
-import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { authorizeOwner } from "@/app/api/stickies/_auth";
+import { queryOne } from "@/lib/db-driver";
 import Pusher from "pusher";
 
 // Module-level flash queue — serializes Hue + Pusher so each cycle
@@ -16,13 +16,6 @@ function getPusher() {
         cluster: process.env.PUSHER_CLUSTER!,
         useTLS: true,
     });
-}
-
-function getSupabase() {
-    return createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY!
-    );
 }
 
 // Two valid tokens:
@@ -89,20 +82,19 @@ export async function POST(req: Request) {
     if (!content) return NextResponse.json({ error: "content required" }, { status: 400 });
 
     const color = url.searchParams.get("color")?.trim() || "#B0B0B8";
-
-    const sb = getSupabase();
     const now = new Date().toISOString();
+    const userId = process.env.OWNER_USER_ID?.trim() ?? "";
 
-    const { data: maxRow } = await sb.from("stickies").select("order").eq("is_folder", false).order("order", { ascending: false }).limit(1).single();
+    const maxRow = await queryOne<{ order: number }>(`SELECT "order" FROM "stickies" WHERE is_folder = false AND user_id = $1 ORDER BY "order" DESC LIMIT 1`, [userId]);
     const nextOrder = typeof maxRow?.order === "number" ? maxRow.order + 1 : 0;
 
-    const { data, error } = await sb.from("stickies").insert([{
-        title, content, folder_name, is_folder: false,
-        folder_color: color,
-        order: nextOrder, created_at: now, updated_at: now,
-    }]).select().single();
+    const data = await queryOne<Record<string, unknown>>(
+        `INSERT INTO "stickies" (title, content, folder_name, is_folder, folder_color, "order", created_at, updated_at, user_id)
+         VALUES ($1, $2, $3, false, $4, $5, $6, $7, $8) RETURNING *`,
+        [title, content, folder_name, color, nextOrder, now, now, userId]
+    );
 
-    if (error) return NextResponse.json({ error: "Database error" }, { status: 500 });
+    if (!data) return NextResponse.json({ error: "Database error" }, { status: 500 });
 
     // Enqueue flash: Hue + Pusher run sequentially per-request so rapid-fire
     // posts don't overlap. Hue starts first (~300ms head-start) so the light

@@ -177,16 +177,14 @@ const notesApi = {
         });
         if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error ?? "delete folder failed"); }
     },
-    updateByFolder: async (filter: { folder_name?: string; parent_folder_name?: string }, fields: Record<string, unknown>) => {
-        // Bulk-rename: fetch matching IDs then batch-update
-        const q = getSupabase().from("stickies").select("id");
-        if (filter.folder_name !== undefined) void (q as any).eq("folder_name", filter.folder_name);
-        if (filter.parent_folder_name !== undefined) void (q as any).eq("parent_folder_name", filter.parent_folder_name);
-        const { data } = await (filter.folder_name !== undefined
-            ? getSupabase().from("stickies").select("id").eq("folder_name", filter.folder_name!)
-            : getSupabase().from("stickies").select("id").eq("parent_folder_name", filter.parent_folder_name!));
-        if (!data || data.length === 0) return;
-        await notesApi.bulkUpdate(data.map((r: any) => ({ id: String(r.id), ...fields })));
+    renameFolder: async (from: string, to: string) => {
+        const token = await getAuthToken();
+        const res = await fetch("/api/stickies", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ rename_folder: { from, to } }),
+        });
+        if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error ?? "rename failed"); }
     },
 };
 
@@ -4483,10 +4481,9 @@ const fireIntegrations = (trigger: string, note: any) => {
         // Optimistic update
         setDbData(prev => prev.map(r => picks[String(r.id)] ? { ...r, folder_color: picks[String(r.id)] } : r));
         showToast(`🎲 ${folderNotes.length} colors randomized`, "#AF52DE");
-        // Persist — direct Supabase update so updated_at is NOT touched
-        const sb = createBrowserClient();
+        // Persist via notes API
         await Promise.all(folderNotes.map(n =>
-            sb.from("stickies").update({ folder_color: picks[String(n.id)] }).eq("id", n.id)
+            notesApi.update(String(n.id), { folder_color: picks[String(n.id)] })
         ));
     }, [activeFolder, dbData]);
 
@@ -4511,8 +4508,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         });
         setFolderStack((prev) => prev.map((f) => f.name === activeFolder ? { ...f, name: trimmed } : f));
         try {
-            await notesApi.updateByFolder({ folder_name: activeFolder }, { folder_name: trimmed });
-            await notesApi.updateByFolder({ parent_folder_name: activeFolder }, { parent_folder_name: trimmed });
+            await notesApi.renameFolder(activeFolder, trimmed);
             showToast(`"${activeFolder}" → "${trimmed}"`, folderColors[trimmed] || folderColors[activeFolder] || palette12[0]);
         } catch (err) {
             console.error("Rename folder failed:", err);
