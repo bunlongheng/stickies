@@ -6562,8 +6562,10 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     shouldFocusTitleOnOpenRef.current = false;
                                     setEditorOpen(true);
                                     playSound("create");
+                                    // Auto-save the dropped note immediately
+                                    setTimeout(() => { noteEverDirtyRef.current = true; saveNoteRef.current?.({ silent: true }); }, 500);
                                     // Also attach any images/PDFs dropped alongside
-                                    if (attachmentFiles.length) setTimeout(() => addImages(attachmentFiles), 300);
+                                    if (attachmentFiles.length) setTimeout(() => addImages(attachmentFiles), 800);
                                 };
                                 reader.readAsText(file);
                             } else if (attachmentFiles.length) {
@@ -6579,7 +6581,9 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 shouldFocusTitleOnOpenRef.current = false;
                                 setEditorOpen(true);
                                 playSound("create");
-                                setTimeout(() => addImages(attachmentFiles), 300);
+                                // Auto-save then attach
+                                setTimeout(() => { noteEverDirtyRef.current = true; saveNoteRef.current?.({ silent: true }); }, 500);
+                                setTimeout(() => addImages(attachmentFiles), 800);
                             }
                         }}
                         className={`ios-mobile-main relative flex-1 ${kanbanMode && isFolderGridView ? "overflow-x-auto overflow-y-hidden touch-pan-x" : "overflow-x-hidden overflow-y-auto touch-pan-y"} overscroll-none bg-black ${!(kanbanMode && isFolderGridView) ? "pb-24 sm:pb-32" : ""} ${!isListMode && !(kanbanMode && isFolderGridView) ? "p-1.5 sm:p-2" : ""}`}
