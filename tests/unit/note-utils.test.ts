@@ -40,9 +40,9 @@ describe("detectNoteType", () => {
         expect(detectNoteType(voice)).toBe("voice");
     });
 
-    it("returns 'rich' for TipTap doc JSON", () => {
+    it("returns 'json' for TipTap-like doc JSON (TipTap removed)", () => {
         const doc = JSON.stringify({ type: "doc", content: [] });
-        expect(detectNoteType(doc)).toBe("rich");
+        expect(detectNoteType(doc)).toBe("json");
     });
 
     it("returns 'mermaid' for flowchart", () => {
@@ -91,10 +91,10 @@ describe("detectNoteType", () => {
         expect(detectNoteType("<p>**bold**</p>")).not.toBe("markdown");
     });
 
-    // Regression: TipTap JSON should NOT be detected as generic json
-    it("prefers 'rich' over 'json' for TipTap doc", () => {
+    // TipTap was removed — doc JSON is now detected as generic json
+    it("detects TipTap-like doc as json (TipTap removed)", () => {
         const doc = JSON.stringify({ type: "doc", content: [{ type: "paragraph" }] });
-        expect(detectNoteType(doc)).toBe("rich");
+        expect(detectNoteType(doc)).toBe("json");
     });
 
     // Code types (javascript, typescript, python, css, sql, bash) are set explicitly
