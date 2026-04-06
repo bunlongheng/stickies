@@ -8,7 +8,7 @@ import { usePageMeta } from "@/lib/usePageMeta";
 import dynamic from "next/dynamic";
 import LZString from "lz-string";
 const MermaidRenderer = dynamic(() => import("@/components/MermaidRenderer").then(m => m.MermaidRenderer), { ssr: false });
-const MarkdownWithMermaid = dynamic(() => import("@/components/MarkdownWithMermaid").then(m => m.MarkdownWithMermaid), { ssr: false });
+const MarkdownPreview = dynamic(() => import("@/components/MarkdownPreview").then(m => m.MarkdownPreview), { ssr: false });
 const CodeViewer = dynamic(() => import("@/components/CodeViewer").then(m => m.CodeViewer), { ssr: false });
 
 // Icons
@@ -6390,7 +6390,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 )}
                                 {/* Preview pane — StackEdit light */}
                                 <div className="flex-1 overflow-auto px-10 py-8 md-preview select-text" style={{ background: "#fff" }}>
-                                    <MarkdownWithMermaid content={content} />
+                                    <MarkdownPreview content={content} />
                                 </div>
                             </div>
                         ) : htmlMode ? (
