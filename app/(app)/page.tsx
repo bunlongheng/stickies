@@ -2474,14 +2474,11 @@ const fireIntegrations = (trigger: string, note: any) => {
         if (!hydratedViewState || isUrlChecking) return;
         try {
             const next = new URL(window.location.href);
-            const noteToken = editorOpen ? toUrlToken(title) : "";
             const noteIdToken = editorOpen && editingNote?.id ? String(editingNote.id) : "";
 
-            // Folder is stored in localStorage, not the URL — keep URL clean
+            // Keep URL clean — only noteId needed
             next.searchParams.delete("folder");
-
-            if (noteToken) next.searchParams.set("note", noteToken);
-            else next.searchParams.delete("note");
+            next.searchParams.delete("note");
 
             if (noteIdToken) next.searchParams.set("noteId", noteIdToken);
             else next.searchParams.delete("noteId");
@@ -5371,7 +5368,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                         );
                 }
                 @keyframes spin { to { transform: rotate(360deg); } }
-                .md-preview { color: #24292e; line-height: 1.7; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; font-size: 16px; text-align: left; }
+                .md-preview { color: #1a1a1a; line-height: 1.7; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; font-size: 16px; text-align: left; }
+                .md-preview p { color: #1a1a1a; }
                 .md-preview h1,.md-preview h2,.md-preview h3,.md-preview h4,.md-preview h5,.md-preview h6 { font-weight: 700; letter-spacing: -0.01em; color: #111; margin: 1.5em 0 0.5em; line-height: 1.3; text-align: left; }
                 .md-preview h1 { font-size: 2em; border-bottom: 1px solid #e5e5e5; padding-bottom: 0.3em; }
                 .md-preview h2 { font-size: 1.5em; border-bottom: 1px solid #eee; padding-bottom: 0.25em; }
