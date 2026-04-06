@@ -4732,7 +4732,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         ro.observe(el);
         return () => ro.disconnect();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isListMode, gridCols]);
+    }, [isListMode, gridCols, displayItems.length]);
     const isNoteGridView = Boolean(activeFolder) && !search.trim();
     const fitAllMode = (isFolderGridView || isNoteGridView) && displayItems.length > 12;
     const fitCols = fitAllMode ? Math.ceil(Math.sqrt(displayItems.length)) : 0;
