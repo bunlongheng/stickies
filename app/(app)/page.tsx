@@ -5386,12 +5386,13 @@ const fireIntegrations = (trigger: string, note: any) => {
                 .md-preview code { font-family: ui-monospace, monospace; font-size: 0.85em; background: rgba(175,184,193,0.2); padding: 0.2em 0.4em; border-radius: 3px; color: #e01e5a; }
                 .md-preview pre { background: #f6f8fa; border: 1px solid #e1e4e8; padding: 1em; margin: 0; overflow-x: auto; border-radius: 0 0 4px 4px; }
                 .md-preview pre code { background: none; padding: 0; color: #24292e; font-size: 0.85em; }
-                .code-block-wrapper { position: relative; margin: 0.75em 0; border-radius: 6px; border: 1px solid #e1e4e8; overflow: hidden; }
-                .code-lang-badge { display: block; background: #f6f8fa; color: #6a737d; font-family: ui-monospace, monospace; font-size: 0.65em; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; padding: 0.3em 0.8em; border-bottom: 1px solid #e1e4e8; }
+                .code-block-wrapper { position: relative; margin: 0.75em 0; border-radius: 8px; border: 1px solid #3e3d32; overflow: hidden; }
+                .code-lang-badge { display: block; background: #1e1f1c; color: #8b949e; font-family: ui-monospace, monospace; font-size: 0.65em; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; padding: 0.3em 0.8em; border-bottom: 1px solid #e1e4e8; }
                 .code-block-wrapper pre { border: none; border-radius: 0; margin: 0; }
-                .copy-code-btn { position: absolute; top: 6px; right: 6px; background: #f6f8fa; border: 1px solid #e1e4e8; color: #6a737d; font-size: 0.62em; font-family: ui-monospace, monospace; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; padding: 3px 8px; border-radius: 3px; cursor: pointer; transition: background 0.15s, color 0.15s; z-index: 1; }
-                .copy-code-btn:hover { background: #e1e4e8; color: #24292e; }
-                .copy-code-btn.copied { background: rgba(34,197,94,0.15); color: #22863a; border-color: rgba(34,197,94,0.3); }
+                .copy-code-btn { position: absolute; top: 8px; right: 8px; background: #3e3d32; border: 1px solid #555; color: #a1a1aa; font-size: 0.65em; font-family: ui-monospace, monospace; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; padding: 4px 10px; border-radius: 4px; cursor: pointer; transition: background 0.15s, color 0.15s; z-index: 1; opacity: 0; }
+                .code-block-wrapper:hover .copy-code-btn, .md-preview pre:hover .copy-code-btn { opacity: 1; }
+                .copy-code-btn:hover { background: #555; color: #fff; }
+                .copy-code-btn.copied { opacity: 1; background: rgba(34,197,94,0.2); color: #4ade80; border-color: rgba(34,197,94,0.4); }
                 .md-preview blockquote { border-left: 4px solid #dfe2e5; padding-left: 1em; margin: 0.75em 0; color: #6a737d; }
                 .md-preview a { color: #0366d6; text-decoration: none; }
                 .md-preview a:hover { text-decoration: underline; }
@@ -5405,7 +5406,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                 .md-preview th,.md-preview td { border: 1px solid #dfe2e5; padding: 6px 13px; text-align: left; color: #1a1a1a; }
                 .md-preview th { font-weight: 600; background: #f6f8fa; color: #111; }
                 .md-preview tr:nth-child(2n) { background: #f6f8fa; }
-                .md-preview pre { background: #272822; border: 1px solid #3e3d32; }
+                .md-preview pre { background: #272822; border: 1px solid #3e3d32; border-radius: 8px; padding: 1.2em; }
                 .md-preview pre code { color: #f8f8f2; }
                 .hljs-keyword,.hljs-tag,.hljs-selector-tag { color: #f92672; }
                 .hljs-string,.hljs-attr,.hljs-addition { color: #e6db74; }
@@ -6389,7 +6390,20 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 />
                                 )}
                                 {/* Preview pane — StackEdit light */}
-                                <div className="flex-1 overflow-auto px-10 py-8 md-preview select-text" style={{ background: "#fff" }}>
+                                <div className="flex-1 overflow-auto px-10 py-8 md-preview select-text" style={{ background: "#fff" }}
+                                    onClick={(e) => {
+                                        const btn = (e.target as HTMLElement).closest(".copy-code-btn") as HTMLElement | null;
+                                        if (!btn) return;
+                                        const wrapper = btn.closest(".code-block-wrapper") || btn.closest("pre");
+                                        const code = wrapper?.querySelector("code")?.textContent || "";
+                                        if (code) {
+                                            navigator.clipboard.writeText(code);
+                                            btn.textContent = "Copied!";
+                                            btn.classList.add("copied");
+                                            showToast("Copied!", "#34C759");
+                                            setTimeout(() => { btn.textContent = "Copy"; btn.classList.remove("copied"); }, 2000);
+                                        }
+                                    }}>
                                     <MarkdownPreview content={content} />
                                 </div>
                             </div>
