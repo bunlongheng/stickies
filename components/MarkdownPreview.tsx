@@ -5,12 +5,16 @@ import { markedHighlight } from "marked-highlight";
 import dynamic from "next/dynamic";
 import hljs from "highlight.js";
 
-// Open all links in a new tab
+// Open all links in a new tab + strip stray backticks from inline code
 const renderer = new Renderer();
 renderer.link = ({ href, title, tokens }) => {
     const text = tokens.map(t => ("raw" in t ? t.raw : "")).join("") || href;
     const titleAttr = title ? ` title="${title}"` : "";
     return `<a href="${href}"${titleAttr} target="_blank" rel="noopener noreferrer">${text}</a>`;
+};
+renderer.codespan = ({ text }) => {
+    const clean = text.replace(/^`+|`+$/g, "");
+    return `<code>${clean}</code>`;
 };
 
 // Syntax highlighting via highlight.js + marked-highlight
