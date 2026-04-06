@@ -1,11 +1,10 @@
 "use client";
 import { useMemo } from "react";
 import { marked, Renderer } from "marked";
-import { markedHighlight } from "marked-highlight";
 import dynamic from "next/dynamic";
 import hljs from "highlight.js";
 
-// Open all links in a new tab + strip stray backticks from inline code
+// Custom renderer — clean code blocks with syntax highlighting, no visible fences
 const renderer = new Renderer();
 renderer.link = ({ href, title, tokens }) => {
     const text = tokens.map(t => ("raw" in t ? t.raw : "")).join("") || href;
@@ -13,21 +12,18 @@ renderer.link = ({ href, title, tokens }) => {
     return `<a href="${href}"${titleAttr} target="_blank" rel="noopener noreferrer">${text}</a>`;
 };
 renderer.codespan = ({ text }) => {
-    const clean = text.replace(/^`+|`+$/g, "");
-    return `<code>${clean}</code>`;
+    return `<code>${text.replace(/^`+|`+$/g, "")}</code>`;
 };
-
-// Syntax highlighting via highlight.js + marked-highlight
-marked.use(markedHighlight({
-    langPrefix: "hljs language-",
-    highlight(code: string, lang: string) {
-        if (lang && hljs.getLanguage(lang)) {
-            try { return hljs.highlight(code, { language: lang }).value; } catch {}
-        }
-        try { return hljs.highlightAuto(code).value; } catch {}
-        return code;
-    },
-}));
+renderer.code = ({ text, lang }) => {
+    const langBadge = lang ? `<span class="code-lang-badge">${lang}</span>` : "";
+    let highlighted = text;
+    if (lang && hljs.getLanguage(lang)) {
+        try { highlighted = hljs.highlight(text, { language: lang }).value; } catch {}
+    } else {
+        try { highlighted = hljs.highlightAuto(text).value; } catch {}
+    }
+    return `<div class="code-block-wrapper">${langBadge}<button class="copy-code-btn" aria-label="Copy code">Copy</button><pre><code class="hljs">${highlighted}</code></pre></div>`;
+};
 
 const DiagramRenderer = dynamic(() => import("./MermaidRenderer").then(m => ({ default: m.MermaidRenderer })), { ssr: false });
 
@@ -79,7 +75,7 @@ export function MarkdownPreview({ content, theme = "dark" }: Props) {
                     ) : (
                         <div key={i}
                             className="prose prose-sm prose-invert max-w-none"
-                            dangerouslySetInnerHTML={{ __html: (marked.parse(seg.text, { async: false, renderer }) as string).replace(/<pre>/g, '<div class="code-block-wrapper"><button class="copy-code-btn" aria-label="Copy code">Copy</button><pre>').replace(/<\/pre>/g, '</pre></div>') }}
+                            dangerouslySetInnerHTML={{ __html: marked.parse(seg.text, { async: false, renderer }) as string }}
                         />
                     )
                 )}
