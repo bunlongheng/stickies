@@ -3434,6 +3434,34 @@ const fireIntegrations = (trigger: string, note: any) => {
         return () => window.removeEventListener("keydown", handler, true);
     }, [openNewNote]);
 
+    // Global paste handler — paste markdown in list view creates a new note
+    useEffect(() => {
+        const handler = (e: ClipboardEvent) => {
+            // Only when not editing (no textarea/input focused)
+            const tag = (document.activeElement?.tagName || "").toLowerCase();
+            if (tag === "textarea" || tag === "input" || editorOpen) return;
+            const text = e.clipboardData?.getData("text/plain")?.trim();
+            if (!text || text.length < 10) return;
+            e.preventDefault();
+            // Derive title from first heading or first line
+            const firstLine = text.split("\n").find(l => l.trim()) || "";
+            const derivedTitle = firstLine.replace(/^#+\s*/, "").slice(0, 60).trim();
+            setEditingNote(null);
+            setTitle("");
+            setContent(text);
+            setTargetFolder(activeFolder || "General");
+            setNoteColor(folders.find(f => f.name === (activeFolder || "General"))?.color || palette12[0]);
+            setPendingNoteType(detectNoteType(text));
+            setEditorOpen(true);
+            // Focus title input after render so user can name it
+            shouldFocusTitleOnOpenRef.current = true;
+            playSound("create");
+            showToast(`Pasted — name your note`, "#34C759");
+        };
+        window.addEventListener("paste", handler);
+        return () => window.removeEventListener("paste", handler);
+    }, [editorOpen, activeFolder, folders]);
+
     const showToast = (msg: string, color = "#34C759", confetti = true) => {
         setToastKey(k => k + 1);
         setToastColor(color);
