@@ -5346,37 +5346,41 @@ const fireIntegrations = (trigger: string, note: any) => {
                         );
                 }
                 @keyframes spin { to { transform: rotate(360deg); } }
-                .md-preview { color: #c9d1d9; line-height: 1.7; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; font-size: 15px; text-align: left; }
-                .md-preview h1,.md-preview h2,.md-preview h3,.md-preview h4,.md-preview h5,.md-preview h6 { font-weight: 600; letter-spacing: -0.01em; color: #e6edf3; margin: 1.5em 0 0.5em; line-height: 1.3; text-align: left; }
-                .md-preview h1 { font-size: 1.8em; border-bottom: 1px solid #21262d; padding-bottom: 0.3em; }
-                .md-preview h2 { font-size: 1.4em; border-bottom: 1px solid #21262d; padding-bottom: 0.25em; }
-                .md-preview h3 { font-size: 1.15em; }
-                .md-preview h4,.md-preview h5,.md-preview h6 { font-size: 1em; color: #8b949e; }
+                .md-preview { color: #333; line-height: 1.7; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; font-size: 16px; text-align: left; }
+                .md-preview h1,.md-preview h2,.md-preview h3,.md-preview h4,.md-preview h5,.md-preview h6 { font-weight: 700; letter-spacing: -0.01em; color: #111; margin: 1.5em 0 0.5em; line-height: 1.3; text-align: left; }
+                .md-preview h1 { font-size: 2em; border-bottom: 1px solid #e5e5e5; padding-bottom: 0.3em; }
+                .md-preview h2 { font-size: 1.5em; border-bottom: 1px solid #eee; padding-bottom: 0.25em; }
+                .md-preview h3 { font-size: 1.25em; }
+                .md-preview h4,.md-preview h5,.md-preview h6 { font-size: 1em; color: #666; }
                 .md-preview p { margin: 0.75em 0; text-align: left; }
                 .md-preview ul,.md-preview ol { padding-left: 1.5em; margin: 0.75em 0; }
                 .md-preview li { margin: 0.25em 0; }
                 .md-preview ul li { list-style-type: disc; }
                 .md-preview ol li { list-style-type: decimal; }
                 .md-preview li::marker { color: #71717a; }
-                .md-preview strong { font-weight: 600; color: #e6edf3; }
-                .md-preview em { font-style: italic; color: #8b949e; }
-                .md-preview code { font-family: ui-monospace, monospace; font-size: 0.85em; background: rgba(110,118,129,0.2); padding: 0.2em 0.4em; border-radius: 3px; color: #79c0ff; }
-                .md-preview pre { background: #161b22; border: 1px solid #30363d; padding: 1em; margin: 0; overflow-x: auto; border-radius: 0 0 4px 4px; }
-                .md-preview pre code { background: none; padding: 0; color: #c9d1d9; font-size: 0.85em; }
-                .code-block-wrapper { position: relative; margin: 0.75em 0; border-radius: 6px; border: 1px solid #30363d; overflow: hidden; }
-                .code-lang-badge { display: block; background: #161b22; color: #8b949e; font-family: ui-monospace, monospace; font-size: 0.65em; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; padding: 0.3em 0.8em; border-bottom: 1px solid #30363d; }
+                .md-preview strong { font-weight: 700; color: #111; }
+                .md-preview em { font-style: italic; color: #555; }
+                .md-preview code { font-family: ui-monospace, monospace; font-size: 0.85em; background: rgba(175,184,193,0.2); padding: 0.2em 0.4em; border-radius: 3px; color: #e01e5a; }
+                .md-preview pre { background: #f6f8fa; border: 1px solid #e1e4e8; padding: 1em; margin: 0; overflow-x: auto; border-radius: 0 0 4px 4px; }
+                .md-preview pre code { background: none; padding: 0; color: #24292e; font-size: 0.85em; }
+                .code-block-wrapper { position: relative; margin: 0.75em 0; border-radius: 6px; border: 1px solid #e1e4e8; overflow: hidden; }
+                .code-lang-badge { display: block; background: #f6f8fa; color: #6a737d; font-family: ui-monospace, monospace; font-size: 0.65em; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; padding: 0.3em 0.8em; border-bottom: 1px solid #e1e4e8; }
                 .code-block-wrapper pre { border: none; border-radius: 0; margin: 0; }
-                .copy-code-btn { position: absolute; top: 6px; right: 6px; background: #21262d; border: 1px solid #30363d; color: #8b949e; font-size: 0.62em; font-family: ui-monospace, monospace; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; padding: 3px 8px; border-radius: 3px; cursor: pointer; transition: background 0.15s, color 0.15s; z-index: 1; }
-                .copy-code-btn:hover { background: #30363d; color: #c9d1d9; }
-                .copy-code-btn.copied { background: rgba(34,197,94,0.15); color: #3fb950; border-color: rgba(34,197,94,0.3); }
-                .md-preview blockquote { border-left: 4px solid #30363d; padding-left: 1em; margin: 0.75em 0; color: #8b949e; }
-                .md-preview a { color: #58a6ff; text-decoration: none; }
+                .copy-code-btn { position: absolute; top: 6px; right: 6px; background: #f6f8fa; border: 1px solid #e1e4e8; color: #6a737d; font-size: 0.62em; font-family: ui-monospace, monospace; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; padding: 3px 8px; border-radius: 3px; cursor: pointer; transition: background 0.15s, color 0.15s; z-index: 1; }
+                .copy-code-btn:hover { background: #e1e4e8; color: #24292e; }
+                .copy-code-btn.copied { background: rgba(34,197,94,0.15); color: #22863a; border-color: rgba(34,197,94,0.3); }
+                .md-preview blockquote { border-left: 4px solid #dfe2e5; padding-left: 1em; margin: 0.75em 0; color: #6a737d; }
+                .md-preview a { color: #0366d6; text-decoration: none; }
                 .md-preview a:hover { text-decoration: underline; }
-                .md-preview img { max-width: 100%; height: auto; border-radius: 4px; margin: 0.6em 0; display: block; border: 1px solid #30363d; }
-                .md-preview input[type="checkbox"] { margin-right: 0.4em; accent-color: #58a6ff; }
-                .md-preview del, .md-preview s { color: #484f58; }
-                .md-preview hr { border: none; border-top: 1px solid #21262d; margin: 1.5em 0; }
-                .md-preview li::marker { color: #8b949e; }
+                .md-preview img { max-width: 100%; height: auto; border-radius: 4px; margin: 0.6em 0; display: block; border: 1px solid #e1e4e8; }
+                .md-preview input[type="checkbox"] { margin-right: 0.4em; accent-color: #0366d6; }
+                .md-preview del, .md-preview s { color: #999; }
+                .md-preview hr { border: none; border-top: 1px solid #e5e5e5; margin: 1.5em 0; }
+                .md-preview li::marker { color: #999; }
+                .md-preview table { border-collapse: collapse; width: 100%; margin: 0.75em 0; }
+                .md-preview th,.md-preview td { border: 1px solid #dfe2e5; padding: 6px 13px; text-align: left; }
+                .md-preview th { font-weight: 600; background: #f6f8fa; }
+                .md-preview tr:nth-child(2n) { background: #f6f8fa; }
                 .md-preview table { width: 100%; border-collapse: collapse; margin: 0.75em 0; font-size: 0.85em; }
                 .md-preview th { background: rgba(255,255,255,0.06); color: #fff; font-weight: 900; text-transform: uppercase; font-size: 0.75em; letter-spacing: 0.05em; }
                 .md-preview th,.md-preview td { border: 1px solid rgba(255,255,255,0.1); padding: 0.5em 0.75em; text-align: left; }
@@ -6345,8 +6349,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     autoCapitalize="off"
                                 />
                                 )}
-                                {/* Preview pane — GitHub dark mode */}
-                                <div className="flex-1 overflow-auto px-10 py-8 md-preview select-text" style={{ background: "#0d1117" }}>
+                                {/* Preview pane — StackEdit light */}
+                                <div className="flex-1 overflow-auto px-10 py-8 md-preview select-text" style={{ background: "#fff" }}>
                                     <MarkdownWithMermaid content={content} />
                                 </div>
                             </div>
