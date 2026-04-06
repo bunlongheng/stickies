@@ -3435,32 +3435,34 @@ const fireIntegrations = (trigger: string, note: any) => {
     }, [openNewNote]);
 
     // Global paste handler — paste markdown in list view creates a new note
+    const editorOpenRef = useRef(editorOpen);
+    editorOpenRef.current = editorOpen;
+    const activeFolderRef = useRef(activeFolder);
+    activeFolderRef.current = activeFolder;
     useEffect(() => {
         const handler = (e: ClipboardEvent) => {
-            // Only when not editing (no textarea/input focused)
-            const tag = (document.activeElement?.tagName || "").toLowerCase();
-            if (tag === "textarea" || tag === "input" || editorOpen) return;
+            // Skip if editor is open or user is typing in an input
+            if (editorOpenRef.current) return;
+            const el = document.activeElement;
+            if (el && (el.tagName === "TEXTAREA" || el.tagName === "INPUT" || (el as HTMLElement).isContentEditable)) return;
             const text = e.clipboardData?.getData("text/plain")?.trim();
             if (!text || text.length < 10) return;
             e.preventDefault();
-            // Derive title from first heading or first line
-            const firstLine = text.split("\n").find(l => l.trim()) || "";
-            const derivedTitle = firstLine.replace(/^#+\s*/, "").slice(0, 60).trim();
             setEditingNote(null);
             setTitle("");
             setContent(text);
-            setTargetFolder(activeFolder || "General");
-            setNoteColor(folders.find(f => f.name === (activeFolder || "General"))?.color || palette12[0]);
+            setTargetFolder(activeFolderRef.current || "General");
+            const fc = folders.find(f => f.name === (activeFolderRef.current || "General"))?.color || palette12[0];
+            setNoteColor(fc);
             setPendingNoteType(detectNoteType(text));
             setEditorOpen(true);
-            // Focus title input after render so user can name it
             shouldFocusTitleOnOpenRef.current = true;
             playSound("create");
-            showToast(`Pasted — name your note`, "#34C759");
+            showToast("Pasted — name your note", "#34C759");
         };
         window.addEventListener("paste", handler);
         return () => window.removeEventListener("paste", handler);
-    }, [editorOpen, activeFolder, folders]);
+    }, [folders]);
 
     const showToast = (msg: string, color = "#34C759", confetti = true) => {
         setToastKey(k => k + 1);
