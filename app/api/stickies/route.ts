@@ -355,7 +355,7 @@ export async function GET(req: Request) {
 
     if (foldersOnly) {
         const { sql, params } = withUser(
-            `SELECT id, folder_name, folder_color, parent_folder_name, "order", updated_at FROM "${table}" WHERE is_folder = true`,
+            `SELECT id, folder_name, folder_color, parent_folder_name, "order", updated_at, content FROM "${table}" WHERE is_folder = true`,
             [],
             userId
         );
