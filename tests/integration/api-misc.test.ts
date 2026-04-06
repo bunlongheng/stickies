@@ -1,7 +1,7 @@
 /**
  * Integration tests: misc API routes
  */
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { createMockSupabase, createChainMock } from "./mock-supabase";
 
 Object.assign(process.env, {
@@ -16,6 +16,13 @@ Object.assign(process.env, {
     PUSHER_CLUSTER: "us2",
 });
 
+// ── Mock DB driver (used by public + folder-icon routes) ─────────────────────
+vi.mock("@/lib/db-driver", () => ({
+    query:    vi.fn(),
+    queryOne: vi.fn(),
+    execute:  vi.fn(),
+}));
+
 const mockSb = createMockSupabase();
 vi.mock("@supabase/supabase-js", () => ({ createClient: vi.fn(() => mockSb) }));
 vi.mock("@/app/api/stickies/_auth", () => ({ authorizeOwner: vi.fn().mockResolvedValue(true) }));
@@ -24,6 +31,11 @@ vi.mock("pusher", () => ({
         return { trigger: vi.fn().mockResolvedValue(undefined) };
     }),
 }));
+
+import { query, queryOne, execute } from "@/lib/db-driver";
+const mockQuery    = vi.mocked(query);
+const mockQueryOne = vi.mocked(queryOne);
+const mockExecute  = vi.mocked(execute);
 
 // ── /api/stickies/public ──
 describe("GET /api/stickies/public", () => {
@@ -35,8 +47,7 @@ describe("GET /api/stickies/public", () => {
     });
 
     it("returns public note by noteId", async () => {
-        const chain = createChainMock({ title: "Public", content: "Hi", type: "text", folder_color: "#fff" });
-        mockSb.from.mockReturnValue(chain);
+        mockQueryOne.mockResolvedValueOnce({ title: "Public", content: "Hi", type: "text", folder_color: "#fff" });
         const { GET } = await import("@/app/api/stickies/public/route");
         const req = new Request("http://localhost:4444/api/stickies/public?noteId=n1");
         const res = await GET(req);
@@ -59,8 +70,7 @@ describe("GET /api/stickies/img-proxy", () => {
 // ── /api/stickies/folder-icon ──
 describe("/api/stickies/folder-icon", () => {
     it("GET returns folder icons with valid auth", async () => {
-        const chain = createChainMock([{ folder_name: "Work", icon: "📁" }]);
-        mockSb.from.mockReturnValue(chain);
+        mockQuery.mockResolvedValueOnce([{ folder_name: "Work", content: "📁" }]);
         const { GET } = await import("@/app/api/stickies/folder-icon/route");
         const req = new Request("http://localhost:4444/api/stickies/folder-icon", {
             headers: { Authorization: "Bearer test-api-key" },
