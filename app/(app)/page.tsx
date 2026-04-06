@@ -5404,7 +5404,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                 .code-block-wrapper:hover .copy-code-btn { opacity: 1; }
                 .copy-code-btn:hover { background: rgba(255,255,255,0.15); color: #fff; }
                 .copy-code-btn.copied { opacity: 1; background: rgba(34,197,94,0.2); color: #4ade80; border-color: rgba(34,197,94,0.4); }
-                .md-preview blockquote { border-left: 4px solid #dfe2e5; padding-left: 1em; margin: 0.75em 0; color: #6a737d; }
+                .md-preview blockquote { border-left: 4px solid #959da5; padding-left: 1em; margin: 0.75em 0; color: #444d56; background: #f8f8f8; padding: 0.6em 1em; border-radius: 0 4px 4px 0; }
                 .md-preview a { color: #0366d6; text-decoration: none; }
                 .md-preview a:hover { text-decoration: underline; }
                 .md-preview img { max-width: 100%; height: auto; border-radius: 4px; margin: 0.6em 0; display: block; border: 1px solid #e1e4e8; }
