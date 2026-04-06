@@ -3162,15 +3162,22 @@ const fireIntegrations = (trigger: string, note: any) => {
                 setFolderStack([{ id: folderId, name, color }]);
                 setShowNoteActions(false);
                 setEditorOpen(false);
+                // Remove from old folder cache, add to new
+                if (editingNote.folder_name && editingNote.folder_name !== name) {
+                    removeFromCachedNotes(editingNote.folder_name, noteId);
+                }
+                mergeIntoCachedNotes(name, [{ ...editingNote, id: noteId, folder_name: name, folder_color: color }]);
                 try {
                     await notesApi.update(noteId, { folder_name: name, folder_color: color });
+                    // Refresh target folder notes so the moved note shows immediately
+                    void loadFolderNotes(name, false);
                 } catch (err) {
                     console.error("Move failed:", err);
                     showToast("Move Failed");
                 }
             }
         },
-        [folders, editingNote],
+        [folders, editingNote, loadFolderNotes],
     );
 
 
