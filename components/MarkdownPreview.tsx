@@ -40,13 +40,13 @@ type Segment = { kind: "md"; text: string } | { kind: "diagram"; code: string };
 
 function segment(raw: string): Segment[] {
     const segments: Segment[] = [];
-    const re = /^```(?:mermaid)?\s*\r?\n([\s\S]*?)^```\s*$/gim;
+    const DIAGRAM_KW = /^(flowchart|graph|sequenceDiagram|classDiagram|stateDiagram(-v2)?|erDiagram|gantt|pie|gitGraph|mindmap|timeline|xychart(-beta)?|quadrantChart|requirementDiagram|zenuml|sankey|block-beta)\b/im;
+    const re = /^```mermaid\s*\r?\n([\s\S]*?)^```\s*$/gim;
     let last = 0;
     let match: RegExpExecArray | null;
 
     while ((match = re.exec(raw)) !== null) {
         const code = match[1].trim();
-        const DIAGRAM_KW = /^(flowchart|graph|sequenceDiagram|classDiagram|stateDiagram(-v2)?|erDiagram|gantt|pie|gitGraph|mindmap|timeline|xychart(-beta)?|quadrantChart|requirementDiagram|zenuml|sankey|block-beta)\b/im;
         if (!DIAGRAM_KW.test(code)) continue;
 
         const before = raw.slice(last, match.index);
@@ -79,7 +79,7 @@ export function MarkdownPreview({ content, theme = "dark" }: Props) {
                     ) : (
                         <div key={i}
                             className="prose prose-sm prose-invert max-w-none"
-                            dangerouslySetInnerHTML={{ __html: (marked.parse(seg.text, { async: false, renderer }) as string).replace(/`([^`]+)`/g, '<code>$1</code>') }}
+                            dangerouslySetInnerHTML={{ __html: (marked.parse(seg.text, { async: false, renderer }) as string).replace(/<pre>/g, '<div class="code-block-wrapper"><button class="copy-code-btn" aria-label="Copy code">Copy</button><pre>').replace(/<\/pre>/g, '</pre></div>') }}
                         />
                     )
                 )}
