@@ -1127,6 +1127,7 @@ export default function NotesMaster() {
     const [flashColor, setFlashColor] = useState("#ffffff");
     const [flashNote, setFlashNote] = useState<any | null>(null);
     const [incomingNoteIds, setIncomingNoteIds] = useState<Set<string>>(new Set());
+    const [iconAnimIds, setIconAnimIds] = useState<Set<string>>(new Set());
     const [removingNoteIds, setRemovingNoteIds] = useState<Set<string>>(new Set());
 
     const [, startContentTransition] = useTransition();
@@ -3301,9 +3302,12 @@ const fireIntegrations = (trigger: string, note: any) => {
             if (icon) { folderUpdates[name] = icon; count++; }
         }
         if (count === 0) { showToast("All notes already have icons", "#71717a"); return; }
+        // Animate the icons that just got assigned
+        const animIds = new Set([...Object.keys(noteUpdates), ...Object.keys(folderUpdates)]);
+        setIconAnimIds(animIds);
+        setTimeout(() => setIconAnimIds(new Set()), 1200);
         if (Object.keys(noteUpdates).length) {
             setNoteIcons(prev => ({ ...prev, ...noteUpdates }));
-            // Persist note icons to DB
             void (async () => {
                 for (const [id, icon] of Object.entries(noteUpdates)) {
                     void notesApi.update(id, { icon });
@@ -7002,7 +7006,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                             borderRadius: "6px 6px 6px 16px",
                                                             boxShadow: `2px 3px 8px ${nc}55`,
                                                         }}>
-                                                        {nIcon ? <FolderIconDisplay value={nIcon} folderName={item.title || "N"} className="w-6 h-6" /> : initial}
+                                                        {nIcon ? <FolderIconDisplay value={nIcon} folderName={item.title || "N"} className={`w-6 h-6${iconAnimIds.has(String(item.id)) ? " animate-spin" : ""}`} /> : initial}
                                                     </button>
                                                 );
                                             })()}
