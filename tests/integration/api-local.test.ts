@@ -34,7 +34,7 @@ vi.mock("pusher", () => ({
 describe("POST /api/stickies/local", () => {
     it("returns 401 without auth", async () => {
         const { POST } = await import("@/app/api/stickies/local/route");
-        const req = new Request("http://localhost:4444/api/stickies/local", {
+        const req = new Request("https://stickies.example.com/api/stickies/local", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ content: "test" }),
@@ -45,7 +45,7 @@ describe("POST /api/stickies/local", () => {
 
     it("accepts API key auth", async () => {
         const { POST } = await import("@/app/api/stickies/local/route");
-        const req = new Request("http://localhost:4444/api/stickies/local", {
+        const req = new Request("https://stickies.example.com/api/stickies/local", {
             method: "POST",
             headers: {
                 Authorization: "Bearer test-api-key",

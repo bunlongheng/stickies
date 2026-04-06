@@ -7,6 +7,7 @@
  */
 import crypto from "crypto";
 import { createClient } from "@supabase/supabase-js";
+import { isLocal } from "@/lib/is-local";
 
 function getSupabase() {
     return createClient(
@@ -16,8 +17,8 @@ function getSupabase() {
 }
 
 export async function authorizeOwner(req: Request): Promise<boolean> {
-    // Dev bypass: no login needed in development
-    if (process.env.NODE_ENV === "development") return true;
+    // Local/LAN bypass: no login needed for local requests
+    if (isLocal(req)) return true;
 
     const auth = req.headers.get("authorization") ?? "";
     const bearer = auth.startsWith("Bearer ") ? auth.slice(7) : "";

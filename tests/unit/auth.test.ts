@@ -36,13 +36,20 @@ beforeEach(() => {
 });
 
 describe("authorizeOwner", () => {
-    describe("dev mode bypass", () => {
-        it("returns true in development (NODE_ENV=development)", async () => {
-            const origEnv = process.env.NODE_ENV;
-            process.env.NODE_ENV = "development";
+    describe("local bypass", () => {
+        it("returns true for localhost requests", async () => {
             const req = new Request("http://localhost:4444/api/test");
             expect(await authorizeOwner(req)).toBe(true);
-            process.env.NODE_ENV = origEnv;
+        });
+
+        it("returns true for 127.0.0.1 requests", async () => {
+            const req = new Request("http://127.0.0.1:4444/api/test");
+            expect(await authorizeOwner(req)).toBe(true);
+        });
+
+        it("returns true for LAN 192.168.x.x requests", async () => {
+            const req = new Request("http://192.168.1.100:4444/api/test");
+            expect(await authorizeOwner(req)).toBe(true);
         });
     });
 
@@ -50,7 +57,7 @@ describe("authorizeOwner", () => {
         it("accepts valid API key", async () => {
             const origEnv = process.env.NODE_ENV;
             process.env.NODE_ENV = "production";
-            const req = new Request("http://localhost:4444/api/test", {
+            const req = new Request("https://stickies.example.com/api/test", {
                 headers: { Authorization: `Bearer ${API_KEY}` },
             });
             expect(await authorizeOwner(req)).toBe(true);
@@ -60,7 +67,7 @@ describe("authorizeOwner", () => {
         it("accepts valid password", async () => {
             const origEnv = process.env.NODE_ENV;
             process.env.NODE_ENV = "production";
-            const req = new Request("http://localhost:4444/api/test", {
+            const req = new Request("https://stickies.example.com/api/test", {
                 headers: { Authorization: `Bearer ${PASSWORD}` },
             });
             expect(await authorizeOwner(req)).toBe(true);
@@ -71,7 +78,7 @@ describe("authorizeOwner", () => {
             const origEnv = process.env.NODE_ENV;
             process.env.NODE_ENV = "production";
             mockGetUser.mockResolvedValue({ data: { user: null }, error: { message: "invalid" } });
-            const req = new Request("http://localhost:4444/api/test", {
+            const req = new Request("https://stickies.example.com/api/test", {
                 headers: { Authorization: "Bearer wrong-key" },
             });
             expect(await authorizeOwner(req)).toBe(false);
@@ -84,7 +91,7 @@ describe("authorizeOwner", () => {
             const origEnv = process.env.NODE_ENV;
             process.env.NODE_ENV = "production";
             mockGetUser.mockResolvedValue({ data: { user: { id: OWNER_ID } }, error: null });
-            const req = new Request("http://localhost:4444/api/test", {
+            const req = new Request("https://stickies.example.com/api/test", {
                 headers: { Authorization: "Bearer valid-jwt" },
             });
             expect(await authorizeOwner(req)).toBe(true);
@@ -95,7 +102,7 @@ describe("authorizeOwner", () => {
             const origEnv = process.env.NODE_ENV;
             process.env.NODE_ENV = "production";
             mockGetUser.mockResolvedValue({ data: { user: { id: "different-user" } }, error: null });
-            const req = new Request("http://localhost:4444/api/test", {
+            const req = new Request("https://stickies.example.com/api/test", {
                 headers: { Authorization: "Bearer other-jwt" },
             });
             expect(await authorizeOwner(req)).toBe(false);
@@ -107,7 +114,7 @@ describe("authorizeOwner", () => {
         it("rejects request with no Authorization header (prod)", async () => {
             const origEnv = process.env.NODE_ENV;
             process.env.NODE_ENV = "production";
-            const req = new Request("http://localhost:4444/api/test");
+            const req = new Request("https://stickies.example.com/api/test");
             expect(await authorizeOwner(req)).toBe(false);
             process.env.NODE_ENV = origEnv;
         });
@@ -115,7 +122,7 @@ describe("authorizeOwner", () => {
         it("rejects empty Bearer token (prod)", async () => {
             const origEnv = process.env.NODE_ENV;
             process.env.NODE_ENV = "production";
-            const req = new Request("http://localhost:4444/api/test", {
+            const req = new Request("https://stickies.example.com/api/test", {
                 headers: { Authorization: "Bearer " },
             });
             expect(await authorizeOwner(req)).toBe(false);
