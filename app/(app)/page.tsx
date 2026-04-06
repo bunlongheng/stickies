@@ -1687,6 +1687,8 @@ export default function NotesMaster() {
             const folderParam = params.get("folder");
             const noteParam = params.get("note");
             const noteIdParam = params.get("noteId");
+            const viewParam = params.get("view");
+            if (viewParam === "split" || viewParam === "preview") setMdViewMode(viewParam);
             if (codeParam) {
                 restoredFromUrl = true;
                 try {
@@ -2483,6 +2485,9 @@ const fireIntegrations = (trigger: string, note: any) => {
             if (noteIdToken) next.searchParams.set("noteId", noteIdToken);
             else next.searchParams.delete("noteId");
 
+            if (editorOpen && mdViewMode !== "text") next.searchParams.set("view", mdViewMode);
+            else next.searchParams.delete("view");
+
             const currentPath = `${window.location.pathname}${window.location.search}`;
             const nextPath = `${next.pathname}${next.search}`;
             if (currentPath !== nextPath) {
@@ -2491,7 +2496,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         } catch (err) {
             console.error("Failed to sync URL state:", err);
         }
-    }, [hydratedViewState, isUrlChecking, activeFolder, editorOpen, targetFolder, title, editingNote?.id, editingNote?.folder_name]);
+    }, [hydratedViewState, isUrlChecking, activeFolder, editorOpen, targetFolder, title, editingNote?.id, editingNote?.folder_name, mdViewMode]);
 
     useEffect(() => {
         if (!editorOpen) return;
