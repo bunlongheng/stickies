@@ -983,26 +983,29 @@ function playSound(type: SoundType) {
         }
         const ctx = getAudioCtx();
         const now = ctx.currentTime;
+        const MASTER_VOL = 0.5;
         const tone = (freq: number, delay: number, vol: number, dur: number, oscType: OscillatorType = "sine") => {
+            const v = vol * MASTER_VOL;
             const osc = ctx.createOscillator();
             const g = ctx.createGain();
             osc.connect(g); g.connect(ctx.destination);
             osc.type = oscType;
             osc.frequency.value = freq;
             g.gain.setValueAtTime(0, now + delay);
-            g.gain.linearRampToValueAtTime(vol, now + delay + 0.012);
+            g.gain.linearRampToValueAtTime(v, now + delay + 0.012);
             g.gain.exponentialRampToValueAtTime(0.001, now + delay + dur);
             osc.start(now + delay); osc.stop(now + delay + dur + 0.02);
         };
         // Cyberpunk / futuristic sound design — sawtooth & square oscillators, high-freq sweeps
         const sweep = (f0: number, f1: number, delay: number, vol: number, dur: number, oscType: OscillatorType = "sawtooth") => {
+            const v = vol * MASTER_VOL;
             const osc = ctx.createOscillator(); const g = ctx.createGain();
             osc.connect(g); g.connect(ctx.destination);
             osc.type = oscType;
             osc.frequency.setValueAtTime(f0, now + delay);
             osc.frequency.exponentialRampToValueAtTime(f1, now + delay + dur);
             g.gain.setValueAtTime(0, now + delay);
-            g.gain.linearRampToValueAtTime(vol, now + delay + 0.008);
+            g.gain.linearRampToValueAtTime(v, now + delay + 0.008);
             g.gain.exponentialRampToValueAtTime(0.001, now + delay + dur);
             osc.start(now + delay); osc.stop(now + delay + dur + 0.02);
         };
