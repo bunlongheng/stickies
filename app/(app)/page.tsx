@@ -3150,16 +3150,15 @@ const fireIntegrations = (trigger: string, note: any) => {
             if (editingNote?.id) {
                 // Optimistic update — happen immediately, before the API call
                 const noteId = String(editingNote.id);
-                setDbData((prev) =>
-                    prev.map((r) =>
-                        String(r.id) === noteId ? { ...r, folder_name: name, folder_color: color } : r,
-                    ),
-                );
-                setEditingNote((prev: any) => (prev ? { ...prev, folder_name: name, folder_color: color } : prev));
                 const folderRow = folders.find((f) => f.name === name);
                 const folderId = folderRow?.id ?? `virtual-${name}`;
-                setActiveFolder(name);
-                setFolderStack([{ id: folderId, name, color }]);
+                const newFolderId = folderId.startsWith("virtual-") ? null : folderId;
+                setDbData((prev) =>
+                    prev.map((r) =>
+                        String(r.id) === noteId ? { ...r, folder_name: name, folder_color: color, folder_id: newFolderId } : r,
+                    ),
+                );
+                setEditingNote((prev: any) => (prev ? { ...prev, folder_name: name, folder_color: color, folder_id: newFolderId } : prev));
                 setShowNoteActions(false);
                 setEditorOpen(false);
                 // Remove from old folder cache, add to new
@@ -3168,7 +3167,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                 }
                 mergeIntoCachedNotes(name, [{ ...editingNote, id: noteId, folder_name: name, folder_color: color }]);
                 try {
-                    await notesApi.update(noteId, { folder_name: name, folder_color: color });
+                    await notesApi.update(noteId, { folder_name: name, folder_color: color, ...(newFolderId ? { folder_id: newFolderId } : {}) });
                     // Refresh target folder notes so the moved note shows immediately
                     void loadFolderNotes(name, false);
                 } catch (err) {
