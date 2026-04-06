@@ -3014,7 +3014,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                     const saved = (editingNote as any)?.type ?? null;
                     // Never overwrite a code/mermaid type with a weaker detection
                     if (saved && CODE_TYPES.has(saved)) return saved;
-                    return saved ?? detectNoteType(saveContent);
+                    // Always re-detect on save so markdown/json/html get the right type
+                    return detectNoteType(saveContent) || saved || "text";
                 })(),
                 ...(extractedTags.length > 0 ? { tags: extractedTags } : {}),
                 updated_at: new Date().toISOString(),
@@ -5812,7 +5813,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     {noteBadgeLabel}
                                 </span>
                             )}
-                            <input ref={titleInputRef} onChange={(e) => { titleRaw.current = e.target.value; }} onBlur={(e) => setTitle(e.target.value)} onFocus={() => { closeEditorTools(); setShowNoteActions(false); }} autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false} className="bg-transparent border-0 appearance-none shadow-none ring-0 outline-none focus:outline-none focus:ring-0 px-1 min-w-0 flex-1 font-black tracking-tight text-xs text-white placeholder:text-zinc-500" style={{ caretColor: activeAccentColor }} placeholder="NOTE TITLE" />
+                            <input ref={titleInputRef} onChange={(e) => { titleRaw.current = e.target.value; }} onBlur={(e) => setTitle(e.target.value)} onFocus={() => { closeEditorTools(); setShowNoteActions(false); }} autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false} className="bg-transparent border-0 appearance-none shadow-none ring-0 outline-none focus:outline-none focus:ring-0 px-1 min-w-0 flex-1 font-normal tracking-tight text-xs text-white placeholder:text-zinc-500" style={{ caretColor: activeAccentColor }} placeholder="NOTE TITLE" />
                         </div>
 
                         {/* Mobile: badge + title */}
@@ -5857,14 +5858,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                         )}
                         {/* Type badge removed — already shown in footer */}
                         {/* AI Grammar Fix */}
-                        {content.trim() && (
-                        <button type="button"
-                            onClick={() => void runAiGrammarFix()}
-                            className={`p-2 sm:p-3 transition flex-shrink-0 ${aiLoading ? "text-emerald-400 animate-pulse" : "text-zinc-500 hover:text-emerald-400"}`}
-                            title="Fix grammar">
-                            <SparklesIcon className="w-[22px] h-[22px] sm:w-[20px] sm:h-[20px]" />
-                        </button>
-                        )}
+                        {!content.trim() && (
+                        <>
                         {/* AI Magic */}
                         <button type="button"
                             onClick={() => { setAiPromptOpen(v => !v); setTimeout(() => aiPromptRef.current?.focus(), 100); }}
@@ -5872,6 +5867,17 @@ const fireIntegrations = (trigger: string, note: any) => {
                             title="AI Magic">
                             <BoltIcon className="w-[24px] h-[24px] sm:w-[22px] sm:h-[22px]" />
                         </button>
+                        </>
+                        )}
+                        {/* Markdown preview toggle — only for markdown notes with content */}
+                        {content.trim() && (noteType === "markdown" || markdownMode) && (
+                        <button type="button"
+                            onClick={toggleMarkdownMode}
+                            className={`p-2 sm:p-3 transition flex-shrink-0 ${markdownMode ? "text-purple-400" : "text-zinc-500 hover:text-purple-400"}`}
+                            title={markdownMode ? "Edit markdown" : "Preview markdown"}>
+                            <EyeIcon className="w-[22px] h-[22px] sm:w-[20px] sm:h-[20px]" />
+                        </button>
+                        )}
                         {/* Checklist toggle — only when eligible or already on */}
                         {(canToggleChecklist || listMode) && (
                         <button type="button"
