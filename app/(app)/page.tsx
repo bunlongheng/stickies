@@ -6744,7 +6744,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                         <button type="button" onClick={() => openNewNote()} className="p-2 mx-1 rounded-full bg-white/15 hover:bg-white/25 text-white transition" title="New note" aria-label="New note">
                                                             <PlusIcon className="w-6 h-6 stroke-[2.5]" />
                                                         </button>
-                                                        <HeaderIconBtn icon={SparklesIcon} label="Auto-icon" onClick={autoAssignNoteIcons} />
                                                         <HeaderIconBtn icon={mainListMode === "list" ? Bars3Icon : Squares2X2Icon} label={mainListMode === "list" ? "List" : "Thumb"} active={!kanbanMode} onClick={() => { setMainListMode(v => v === "thumb" ? "list" : "thumb"); setKanbanMode(false); }} />
                                                         <HeaderIconBtn icon={Cog6ToothIcon} label="Settings" onClick={() => { const hueInt = integrationsRef.current.find(ig => ig.type === "hue"); setLightMode((hueInt?.config?.mode as any) ?? "flash"); setIsGlobalSettings(false); setShowFolderActions(true); }} />
                                                     </>
