@@ -1250,6 +1250,7 @@ export default function NotesMaster() {
     const [showFolderColorPicker, setShowFolderColorPicker] = useState(false);
     const [showFolderIconPicker, setShowFolderIconPicker] = useState(false);
     const [iconPickerTab, setIconPickerTab] = useState<"icons">("icons");
+    const [mdViewMode, setMdViewMode] = useState<"text" | "split" | "preview">("text");
     const [iconPickerSearch, setIconPickerSearch] = useState("");
     const [showFolderMovePicker, setShowFolderMovePicker] = useState(false);
     const [folderMoveQuery, setFolderMoveQuery] = useState("");
@@ -3166,6 +3167,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         closeEditorTools();
         setEditorOpen(false);
         setImages([]);
+        setMdViewMode("text");
     }, [saveNote, closeEditorTools, editingNote?.id, noteColor]);
 
     const backToRootFromEditor = useCallback(async () => {
@@ -5344,12 +5346,12 @@ const fireIntegrations = (trigger: string, note: any) => {
                         );
                 }
                 @keyframes spin { to { transform: rotate(360deg); } }
-                .md-preview { color: #e4e4e7; line-height: 1.6; font-family: ui-sans-serif, system-ui, sans-serif; font-size: 9px; text-align: left; }
-                .md-preview h1,.md-preview h2,.md-preview h3,.md-preview h4,.md-preview h5,.md-preview h6 { font-weight: 900; text-transform: uppercase; letter-spacing: -0.02em; color: #fff; margin: 1em 0 0.4em; line-height: 1.2; text-align: left; }
-                .md-preview h1 { font-size: 1.3rem; border-bottom: 2px solid rgba(255,255,255,0.12); padding-bottom: 0.3em; }
-                .md-preview h2 { font-size: 1.05rem; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 0.2em; }
-                .md-preview h3 { font-size: 0.9rem; }
-                .md-preview h4,.md-preview h5,.md-preview h6 { font-size: 0.8rem; color: #a1a1aa; }
+                .md-preview { color: #e4e4e7; line-height: 1.7; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; font-size: 14px; text-align: left; }
+                .md-preview h1,.md-preview h2,.md-preview h3,.md-preview h4,.md-preview h5,.md-preview h6 { font-weight: 600; letter-spacing: -0.01em; color: #fff; margin: 1.5em 0 0.5em; line-height: 1.3; text-align: left; }
+                .md-preview h1 { font-size: 1.75em; border-bottom: 1px solid rgba(255,255,255,0.12); padding-bottom: 0.3em; }
+                .md-preview h2 { font-size: 1.4em; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 0.25em; }
+                .md-preview h3 { font-size: 1.15em; }
+                .md-preview h4,.md-preview h5,.md-preview h6 { font-size: 1em; color: #a1a1aa; }
                 .md-preview p { margin: 0.75em 0; text-align: left; }
                 .md-preview ul,.md-preview ol { padding-left: 1.5em; margin: 0.75em 0; }
                 .md-preview li { margin: 0.25em 0; }
@@ -5869,15 +5871,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                         </button>
                         </>
                         )}
-                        {/* Markdown preview toggle — only for markdown notes with content */}
-                        {content.trim() && (noteType === "markdown" || markdownMode) && (
-                        <button type="button"
-                            onClick={toggleMarkdownMode}
-                            className={`p-2 sm:p-3 transition flex-shrink-0 ${markdownMode ? "text-purple-400" : "text-zinc-500 hover:text-purple-400"}`}
-                            title={markdownMode ? "Edit markdown" : "Preview markdown"}>
-                            <EyeIcon className="w-[22px] h-[22px] sm:w-[20px] sm:h-[20px]" />
-                        </button>
-                        )}
                         {/* Checklist toggle — only when eligible or already on */}
                         {(canToggleChecklist || listMode) && (
                         <button type="button"
@@ -5891,6 +5884,15 @@ const fireIntegrations = (trigger: string, note: any) => {
                         </button>
                         )}
                         {/* Share removed — available in note actions menu */}
+                        {/* Markdown preview — cycles: text → split → preview → text */}
+                        {content.trim() && (
+                        <button type="button"
+                            onClick={() => setMdViewMode(v => v === "text" ? "split" : v === "split" ? "preview" : "text")}
+                            className={`p-2 sm:p-3 transition flex-shrink-0 ${mdViewMode !== "text" ? "text-purple-400" : "text-zinc-500 hover:text-purple-400"}`}
+                            title={mdViewMode === "text" ? "Split view" : mdViewMode === "split" ? "Preview only" : "Text only"}>
+                            <EyeIcon className="w-[24px] h-[24px] sm:w-[22px] sm:h-[22px]" />
+                        </button>
+                        )}
                         {/* Delete — quick access */}
                         {editingNote?.id && (
                         <button type="button"
@@ -6314,8 +6316,10 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 onBlur={() => { setCodeEditMode(false); void saveNote({ silent: true, deriveTitle: true }); }}
                                 onClick={() => setCodeEditMode(true)}
                             />
-                        ) : markdownMode ? (
-                            <div className="flex-1 flex overflow-auto relative" style={{ background: "#000" }}>
+                        ) : mdViewMode !== "text" ? (
+                            <div className="flex-1 flex overflow-hidden relative" style={{ background: "#000" }}>
+                                {/* Editor pane — hidden on preview-only, hidden on mobile for split */}
+                                {(mdViewMode === "split") && (
                                 <textarea
                                     ref={editorTextRef}
                                     value={content}
@@ -6324,7 +6328,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     onFocus={() => closeEditorTools()}
                                     onBlur={() => void saveNote({ silent: true, deriveTitle: true })}
                                     onPaste={handleEditorPaste}
-                                    className="ios-editor-scroll overscroll-none touch-pan-y"
+                                    className="ios-editor-scroll overscroll-none touch-pan-y hidden sm:block"
                                     style={{
                                         flex: 1, background: "transparent", color: "#f8f8f2",
                                         fontFamily: "ui-monospace,'Fira Code','Cascadia Code',monospace",
@@ -6332,11 +6336,17 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         paddingTop: 8, paddingBottom: 24, paddingLeft: 24, paddingRight: 24,
                                         outline: "none", resize: "none", caretColor: "#f8f8f2",
                                         whiteSpace: "pre-wrap", overflowWrap: "break-word", wordBreak: "break-word",
+                                        borderRight: "1px solid rgba(255,255,255,0.1)",
                                     }}
                                     spellCheck={false}
                                     autoCorrect="off"
                                     autoCapitalize="off"
                                 />
+                                )}
+                                {/* Preview pane */}
+                                <div className="flex-1 overflow-auto p-6 md-preview" style={{ background: "#0a0a0a" }}>
+                                    <MarkdownWithMermaid content={content} />
+                                </div>
                             </div>
                         ) : htmlMode ? (
                             <div className="flex-1 flex flex-col">
