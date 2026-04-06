@@ -6413,6 +6413,45 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     }}>
                                     <MarkdownPreview content={content} />
                                 </div>
+                                {/* Preview footer — copy & download */}
+                                <div className="flex-shrink-0 flex items-center justify-end gap-2 px-3 py-1.5 border-t border-zinc-200" style={{ background: "#f6f8fa" }}>
+                                    <button type="button"
+                                        onClick={() => { navigator.clipboard.writeText(content); showToast("Copied!", "#34C759"); }}
+                                        className="flex items-center gap-1.5 px-3 py-1 text-[11px] font-semibold text-zinc-600 hover:text-zinc-900 transition rounded hover:bg-zinc-200">
+                                        <ClipboardDocumentListIcon className="w-3.5 h-3.5" />
+                                        Copy
+                                    </button>
+                                    <button type="button"
+                                        onClick={() => {
+                                            const previewEl = (document.querySelector(".md-preview.select-text") as HTMLElement);
+                                            if (!previewEl) return;
+                                            const printWin = window.open("", "_blank");
+                                            if (!printWin) return;
+                                            printWin.document.write(`<!DOCTYPE html><html><head><title>${title || "Note"}</title><style>
+                                                body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; font-size: 14px; color: #1a1a1a; line-height: 1.7; max-width: 800px; margin: 0 auto; padding: 40px; }
+                                                h1,h2,h3,h4,h5,h6 { font-weight: 700; color: #111; margin: 1em 0 0.4em; }
+                                                h1 { font-size: 1.8em; border-bottom: 1px solid #e5e5e5; padding-bottom: 0.3em; }
+                                                h2 { font-size: 1.4em; border-bottom: 1px solid #eee; padding-bottom: 0.2em; }
+                                                pre { background: #f6f8fa; border: 1px solid #e1e4e8; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.85em; }
+                                                code { font-family: ui-monospace, monospace; font-size: 0.85em; background: rgba(175,184,193,0.2); padding: 0.2em 0.4em; border-radius: 3px; }
+                                                pre code { background: none; padding: 0; }
+                                                table { border-collapse: collapse; width: 100%; margin: 0.75em 0; }
+                                                th, td { border: 1px solid #d0d7de; padding: 8px 14px; text-align: left; }
+                                                th { background: #f0f3f6; font-weight: 600; }
+                                                blockquote { border-left: 4px solid #959da5; padding-left: 1em; color: #444d56; background: #f8f8f8; padding: 0.6em 1em; margin: 0.75em 0; }
+                                                img { max-width: 100%; }
+                                                a { color: #0366d6; }
+                                                .copy-code-btn, .code-lang-badge { display: none; }
+                                                @media print { body { padding: 0; } }
+                                            </style></head><body>${previewEl.innerHTML}</body></html>`);
+                                            printWin.document.close();
+                                            setTimeout(() => { printWin.print(); }, 300);
+                                        }}
+                                        className="flex items-center gap-1.5 px-3 py-1 text-[11px] font-semibold text-zinc-600 hover:text-zinc-900 transition rounded hover:bg-zinc-200">
+                                        <ArrowDownTrayIcon className="w-3.5 h-3.5" />
+                                        PDF
+                                    </button>
+                                </div>
                             </div>
                         ) : htmlMode ? (
                             <div className="flex-1 flex flex-col">
