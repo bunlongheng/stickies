@@ -74,7 +74,7 @@ export function MarkdownPreview({ content, theme = "dark" }: Props) {
                         </div>
                     ) : (
                         <div key={i}
-                            className="prose prose-sm prose-invert max-w-none"
+                            className="md-preview max-w-none"
                             dangerouslySetInnerHTML={{ __html: marked.parse(seg.text, { async: false, renderer }) as string }}
                         />
                     )
