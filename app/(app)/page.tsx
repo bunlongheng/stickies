@@ -6636,25 +6636,65 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             if (!previewEl) return;
                                             const printWin = window.open("", "_blank");
                                             if (!printWin) return;
-                                            printWin.document.write(`<!DOCTYPE html><html><head><title>${title || "Note"}</title><style>
-                                                @page { margin: 2cm; }
-                                                body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; font-size: 13px; color: #1a1a1a; line-height: 1.8; margin: 0; padding: 0; }
-                                                h1,h2,h3,h4,h5,h6 { font-weight: 700; color: #111; page-break-after: avoid; }
-                                                h1 { font-size: 1.8em; border-bottom: 1px solid #ddd; padding-bottom: 0.3em; }
-                                                h2 { font-size: 1.4em; border-bottom: 1px solid #eee; padding-bottom: 0.2em; }
-                                                pre { background: #272822; color: #f8f8f2; padding: 1em; border-radius: 6px; page-break-inside: avoid; }
-                                                code { font-family: ui-monospace, monospace; font-size: 0.85em; background: #f0f0f0; padding: 0.15em 0.4em; border-radius: 3px; }
-                                                pre code { background: none; color: #f8f8f2; }
-                                                .hljs-keyword{color:#f92672}.hljs-string{color:#e6db74}.hljs-comment{color:#75715e}.hljs-built_in{color:#66d9ef}.hljs-number,.hljs-literal{color:#ae81ff}.hljs-title{color:#a6e22e}.hljs-variable{color:#fd971f}
-                                                table { border-collapse: collapse; width: 100%; page-break-inside: avoid; }
-                                                th,td { border: 1px solid #d0d7de; padding: 8px 14px; }
-                                                th { background: #f0f3f6; font-weight: 600; }
-                                                blockquote { border-left: 4px solid #959da5; padding: 0.5em 1em; color: #444d56; background: #f8f8f8; }
-                                                img { max-width: 100%; } a { color: #0366d6; }
-                                                .copy-code-btn,.code-lang-badge { display: none; }
-                                            </style></head><body>${previewEl.innerHTML}</body></html>`);
+                                            const css = `
+@page { margin: 1.8cm 2cm; size: A4; }
+* { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    font-size: 12pt; color: #1a1a1a; line-height: 1.75; margin: 0; padding: 0;
+}
+h1, h2, h3, h4, h5, h6 { font-weight: 700; color: #111; page-break-after: avoid; margin: 1.2em 0 0.5em; }
+h1 { font-size: 22pt; border-bottom: 2px solid #ddd; padding-bottom: 8px; margin-top: 0; }
+h2 { font-size: 17pt; border-bottom: 1px solid #eee; padding-bottom: 6px; }
+h3 { font-size: 14pt; }
+h4, h5, h6 { font-size: 12pt; color: #444; }
+p { margin: 0.6em 0; orphans: 3; widows: 3; }
+ul, ol { padding-left: 1.8em; margin: 0.6em 0; }
+li { margin: 0.3em 0; }
+
+/* Code blocks — Monokai dark */
+pre { background: #272822 !important; color: #f8f8f2 !important; padding: 14px 18px; border-radius: 6px;
+    font-size: 9pt; line-height: 1.5; overflow-x: visible; white-space: pre-wrap; word-wrap: break-word;
+    page-break-inside: avoid; margin: 12px 0; }
+code { font-family: "SF Mono", "Fira Code", ui-monospace, monospace; font-size: 0.9em;
+    background: #f0f0f0; padding: 2px 5px; border-radius: 3px; color: #d63384; }
+pre code { background: none !important; padding: 0; color: #f8f8f2 !important; font-size: 9pt; }
+
+/* Syntax colors */
+.hljs-keyword, .hljs-tag { color: #f92672 !important; }
+.hljs-string, .hljs-attr { color: #e6db74 !important; }
+.hljs-comment, .hljs-quote { color: #75715e !important; font-style: italic; }
+.hljs-number, .hljs-literal, .hljs-type { color: #ae81ff !important; }
+.hljs-built_in { color: #66d9ef !important; }
+.hljs-title, .hljs-function .hljs-title, .hljs-title.function_ { color: #a6e22e !important; }
+.hljs-variable, .hljs-template-variable { color: #fd971f !important; }
+.hljs-name, .hljs-selector-class { color: #a6e22e !important; }
+.hljs-attribute { color: #66d9ef !important; }
+
+/* Tables */
+table { border-collapse: collapse; width: 100%; margin: 12px 0; page-break-inside: avoid; font-size: 10pt; }
+th, td { border: 1px solid #d0d7de; padding: 8px 12px; text-align: left; }
+th { background: #f0f3f6 !important; font-weight: 600; font-size: 9pt; }
+tr:nth-child(2n) td { background: #f8f9fa !important; }
+
+/* Blockquotes */
+blockquote { border-left: 4px solid #959da5; padding: 8px 16px; color: #444d56;
+    background: #f8f8f8 !important; margin: 12px 0; border-radius: 0 4px 4px 0; }
+
+/* Links, images, misc */
+a { color: #0366d6; text-decoration: none; }
+img { max-width: 100%; height: auto; page-break-inside: avoid; }
+hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
+
+/* Hide UI elements */
+.copy-code-btn, .code-lang-badge, .code-block-wrapper > button { display: none !important; }
+
+/* Wrapper cleanup */
+.code-block-wrapper { margin: 12px 0; border-radius: 6px; overflow: hidden; page-break-inside: avoid; }
+`;
+                                            printWin.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${title || "Note"}</title><style>${css}</style></head><body>${previewEl.innerHTML}</body></html>`);
                                             printWin.document.close();
-                                            setTimeout(() => { printWin.print(); }, 300);
+                                            setTimeout(() => { printWin.print(); }, 400);
                                         }}
                                         className="flex items-center gap-1 px-1.5 py-px text-zinc-500 hover:text-white transition"
                                         title="Export PDF">
