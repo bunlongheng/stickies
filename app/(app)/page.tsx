@@ -5413,10 +5413,12 @@ const fireIntegrations = (trigger: string, note: any) => {
                 .md-preview hr { border: none; border-top: 1px solid #e5e5e5; margin: 1.5em 0; }
                 .md-preview li { color: #1a1a1a; }
                 .md-preview li::marker { color: #555; }
-                .md-preview table { border-collapse: collapse; width: 100%; margin: 0.75em 0; }
-                .md-preview th,.md-preview td { border: 1px solid #dfe2e5; padding: 6px 13px; text-align: left; color: #1a1a1a; }
-                .md-preview th { font-weight: 600; background: #f6f8fa; color: #111; }
-                .md-preview tr:nth-child(2n) { background: #f6f8fa; }
+                .md-preview table { border-collapse: separate; border-spacing: 0; width: 100%; margin: 0.75em 0; border: 1px solid #d0d7de; border-radius: 8px; overflow: hidden; }
+                .md-preview th,.md-preview td { border-bottom: 1px solid #d0d7de; border-right: 1px solid #d0d7de; padding: 8px 14px; text-align: left; color: #1a1a1a; }
+                .md-preview th:last-child,.md-preview td:last-child { border-right: none; }
+                .md-preview tr:last-child td { border-bottom: none; }
+                .md-preview th { font-weight: 600; background: #f0f3f6; color: #111; font-size: 0.85em; }
+                .md-preview tr:nth-child(2n) td { background: #f8f9fa; }
                 .hljs-keyword,.hljs-tag,.hljs-selector-tag { color: #f92672; }
                 .hljs-string,.hljs-attr,.hljs-addition { color: #e6db74; }
                 .hljs-comment,.hljs-quote { color: #75715e; font-style: italic; }
@@ -5430,10 +5432,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                 .hljs-section { color: #a6e22e; font-weight: bold; }
                 .hljs-deletion { color: #f92672; }
                 .hljs-meta { color: #75715e; }
-                .md-preview table { width: 100%; border-collapse: collapse; margin: 0.75em 0; font-size: 0.85em; }
-                .md-preview th { background: rgba(255,255,255,0.06); color: #fff; font-weight: 900; text-transform: uppercase; font-size: 0.75em; letter-spacing: 0.05em; }
-                .md-preview th,.md-preview td { border: 1px solid rgba(255,255,255,0.1); padding: 0.5em 0.75em; text-align: left; }
-                .md-preview tr:nth-child(even) td { background: rgba(255,255,255,0.02); }
                 .md-preview input[type="checkbox"] { accent-color: #22d3ee; margin-right: 0.4em; }
                 @keyframes noteActionsIn {
                     from { opacity: 0; transform: translateY(8px) scale(0.98); }
