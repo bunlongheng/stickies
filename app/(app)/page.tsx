@@ -853,7 +853,7 @@ const FOLDER_HERO_ICONS: { key: string; label: string; Icon: React.ComponentType
 ];
 const HERO_ICON_MAP = Object.fromEntries(FOLDER_HERO_ICONS.map(e => [e.key, e.Icon]));
 
-// Render a folder icon value — hero icons stored as "__hero:IconName", images as base64/URL, emojis as-is
+// Render a folder icon value — hero icons stored as "__hero:IconName", images as base64/URL
 function FolderIconDisplay({ value, folderName, className = "w-4 h-4" }: { value: string; folderName: string; className?: string }) {
     if (value.startsWith("__hero:")) {
         const key = value.slice(7);
@@ -863,32 +863,9 @@ function FolderIconDisplay({ value, folderName, className = "w-4 h-4" }: { value
     if (value.startsWith("data:image/") || value.startsWith("http://") || value.startsWith("https://")) {
         return <img src={value} alt={folderName} className={className} style={{ objectFit: "contain", borderRadius: 2, filter: "brightness(0) invert(1)" }} />;
     }
-    if (value) return <span>{value}</span>;
     return <span className="font-black">{folderName.charAt(0).toUpperCase()}</span>;
 }
 
-const FOLDER_ICON_EMOJIS = [
-    // Folders & files
-    "📁","📂","🗂️","📋","📌","📍","🏷️","🗒️","📎","🔖",
-    // Work & business
-    "💼","📊","📈","📉","💰","🏦","🏢","⚙️","🔧","🔨","📡","🛠️",
-    // Creative
-    "🎨","✏️","🖊️","📝","🖼️","🎭","🎬","🎵","🎸","🎹","🎤","📸",
-    // Tech
-    "💻","🖥️","📱","⌨️","💡","🔌","🔋","🤖","🧠","👾",
-    // Learning
-    "📚","📖","🎓","🧪","🔬","🔭","🧮","✍️","🏫",
-    // Life & home
-    "🏠","🏡","🛒","🧹","🛋️","🛁","🌱","🌍","✈️","🚗","🚀","⚓",
-    // Food & drink
-    "🍕","🍔","🌮","☕","🍵","🍎","🎂","🥗",
-    // Health & sport
-    "🏋️","🧘","❤️","💊","🩺","🏃","⚽","🎯","🏆","🥇",
-    // Social & fun
-    "👥","🎉","🎁","🎮","🎲","🧩","🃏","🎪","😂","🤝",
-    // Nature
-    "🌿","🌺","🌊","🔥","⚡","❄️","☀️","🌙","⭐","🌈","🦋","🐾",
-];
 // ── Note icon auto-assign via keyword matching ──────────────────────────────
 const NOTE_ICON_KEYWORDS: [string[], string][] = [
     [["deploy","ship","release","launch","rocket","vercel","netlify","ci","cd"], "RocketLaunchIcon"],
@@ -1272,7 +1249,7 @@ export default function NotesMaster() {
     const [editingFolderTitleValue, setEditingFolderTitleValue] = useState("");
     const [showFolderColorPicker, setShowFolderColorPicker] = useState(false);
     const [showFolderIconPicker, setShowFolderIconPicker] = useState(false);
-    const [iconPickerTab, setIconPickerTab] = useState<"icons" | "emoji">("icons");
+    const [iconPickerTab, setIconPickerTab] = useState<"icons">("icons");
     const [iconPickerSearch, setIconPickerSearch] = useState("");
     const [showFolderMovePicker, setShowFolderMovePicker] = useState(false);
     const [folderMoveQuery, setFolderMoveQuery] = useState("");
@@ -4709,10 +4686,14 @@ const fireIntegrations = (trigger: string, note: any) => {
             const gap = 6;
             const cs = getComputedStyle(el);
             const px = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
-            const cellSize = Math.floor((el.clientWidth - px - (cols - 1) * gap) / cols);
+            const w = el.clientWidth;
+            if (w === 0) return; // not laid out yet
+            const cellSize = Math.floor((w - px - (cols - 1) * gap) / cols);
             el.style.setProperty('--cell-size', cellSize + 'px');
         };
         update();
+        // Retry after a frame in case element wasn't laid out yet
+        requestAnimationFrame(update);
         const ro = new ResizeObserver(update);
         ro.observe(el);
         return () => ro.disconnect();
@@ -6978,9 +6959,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                     <PencilSquareIcon className="w-4 h-4" />
                                                 </button>
                                             )}
-                                            {!item.is_folder && (item as any).flag && (
-                                                <span className="flex-shrink-0 text-base leading-none" title={(item as any).flag}>{(item as any).flag}</span>
-                                            )}
                                             {!item.is_folder && pinnedIds.has(String(item.id)) && !isSelectMode && (
                                                 <HeartSolidIcon className="w-3.5 h-3.5 text-white flex-shrink-0" />
                                             )}
@@ -7043,9 +7021,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                     </>
                                                 ) : (
                                                     <>
-                                                        {(item as any).flag && (
-                                                            <span className="absolute top-1 left-1 text-sm leading-none">{(item as any).flag}</span>
-                                                        )}
                                                         {(() => { const tc = isLightColor(item.color || item.folder_color || "#888") ? "#000" : "#fff"; return (<>
                                                         <div style={{ fontSize: "3rem", lineHeight: 1, color: tc }} className="font-black relative z-10">
                                                             {noteIcons[String(item.id)]
@@ -7879,60 +7854,25 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         const selectIcon = (val: string) => { setFolderIcons((prev) => ({ ...prev, [activeFolder]: val })); void saveFolderIconToDb(activeFolder, val); setShowFolderIconPicker(false); setIconPickerSearch(""); };
                                         const clearIcon = () => { setFolderIcons((prev) => { const next = { ...prev }; delete next[activeFolder]; return next; }); void saveFolderIconToDb(activeFolder, ""); setShowFolderIconPicker(false); setIconPickerSearch(""); };
                                         const filteredHero = FOLDER_HERO_ICONS.filter(e => !q || e.label.includes(q) || e.key.toLowerCase().includes(q));
-                                        const filteredEmoji = FOLDER_ICON_EMOJIS.filter(e => !q || e.includes(q));
                                         return (
                                             <div className="px-4 pb-4">
-                                                {/* Tabs */}
                                                 <div className="flex gap-1 mb-3 border-b border-white/10 pb-2">
-                                                    {(["icons", "emoji"] as const).map(tab => (
-                                                        <button key={tab} type="button"
-                                                            onClick={() => { setIconPickerTab(tab); setIconPickerSearch(""); }}
-                                                            className={`px-3 py-1 text-[11px] font-black tracking-wide transition-colors ${iconPickerTab === tab ? "text-white border-b-2 border-white" : "text-zinc-500 hover:text-zinc-300"}`}>
-                                                            {tab === "icons" ? "ICONS" : "EMOJI"}
-                                                        </button>
-                                                    ))}
-                                                    <button type="button"
-                                                        onClick={clearIcon}
-                                                        className="ml-auto px-3 py-1 text-[11px] font-black tracking-wide text-zinc-600 hover:text-zinc-300 transition-colors">
-                                                        NONE
-                                                    </button>
+                                                    <span className="px-3 py-1 text-[11px] font-black tracking-wide text-white">ICONS</span>
+                                                    <button type="button" onClick={clearIcon} className="ml-auto px-3 py-1 text-[11px] font-black tracking-wide text-zinc-600 hover:text-zinc-300 transition-colors">NONE</button>
                                                 </div>
-                                                {/* Search */}
-                                                <input
-                                                    type="text"
-                                                    value={iconPickerSearch}
-                                                    onChange={e => setIconPickerSearch(e.target.value)}
-                                                    placeholder="Search..."
-                                                    className="w-full bg-black border border-white/15 outline-none focus:border-white/40 px-3 py-1.5 text-xs text-white placeholder:text-zinc-600 font-mono mb-2"
-                                                />
-                                                {/* Icons grid */}
-                                                {iconPickerTab === "icons" && (
-                                                    <div className="grid grid-cols-8 gap-1 max-h-44 overflow-y-auto">
-                                                        {filteredHero.map(({ key, label, Icon }) => {
-                                                            const val = `__hero:${key}`;
-                                                            return (
-                                                                <button key={key} type="button" title={label}
-                                                                    onClick={() => selectIcon(val)}
-                                                                    className={`aspect-square flex items-center justify-center transition-all hover:bg-white/15 rounded ${curIcon === val ? "bg-white/20 ring-1 ring-white/60" : ""}`}>
-                                                                    <Icon className="w-4 h-4 text-white" />
-                                                                </button>
-                                                            );
-                                                        })}
-                                                        {filteredHero.length === 0 && <p className="col-span-8 text-[10px] text-zinc-600 py-2 text-center">No icons match</p>}
-                                                    </div>
-                                                )}
-                                                {iconPickerTab === "emoji" && (
-                                                    <div className="grid grid-cols-8 gap-1 max-h-44 overflow-y-auto">
-                                                        {filteredEmoji.map((emoji) => (
-                                                            <button key={emoji} type="button"
-                                                                onClick={() => selectIcon(emoji)}
-                                                                className={`aspect-square flex items-center justify-center text-xl transition-all hover:bg-white/15 rounded ${curIcon === emoji ? "bg-white/20 ring-1 ring-white/60" : ""}`}>
-                                                                {emoji}
+                                                <input type="text" value={iconPickerSearch} onChange={e => setIconPickerSearch(e.target.value)} placeholder="Search..." className="w-full bg-black border border-white/15 outline-none focus:border-white/40 px-3 py-1.5 text-xs text-white placeholder:text-zinc-600 font-mono mb-2" />
+                                                <div className="grid grid-cols-8 gap-1 max-h-44 overflow-y-auto">
+                                                    {filteredHero.map(({ key, label, Icon }) => {
+                                                        const val = `__hero:${key}`;
+                                                        return (
+                                                            <button key={key} type="button" title={label} onClick={() => selectIcon(val)}
+                                                                className={`aspect-square flex items-center justify-center transition-all hover:bg-white/15 rounded ${curIcon === val ? "bg-white/20 ring-1 ring-white/60" : ""}`}>
+                                                                <Icon className="w-4 h-4 text-white" />
                                                             </button>
-                                                        ))}
-                                                        {filteredEmoji.length === 0 && <p className="col-span-8 text-[10px] text-zinc-600 py-2 text-center">No emoji match</p>}
-                                                    </div>
-                                                )}
+                                                        );
+                                                    })}
+                                                    {filteredHero.length === 0 && <p className="col-span-8 text-[10px] text-zinc-600 py-2 text-center">No icons match</p>}
+                                                </div>
                                             </div>
                                         );
                                     })()}
@@ -8740,7 +8680,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                 const selectIcon2 = (val: string) => { setFolderIcons((prev) => ({ ...prev, [iconPickerFolder]: val })); void saveFolderIconToDb(iconPickerFolder, val); setIconPickerFolder(null); setIconPickerSearch(""); };
                 const clearIcon2 = () => { setFolderIcons((prev) => { const next = { ...prev }; delete next[iconPickerFolder]; return next; }); void saveFolderIconToDb(iconPickerFolder, ""); setIconPickerFolder(null); setIconPickerSearch(""); };
                 const filteredHero2 = FOLDER_HERO_ICONS.filter(e => !q2 || e.label.includes(q2) || e.key.toLowerCase().includes(q2));
-                const filteredEmoji2 = FOLDER_ICON_EMOJIS.filter(e => !q2 || e.includes(q2));
                 return (
                     <div className="fixed inset-0 z-[630] bg-black/90 flex items-center justify-center p-4" onClick={() => { setIconPickerFolder(null); setIconPickerSearch(""); }}>
                         <div className="bg-zinc-900 border border-white/15 p-5 w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
@@ -8748,22 +8687,15 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 <h2 className="text-sm font-black uppercase tracking-wider text-white">Folder Icon</h2>
                                 <span className="text-xs text-zinc-400 uppercase">{iconPickerFolder}</span>
                             </div>
-                            {/* Tabs */}
                             <div className="flex gap-1 mb-3 border-b border-white/10 pb-2">
-                                {(["icons", "emoji"] as const).map(tab => (
-                                    <button key={tab} type="button"
-                                        onClick={() => { setIconPickerTab(tab); setIconPickerSearch(""); }}
-                                        className={`px-3 py-1 text-[11px] font-black tracking-wide transition-colors ${iconPickerTab === tab ? "text-white border-b-2 border-white" : "text-zinc-500 hover:text-zinc-300"}`}>
-                                        {tab === "icons" ? "ICONS" : "EMOJI"}
-                                    </button>
-                                ))}
+                                <span className="px-3 py-1 text-[11px] font-black tracking-wide text-white">ICONS</span>
                                 <button type="button" onClick={clearIcon2} className="ml-auto px-3 py-1 text-[11px] font-black tracking-wide text-zinc-600 hover:text-zinc-300 transition-colors">NONE</button>
                             </div>
                             {/* Search */}
                             <input type="text" value={iconPickerSearch} onChange={e => setIconPickerSearch(e.target.value)}
                                 placeholder="Search..." autoFocus
                                 className="w-full bg-black border border-white/15 outline-none focus:border-white/40 px-3 py-1.5 text-xs text-white placeholder:text-zinc-600 font-mono mb-3" />
-                            {iconPickerTab === "icons" && (
+                            {(
                                 <div className="grid grid-cols-8 gap-1 max-h-56 overflow-y-auto">
                                     {filteredHero2.map(({ key, label, Icon }) => {
                                         const val = `__hero:${key}`;
@@ -8777,17 +8709,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     {filteredHero2.length === 0 && <p className="col-span-8 text-[10px] text-zinc-600 py-2 text-center">No icons match</p>}
                                 </div>
                             )}
-                            {iconPickerTab === "emoji" && (
-                                <div className="grid grid-cols-8 gap-1 max-h-56 overflow-y-auto">
-                                    {filteredEmoji2.map((emoji) => (
-                                        <button key={emoji} type="button" onClick={() => selectIcon2(emoji)}
-                                            className={`aspect-square flex items-center justify-center text-2xl rounded transition-all hover:bg-white/15 ${cur2 === emoji ? "bg-white/20 ring-1 ring-cyan-400" : ""}`}>
-                                            {emoji}
-                                        </button>
-                                    ))}
-                                    {filteredEmoji2.length === 0 && <p className="col-span-8 text-[10px] text-zinc-600 py-2 text-center">No emoji match</p>}
-                                </div>
-                            )}
                             <button type="button" onClick={() => { setIconPickerFolder(null); setIconPickerSearch(""); }} className="w-full mt-4 py-2.5 bg-zinc-800 text-white font-black uppercase text-xs tracking-wide hover:bg-zinc-700 transition-colors">Cancel</button>
                         </div>
                     </div>
@@ -8798,11 +8719,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                 <div className="fixed inset-0 z-[620] bg-black/90 flex items-center justify-center p-4" onClick={() => setShowCreateFolder(false)}>
                     <div className="bg-zinc-900 border border-white/15 p-7 sm:p-9 w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
                         <div className="w-16 h-16 mx-auto mb-3 flex items-center justify-center bg-zinc-800 border border-white/10">
-                            {newFolderIcon ? (
-                                <span className="text-4xl">{newFolderIcon}</span>
-                            ) : (
-                                <FolderIcon className="w-8 h-8 text-cyan-400" />
-                            )}
+                            <FolderIcon className="w-8 h-8 text-cyan-400" />
                         </div>
                         <h2 className="text-sm font-black tracking-wide text-white mb-4 text-center">New Folder</h2>
                         <input
@@ -8819,22 +8736,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                             className="w-full bg-black border border-white/20 outline-none focus:border-cyan-400 px-4 py-3 text-sm text-white font-bold tracking-tight mb-3"
                             placeholder="Folder name"
                         />
-                        {/* Icon quick-pick row */}
-                        <div className="mb-4">
-                            <p className="text-[9px] tracking-widest text-zinc-500 mb-2">Icon (optional)</p>
-                            <div className="flex flex-wrap gap-1.5">
-                                {FOLDER_ICON_EMOJIS.slice(0, 20).map((emoji) => (
-                                    <button
-                                        key={emoji}
-                                        type="button"
-                                        onClick={() => setNewFolderIcon((prev) => prev === emoji ? "" : emoji)}
-                                        className={`w-8 h-8 flex items-center justify-center text-xl rounded transition-all hover:bg-white/15 ${newFolderIcon === emoji ? "bg-white/20 ring-1 ring-cyan-400" : ""}`}
-                                    >
-                                        {emoji}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
                         <div className="flex flex-col gap-2">
                             <button type="button" onClick={() => void confirmCreateFolder()} disabled={!newFolderName.trim()} className="w-full py-3 bg-white text-black font-black text-xs tracking-wide disabled:opacity-30 disabled:cursor-not-allowed">
                                 Create
