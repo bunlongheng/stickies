@@ -1,7 +1,11 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { isLocal } from '@/lib/is-local'
 
 export async function middleware(request: NextRequest) {
+  // Skip auth session refresh for local/LAN requests
+  if (isLocal(request)) return NextResponse.next({ request })
+
   let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient(
