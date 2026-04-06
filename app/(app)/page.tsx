@@ -1538,13 +1538,10 @@ export default function NotesMaster() {
             }
             syncHadTokenRef.current = !!token;
             const _t0 = performance.now();
-            const [foldersRes, iconsResult, integrationsResult, countsResult] = await Promise.all([
+            const [foldersRes, integrationsResult, countsResult] = await Promise.all([
                 fetch("/api/stickies?folders=1", {
                     headers: { Authorization: `Bearer ${token}` },
                 }).then((r) => r.ok ? r.json() : { folders: [] }).catch(() => ({ folders: [] })),
-                fetch("/api/stickies/folder-icon", {
-                    headers: { Authorization: `Bearer ${token}` },
-                }).then((r) => r.ok ? r.json() : { icons: {} }).catch(() => ({ icons: {} })),
                 fetch("/api/stickies/integrations", {
                     headers: { Authorization: `Bearer ${token}` },
                 }).then((r) => r.ok ? r.json() : []).catch(() => []),
@@ -1568,8 +1565,15 @@ export default function NotesMaster() {
                 localStorage.setItem(DB_CACHE_KEY, JSON.stringify(folderItems));
                 localStorage.setItem(COUNTS_CACHE_KEY, JSON.stringify({ counts: freshCounts, countsByFolderId: freshCountsById }));
             } catch { /* quota exceeded — skip */ }
-            if (iconsResult.icons && Object.keys(iconsResult.icons).length > 0) {
-                setFolderIcons((prev) => ({ ...prev, ...iconsResult.icons }));
+            // Extract folder icons from folder rows (content field stores icon value)
+            const folderIconsFromDb: Record<string, string> = {};
+            folderItems.forEach((f: any) => {
+                if (f.folder_name && f.content && f.content.trim()) {
+                    folderIconsFromDb[String(f.folder_name)] = f.content.trim();
+                }
+            });
+            if (Object.keys(folderIconsFromDb).length > 0) {
+                setFolderIcons((prev) => ({ ...prev, ...folderIconsFromDb }));
             }
             if (Array.isArray(integrationsResult)) {
                 integrationsRef.current = integrationsResult;
@@ -1896,19 +1900,7 @@ export default function NotesMaster() {
         try { localStorage.setItem(NOTE_ICON_KEY, JSON.stringify(noteIcons)); } catch { /* ignore */ }
     }, [noteIcons]);
 
-    // Sync folder icons from DB (content field on is_folder rows) — DB wins over localStorage
-    useEffect(() => {
-        if (!dbData || dbData.length === 0) return;
-        const fromDb: Record<string, string> = {};
-        dbData.forEach((row: any) => {
-            if (row.is_folder && row.folder_name && row.content && row.content.trim()) {
-                fromDb[String(row.folder_name)] = row.content.trim();
-            }
-        });
-        if (Object.keys(fromDb).length > 0) {
-            setFolderIcons((prev) => ({ ...prev, ...fromDb }));
-        }
-    }, [dbData]);
+    // Folder icons loaded from ?folders=1 response in sync() — no separate effect needed
 
     // Sync note icons from DB (icon column) — DB wins over localStorage
     useEffect(() => {
