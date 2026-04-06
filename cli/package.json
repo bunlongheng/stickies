@@ -1,0 +1,9 @@
+{
+  "name": "stickies-cli",
+  "version": "1.0.0",
+  "description": "CLI to create notes via the Stickies API",
+  "bin": { "stickies": "./bin/stickies.js" },
+  "type": "module",
+  "license": "MIT",
+  "engines": { "node": ">=18" }
+}
