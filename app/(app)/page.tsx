@@ -3314,7 +3314,15 @@ const fireIntegrations = (trigger: string, note: any) => {
                 }
             })();
         }
-        if (Object.keys(folderUpdates).length) setFolderIcons(prev => ({ ...prev, ...folderUpdates }));
+        if (Object.keys(folderUpdates).length) {
+            setFolderIcons(prev => ({ ...prev, ...folderUpdates }));
+            // Persist folder icons to DB
+            void (async () => {
+                for (const [name, icon] of Object.entries(folderUpdates)) {
+                    void saveFolderIconToDb(name, icon);
+                }
+            })();
+        }
         playSound("create");
         showToast(`Auto-assigned ${count} icon${count !== 1 ? "s" : ""}`, "#34d399");
     }, [dbData, noteIcons, folderIcons, folders]);
@@ -5867,7 +5875,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 </div>
                             ) : (
                                 <span className="w-6 h-6 flex-shrink-0 flex items-center justify-center font-black leading-none tracking-tight" style={{ backgroundColor: activeAccentColor, color: isLightColor(activeAccentColor) ? "#000" : "#fff", borderRadius: "2px 2px 2px 10px", fontSize: noteBadgeFontSize }}>
-                                    {noteBadgeLabel}
+                                    {editingNote?.id && noteIcons[String(editingNote.id)] ? <FolderIconDisplay value={noteIcons[String(editingNote.id)]} folderName={title || "N"} className="w-3.5 h-3.5" /> : noteBadgeLabel}
                                 </span>
                             )}
                             <input ref={titleInputRef} onChange={(e) => { titleRaw.current = e.target.value; }} onBlur={(e) => setTitle(e.target.value)} onFocus={() => { closeEditorTools(); setShowNoteActions(false); }} autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false} className="bg-transparent border-0 appearance-none shadow-none ring-0 outline-none focus:outline-none focus:ring-0 px-1 min-w-0 flex-1 font-normal tracking-tight text-xs text-white placeholder:text-zinc-500" style={{ caretColor: activeAccentColor }} placeholder="NOTE TITLE" />
@@ -5881,7 +5889,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                             </div>
                         ) : (
                             <span className="sm:hidden w-[30px] h-[30px] inline-flex items-center justify-center font-black leading-none tracking-tight flex-shrink-0" style={{ backgroundColor: activeAccentColor, color: isLightColor(activeAccentColor) ? "#000" : "#fff", borderRadius: "2px 2px 2px 10px", fontSize: noteBadgeFontSize }}>
-                                {noteBadgeLabel}
+                                {editingNote?.id && noteIcons[String(editingNote.id)] ? <FolderIconDisplay value={noteIcons[String(editingNote.id)]} folderName={title || "N"} className="w-4 h-4" /> : noteBadgeLabel}
                             </span>
                         )}
                         <input ref={titleInputMobileRef} onChange={(e) => { titleRaw.current = e.target.value; }} onBlur={(e) => setTitle(e.target.value)} onFocus={() => { closeEditorTools(); setShowNoteActions(false); }} autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false} className="sm:hidden bg-transparent border-0 appearance-none shadow-none ring-0 outline-none focus:outline-none focus:ring-0 px-2 flex-grow min-w-0 text-sm text-white placeholder:text-zinc-500" style={{ caretColor: activeAccentColor, border: "none" }} placeholder="NOTE TITLE" />
