@@ -893,6 +893,7 @@ const NOTE_ICON_KEYWORDS: [string[], string][] = [
     [["video","film","youtube","stream","record"], "FilmIcon"],
     [["book","read","docs","documentation","wiki","readme"], "BookOpenIcon"],
     [["chart","analytics","metrics","data","dashboard","graph"], "ChartBarIcon"],
+    [["diagram","flowchart","mermaid","sequence","mindmap","timeline"], "ShareIcon"],
     [["home","house","personal","family","life"], "HomeIcon"],
     [["work","office","job","career","project","task"], "BriefcaseIcon"],
     [["code","dev","program","function","module","component","react","next"], "CodeBracketIcon"],
@@ -3275,7 +3276,7 @@ const fireIntegrations = (trigger: string, note: any) => {
             javascript: "__hero:CodeBracketIcon", typescript: "__hero:CodeBracketIcon",
             python: "__hero:CodeBracketIcon", css: "__hero:CodeBracketIcon",
             sql: "__hero:TableCellsIcon", bash: "__hero:CodeBracketIcon",
-            markdown: "__hero:BookOpenIcon", mermaid: "__hero:ChartBarIcon",
+            markdown: "__hero:BookOpenIcon", mermaid: "__hero:ShareIcon",
             json: "__hero:WrenchIcon", html: "__hero:GlobeAltIcon",
         };
         for (const note of dbData.filter(n => !n.is_folder && n.title)) {
