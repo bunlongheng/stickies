@@ -2367,6 +2367,31 @@ const fireIntegrations = (trigger: string, note: any) => {
         let matchedDraft: any = null;
         if (noteIdToken) {
             matchedNote = allNotes.find((item) => String(item.id) === noteIdToken && (!matchedFolder || item.folder_name === matchedFolder)) || allNotes.find((item) => String(item.id) === noteIdToken) || null;
+            // Note not in dbData yet (lazy-loaded) — fetch directly from API
+            if (!matchedNote) {
+                void (async () => {
+                    try {
+                        const token = await getAuthToken();
+                        const res = await fetch(`/api/stickies?id=${noteIdToken}`, { headers: { Authorization: `Bearer ${token}` } });
+                        if (!res.ok) return;
+                        const { note } = await res.json();
+                        if (!note) return;
+                        setActiveFolder(note.folder_name || null);
+                        if (note.folder_name) {
+                            const row = dbData.find((r: any) => r.is_folder && r.folder_name === note.folder_name);
+                            setFolderStack([{ id: row?.id || `virtual-${note.folder_name}`, name: note.folder_name, color: row?.folder_color || note.folder_color || palette12[0] }]);
+                        }
+                        setEditingNote(note);
+                        setTitle(note.title || "");
+                        setContent(note.content || "");
+                        setTargetFolder(note.folder_name || "General");
+                        setNoteColor(note.folder_color || palette12[0]);
+                        setEditorOpen(true);
+                    } catch {}
+                })();
+                setPendingFolderQuery(null); setPendingNoteQuery(null); setPendingNoteIdQuery(null); setIsUrlChecking(false);
+                return;
+            }
         }
 
         if (!matchedNote && noteToken) {
