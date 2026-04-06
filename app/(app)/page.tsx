@@ -5399,10 +5399,11 @@ const fireIntegrations = (trigger: string, note: any) => {
                 .md-preview input[type="checkbox"] { margin-right: 0.4em; accent-color: #0366d6; }
                 .md-preview del, .md-preview s { color: #999; }
                 .md-preview hr { border: none; border-top: 1px solid #e5e5e5; margin: 1.5em 0; }
-                .md-preview li::marker { color: #999; }
+                .md-preview li { color: #1a1a1a; }
+                .md-preview li::marker { color: #555; }
                 .md-preview table { border-collapse: collapse; width: 100%; margin: 0.75em 0; }
-                .md-preview th,.md-preview td { border: 1px solid #dfe2e5; padding: 6px 13px; text-align: left; }
-                .md-preview th { font-weight: 600; background: #f6f8fa; }
+                .md-preview th,.md-preview td { border: 1px solid #dfe2e5; padding: 6px 13px; text-align: left; color: #1a1a1a; }
+                .md-preview th { font-weight: 600; background: #f6f8fa; color: #111; }
                 .md-preview tr:nth-child(2n) { background: #f6f8fa; }
                 .md-preview pre { background: #272822; border: 1px solid #3e3d32; }
                 .md-preview pre code { color: #f8f8f2; }

@@ -1,6 +1,7 @@
 "use client";
-import { useMemo, useEffect } from "react";
+import { useMemo } from "react";
 import { marked, Renderer } from "marked";
+import { markedHighlight } from "marked-highlight";
 import dynamic from "next/dynamic";
 import hljs from "highlight.js/lib/core";
 import javascript from "highlight.js/lib/languages/javascript";
@@ -47,8 +48,9 @@ renderer.link = ({ href, title, tokens }) => {
     return `<a href="${href}"${titleAttr} target="_blank" rel="noopener noreferrer">${text}</a>`;
 };
 
-// Syntax highlighting via highlight.js
-marked.setOptions({
+// Syntax highlighting via highlight.js + marked-highlight
+marked.use(markedHighlight({
+    langPrefix: "hljs language-",
     highlight(code: string, lang: string) {
         if (lang && hljs.getLanguage(lang)) {
             try { return hljs.highlight(code, { language: lang }).value; } catch {}
@@ -56,7 +58,7 @@ marked.setOptions({
         try { return hljs.highlightAuto(code).value; } catch {}
         return code;
     },
-});
+}));
 
 const MermaidRenderer = dynamic(() => import("./MermaidRenderer").then(m => ({ default: m.MermaidRenderer })), { ssr: false });
 
