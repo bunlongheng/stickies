@@ -5977,8 +5977,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                         </button>
                         )}
                         {/* Share removed — available in note actions menu */}
-                        {/* Markdown preview — cycles: text → split → preview → text */}
-                        {content.trim() && (
+                        {/* Preview — cycles: text → split → preview → text (markdown + html only) */}
+                        {content.trim() && (noteType === "markdown" || noteType === "html" || mdViewMode !== "text") && (
                         <button type="button"
                             onClick={() => setMdViewMode(v => v === "text" ? "split" : v === "split" ? "preview" : "text")}
                             className={`p-2 sm:p-3 transition flex-shrink-0 ${mdViewMode !== "text" ? "text-purple-400" : "text-zinc-500 hover:text-purple-400"}`}
@@ -6436,7 +6436,15 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     autoCapitalize="off"
                                 />
                                 )}
-                                {/* Preview pane — StackEdit light */}
+                                {/* Preview pane */}
+                                {noteType === "html" ? (
+                                    <iframe
+                                        className="flex-1 select-text"
+                                        style={{ border: "none", background: "#fff" }}
+                                        srcDoc={content}
+                                        sandbox="allow-same-origin"
+                                    />
+                                ) : (
                                 <div className="flex-1 overflow-auto px-10 py-3 md-preview select-text" style={{ background: "#fff" }}
                                     onClick={(e) => {
                                         const btn = (e.target as HTMLElement).closest(".copy-code-btn") as HTMLElement | null;
@@ -6453,6 +6461,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     }}>
                                     <MarkdownPreview content={content} />
                                 </div>
+                                )}
                             </div>
                         ) : htmlMode ? (
                             <div className="flex-1 flex flex-col">
