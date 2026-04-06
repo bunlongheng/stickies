@@ -1,7 +1,43 @@
 "use client";
-import { useMemo } from "react";
+import { useMemo, useEffect } from "react";
 import { marked, Renderer } from "marked";
 import dynamic from "next/dynamic";
+import hljs from "highlight.js/lib/core";
+import javascript from "highlight.js/lib/languages/javascript";
+import typescript from "highlight.js/lib/languages/typescript";
+import python from "highlight.js/lib/languages/python";
+import bash from "highlight.js/lib/languages/bash";
+import css from "highlight.js/lib/languages/css";
+import json from "highlight.js/lib/languages/json";
+import sql from "highlight.js/lib/languages/sql";
+import xml from "highlight.js/lib/languages/xml";
+import yaml from "highlight.js/lib/languages/yaml";
+import markdown from "highlight.js/lib/languages/markdown";
+import go from "highlight.js/lib/languages/go";
+import rust from "highlight.js/lib/languages/rust";
+import diff from "highlight.js/lib/languages/diff";
+
+hljs.registerLanguage("javascript", javascript);
+hljs.registerLanguage("js", javascript);
+hljs.registerLanguage("typescript", typescript);
+hljs.registerLanguage("ts", typescript);
+hljs.registerLanguage("python", python);
+hljs.registerLanguage("py", python);
+hljs.registerLanguage("bash", bash);
+hljs.registerLanguage("sh", bash);
+hljs.registerLanguage("shell", bash);
+hljs.registerLanguage("css", css);
+hljs.registerLanguage("json", json);
+hljs.registerLanguage("sql", sql);
+hljs.registerLanguage("html", xml);
+hljs.registerLanguage("xml", xml);
+hljs.registerLanguage("yaml", yaml);
+hljs.registerLanguage("yml", yaml);
+hljs.registerLanguage("markdown", markdown);
+hljs.registerLanguage("md", markdown);
+hljs.registerLanguage("go", go);
+hljs.registerLanguage("rust", rust);
+hljs.registerLanguage("diff", diff);
 
 // Open all links in a new tab
 const renderer = new Renderer();
@@ -10,6 +46,17 @@ renderer.link = ({ href, title, tokens }) => {
     const titleAttr = title ? ` title="${title}"` : "";
     return `<a href="${href}"${titleAttr} target="_blank" rel="noopener noreferrer">${text}</a>`;
 };
+
+// Syntax highlighting via highlight.js
+marked.setOptions({
+    highlight(code: string, lang: string) {
+        if (lang && hljs.getLanguage(lang)) {
+            try { return hljs.highlight(code, { language: lang }).value; } catch {}
+        }
+        try { return hljs.highlightAuto(code).value; } catch {}
+        return code;
+    },
+});
 
 const MermaidRenderer = dynamic(() => import("./MermaidRenderer").then(m => ({ default: m.MermaidRenderer })), { ssr: false });
 

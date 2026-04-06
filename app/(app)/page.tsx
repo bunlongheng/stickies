@@ -5346,7 +5346,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                         );
                 }
                 @keyframes spin { to { transform: rotate(360deg); } }
-                .md-preview { color: #333; line-height: 1.7; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; font-size: 16px; text-align: left; }
+                .md-preview { color: #24292e; line-height: 1.7; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; font-size: 16px; text-align: left; }
                 .md-preview h1,.md-preview h2,.md-preview h3,.md-preview h4,.md-preview h5,.md-preview h6 { font-weight: 700; letter-spacing: -0.01em; color: #111; margin: 1.5em 0 0.5em; line-height: 1.3; text-align: left; }
                 .md-preview h1 { font-size: 2em; border-bottom: 1px solid #e5e5e5; padding-bottom: 0.3em; }
                 .md-preview h2 { font-size: 1.5em; border-bottom: 1px solid #eee; padding-bottom: 0.25em; }
@@ -5359,7 +5359,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                 .md-preview ol li { list-style-type: decimal; }
                 .md-preview li::marker { color: #71717a; }
                 .md-preview strong { font-weight: 700; color: #111; }
-                .md-preview em { font-style: italic; color: #555; }
+                .md-preview em { font-style: italic; color: #24292e; }
                 .md-preview code { font-family: ui-monospace, monospace; font-size: 0.85em; background: rgba(175,184,193,0.2); padding: 0.2em 0.4em; border-radius: 3px; color: #e01e5a; }
                 .md-preview pre { background: #f6f8fa; border: 1px solid #e1e4e8; padding: 1em; margin: 0; overflow-x: auto; border-radius: 0 0 4px 4px; }
                 .md-preview pre code { background: none; padding: 0; color: #24292e; font-size: 0.85em; }
@@ -5381,6 +5381,21 @@ const fireIntegrations = (trigger: string, note: any) => {
                 .md-preview th,.md-preview td { border: 1px solid #dfe2e5; padding: 6px 13px; text-align: left; }
                 .md-preview th { font-weight: 600; background: #f6f8fa; }
                 .md-preview tr:nth-child(2n) { background: #f6f8fa; }
+                .md-preview pre { background: #272822; border: 1px solid #3e3d32; }
+                .md-preview pre code { color: #f8f8f2; }
+                .hljs-keyword,.hljs-tag,.hljs-selector-tag { color: #f92672; }
+                .hljs-string,.hljs-attr,.hljs-addition { color: #e6db74; }
+                .hljs-comment,.hljs-quote { color: #75715e; font-style: italic; }
+                .hljs-variable,.hljs-template-variable { color: #fd971f; }
+                .hljs-number,.hljs-literal,.hljs-type,.hljs-params,.hljs-link { color: #ae81ff; }
+                .hljs-built_in,.hljs-builtin-name { color: #66d9ef; }
+                .hljs-function .hljs-title,.hljs-title.function_,.hljs-title { color: #a6e22e; }
+                .hljs-name,.hljs-selector-class,.hljs-selector-id { color: #a6e22e; }
+                .hljs-attribute { color: #66d9ef; font-style: italic; }
+                .hljs-symbol,.hljs-bullet,.hljs-subst { color: #f8f8f2; }
+                .hljs-section { color: #a6e22e; font-weight: bold; }
+                .hljs-deletion { color: #f92672; }
+                .hljs-meta { color: #75715e; }
                 .md-preview table { width: 100%; border-collapse: collapse; margin: 0.75em 0; font-size: 0.85em; }
                 .md-preview th { background: rgba(255,255,255,0.06); color: #fff; font-weight: 900; text-transform: uppercase; font-size: 0.75em; letter-spacing: 0.05em; }
                 .md-preview th,.md-preview td { border: 1px solid rgba(255,255,255,0.1); padding: 0.5em 0.75em; text-align: left; }
