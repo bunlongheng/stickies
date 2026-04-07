@@ -6615,11 +6615,11 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             const printWin = window.open("", "_blank");
                                             if (!printWin) return;
                                             const css = `
-@page { margin: 1.8cm 2cm; size: A4; }
+@page { margin: 0; size: A4; }
 * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif !important; }
 body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-    font-size: 10pt; color: #1a1a1a; line-height: 1.6; margin: 0; padding: 0;
+    font-size: 10pt; color: #1a1a1a; line-height: 1.6; margin: 0; padding: 1.8cm 2cm;
 }
 h1, h2, h3, h4, h5, h6 { font-weight: 700; color: #111; page-break-after: avoid; margin: 1.2em 0 0.5em; }
 h1 { font-size: 22pt; border-bottom: 2px solid #ddd; padding-bottom: 8px; margin-top: 0; }
