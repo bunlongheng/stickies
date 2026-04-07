@@ -2676,8 +2676,9 @@ const fireIntegrations = (trigger: string, note: any) => {
             const activeFolderId = folderStack.at(-1)?.id ?? null;
             const useUuid = activeFolderId && !activeFolderId.startsWith("virtual-");
             const notes = dbData.filter((n) => !n.is_folder && (
-                (useUuid && String(n.folder_id) === activeFolderId) ||
-                n.folder_name === activeFolder
+                n.folder_id
+                    ? (useUuid && String(n.folder_id) === activeFolderId)
+                    : n.folder_name === activeFolder
             ) && (activeFolder === "TRASH" || (n.folder_name !== "TRASH" && !n.trashed_at))).sort(byUpdated);
             return [...currentLevelFolders, ...notes];
         }
