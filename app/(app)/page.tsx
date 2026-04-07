@@ -5417,7 +5417,9 @@ const fireIntegrations = (trigger: string, note: any) => {
                         );
                 }
                 @keyframes spin { to { transform: rotate(360deg); } }
-                .md-preview { color: #1a1a1a; line-height: 1.7; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; font-size: 16px; text-align: left; }
+                .md-preview { color: #1a1a1a; line-height: 1.7; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; font-size: 12px; text-align: left; }
+                @media (max-width: 1024px) { .md-preview { font-size: 10px; } }
+                @media (max-width: 640px) { .md-preview { font-size: 8px; } }
                 .md-preview p { color: #1a1a1a; }
                 .md-preview h1,.md-preview h2,.md-preview h3,.md-preview h4,.md-preview h5,.md-preview h6 { font-weight: 700; letter-spacing: -0.01em; color: #111; margin: 0.8em 0 0.4em; line-height: 1.3; text-align: left; }
                 .md-preview h1:first-child,.md-preview h2:first-child,.md-preview h3:first-child { margin-top: 0; }
@@ -6425,7 +6427,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     style={{
                                         flex: 1, background: "transparent", color: "#f8f8f2",
                                         fontFamily: "ui-monospace,'Fira Code','Cascadia Code',monospace",
-                                        fontSize: 14, lineHeight: "22px",
+                                        fontSize: "clamp(8px, 1.2vw, 12px)", lineHeight: 1.6,
                                         paddingTop: 8, paddingBottom: 24, paddingLeft: 24, paddingRight: 24,
                                         outline: "none", resize: "none", caretColor: "#f8f8f2",
                                         whiteSpace: "pre-wrap", overflowWrap: "break-word", wordBreak: "break-word",
@@ -6536,7 +6538,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
                                         pointerEvents: "none",
                                         fontFamily: "ui-monospace,'Fira Code','Cascadia Code',monospace",
-                                        fontSize: 14, lineHeight: "22px",
+                                        fontSize: "clamp(8px, 1.2vw, 12px)", lineHeight: 1.6,
                                         paddingTop: 8, paddingBottom: 24, paddingLeft: 24, paddingRight: 24,
                                         whiteSpace: "pre-wrap", overflowWrap: "break-word", wordBreak: "break-word",
                                         color: "transparent", zIndex: 0,
@@ -6557,7 +6559,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     style={{
                                         flex: 1, background: "transparent", color: "#f8f8f2",
                                         fontFamily: "ui-monospace,'Fira Code','Cascadia Code',monospace",
-                                        fontSize: 14, lineHeight: "22px",
+                                        fontSize: "clamp(8px, 1.2vw, 12px)", lineHeight: 1.6,
                                         paddingTop: 8, paddingBottom: 24, paddingLeft: 24, paddingRight: 24,
                                         outline: "none", resize: "none", caretColor: "#f8f8f2",
                                         whiteSpace: "pre-wrap", overflowWrap: "break-word", wordBreak: "break-word",
@@ -6653,7 +6655,7 @@ const fireIntegrations = (trigger: string, note: any) => {
 * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
 body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-    font-size: 12pt; color: #1a1a1a; line-height: 1.75; margin: 0; padding: 0;
+    font-size: 10pt; color: #1a1a1a; line-height: 1.6; margin: 0; padding: 0;
 }
 h1, h2, h3, h4, h5, h6 { font-weight: 700; color: #111; page-break-after: avoid; margin: 1.2em 0 0.5em; }
 h1 { font-size: 22pt; border-bottom: 2px solid #ddd; padding-bottom: 8px; margin-top: 0; }
