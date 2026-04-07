@@ -6447,7 +6447,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         sandbox="allow-same-origin"
                                     />
                                 ) : (
-                                <div className="flex-1 overflow-auto px-10 py-3 md-preview select-text" style={{ background: "#fff" }}
+                                <div className="flex-1 overflow-auto px-6 py-2 md-preview select-text" style={{ background: "#fff" }}
                                     onClick={(e) => {
                                         const btn = (e.target as HTMLElement).closest(".copy-code-btn") as HTMLElement | null;
                                         if (!btn) return;
