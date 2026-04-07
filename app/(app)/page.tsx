@@ -6671,7 +6671,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
 .code-block-wrapper { margin: 12px 0; border-radius: 6px; overflow: hidden; page-break-inside: avoid; }
 `;
                                             const pdfDate = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-                                            const pdfHeader = `<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:1.5em;padding-bottom:0.5em;border-bottom:1px solid #e5e5e5;font-size:9pt;color:#999;"><span><strong style="color:#bbb;">BH</strong> <span style="color:#ccc;">|</span> ${pdfDate}</span><span style="text-align:right;color:#999;">${(title || "Note").slice(0, 60)}</span></div>`;
+                                            const pdfHeader = `<div style="display:flex;justify-content:flex-start;align-items:baseline;margin-bottom:1.5em;padding-bottom:0.5em;border-bottom:1px solid #e5e5e5;font-size:9pt;"><strong style="color:#bbb;">BH</strong> <span style="color:#ccc;margin:0 4px;">/</span> <span style="color:#1a1a1a;">${pdfDate}</span></div>`;
                                             printWin.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${title || "Note"}</title><style>${css}</style></head><body>${pdfHeader}${previewEl.innerHTML}</body></html>`);
                                             printWin.document.close();
                                             setTimeout(() => { printWin.print(); }, 400);
