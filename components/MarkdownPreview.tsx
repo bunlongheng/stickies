@@ -62,7 +62,7 @@ export function MarkdownPreview({ content, theme = "dark" }: Props) {
 
     return (
         <div className="flex-1 overflow-y-auto">
-            <div className="p-4 sm:p-6 max-w-none">
+            <div className="max-w-none">
                 {segments.map((seg, i) =>
                     seg.kind === "diagram" ? (
                         <div key={i} className="my-4 rounded overflow-hidden" style={{ minHeight: 200 }}>
