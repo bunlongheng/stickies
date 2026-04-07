@@ -1489,11 +1489,13 @@ export default function NotesMaster() {
             folderPaginationRef.current.set(folderName, { offset: offset + notes.length, total });
 
             setDbData((prev) => {
+                const freshIds = new Set(notes.map((n: any) => String(n.id)));
                 if (append) {
                     const seen = new Set(prev.map((r: any) => String(r.id)));
                     return [...prev, ...notes.filter((n: any) => !seen.has(String(n.id)))];
                 }
-                const without = prev.filter((r: any) => r.is_folder || r.folder_name !== folderName || r._optimistic);
+                // Remove notes that belong to this folder (by name or by being in fresh data)
+                const without = prev.filter((r: any) => r.is_folder || r._optimistic || (r.folder_name !== folderName && !freshIds.has(String(r.id))));
                 return [...without, ...notes];
             });
 
