@@ -6421,7 +6421,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         const wrapper = btn.closest(".code-block-wrapper") || btn.closest("pre");
                                         const code = wrapper?.querySelector("code")?.textContent || "";
                                         if (code) {
-                                            navigator.clipboard.writeText(code);
+                                            void secureCopy(code);
                                             btn.textContent = "Copied!";
                                             btn.classList.add("copied");
                                             showToast("Copied!", "#34C759");
@@ -6605,7 +6605,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                             <div className="flex items-center gap-2">
                                 {mdViewMode !== "text" && (<>
                                     <button type="button"
-                                        onClick={() => { navigator.clipboard.writeText(content); showToast("Copied!", "#34C759"); }}
+                                        onClick={() => { void secureCopy(content); showToast("Copied!", "#34C759"); }}
                                         className="flex items-center gap-1 px-1.5 py-px text-zinc-500 hover:text-white transition"
                                         title="Copy markdown">
                                         <ClipboardDocumentListIcon className="w-3 h-3" />
@@ -8170,7 +8170,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                             return c ? `# ${t}\n\n${c}` : `# ${t}`;
                                         }).join("\n\n---\n\n");
                                         try {
-                                            await navigator.clipboard.writeText(text);
+                                            await secureCopy(text);
                                         } catch {
                                             const ta = document.createElement("textarea");
                                             ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
