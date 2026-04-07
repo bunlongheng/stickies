@@ -5380,7 +5380,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                         );
                 }
                 @keyframes spin { to { transform: rotate(360deg); } }
-                .md-preview { color: #1a1a1a; line-height: 1.7; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; font-size: 12px; text-align: left; }
+                .md-preview { color: #1a1a1a; line-height: 1.7; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; font-size: 12px; text-align: left; word-wrap: break-word; overflow-wrap: break-word; min-width: 0; }
                 @media (max-width: 1024px) { .md-preview { font-size: 10px; } }
                 @media (max-width: 640px) { .md-preview { font-size: 8px; } }
                 .md-preview p { color: #1a1a1a; }
@@ -5418,7 +5418,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                 .md-preview hr { border: none; border-top: 1px solid #e5e5e5; margin: 1.5em 0; }
                 .md-preview li { color: #1a1a1a; }
                 .md-preview li::marker { color: #555; }
-                .md-preview table { border-collapse: separate; border-spacing: 0; width: 100%; margin: 0.75em 0; border: 1px solid #d0d7de; border-radius: 8px; overflow: hidden; }
+                .md-preview table { border-collapse: separate; border-spacing: 0; width: 100%; margin: 0.75em 0; border: 1px solid #d0d7de; border-radius: 8px; overflow: hidden; display: block; overflow-x: auto; }
+                .md-preview thead, .md-preview tbody { display: table; width: 100%; }
                 .md-preview th,.md-preview td { border-bottom: 1px solid #d0d7de; border-right: 1px solid #d0d7de; padding: 8px 14px; text-align: left; color: #1a1a1a; }
                 .md-preview th:last-child,.md-preview td:last-child { border-right: none; }
                 .md-preview tr:last-child td { border-bottom: none; }
