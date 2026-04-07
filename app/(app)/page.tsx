@@ -6616,7 +6616,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             if (!printWin) return;
                                             const css = `
 @page { margin: 1.8cm 2cm; size: A4; }
-* { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
+* { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif !important; }
 body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
     font-size: 10pt; color: #1a1a1a; line-height: 1.6; margin: 0; padding: 0;
