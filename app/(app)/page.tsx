@@ -468,47 +468,15 @@ const DEFAULT_FOLDER_KEY = "stickies:default-folder:v1";
 const LAST_FOLDER_KEY = "stickies:last-folder:v1"; // persists last active folder across sessions
 const DB_CACHE_KEY = "stickies:db-cache:v1";
 const COUNTS_CACHE_KEY = "stickies:counts-cache:v1";
-const NOTES_CACHE_KEY = "stickies:notes-cache:v2";
+// Note cache removed — API is fast enough, cache caused stale data bugs
 const DEV_MODE_KEY = "stickies:dev-mode:v1";
 
 // ── Notes cache helpers ───────────────────────────────────────────────────────
-function getNotesCacheForFolder(folderName: string): unknown[] {
-    try {
-        const raw = localStorage.getItem(NOTES_CACHE_KEY);
-        if (!raw) return [];
-        const cache = JSON.parse(raw) as Record<string, unknown[]>;
-        return Array.isArray(cache[folderName]) ? cache[folderName] : [];
-    } catch { return []; }
+function setNotesCacheForFolder(_folderName: string, _notes: unknown[]): void {
 }
-
-function setNotesCacheForFolder(folderName: string, notes: unknown[]): void {
-    try {
-        const raw = localStorage.getItem(NOTES_CACHE_KEY);
-        const cache = raw ? JSON.parse(raw) as Record<string, unknown[]> : {};
-        cache[folderName] = notes.filter((n: any) => !n._external);
-        localStorage.setItem(NOTES_CACHE_KEY, JSON.stringify(cache));
-    } catch { /* quota exceeded */ }
-}
-
-
-/** Upsert a note into the cache for its folder (keeps cache fresh on save). */
-function mergeIntoCachedNotes(folderName: string, changed: unknown[]): void {
-    if (!changed.length) return;
-    try {
-        const existing = getNotesCacheForFolder(folderName);
-        const byId = new Map(existing.map((n: any) => [String(n.id), n]));
-        changed.filter((n: any) => !n._external).forEach((n: any) => byId.set(String(n.id), n));
-        setNotesCacheForFolder(folderName, Array.from(byId.values()));
-    } catch { /* ignore */ }
-}
-
-/** Remove a note from the cached array for a folder. */
-function removeFromCachedNotes(folderName: string, noteId: string): void {
-    try {
-        const existing = getNotesCacheForFolder(folderName);
-        setNotesCacheForFolder(folderName, existing.filter((n: any) => String(n.id) !== noteId));
-    } catch { /* ignore */ }
-}
+// Note cache helpers — no-ops (cache removed to prevent stale data)
+function mergeIntoCachedNotes(_f: string, _c: unknown[]): void {}
+function removeFromCachedNotes(_f: string, _n: string): void {}
 
 // --- Mindmap ---
 const MIND_COLORS = ["#FF3B30","#FF9500","#FFCC00","#34C759","#00C7BE","#007AFF","#5856D6","#AF52DE","#FF2D55","#FF6B4E"];
@@ -1465,13 +1433,6 @@ export default function NotesMaster() {
 
         // Paint cached notes instantly so UI is never blank
         if (!append && offset === 0) {
-            const cached = getNotesCacheForFolder(folderName);
-            if (cached.length > 0) {
-                setDbData((prev) => {
-                    const without = prev.filter((r: any) => r.is_folder || r.folder_name !== folderName || r._optimistic);
-                    return [...without, ...cached];
-                });
-            }
         }
 
         folderNotesLoadingRef.current = true;
