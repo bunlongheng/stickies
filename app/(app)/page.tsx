@@ -4013,6 +4013,10 @@ const fireIntegrations = (trigger: string, note: any) => {
         setNoteColor(note.folder_color || folders.find((f: any) => f.name === (note.folder_name || activeFolder))?.color || palette12[0]);
         setShowColorPicker(false);
         setShowSwitcher(false);
+        // On mobile, auto-show preview for markdown notes
+        const isMobileView = window.innerWidth < 640;
+        const isMarkdown = note.type === "markdown" || (note.content && /^#{1,6}\s|^\*\*|^>\s/m.test(note.content));
+        setMdViewMode(isMobileView && isMarkdown ? "preview" : "text");
         setEditorOpen(true);
 
         // Always fetch full content — list API omits the content column
