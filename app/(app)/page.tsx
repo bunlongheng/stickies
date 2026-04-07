@@ -4069,12 +4069,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         if (note._isFolder) {
             const fr = dbData.find((r: any) => r.is_folder && (r.folder_name === note.name || String(r.id) === String(note.id)));
             enterFolder({ id: fr ? String(fr.id) : `virtual-${note.name}`, name: note.name, color: note.color || palette12[0] });
-            loadFolderNotes(note.name, false).then(() => {
-                const first = (getNotesCacheForFolder(note.name) as any[])
-                    .filter((n: any) => !n.is_folder)
-                    .sort((a: any, b: any) => (b.updated_at || "").localeCompare(a.updated_at || ""))[0];
-                if (first) void openNote(first);
-            });
+            void loadFolderNotes(note.name, false);
             return;
         }
         if (note.folder_name) {
@@ -6671,7 +6666,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
 .code-block-wrapper { margin: 12px 0; border-radius: 6px; overflow: hidden; page-break-inside: avoid; }
 `;
                                             const pdfDate = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-                                            const pdfHeader = `<div style="display:flex;justify-content:flex-start;align-items:baseline;margin-bottom:1.5em;padding-bottom:0.5em;border-bottom:1px solid #e5e5e5;font-size:9pt;"><strong style="color:#bbb;">BH</strong> <span style="color:#ccc;margin:0 4px;">|</span> <span style="color:#1a1a1a;">${pdfDate}</span></div>`;
+                                            const pdfHeader = `<div style="display:flex;justify-content:flex-start;align-items:baseline;margin-bottom:1em;font-size:9pt;"><strong style="color:#bbb;">BH</strong> <span style="color:#ccc;margin:0 4px;">|</span> <span style="color:#1a1a1a;">${pdfDate}</span></div>`;
                                             printWin.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${title || "Note"}</title><style>${css}</style></head><body>${pdfHeader}${previewEl.innerHTML}</body></html>`);
                                             printWin.document.close();
                                             setTimeout(() => { printWin.print(); }, 400);
@@ -8424,12 +8419,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                             setShowCmdK(false); setCmdKQuery("");
                                                             const fr = dbData.find((r: any) => r.is_folder && (r.folder_name === folder.name || r.name === folder.name));
                                                             enterFolder({ id: fr ? String(fr.id) : `virtual-${folder.name}`, name: folder.name, color: folder.color || palette12[0] });
-                                                            loadFolderNotes(folder.name, false).then(() => {
-                                                                const first = (getNotesCacheForFolder(folder.name) as any[])
-                                                                    .filter((n: any) => !n.is_folder)
-                                                                    .sort((a: any, b: any) => (b.updated_at || "").localeCompare(a.updated_at || ""))[0];
-                                                                if (first) void openNote(first);
-                                                            });
+                                                            void loadFolderNotes(folder.name, false);
                                                         }}
                                                         className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition ${i === cmdKCursor ? "bg-white/10" : "hover:bg-white/5"}`}>
                                                         <div className="w-7 h-7 flex-shrink-0 flex items-center justify-center text-sm font-black overflow-hidden"
