@@ -4004,9 +4004,13 @@ const fireIntegrations = (trigger: string, note: any) => {
         // Open immediately with available metadata so the editor switches at once
         setPendingNoteType(null); // reset so noteType comes from note.type, not prior mode
         setEditingNote(note);
-        const rawTitle = note.title || "";
-        // Treat "Untitled" as no title so first-line auto-derive runs on next save
-        setTitle(rawTitle.toLowerCase() === "untitled" ? "" : rawTitle);
+        let rawTitle = note.title || "";
+        // If "Untitled", derive from first line of content
+        if (!rawTitle || rawTitle.toLowerCase() === "untitled") {
+            const firstLine = (note.content || "").trim().split("\n").find((l: string) => l.trim()) || "";
+            rawTitle = firstLine.replace(/^#+\s*/, "").slice(0, 60).trim();
+        }
+        setTitle(rawTitle);
         setContent(note.content != null ? (note.type === "mermaid" || detectMermaid(note.content || "") ? cleanMermaidContent(note.content) : note.content) : "");
         setImages((note as any).images ?? []);
         setTargetFolder(note.folder_name || activeFolder || "General");
