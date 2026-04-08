@@ -181,26 +181,6 @@ body {
 [data-theme="light"] ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.2) !important; }
 [data-theme="light"] ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.35) !important; }
 
-/* monokai: warm dark palette */
-[data-theme="monokai"] body {
-  background: #272822 !important;
-}
-[data-theme="monokai"] main,
-[data-theme="monokai"] .bg-black {
-  background: #272822 !important;
-}
-[data-theme="monokai"] .bg-zinc-900 { background: #1e1f1a !important; }
-[data-theme="monokai"] .bg-zinc-800 { background: #2d2e28 !important; }
-[data-theme="monokai"] .bg-zinc-700 { background: #3a3b35 !important; }
-[data-theme="monokai"] * {
-  scrollbar-color: rgba(253,151,31,0.3) transparent;
-}
-[data-theme="monokai"] ::-webkit-scrollbar-thumb {
-  background: rgba(253,151,31,0.25);
-}
-[data-theme="monokai"] ::-webkit-scrollbar-thumb:hover {
-  background: rgba(253,151,31,0.45);
-}
 
 /* Folder icon badge — solid folder color, icon color adapts for light bg */
 .folder-icon-badge {
