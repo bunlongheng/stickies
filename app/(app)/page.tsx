@@ -1504,11 +1504,20 @@ export default function NotesMaster() {
                 token = await getAuthToken();
             }
             syncHadTokenRef.current = !!token;
+            if (!token && process.env.NODE_ENV === "production") {
+                // No session — clear stale cache and redirect to login
+                try { localStorage.removeItem(DB_CACHE_KEY); localStorage.removeItem(COUNTS_CACHE_KEY); } catch {}
+                window.location.href = "/sign-in";
+                return;
+            }
             const _t0 = performance.now();
             const [foldersRes, integrationsResult, countsResult] = await Promise.all([
                 fetch("/api/stickies?folders=1", {
                     headers: { Authorization: `Bearer ${token}` },
-                }).then((r) => r.ok ? r.json() : { folders: [] }).catch(() => ({ folders: [] })),
+                }).then((r) => {
+                    if (r.status === 401) { try { localStorage.removeItem(DB_CACHE_KEY); } catch {} }
+                    return r.ok ? r.json() : { folders: [] };
+                }).catch(() => ({ folders: [] })),
                 fetch("/api/stickies/integrations", {
                     headers: { Authorization: `Bearer ${token}` },
                 }).then((r) => r.ok ? r.json() : []).catch(() => []),
