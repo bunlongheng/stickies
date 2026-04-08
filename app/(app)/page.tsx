@@ -5409,8 +5409,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                 .code-block-wrapper pre { background: #272822; border: none; border-radius: 0; margin: 0; padding: 1.2em; }
                 .code-block-wrapper pre code { color: #f8f8f2; }
                 .code-lang-badge { display: block; background: #1e1f1c; color: #75715e; font-family: ui-monospace, monospace; font-size: 0.6em; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; padding: 0.4em 1em; }
-                .copy-code-btn { position: absolute; top: 8px; right: 8px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #a1a1aa; font-size: 0.65em; font-family: ui-monospace, monospace; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; padding: 4px 10px; border-radius: 4px; cursor: pointer; transition: all 0.15s; z-index: 1; opacity: 0; }
-                .code-block-wrapper:hover .copy-code-btn { opacity: 1; }
+                .copy-code-btn { display: none; }
                 .copy-code-btn:hover { background: rgba(255,255,255,0.15); color: #fff; }
                 .copy-code-btn.copied { opacity: 1; background: rgba(34,197,94,0.2); color: #4ade80; border-color: rgba(34,197,94,0.4); }
                 .md-preview blockquote { border-left: 4px solid #959da5; padding-left: 1em; margin: 0.75em 0; color: #444d56; background: #f8f8f8; padding: 0.6em 1em; border-radius: 0 4px 4px 0; }
