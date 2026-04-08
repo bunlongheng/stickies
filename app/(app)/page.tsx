@@ -1247,7 +1247,7 @@ export default function NotesMaster() {
     const [notebookPickerCursor, setNotebookPickerCursor] = useState(-1);
     const [navMode, setNavMode] = useState<"folders-and-files" | "files-only">("folders-and-files");
     const [kanbanMode, setKanbanMode] = useState(false);
-    const [appTheme, setAppTheme] = useState<"dark" | "light" | "monokai">("dark");
+    const [appTheme, setAppTheme] = useState<"dark" | "light">("dark");
     const [mermaidShowCode, setMermaidShowCode] = useState(false);
     const [codeEditMode, setCodeEditMode] = useState(false);
     const [typeFilter, setTypeFilter] = useState<string | null>(null);
@@ -1819,7 +1819,7 @@ export default function NotesMaster() {
         } catch { /* ignore */ }
         try {
             const rawTheme = localStorage.getItem(APP_THEME_KEY);
-            if (rawTheme === "light" || rawTheme === "dark" || rawTheme === "monokai") setAppTheme(rawTheme);
+            if (rawTheme === "light" || rawTheme === "dark") setAppTheme(rawTheme);
         } catch { /* ignore */ }
         try {
             const rawDev = localStorage.getItem(DEV_MODE_KEY);
@@ -1830,7 +1830,7 @@ export default function NotesMaster() {
         try {
             const urlParams = new URLSearchParams(window.location.search);
             const themeParam = urlParams.get("theme");
-            if (themeParam === "light" || themeParam === "dark" || themeParam === "monokai") setAppTheme(themeParam);
+            if (themeParam === "light" || themeParam === "dark") setAppTheme(themeParam);
             const viewParam = urlParams.get("view");
             if (viewParam === "list") { setMainListMode("list"); setKanbanMode(false); }
             else if (viewParam === "thumb") { setMainListMode("thumb"); setKanbanMode(false); }
@@ -6437,8 +6437,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     srcDoc={(() => {
                                         const scrollbarCss = appTheme === "light"
                                             ? `::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.18);border-radius:6px}::-webkit-scrollbar-thumb:hover{background:rgba(0,0,0,0.32)}*{scrollbar-width:thin;scrollbar-color:rgba(0,0,0,0.18) transparent}`
-                                            : appTheme === "monokai"
-                                            ? `::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:rgba(253,151,31,0.25);border-radius:6px}::-webkit-scrollbar-thumb:hover{background:rgba(253,151,31,0.45)}*{scrollbar-width:thin;scrollbar-color:rgba(253,151,31,0.25) transparent}`
                                             : `::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.12);border-radius:6px}::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,0.22)}*{scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.12) transparent}`;
                                         if (/^\s*<!DOCTYPE\s+html/i.test(content) || /^\s*<html[\s>]/i.test(content)) {
                                             return content.replace(/(<head[^>]*>)/i, `$1<style>${scrollbarCss}</style>`);
@@ -8275,11 +8273,11 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                 <div className="px-6 py-2 border-b border-white/[0.06]">
                                     <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-1.5">Theme</p>
                                     <div className="flex gap-1.5">
-                                        {(["dark", "monokai", "light"] as const).map((t) => (
+                                        {(["dark", "light"] as const).map((t) => (
                                             <button key={t} type="button"
                                                 onClick={() => setAppTheme(t)}
                                                 className={`flex-1 py-1.5 rounded text-[10px] font-black uppercase tracking-wide transition ${appTheme === t ? "bg-white text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"}`}>
-                                                {t === "dark" ? "Dark" : t === "light" ? "Light" : "Monokai"}
+                                                {t === "dark" ? "Dark" : "Light"}
                                             </button>
                                         ))}
                                     </div>
