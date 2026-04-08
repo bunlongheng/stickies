@@ -8270,31 +8270,6 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                     </div>
                                 </div>
                                 {/* THEME */}
-                                <div className="px-6 py-2 border-b border-white/[0.06]">
-                                    <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-1.5">Theme</p>
-                                    <div className="flex gap-1.5">
-                                        {(["dark", "light"] as const).map((t) => (
-                                            <button key={t} type="button"
-                                                onClick={() => setAppTheme(t)}
-                                                className={`flex-1 py-1.5 rounded text-[10px] font-black uppercase tracking-wide transition ${appTheme === t ? "bg-white text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"}`}>
-                                                {t === "dark" ? "Dark" : "Light"}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-                                {/* DEV MODE */}
-                                <div className="px-6 py-2 border-b border-white/[0.06]">
-                                    <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-1.5">Dev Mode</p>
-                                    <div className="flex gap-1.5">
-                                        {([true, false] as const).map((v) => (
-                                            <button key={String(v)} type="button"
-                                                onClick={() => setDevMode(v)}
-                                                className={`flex-1 py-1.5 rounded text-[10px] font-black uppercase tracking-wide transition ${devMode === v ? "bg-white text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"}`}>
-                                                {v ? "On" : "Off"}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
                                 <button type="button" className="w-full flex items-center gap-4 px-6 py-4 text-left text-zinc-300 hover:bg-white/5 hover:text-white active:bg-white/10 transition"
                                     onClick={() => {
                                         if (gdriveConnected) {
