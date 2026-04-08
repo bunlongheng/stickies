@@ -8253,37 +8253,6 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                         ))}
                                     </div>
                                 </div>
-                                {/* VIEW MODE */}
-                                <div className="px-6 py-2 border-b border-white/[0.06]">
-                                    <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-1.5">View</p>
-                                    <div className="grid grid-cols-2 gap-1.5">
-                                        <button type="button" onClick={() => { setMainListMode("list"); setKanbanMode(false); }}
-                                            className={`py-1.5 rounded flex flex-col items-center gap-0.5 transition ${mainListMode === "list" && !kanbanMode ? "bg-white text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"}`}>
-                                            <Bars3Icon className="w-4 h-4" />
-                                            <span className="text-[9px] font-black uppercase tracking-wide">List</span>
-                                        </button>
-                                        <button type="button" onClick={() => { setMainListMode("thumb"); setKanbanMode(false); }}
-                                            className={`py-1.5 rounded flex flex-col items-center gap-0.5 transition ${mainListMode === "thumb" && !kanbanMode ? "bg-white text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"}`}>
-                                            <Squares2X2Icon className="w-4 h-4" />
-                                            <span className="text-[9px] font-black uppercase tracking-wide">Thumb</span>
-                                        </button>
-                                    </div>
-                                </div>
-                                {/* THEME */}
-                                <button type="button" className="w-full flex items-center gap-4 px-6 py-4 text-left text-zinc-300 hover:bg-white/5 hover:text-white active:bg-white/10 transition"
-                                    onClick={() => {
-                                        if (gdriveConnected) {
-                                            showToast("Google Drive already connected", "#34d399");
-                                        } else {
-                                            window.location.href = "/api/stickies/gdrive/auth";
-                                        }
-                                    }}>
-                                    <svg className="w-5 h-5 flex-shrink-0" viewBox="0 0 24 24" fill="none"><path d="M4.433 22l-3.424-5.932L9.067 2h6.858l-8.058 13.958L4.433 22z" fill="#0066DA"/><path d="M23 16.068L19.576 22H4.434l3.424-5.932H23z" fill="#00AC47"/><path d="M15.925 2l3.424 5.932L11.292 22h-3.434L15.925 2z" fill="#EA4335"/><path d="M7.858 16.068L15.925 2H9.067L1.009 16.068h6.849z" fill="#00832D"/><path d="M15.925 2l3.424 5.932-4.057 7.026L11.859 22h3.434" fill="#2684FC"/><path d="M19.576 22l3.424-5.932h-6.85l-4.291 5.932h7.717z" fill="#FFBA00"/></svg>
-                                    <span className="text-xs font-black tracking-wide flex-1">Google Drive</span>
-                                    <span className={`text-[10px] font-black ${gdriveConnected ? "text-emerald-400" : "text-zinc-600"}`}>
-                                        {gdriveConnected ? "Connected" : "Connect"}
-                                    </span>
-                                </button>
                                 <button type="button" className="w-full flex items-center gap-4 px-6 py-4 text-left text-zinc-300 hover:bg-white/5 hover:text-white active:bg-white/10 transition"
                                     onClick={() => { setIntegrationsSnapshot([...integrationsRef.current]); setShowIntegrationsPanel(true); }}>
                                     <PuzzlePieceIcon className="w-5 h-5 flex-shrink-0" />
