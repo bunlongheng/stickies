@@ -5856,7 +5856,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     <button type="button"
                                         onClick={() => { goToIndex(i); void backToRootFromEditor(); }}
                                         className="flex items-center gap-1 font-normal tracking-tight text-white hover:text-zinc-300 transition flex-shrink-0 text-xs px-0.5">
-                                        <span className="w-6 h-6 flex-shrink-0 flex items-center justify-center text-sm font-black leading-none overflow-hidden" style={{ background: frame.name === "CLAUDE" ? "#fff" : (folderColors[frame.name] || frame.color || "#888"), color: frame.name === "CLAUDE" ? (folderColors[frame.name] || "#888") : (isLightColor(folderColors[frame.name] || frame.color || "#888") ? "#000" : "#fff"), borderRadius: 4 } as React.CSSProperties}>
+                                        <span className="w-6 h-6 flex-shrink-0 flex items-center justify-center text-sm font-black leading-none overflow-hidden" style={{ background: frame.name === "CLAUDE" ? "#fff" : (folderColors[frame.name] || frame.color || "#888"), color: frame.name === "CLAUDE" ? (folderColors[frame.name] || "#888") : ("#fff"), borderRadius: 4 } as React.CSSProperties}>
                                             {frame.name === "CLAUDE"
                                                 ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-0.5" />
                                                 : <FolderIconDisplay value={folderIcons[frame.name] || ""} folderName={frame.name} className="w-3.5 h-3.5" />}
@@ -5872,7 +5872,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     <div className="absolute inset-0 flex items-center justify-center" style={{ fontSize: breadcrumbTotal >= 10 ? 9 : 11, color: "#fff" }}>{breadcrumbTotal}</div>
                                 </div>
                             ) : (
-                                <span className="w-6 h-6 flex-shrink-0 flex items-center justify-center font-black leading-none tracking-tight" style={{ backgroundColor: activeAccentColor, color: isLightColor(activeAccentColor) ? "#000" : "#fff", borderRadius: "2px 2px 2px 10px", fontSize: noteBadgeFontSize }}>
+                                <span className="w-6 h-6 flex-shrink-0 flex items-center justify-center font-black leading-none tracking-tight" style={{ backgroundColor: activeAccentColor, color: "#fff", borderRadius: "2px 2px 2px 10px", fontSize: noteBadgeFontSize }}>
                                     {editingNote?.id && noteIcons[String(editingNote.id)] ? <FolderIconDisplay value={noteIcons[String(editingNote.id)]} folderName={title || "N"} className="w-3.5 h-3.5" /> : noteBadgeLabel}
                                 </span>
                             )}
@@ -5886,7 +5886,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 <div className="absolute inset-0 flex items-center justify-center" style={{ fontSize: breadcrumbTotal >= 10 ? 9 : 11, color: "#fff" }}>{breadcrumbTotal}</div>
                             </div>
                         ) : (
-                            <span className="sm:hidden w-[30px] h-[30px] inline-flex items-center justify-center font-black leading-none tracking-tight flex-shrink-0" style={{ backgroundColor: activeAccentColor, color: isLightColor(activeAccentColor) ? "#000" : "#fff", borderRadius: "2px 2px 2px 10px", fontSize: noteBadgeFontSize }}>
+                            <span className="sm:hidden w-[30px] h-[30px] inline-flex items-center justify-center font-black leading-none tracking-tight flex-shrink-0" style={{ backgroundColor: activeAccentColor, color: "#fff", borderRadius: "2px 2px 2px 10px", fontSize: noteBadgeFontSize }}>
                                 {editingNote?.id && noteIcons[String(editingNote.id)] ? <FolderIconDisplay value={noteIcons[String(editingNote.id)]} folderName={title || "N"} className="w-4 h-4" /> : noteBadgeLabel}
                             </span>
                         )}
@@ -6752,7 +6752,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                                 }}
                                                                 className={`flex items-center gap-1.5 font-normal tracking-tight truncate sm:max-w-[150px] flex-shrink-0 px-0.5 sm:px-1 transition text-xs ${i === folderStack.length - 1 ? "text-white hover:text-zinc-300" : "text-white hover:text-zinc-300"}`}
                                                                 title={i === folderStack.length - 1 ? `${frame.name} settings` : frame.name}>
-                                                                <span className="flex-shrink-0 w-6 h-6 flex items-center justify-center text-sm font-black leading-none overflow-hidden" style={{ background: frame.name === "CLAUDE" ? "#fff" : (folderColors[frame.name] || frame.color || "#888"), color: frame.name === "CLAUDE" ? (folderColors[frame.name] || "#888") : (isLightColor(folderColors[frame.name] || frame.color || "#888") ? "#000" : "#fff"), borderRadius: 4 } as React.CSSProperties}>
+                                                                <span className="flex-shrink-0 w-6 h-6 flex items-center justify-center text-sm font-black leading-none overflow-hidden" style={{ background: frame.name === "CLAUDE" ? "#fff" : (folderColors[frame.name] || frame.color || "#888"), color: frame.name === "CLAUDE" ? (folderColors[frame.name] || "#888") : ("#fff"), borderRadius: 4 } as React.CSSProperties}>
                                                                     {frame.name === "CLAUDE" ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-0.5" /> : <FolderIconDisplay value={folderIcons[frame.name] || ""} folderName={frame.name} className="w-3.5 h-3.5" />}
                                                                 </span>
                                                                 <span className={`uppercase ${i === folderStack.length - 1 && folderStack.length <= 2 ? "inline" : "hidden sm:inline"}`}>{frame.name}</span>
@@ -7045,7 +7045,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                             return { position: "relative", isolation: "isolate", "--row-color": c, "--fc": c, ...(isActive && !item.is_folder ? { borderRightColor: c, background: `${c}35` } : isActive ? { borderRightColor: c } : {}), ...(item.is_folder ? { background: `${c}18` } : {}) } as unknown as React.CSSProperties;
                                         }
                                         return item.is_folder
-                                            ? { isolation: "isolate", "--fc": c, "--tc": isLightColor(c) ? "#000" : "#fff" } as React.CSSProperties
+                                            ? { isolation: "isolate", "--fc": c, "--tc": "#fff" } as React.CSSProperties
                                             : { isolation: "isolate", backgroundColor: c, borderRadius: "3px 3px 3px 14px" };
                                     })()}
                                     className={`${isListMode
@@ -7074,7 +7074,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                     <button type="button"
                                                         onClick={(e) => { e.stopPropagation(); enterFolder({ id: String(item.id), name: item.name, color: item.color || palette12[0] }); setIsGlobalSettings(false); setShowFolderColorPicker(false); setShowFolderIconPicker(false); setShowFolderMovePicker(false); setShowFolderActions(true); }}
                                                         className={`folder-icon-badge${item.name === "CLAUDE" ? " folder-icon-badge-claude" : ""} flex-shrink-0 w-[54px] h-[54px] sm:w-[46px] sm:h-[46px] m-2 sm:m-0 flex items-center justify-center font-black overflow-hidden`}
-                                                        style={{ fontSize: 22, "--fc": c, "--ic": isLightColor(c) ? "#000" : "#fff", boxShadow: `2px 3px 8px ${c}55` } as React.CSSProperties}>
+                                                        style={{ fontSize: 22, "--fc": c, "--ic": "#fff", boxShadow: `2px 3px 8px ${c}55` } as React.CSSProperties}>
                                                         {item.name === "CLAUDE"
                                                             ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-0.5" />
                                                             : item.name === "TRASH"
@@ -7095,7 +7095,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                         style={{
                                                             fontSize: 22,
                                                             backgroundColor: nc,
-                                                            color: isLightColor(nc) ? "#000" : "#fff",
+                                                            color: "#fff",
                                                             borderRadius: "6px 6px 6px 16px",
                                                             boxShadow: `2px 3px 8px ${nc}55`,
                                                         }}>
@@ -7198,7 +7198,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                     </>
                                                 ) : (
                                                     <>
-                                                        {(() => { const tc = isLightColor(item.color || item.folder_color || "#888") ? "#000" : "#fff"; return (<>
+                                                        {(() => { const tc = "#fff"; return (<>
                                                         <div style={{ fontSize: "3rem", lineHeight: 1, color: tc }} className="font-black relative z-10">
                                                             {noteIcons[String(item.id)]
                                                                 ? <FolderIconDisplay value={noteIcons[String(item.id)]} folderName={item.title || "N"} className="w-10 h-10" />
@@ -7516,7 +7516,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                             onClick={() => moveToFolder(name)}
                                                             className={`w-full flex items-center gap-3 px-3 py-2.5 text-left border transition folder-search-item ${selected ? "bg-white/10 border-white/30 text-white" : "bg-black/30 border-white/10 text-zinc-300 hover:bg-white/5"}`}
                                                         >
-                                                            <span className="w-[18px] h-[18px] flex-shrink-0 inline-flex items-center justify-center text-[10px] font-black leading-none border border-white/25" style={{ backgroundColor: color, color: isLightColor(color) ? "#000" : "#fff", borderRadius: 4 }}>
+                                                            <span className="w-[18px] h-[18px] flex-shrink-0 inline-flex items-center justify-center text-[10px] font-black leading-none border border-white/25" style={{ backgroundColor: color, color: "#fff", borderRadius: 4 }}>
                                                                 <FolderIconDisplay value={folderIcon} folderName={name} className="w-3 h-3" />
                                                             </span>
                                                             <span className="text-[12px] font-bold truncate flex-1">{name}</span>
@@ -8137,7 +8137,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                                 data-fi-active={idx === 0 ? "1" : "0"}
                                                                 onClick={() => void moveFolderToParent(name)}
                                                                 className="w-full flex items-center gap-3 px-3 py-2.5 text-left border transition folder-search-item border-white/10 bg-black/30 text-zinc-300 hover:bg-white/5">
-                                                                <span className="w-[18px] h-[18px] flex-shrink-0 inline-flex items-center justify-center text-[10px] font-black leading-none border border-white/25" style={{ backgroundColor: color, color: isLightColor(color) ? "#000" : "#fff", borderRadius: 4 }}>
+                                                                <span className="w-[18px] h-[18px] flex-shrink-0 inline-flex items-center justify-center text-[10px] font-black leading-none border border-white/25" style={{ backgroundColor: color, color: "#fff", borderRadius: 4 }}>
                                                                     <FolderIconDisplay value={iconVal} folderName={name} className="w-3 h-3" />
                                                                 </span>
                                                                 <span className="text-[12px] font-bold truncate flex-1">{name}</span>
@@ -8770,7 +8770,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                 </div>
                             ) : (
                                 <div className="w-14 h-14 mx-auto mb-4 flex items-center justify-center font-black overflow-hidden"
-                                    style={{ background: nc!, color: isLightColor(nc!) ? "#000" : "#fff", borderRadius: "6px 6px 6px 16px", fontSize: 26, boxShadow: `2px 3px 8px ${nc}55` }}>
+                                    style={{ background: nc!, color: "#fff", borderRadius: "6px 6px 6px 16px", fontSize: 26, boxShadow: `2px 3px 8px ${nc}55` }}>
                                     {initial}
                                 </div>
                             )}
