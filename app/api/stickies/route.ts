@@ -488,7 +488,7 @@ export async function GET(req: Request) {
             [],
             userId
         );
-        const rows = await query(`${sql} ORDER BY updated_at DESC LIMIT 10000`, params);
+        const rows = await query(`${sql} ORDER BY updated_at DESC LIMIT 500`, params);
         return NextResponse.json({ notes: rows, total: rows.length });
     }
 
@@ -498,7 +498,7 @@ export async function GET(req: Request) {
         [],
         userId
     );
-    const rows = await query(`${sql} ORDER BY "order" ASC LIMIT 10000`, params);
+    const rows = await query(`${sql} ORDER BY "order" ASC LIMIT 500`, params);
     return NextResponse.json({ notes: rows });
 }
 
