@@ -1411,10 +1411,12 @@ export default function NotesMaster() {
             setApiTimings((prev) => ({ ...prev, allNotes: Math.round(performance.now() - _t0) }));
             setDbData((prev) => {
                 const folders = prev.filter((r: any) => r.is_folder);
-                const noteMap = new Map(notes.map((n: any) => [String(n.id), n]));
-                // Keep optimistic notes, merge fetched notes
-                const kept = prev.filter((r: any) => !r.is_folder && (r._optimistic || !noteMap.has(String(r.id))));
-                return [...folders, ...kept, ...notes];
+                // Only keep optimistic notes not yet confirmed by server
+                const optimistic = prev.filter((r: any) => !r.is_folder && r._optimistic);
+                // Dedup fetched notes by id
+                const seen = new Set<string>();
+                const deduped = notes.filter((n: any) => { const id = String(n.id); if (seen.has(id)) return false; seen.add(id); return true; });
+                return [...folders, ...optimistic, ...deduped];
             });
         } finally {
             folderNotesLoadingRef.current = false;
@@ -2202,6 +2204,21 @@ const fireIntegrations = (trigger: string, note: any) => {
             sync();
         });
 
+        channel.bind("note-deleted", (data: any) => {
+            if (!data?.id && !data?.folder_name) return;
+            if (data.id) {
+                const nid = String(data.id);
+                setRemovingNoteIds((prev) => new Set([...prev, nid]));
+                setTimeout(() => {
+                    setDbData((prev) => prev.filter((r) => String(r.id) !== nid));
+                    setRemovingNoteIds((prev) => { const s = new Set(prev); s.delete(nid); return s; });
+                }, 360);
+            }
+            if (data.folder_name) {
+                setFolderCounts((prev) => { const next = { ...prev }; delete next[data.folder_name]; return next; });
+            }
+        });
+
         channel.bind("navigate-to", (data: { url: string }) => {
             if (data?.url) window.location.href = data.url;
         });
@@ -2216,59 +2233,9 @@ const fireIntegrations = (trigger: string, note: any) => {
         return () => { channel.unbind_all(); pusher.unsubscribe("stickies"); pusher.disconnect(); };
     }, [mounted]);
 
-    // Supabase Realtime — DB-level so every session sees every write
-    // regardless of API path (batch, curl, external tools, etc.)
-    useEffect(() => {
-        if (!mounted) return;
-        const client = getSupabase();
-        const rt = client
-            .channel("notes-realtime")
-            .on("postgres_changes", { event: "INSERT", schema: "public", table: "stickies" }, (payload: any) => {
-                const note = { ...payload.new, updated_at: payload.new?.updated_at || new Date().toISOString() };
-                if (!note?.id) return;
-                // Skip own inserts — we already have the optimistic note in the list
-                const lastWrite = localWriteRef.current.get(String(note.id));
-                if (lastWrite && Date.now() - lastWrite < 5000) return;
-                setDbData((prev) => {
-                    if (prev.some((r) => String(r.id) === String(note.id))) return prev;
-                    // Skip if we have a pending optimistic note in the same folder —
-                    // the API response will replace it and dedup. Avoids the duplicate flash.
-                    if (note.folder_name && prev.some((r) => r._optimistic && r.folder_name === note.folder_name)) return prev;
-                    return [...prev, note];
-                });
-                const color = note.folder_color || "#34C759";
-                showToast(`+ ${note.title || "New note"}`, color);
-                flashQueueRef.current.push({ note, color });
-                // Blink the list item twice so user knows it just came in live
-                const nid = String(note.id);
-                setIncomingNoteIds((prev) => new Set([...prev, nid]));
-                setTimeout(() => setIncomingNoteIds((prev) => { const s = new Set(prev); s.delete(nid); return s; }), 1400);
-            })
-            .on("postgres_changes", { event: "UPDATE", schema: "public", table: "stickies" }, (payload: any) => {
-                const note = payload.new;
-                if (!note?.id) return;
-                if (pendingDeleteRef.current && String(pendingDeleteRef.current.note.id) === String(note.id)) return;
-                const lastWrite = localWriteRef.current.get(String(note.id));
-                if (lastWrite && Date.now() - lastWrite < 3000) return;
-                setDbData((prev) => prev.map((r) => String(r.id) === String(note.id) ? { ...r, ...note } : r));
-                if (note.folder_name) mergeIntoCachedNotes(note.folder_name, [note]);
-            })
-            .on("postgres_changes", { event: "DELETE", schema: "public", table: "stickies" }, (payload: any) => {
-                const id = payload.old?.id;
-                const folderName = payload.old?.folder_name;
-                if (id) {
-                    const nid = String(id);
-                    setRemovingNoteIds((prev) => new Set([...prev, nid]));
-                    setTimeout(() => {
-                        setDbData((prev) => prev.filter((r) => String(r.id) !== nid));
-                        setRemovingNoteIds((prev) => { const s = new Set(prev); s.delete(nid); return s; });
-                        if (folderName) removeFromCachedNotes(folderName, nid);
-                    }, 360);
-                }
-            })
-            .subscribe();
-        return () => { client.removeChannel(rt); };
-    }, [mounted]);
+    // Supabase Realtime removed — Pusher handles all real-time events.
+    // If external tools (curl, batch) need live updates, they should POST
+    // through the API which triggers Pusher.
 
     useEffect(() => {
         const prevHtmlOverflow = document.documentElement.style.overflow;
