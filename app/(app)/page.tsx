@@ -5855,9 +5855,13 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     <div className="absolute inset-0 flex items-center justify-center" style={{ fontSize: breadcrumbTotal >= 10 ? 9 : 11, color: "#fff" }}>{breadcrumbTotal}</div>
                                 </div>
                             ) : (
-                                <span className="w-6 h-6 flex-shrink-0 flex items-center justify-center font-black leading-none tracking-tight" style={{ backgroundColor: activeAccentColor, color: "#fff", borderRadius: "2px 2px 2px 10px", fontSize: noteBadgeFontSize }}>
+                                <button type="button"
+                                    onClick={() => { if (editingNote?.id) setIconPickerFolder(`__note:${editingNote.id}`); }}
+                                    className="w-6 h-6 flex-shrink-0 flex items-center justify-center font-black leading-none tracking-tight cursor-pointer hover:brightness-125 transition"
+                                    style={{ backgroundColor: activeAccentColor, color: "#fff", borderRadius: "2px 2px 2px 10px", fontSize: noteBadgeFontSize }}
+                                    title="Change icon">
                                     {editingNote?.id && noteIcons[String(editingNote.id)] ? <FolderIconDisplay value={noteIcons[String(editingNote.id)]} folderName={title || "N"} className="w-3.5 h-3.5" /> : noteBadgeLabel}
-                                </span>
+                                </button>
                             )}
                             <input ref={titleInputRef} onChange={(e) => { titleRaw.current = e.target.value; }} onBlur={(e) => setTitle(e.target.value)} onFocus={() => { closeEditorTools(); setShowNoteActions(false); }} autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false} className="bg-transparent border-0 appearance-none shadow-none ring-0 outline-none focus:outline-none focus:ring-0 px-1 min-w-0 flex-1 font-normal tracking-tight text-xs text-white placeholder:text-zinc-500" style={{ caretColor: activeAccentColor }} placeholder="NOTE TITLE" />
                         </div>
@@ -5869,9 +5873,13 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 <div className="absolute inset-0 flex items-center justify-center" style={{ fontSize: breadcrumbTotal >= 10 ? 9 : 11, color: "#fff" }}>{breadcrumbTotal}</div>
                             </div>
                         ) : (
-                            <span className="sm:hidden w-[30px] h-[30px] inline-flex items-center justify-center font-black leading-none tracking-tight flex-shrink-0" style={{ backgroundColor: activeAccentColor, color: "#fff", borderRadius: "2px 2px 2px 10px", fontSize: noteBadgeFontSize }}>
+                            <button type="button"
+                                onClick={() => { if (editingNote?.id) setIconPickerFolder(`__note:${editingNote.id}`); }}
+                                className="sm:hidden w-[30px] h-[30px] inline-flex items-center justify-center font-black leading-none tracking-tight flex-shrink-0 cursor-pointer hover:brightness-125 transition"
+                                style={{ backgroundColor: activeAccentColor, color: "#fff", borderRadius: "2px 2px 2px 10px", fontSize: noteBadgeFontSize }}
+                                title="Change icon">
                                 {editingNote?.id && noteIcons[String(editingNote.id)] ? <FolderIconDisplay value={noteIcons[String(editingNote.id)]} folderName={title || "N"} className="w-4 h-4" /> : noteBadgeLabel}
-                            </span>
+                            </button>
                         )}
                         <input ref={titleInputMobileRef} onChange={(e) => { titleRaw.current = e.target.value; }} onBlur={(e) => setTitle(e.target.value)} onFocus={() => { closeEditorTools(); setShowNoteActions(false); }} autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false} className="sm:hidden bg-transparent border-0 appearance-none shadow-none ring-0 outline-none focus:outline-none focus:ring-0 px-2 flex-grow min-w-0 text-sm text-white placeholder:text-zinc-500" style={{ caretColor: activeAccentColor, border: "none" }} placeholder="NOTE TITLE" />
 
@@ -8774,17 +8782,38 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
             })()}
 
             {iconPickerFolder !== null && (() => {
+                const isNotePicker = iconPickerFolder.startsWith("__note:");
+                const noteId = isNotePicker ? iconPickerFolder.slice(7) : "";
+                const pickerLabel = isNotePicker ? (title || "Note") : iconPickerFolder;
                 const q2 = iconPickerSearch.toLowerCase();
-                const cur2 = folderIcons[iconPickerFolder] || "";
-                const selectIcon2 = (val: string) => { setFolderIcons((prev) => ({ ...prev, [iconPickerFolder]: val })); void saveFolderIconToDb(iconPickerFolder, val); setIconPickerFolder(null); setIconPickerSearch(""); };
-                const clearIcon2 = () => { setFolderIcons((prev) => { const next = { ...prev }; delete next[iconPickerFolder]; return next; }); void saveFolderIconToDb(iconPickerFolder, ""); setIconPickerFolder(null); setIconPickerSearch(""); };
+                const cur2 = isNotePicker ? (noteIcons[noteId] || "") : (folderIcons[iconPickerFolder] || "");
+                const selectIcon2 = (val: string) => {
+                    if (isNotePicker) {
+                        setNoteIcons((prev) => ({ ...prev, [noteId]: val }));
+                        void notesApi.update(noteId, { icon: val });
+                    } else {
+                        setFolderIcons((prev) => ({ ...prev, [iconPickerFolder]: val }));
+                        void saveFolderIconToDb(iconPickerFolder, val);
+                    }
+                    setIconPickerFolder(null); setIconPickerSearch("");
+                };
+                const clearIcon2 = () => {
+                    if (isNotePicker) {
+                        setNoteIcons((prev) => { const next = { ...prev }; delete next[noteId]; return next; });
+                        void notesApi.update(noteId, { icon: "" });
+                    } else {
+                        setFolderIcons((prev) => { const next = { ...prev }; delete next[iconPickerFolder]; return next; });
+                        void saveFolderIconToDb(iconPickerFolder, "");
+                    }
+                    setIconPickerFolder(null); setIconPickerSearch("");
+                };
                 const filteredHero2 = FOLDER_HERO_ICONS.filter(e => !q2 || e.label.includes(q2) || e.key.toLowerCase().includes(q2));
                 return (
                     <div className="fixed inset-0 z-[630] bg-black/90 flex items-center justify-center p-4" onClick={() => { setIconPickerFolder(null); setIconPickerSearch(""); }}>
                         <div className="bg-zinc-900 border border-white/15 p-5 w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
                             <div className="flex items-center justify-between mb-3">
-                                <h2 className="text-sm font-black uppercase tracking-wider text-white">Folder Icon</h2>
-                                <span className="text-xs text-zinc-400 uppercase">{iconPickerFolder}</span>
+                                <h2 className="text-sm font-black uppercase tracking-wider text-white">{isNotePicker ? "Note Icon" : "Folder Icon"}</h2>
+                                <span className="text-xs text-zinc-400 uppercase truncate max-w-[150px]">{pickerLabel}</span>
                             </div>
                             <div className="flex gap-1 mb-3 border-b border-white/10 pb-2">
                                 <span className="px-3 py-1 text-[11px] font-black tracking-wide text-white">ICONS</span>
