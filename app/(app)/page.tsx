@@ -765,61 +765,19 @@ const RobotIcon = (props: React.SVGProps<SVGSVGElement>) => (
 
 // Hero icon entries for folder icon picker
 // Stored as "__hero:StarIcon" in folderIcons map
-const FOLDER_HERO_ICONS: { key: string; label: string; Icon: React.ComponentType<React.SVGProps<SVGSVGElement>> }[] = [
-    { key: "StarIcon",                 label: "star",         Icon: StarIcon },
-    { key: "HeartIcon",                label: "heart",        Icon: HeartIcon },
-    { key: "BriefcaseIcon",            label: "briefcase",    Icon: BriefcaseIcon },
-    { key: "HomeIcon",                 label: "home",         Icon: HomeIcon },
-    { key: "BookOpenIcon",             label: "book",         Icon: BookOpenIcon },
-    { key: "CodeBracketIcon",          label: "code",         Icon: CodeBracketIcon },
-    { key: "ChartBarIcon",             label: "chart",        Icon: ChartBarIcon },
-    { key: "ChartPieIcon",             label: "pie chart",    Icon: ChartPieIcon },
-    { key: "RocketLaunchIcon",         label: "rocket",       Icon: RocketLaunchIcon },
-    { key: "BoltIcon",                 label: "bolt",         Icon: BoltIcon },
-    { key: "SparklesIcon",             label: "sparkles",     Icon: SparklesIcon },
-    { key: "FireIcon",                 label: "fire",         Icon: FireIcon },
-    { key: "LightBulbIcon",            label: "idea",         Icon: LightBulbIcon },
-    { key: "MusicalNoteIcon",          label: "music",        Icon: MusicalNoteIcon },
-    { key: "CameraIcon",               label: "camera",       Icon: CameraIcon },
-    { key: "FilmIcon",                 label: "film",         Icon: FilmIcon },
-    { key: "ChatBubbleLeftRightIcon",  label: "chat",         Icon: ChatBubbleLeftRightIcon },
-    { key: "BellIcon",                 label: "bell",         Icon: BellIcon },
-    { key: "MapPinIcon",               label: "location",     Icon: MapPinIcon },
-    { key: "GlobeAltIcon",             label: "globe",        Icon: GlobeAltIcon },
-    { key: "GlobeAmericasIcon",        label: "world",        Icon: GlobeAmericasIcon },
-    { key: "TagIcon",                  label: "tag",          Icon: TagIcon },
-    { key: "UserGroupIcon",            label: "team",         Icon: UserGroupIcon },
-    { key: "UserIcon",                 label: "person",       Icon: UserIcon },
-    { key: "FlagIcon",                 label: "flag",         Icon: FlagIcon },
-    { key: "TrophyIcon",               label: "trophy",       Icon: TrophyIcon },
-    { key: "KeyIcon",                  label: "key",          Icon: KeyIcon },
-    { key: "WrenchIcon",               label: "tools",        Icon: WrenchIcon },
-    { key: "BanknotesIcon",            label: "money",        Icon: BanknotesIcon },
-    { key: "BuildingOfficeIcon",       label: "office",       Icon: BuildingOfficeIcon },
-    { key: "ArchiveBoxIcon",           label: "archive",      Icon: ArchiveBoxIcon },
-    { key: "CalendarDaysIcon",         label: "calendar",     Icon: CalendarDaysIcon },
-    { key: "ClipboardDocumentListIcon",label: "clipboard",    Icon: ClipboardDocumentListIcon },
-    { key: "PuzzlePieceIcon",          label: "puzzle",       Icon: PuzzlePieceIcon },
-    { key: "ComputerDesktopIcon",      label: "desktop",      Icon: ComputerDesktopIcon },
-    { key: "DevicePhoneMobileIcon",    label: "mobile",       Icon: DevicePhoneMobileIcon },
-    { key: "CloudIcon",                label: "cloud",        Icon: CloudIcon },
-    { key: "SunIcon",                  label: "sun",          Icon: SunIcon },
-    { key: "MoonIcon",                 label: "moon",         Icon: MoonIcon },
-    { key: "CubeTransparentIcon",      label: "cube",         Icon: CubeTransparentIcon },
-    { key: "RectangleStackIcon",       label: "stack",        Icon: RectangleStackIcon },
-    { key: "FolderIcon",               label: "folder",       Icon: FolderIcon },
-    { key: "SwatchIcon",               label: "palette",      Icon: SwatchIcon },
-    { key: "ShareIcon",                label: "share",        Icon: ShareIcon },
-    { key: "CpuChipIcon",              label: "chip",         Icon: CpuChipIcon },
-    { key: "RobotIcon",               label: "robot",        Icon: RobotIcon as any },
-    { key: "FaceSmileIcon",            label: "smile",        Icon: FaceSmileIcon },
-    { key: "EyeIcon",                  label: "eye",          Icon: EyeIcon },
-    { key: "PhotoIcon",                label: "photo",        Icon: PhotoIcon },
-    { key: "LinkIcon",                 label: "link",         Icon: LinkIcon },
-    { key: "TableCellsIcon",           label: "table",        Icon: TableCellsIcon },
-    { key: "QrCodeIcon",               label: "qr code",      Icon: QrCodeIcon },
-];
-const HERO_ICON_MAP = Object.fromEntries(FOLDER_HERO_ICONS.map(e => [e.key, e.Icon]));
+// All 324 Heroicons — loaded from barrel import
+import * as HeroOutline from "@heroicons/react/24/outline";
+const FOLDER_HERO_ICONS: { key: string; label: string; Icon: React.ComponentType<React.SVGProps<SVGSVGElement>> }[] = Object.entries(HeroOutline)
+    .filter(([key]) => key.endsWith("Icon") && key !== "default")
+    .map(([key, Icon]) => ({
+        key,
+        label: key.replace(/Icon$/, "").replace(/([A-Z])/g, " $1").trim().toLowerCase(),
+        Icon: Icon as React.ComponentType<React.SVGProps<SVGSVGElement>>,
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+// Add custom RobotIcon
+FOLDER_HERO_ICONS.push({ key: "RobotIcon", label: "robot", Icon: RobotIcon as any });
+const HERO_ICON_MAP: Record<string, React.ComponentType<React.SVGProps<SVGSVGElement>>> = Object.fromEntries(FOLDER_HERO_ICONS.map(e => [e.key, e.Icon]));
 
 // Render a folder icon value — hero icons stored as "__hero:IconName", images as base64/URL
 function FolderIconDisplay({ value, folderName, className = "w-4 h-4" }: { value: string; folderName: string; className?: string }) {
@@ -4550,8 +4508,14 @@ const fireIntegrations = (trigger: string, note: any) => {
         const folderName = newFolderName.trim();
         if (!folderName) return;
         setShowCreateFolder(false);
+        setShowFolderIconPicker(false);
         setNewFolderName("");
-        if (newFolderIcon) setFolderIcons((prev) => ({ ...prev, [folderName]: newFolderIcon }));
+        const iconToSave = newFolderIcon || matchNoteIcon(folderName, "") || "";
+        if (iconToSave) {
+            setFolderIcons((prev) => ({ ...prev, [folderName]: iconToSave }));
+            // Persist icon to DB after folder is created
+            setTimeout(() => void saveFolderIconToDb(folderName, iconToSave), 500);
+        }
         setNewFolderIcon("");
 
         const exists = folderNames.some((name) => name.toLowerCase() === folderName.toLowerCase());
@@ -8843,12 +8807,21 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                 );
             })()}
 
-            {showCreateFolder && (
-                <div className="fixed inset-0 z-[620] bg-black/90 flex items-center justify-center p-4" onClick={() => setShowCreateFolder(false)}>
+            {showCreateFolder && (() => {
+                const suggestedIcon = matchNoteIcon(newFolderName, "") || "";
+                const displayIcon = newFolderIcon || suggestedIcon;
+                const [showNewFolderIcons, setShowNewFolderIcons] = [showFolderIconPicker, setShowFolderIconPicker];
+                return (
+                <div className="fixed inset-0 z-[620] bg-black/90 flex items-center justify-center p-4" onClick={() => { setShowCreateFolder(false); setShowFolderIconPicker(false); }}>
                     <div className="bg-zinc-900 border border-white/15 p-7 sm:p-9 w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
-                        <div className="w-16 h-16 mx-auto mb-3 flex items-center justify-center bg-zinc-800 border border-white/10">
-                            <FolderIcon className="w-8 h-8 text-cyan-400" />
-                        </div>
+                        <button type="button"
+                            onClick={() => setShowFolderIconPicker(v => !v)}
+                            className="w-16 h-16 mx-auto mb-3 flex items-center justify-center bg-zinc-800 border border-white/10 hover:border-cyan-400 transition cursor-pointer"
+                            title="Change icon">
+                            {displayIcon
+                                ? <FolderIconDisplay value={displayIcon} folderName={newFolderName || "F"} className="w-8 h-8 text-cyan-400" />
+                                : <FolderIcon className="w-8 h-8 text-cyan-400" />}
+                        </button>
                         <h2 className="text-sm font-black tracking-wide text-white mb-4 text-center">New Folder</h2>
                         <input
                             ref={newFolderInputRef}
@@ -8864,17 +8837,32 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                             className="w-full bg-black border border-white/20 outline-none focus:border-cyan-400 px-4 py-3 text-sm text-white font-bold tracking-tight mb-3"
                             placeholder="Folder name"
                         />
+                        {showNewFolderIcons && (
+                            <div className="grid grid-cols-8 gap-1 max-h-36 overflow-y-auto mb-3">
+                                {FOLDER_HERO_ICONS.map(({ key, label, Icon }) => {
+                                    const val = `__hero:${key}`;
+                                    return (
+                                        <button key={key} type="button" title={label}
+                                            onClick={() => { setNewFolderIcon(val); setShowFolderIconPicker(false); }}
+                                            className={`aspect-square flex items-center justify-center transition-all hover:bg-white/15 rounded ${displayIcon === val ? "bg-white/20 ring-1 ring-cyan-400" : ""}`}>
+                                            <Icon className="w-4 h-4 text-white" />
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        )}
                         <div className="flex flex-col gap-2">
                             <button type="button" onClick={() => void confirmCreateFolder()} disabled={!newFolderName.trim()} className="w-full py-3 bg-white text-black font-black text-xs tracking-wide disabled:opacity-30 disabled:cursor-not-allowed">
                                 Create
                             </button>
-                            <button type="button" onClick={() => setShowCreateFolder(false)} className="w-full py-3 bg-zinc-800 text-white font-black text-xs tracking-wide">
+                            <button type="button" onClick={() => { setShowCreateFolder(false); setShowFolderIconPicker(false); }} className="w-full py-3 bg-zinc-800 text-white font-black text-xs tracking-wide">
                                 Cancel
                             </button>
                         </div>
                     </div>
                 </div>
-            )}
+                );
+            })()}
 
 
             {/* Lightbox */}
