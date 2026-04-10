@@ -372,24 +372,6 @@ export async function GET(req: Request) {
             total += n;
         }
 
-        // Add external source counts so folder tiles show the right number
-        try {
-            const [ideasRows, diagramsCount] = await Promise.all([
-                // mindmaps: use same fetch path as folder load (reuses proven Management API call)
-                fetchExternalIdeas(req, "mindmaps"),
-                // diagrams: count rows in stickies diagrams table
-                (async () => {
-                    const { createClient: createSb } = await import("@supabase/supabase-js");
-                    const sb = createSb(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
-                    const { count } = await sb.from("diagrams").select("*", { count: "exact", head: true });
-                    return count ?? 0;
-                })(),
-            ]);
-            const ideasCount = ideasRows.length;
-            if (ideasCount > 0) { byName["mindmaps"] = (byName["mindmaps"] || 0) + ideasCount; total += ideasCount; }
-            if (diagramsCount > 0) { byName["diagrams"] = (byName["diagrams"] || 0) + diagramsCount; total += diagramsCount; }
-        } catch { /* non-fatal — counts just won't include externals */ }
-
         return NextResponse.json({ counts: byName, countsByFolderId: byId, total });
     }
 
