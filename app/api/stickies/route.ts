@@ -261,12 +261,9 @@ async function pickLeastUsedColor(userId: string, rawColor?: string): Promise<st
     const c = String(rawColor ?? "").trim().toUpperCase();
     if (/^#[0-9A-F]{6}$/.test(c)) return c;
 
-    const rows = await query<{ folder_color: string }>(`SELECT folder_color FROM "stickies" WHERE is_folder = false AND user_id = $1 LIMIT 500`, [userId]);
+    const rows = await query<{ folder_color: string; cnt: string }>(`SELECT UPPER(folder_color) AS folder_color, COUNT(*) AS cnt FROM "stickies" WHERE is_folder = false AND user_id = $1 GROUP BY UPPER(folder_color)`, [userId]);
     const counts = new Map<string, number>(palette12.map((p) => [p, 0]));
-    rows.forEach((r) => {
-        const col = String(r.folder_color ?? "").toUpperCase();
-        if (counts.has(col)) counts.set(col, (counts.get(col) ?? 0) + 1);
-    });
+    rows.forEach((r) => { if (counts.has(r.folder_color)) counts.set(r.folder_color, Number(r.cnt)); });
     return palette12.reduce((a, b) => (counts.get(b)! < counts.get(a)! ? b : a), palette12[0]);
 }
 
@@ -274,12 +271,9 @@ async function pickLeastUsedFolderColor(userId: string, rawColor?: string): Prom
     const c = String(rawColor ?? "").trim().toUpperCase();
     if (/^#[0-9A-F]{6}$/.test(c)) return c;
 
-    const rows = await query<{ folder_color: string }>(`SELECT folder_color FROM "stickies" WHERE is_folder = true AND user_id = $1 LIMIT 500`, [userId]);
+    const rows = await query<{ folder_color: string; cnt: string }>(`SELECT UPPER(folder_color) AS folder_color, COUNT(*) AS cnt FROM "stickies" WHERE is_folder = true AND user_id = $1 GROUP BY UPPER(folder_color)`, [userId]);
     const counts = new Map<string, number>(palette12.map((p) => [p, 0]));
-    rows.forEach((r) => {
-        const col = String(r.folder_color ?? "").toUpperCase();
-        if (counts.has(col)) counts.set(col, (counts.get(col) ?? 0) + 1);
-    });
+    rows.forEach((r) => { if (counts.has(r.folder_color)) counts.set(r.folder_color, Number(r.cnt)); });
     return palette12.reduce((a, b) => (counts.get(b)! < counts.get(a)! ? b : a), palette12[0]);
 }
 
