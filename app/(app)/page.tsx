@@ -4017,6 +4017,13 @@ const fireIntegrations = (trigger: string, note: any) => {
                         setEditingNote(fetched);
                         const body = (fetched.type === "mermaid" || detectMermaid(fetched.content || "")) ? cleanMermaidContent(fetched.content || "") : (fetched.content || "");
                         setContent(body);
+                        // Derive title if still empty after content loads
+                        const curTitle = titleRaw.current?.trim() || "";
+                        if (!curTitle || curTitle.toLowerCase() === "untitled") {
+                            const firstLine = (fetched.content || "").trim().split("\n").find((l: string) => l.trim()) || "";
+                            const derived = firstLine.replace(/^#+\s*/, "").slice(0, 60).trim();
+                            if (derived) setTitle(derived);
+                        }
                         if (fetched.id && looksLikeMarkdown(fetched.content || "")) setMarkdownModeNotes((p: Set<string>) => new Set([...p, String(fetched.id)]));
                         if (fetched.id && (fetched.list_mode || fetched.type === "checklist")) setListModeNotes((p: Set<string>) => new Set([...p, String(fetched.id)]));
                         if (fetched.id && fetched.mindmap_mode) setMindmapModeNotes((p: Set<string>) => new Set([...p, String(fetched.id)]));
