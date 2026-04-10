@@ -287,6 +287,24 @@ const TYPE_BADGE: Record<string, { label: string; color: string }> = {
     checklist:  { label: "Checklist",   color: "#22c55e" },
 };
 
+/** Derive a title from content — checks YAML frontmatter, markdown headings, then first line */
+function deriveTitleFromContent(content: string): string {
+    const text = (content || "").trim();
+    if (!text) return "";
+    // 1. YAML frontmatter: title: ...
+    const fm = text.match(/^---\s*\n([\s\S]*?)\n---/);
+    if (fm) {
+        const titleMatch = fm[1].match(/^title:\s*(.+)$/m);
+        if (titleMatch) return titleMatch[1].trim().slice(0, 60);
+    }
+    // 2. First markdown heading
+    const heading = text.match(/^#{1,6}\s+(.+)$/m);
+    if (heading) return heading[1].trim().slice(0, 60);
+    // 3. First non-empty line
+    const firstLine = text.split("\n").find(l => l.trim() && !l.startsWith("---")) || "";
+    return firstLine.replace(/^#+\s*/, "").slice(0, 60).trim();
+}
+
 /** Client-side fallback type detection — used only when DB type is null (legacy notes) */
 function detectNoteType(content: string): string {
     const t = content.trim();
@@ -3940,10 +3958,9 @@ const fireIntegrations = (trigger: string, note: any) => {
         setPendingNoteType(null); // reset so noteType comes from note.type, not prior mode
         setEditingNote(note);
         let rawTitle = note.title || "";
-        // If "Untitled", derive from first line of content
+        // If "Untitled", derive from content — check frontmatter, headings, first line
         if (!rawTitle || rawTitle.toLowerCase() === "untitled") {
-            const firstLine = (note.content || "").trim().split("\n").find((l: string) => l.trim()) || "";
-            rawTitle = firstLine.replace(/^#+\s*/, "").slice(0, 60).trim();
+            rawTitle = deriveTitleFromContent(note.content || "");
         }
         setTitle(rawTitle);
         setContent(note.content != null ? (note.type === "mermaid" || detectMermaid(note.content || "") ? cleanMermaidContent(note.content) : note.content) : "");
@@ -3978,8 +3995,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                         // Derive title if still empty after content loads
                         const curTitle = titleRaw.current?.trim() || "";
                         if (!curTitle || curTitle.toLowerCase() === "untitled") {
-                            const firstLine = (fetched.content || "").trim().split("\n").find((l: string) => l.trim()) || "";
-                            const derived = firstLine.replace(/^#+\s*/, "").slice(0, 60).trim();
+                            const derived = deriveTitleFromContent(fetched.content || "");
                             if (derived) setTitle(derived);
                         }
                         if (fetched.id && looksLikeMarkdown(fetched.content || "")) setMarkdownModeNotes((p: Set<string>) => new Set([...p, String(fetched.id)]));
