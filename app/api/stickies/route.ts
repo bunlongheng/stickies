@@ -4,106 +4,8 @@ import Pusher from "pusher";
 import crypto from "crypto";
 import { query, queryOne, execute } from "@/lib/db-driver";
 
-// ── External ideas integration ────────────────────────────────────────────────
-const IDEAS_PALETTE = [
-    "#FF3B30","#FF6B4E","#FF9500","#FFCC00","#D4E157","#34C759",
-    "#00C7BE","#32ADE6","#007AFF","#5856D6","#AF52DE","#FF2D55",
-];
-function randomIdeaColor(): string {
-    return IDEAS_PALETTE[Math.floor(Math.random() * IDEAS_PALETTE.length)];
-}
 
-function mindmapNodesToJSON(name: string, nodes: any[]): string {
-    if (!Array.isArray(nodes) || nodes.length === 0) return JSON.stringify({ [name]: [] }, null, 2);
-    const nodeIds = new Set(nodes.map((n: any) => n.id));
-    const childrenMap = new Map<string, any[]>();
-    for (const n of nodes) {
-        if (n.parentId && nodeIds.has(n.parentId)) {
-            if (!childrenMap.has(n.parentId)) childrenMap.set(n.parentId, []);
-            childrenMap.get(n.parentId)!.push(n);
-        }
-    }
-    for (const list of childrenMap.values()) list.sort((a: any, b: any) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
-    const roots = nodes
-        .filter((n: any) => !n.parentId || !nodeIds.has(n.parentId))
-        .sort((a: any, b: any) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
-    const categories: any[] = [];
-    for (const root of roots) {
-        for (const cat of childrenMap.get(root.id) ?? []) {
-            const leaves = (childrenMap.get(cat.id) ?? []).map((c: any) => (c.title ?? "").trim()).filter(Boolean);
-            const obj: any = { [(cat.title ?? "").trim()]: leaves };
-            if (cat.emoji) obj.emoji = cat.emoji;
-            categories.push(obj);
-        }
-    }
-    return JSON.stringify({ [name]: categories }, null, 2);
-}
 
-async function fetchExternalIdeas(req: Request, folderName: string): Promise<Record<string, unknown>[]> {
-    const ref   = process.env.SUPABASE_PROJECT_REF;
-    const token = process.env.SUPABASE_MANAGEMENT_TOKEN;
-    if (!ref || !token) return [];
-    try {
-        const res = await fetch(`https://api.supabase.com/v1/projects/${ref}/database/query`, {
-            method: "POST",
-            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-            body: JSON.stringify({ query: "SELECT id, name, type, nodes, created_at, updated_at FROM mindmaps ORDER BY updated_at DESC" }),
-        });
-        if (!res.ok) return [];
-        const rows: any[] = await res.json();
-        if (!Array.isArray(rows)) return [];
-        const host = req.headers.get("host") ?? "";
-        const isLocal = host.startsWith("localhost") || host.startsWith("10.") || host.startsWith("192.168.");
-        const baseUrl = isLocal ? "http://10.0.0.138:5173" : "https://ideas-bheng.vercel.app";
-        return rows.map((idea) => {
-            const mapUrl = `${baseUrl}/?map=${idea.id}`;
-            return {
-                id: `ext_idea_${idea.id}`,
-                title: idea.name,
-                content: mindmapNodesToJSON(idea.name, idea.nodes),
-                folder_name: folderName,
-                folder_color: randomIdeaColor(),
-                is_folder: false,
-                type: "json",
-                _external: true,
-                _mapUrl: mapUrl,
-                created_at: idea.created_at,
-                updated_at: idea.updated_at,
-            };
-        });
-    } catch { return []; }
-}
-
-async function fetchDiagrams(req: Request): Promise<Record<string, unknown>[]> {
-    try {
-        const { createClient: createSb } = await import("@supabase/supabase-js");
-        const sb = createSb(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
-        const { data, error } = await sb
-            .from("diagrams")
-            .select("id, title, slug, diagram_type, code, created_at, updated_at")
-            .order("updated_at", { ascending: false });
-        if (error || !data) return [];
-        const host = req.headers.get("host") ?? "";
-        const isLocal = host.startsWith("localhost") || host.startsWith("10.") || host.startsWith("192.168.");
-        const baseUrl = isLocal ? "http://10.0.0.138:3002" : "https://diagram-bheng.vercel.app";
-        return data.map((d: any, i: number) => {
-            const galleryUrl = `${baseUrl}/?id=${d.id}&view=1`;
-            return {
-                id: `ext_diagram_${d.id}`,
-                title: d.title || d.slug || "Untitled Diagram",
-                content: d.code ?? "",
-                folder_name: "diagrams",
-                folder_color: palette12[i % palette12.length],
-                is_folder: false,
-                type: "mermaid",
-                _external: true,
-                _mapUrl: galleryUrl,
-                created_at: d.created_at,
-                updated_at: d.updated_at,
-            };
-        });
-    } catch { return []; }
-}
 
 const palette12 = [
     "#FF3B30", "#FF6B4E", "#FF9500", "#FFCC00",
@@ -423,16 +325,7 @@ export async function GET(req: Request) {
         );
         const total = Number(rows[0]?._total ?? 0);
         const cleanRows = rows.map(({ _total, ...rest }) => rest);
-        let allNotes: unknown[] = cleanRows;
-        if (folderFilter.toLowerCase() === "mindmaps" && offsetParam === 0) {
-            const external = await fetchExternalIdeas(req, folderFilter);
-            allNotes = [...cleanRows, ...external];
-        }
-        if (folderFilter.toLowerCase() === "diagrams" && offsetParam === 0) {
-            const diagrams = await fetchDiagrams(req);
-            allNotes = [...cleanRows, ...diagrams];
-        }
-        return NextResponse.json({ notes: allNotes, total: total + (allNotes.length - cleanRows.length), syncedAt: new Date().toISOString() });
+        return NextResponse.json({ notes: cleanRows, total, syncedAt: new Date().toISOString() });
     }
 
     if (q) {
