@@ -4,6 +4,7 @@
 @tailwind utilities;
 
 .ai-prompt-input::placeholder { color: rgba(0, 0, 0, 0.5) !important; }
+.sticky-editor::placeholder { color: rgba(0, 0, 0, 0.4) !important; }
 
 /* Square grid tiles — JS-measured height via CSS var (works on all browsers incl. iOS Safari) */
 .grid-square-tile {
