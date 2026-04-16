@@ -3054,7 +3054,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                 if (editingNote.folder_name && editingNote.folder_name !== name) {
                     removeFromCachedNotes(editingNote.folder_name, noteId);
                 }
-                mergeIntoCachedNotes(name, [{ ...editingNote, id: noteId, folder_name: name, folder_color: color }]);
+                mergeIntoCachedNotes(name, [{ ...editingNote, id: noteId, folder_name: name }]);
                 try {
                     await notesApi.update(noteId, { folder_name: name, ...(newFolderId ? { folder_id: newFolderId } : {}) });
                     // Refresh target folder notes so the moved note shows immediately
