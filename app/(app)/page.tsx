@@ -7031,7 +7031,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                             borderRadius: "6px 6px 6px 16px",
                                                             boxShadow: `2px 3px 8px ${nc}55`,
                                                         }}>
-                                                        {nIcon ? <FolderIconDisplay value={nIcon} folderName={item.title || "N"} className={`w-6 h-6${iconAnimIds.has(String(item.id)) ? " animate-spin" : ""}`} /> : initial}
+                                                        {nIcon ? <FolderIconDisplay value={nIcon} folderName={item.title || "N"} className={`w-6 h-6${iconAnimIds.has(String(item.id)) ? " animate-pulse" : ""}`} /> : initial}
                                                     </button>
                                                 );
                                             })()}
@@ -8100,8 +8100,12 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                             const { updated } = await res.json();
                                             if (updated > 0) {
                                                 // Reload folder to show new icons/titles
-                                                void loadFolderNotes(activeFolder!, false);
+                                                await loadFolderNotes(activeFolder!, false);
                                                 void sync();
+                                                // Blink all items to indicate update
+                                                const allIds = new Set(dbData.filter(n => n.folder_name === activeFolder && !n.is_folder).map(n => String(n.id)));
+                                                setIconAnimIds(allIds);
+                                                setTimeout(() => setIconAnimIds(new Set()), 2000);
                                                 playSound("create");
                                                 showToast(`Magic: ${updated} item${updated !== 1 ? "s" : ""} updated`, "#a78bfa");
                                             } else {
