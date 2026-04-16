@@ -260,21 +260,28 @@ export async function GET(req: Request) {
     }
 
     if (url.searchParams.get("counts") === "1") {
-        const rows = await query<{ folder_name: string; folder_id: string | null; cnt: string }>(
-            `SELECT folder_name, folder_id::text AS folder_id, COUNT(*) AS cnt FROM "stickies" WHERE is_folder = false AND user_id = $1 GROUP BY folder_name, folder_id`,
+        const rows = await query<{ folder_name: string; folder_id: string | null; cnt: string; latest: string }>(
+            `SELECT folder_name, folder_id::text AS folder_id, COUNT(*) AS cnt, MAX(updated_at) AS latest FROM "stickies" WHERE is_folder = false AND user_id = $1 GROUP BY folder_name, folder_id`,
             [userId]
         );
         const byName: Record<string, number> = {};
         const byId: Record<string, number> = {};
+        const latestByFolderId: Record<string, string> = {};
         let total = 0;
         for (const row of rows) {
             const n = Number(row.cnt ?? 0);
             if (row.folder_name) byName[row.folder_name] = (byName[row.folder_name] || 0) + n;
-            if (row.folder_id) byId[String(row.folder_id)] = (byId[String(row.folder_id)] || 0) + n;
+            if (row.folder_id) {
+                byId[String(row.folder_id)] = (byId[String(row.folder_id)] || 0) + n;
+                const ts = String(row.latest || "");
+                if (!latestByFolderId[String(row.folder_id)] || ts > latestByFolderId[String(row.folder_id)]) {
+                    latestByFolderId[String(row.folder_id)] = ts;
+                }
+            }
             total += n;
         }
 
-        return NextResponse.json({ counts: byName, countsByFolderId: byId, total });
+        return NextResponse.json({ counts: byName, countsByFolderId: byId, latestByFolderId, total });
     }
 
     if (folderFilter) {
