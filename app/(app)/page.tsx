@@ -6426,15 +6426,21 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 onBlur={() => { setCodeEditMode(false); void saveNote({ silent: true, deriveTitle: true }); }}
                                 onClick={() => setCodeEditMode(true)}
                             />
-                        ) : (
-                            <div className="flex-1 flex overflow-auto relative" style={{ background: "#000" }}>
+                        ) : (() => {
+                            const isStickyText = noteType === "text";
+                            const stickyBg = isStickyText ? noteColor : "#000";
+                            const stickyText = isStickyText ? "#1a1a1a" : "#f8f8f2";
+                            const stickyFont = isStickyText ? "Caveat, 'Comic Sans MS', cursive" : "ui-monospace,'Fira Code','Cascadia Code',monospace";
+                            const stickyFontSize = isStickyText ? "clamp(14px, 1.6vw, 18px)" : "clamp(8px, 1.2vw, 12px)";
+                            return (
+                            <div className="flex-1 flex overflow-auto relative" style={{ background: stickyBg }}>
                                 {/* Highlight backdrop for find-in-note */}
                                 {showFindBar && findMatches.length > 0 && (
                                     <div aria-hidden="true" style={{
                                         position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
                                         pointerEvents: "none",
-                                        fontFamily: "ui-monospace,'Fira Code','Cascadia Code',monospace",
-                                        fontSize: "clamp(8px, 1.2vw, 12px)", lineHeight: 1.6,
+                                        fontFamily: stickyFont,
+                                        fontSize: stickyFontSize, lineHeight: 1.6,
                                         paddingTop: 8, paddingBottom: 24, paddingLeft: 24, paddingRight: 24,
                                         whiteSpace: "pre-wrap", overflowWrap: "break-word", wordBreak: "break-word",
                                         color: "transparent", zIndex: 0,
@@ -6453,11 +6459,11 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     onPaste={handleEditorPaste}
                                     className="ios-editor-scroll overscroll-none touch-pan-y"
                                     style={{
-                                        flex: 1, background: "transparent", color: "#f8f8f2",
-                                        fontFamily: "ui-monospace,'Fira Code','Cascadia Code',monospace",
-                                        fontSize: "clamp(8px, 1.2vw, 12px)", lineHeight: 1.6,
+                                        flex: 1, background: "transparent", color: stickyText,
+                                        fontFamily: stickyFont,
+                                        fontSize: stickyFontSize, lineHeight: 1.6,
                                         paddingTop: 8, paddingBottom: 24, paddingLeft: 24, paddingRight: 24,
-                                        outline: "none", resize: "none", caretColor: "#f8f8f2",
+                                        outline: "none", resize: "none", caretColor: stickyText,
                                         whiteSpace: "pre-wrap", overflowWrap: "break-word", wordBreak: "break-word",
                                         overflow: "auto",
                                         position: "relative", zIndex: 1,
@@ -6465,7 +6471,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     placeholder="START TYPING..."
                                 />
                             </div>
-                        )}
+                            );
+                        })()}
                     </div>
 
                     {/* Image attachment strip */}
