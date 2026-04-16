@@ -460,6 +460,9 @@ export async function POST(req: Request) {
                     const folder_color = pickColor(item.color as string);
                     const parent_folder_name = String(item.parent_folder ?? "").trim() || null;
                     const folderIcon = String(item.icon ?? "").trim();
+                    // Skip if folder already exists at this level
+                    const dup = await queryOne(`SELECT id FROM "stickies" WHERE is_folder = true AND folder_name = $1 AND COALESCE(parent_folder_name, '') = $2 AND user_id = $3`, [name, parent_folder_name || "", userId]);
+                    if (dup) { results.push({ type: "folder", data: dup, error: "already exists" }); continue; }
                     const row = await queryOne(
                         `INSERT INTO "stickies" (is_folder, folder_name, title, content, folder_color, parent_folder_name, "order", created_at, updated_at, user_id)
                          VALUES (true, $1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
@@ -507,6 +510,10 @@ export async function POST(req: Request) {
 
         const rawColor = String(url.searchParams.get("color") || (bodyForFolderCheck?.color as string) || "").trim();
         const parentFolder = String(url.searchParams.get("parent") || (bodyForFolderCheck?.parent_folder as string) || "").trim() || null;
+
+        // Prevent duplicate folder names at the same level
+        const existing = await queryOne(`SELECT id FROM "stickies" WHERE is_folder = true AND folder_name = $1 AND COALESCE(parent_folder_name, '') = $2 AND user_id = $3`, [name, parentFolder || "", userId]);
+        if (existing) return NextResponse.json({ error: "Folder already exists", id: existing.id }, { status: 409 });
         const folderIcon = String(url.searchParams.get("icon") || (bodyForFolderCheck?.icon as string) || "").trim();
         const folder_color = await pickLeastUsedFolderColor(userId, rawColor);
         const nextOrder = await getNextOrder(userId, true);
