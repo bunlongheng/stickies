@@ -88,11 +88,11 @@ export async function POST(req: Request) {
         return NextResponse.json({ updated: 0, message: "No items to process" });
     }
 
-    // Only process items that need icons or have bad titles
-    const needsWork = items.filter(i => !i.hasIcon || (i.type === "note" && (!i.currentTitle || i.currentTitle === "Untitled" || i.currentTitle.length < 3)));
+    // Process all items — assign icons to everything for consistency
+    const needsWork = items;
 
     if (needsWork.length === 0) {
-        return NextResponse.json({ updated: 0, message: "All items already have icons" });
+        return NextResponse.json({ updated: 0, message: "No items in folder" });
     }
 
     const client = new Anthropic({ apiKey });
@@ -125,7 +125,23 @@ Rules:
         const jsonMatch = text.match(/\[[\s\S]*\]/);
         if (!jsonMatch) return NextResponse.json({ error: "AI returned invalid format", raw: text }, { status: 500 });
 
-        const assignments: { index: number; icon: string; title: string | null }[] = JSON.parse(jsonMatch[0]);
+        // Clean up common JSON issues from AI output
+        const cleaned = jsonMatch[0]
+            .replace(/,\s*]/g, "]")           // trailing commas
+            .replace(/,\s*}/g, "}")           // trailing commas in objects
+            .replace(/\/\/[^\n]*/g, "")       // line comments
+            .replace(/\/\*[\s\S]*?\*\//g, "") // block comments
+            .replace(/[\x00-\x1f]/g, " ");    // control chars
+
+        let assignments: { index: number; icon: string; title: string | null }[];
+        try {
+            assignments = JSON.parse(cleaned);
+        } catch {
+            // Last resort: try to extract individual objects
+            const items = [...cleaned.matchAll(/\{[^}]+\}/g)].map(m => { try { return JSON.parse(m[0]); } catch { return null; } }).filter(Boolean);
+            if (items.length === 0) return NextResponse.json({ error: "Could not parse AI response" }, { status: 500 });
+            assignments = items as any;
+        }
         let updated = 0;
 
         for (const a of assignments) {
