@@ -5858,9 +5858,10 @@ const fireIntegrations = (trigger: string, note: any) => {
                         {/* AI Magic */}
                         <button type="button"
                             onClick={() => { setAiPromptOpen(v => !v); setTimeout(() => aiPromptRef.current?.focus(), 100); }}
-                            className={`p-2 sm:p-3 transition flex-shrink-0 ${aiPromptOpen || aiLoading ? "text-purple-400" : "text-zinc-500 hover:text-purple-400"}`}
+                            className={`p-2 sm:p-3 transition flex-shrink-0 ${aiPromptOpen || aiLoading ? "text-purple-400 animate-pulse" : "text-zinc-500 hover:text-purple-400"}`}
+                            style={aiPromptOpen || aiLoading ? { filter: "drop-shadow(0 0 6px #a855f7)" } : undefined}
                             title="AI Magic">
-                            <BoltIcon className="w-[24px] h-[24px] sm:w-[22px] sm:h-[22px]" />
+                            <RobotIcon className="w-[24px] h-[24px] sm:w-[22px] sm:h-[22px]" />
                         </button>
                         </>
                         )}
@@ -5902,40 +5903,27 @@ const fireIntegrations = (trigger: string, note: any) => {
                             <EllipsisVerticalIcon className="w-[29px] h-[29px] sm:w-7 sm:h-7" />
                         </button>
                     </div>
-                    {/* AI PROMPT BAR */}
+                    {/* AI PROMPT BAR — fills entire editor when active */}
                     {aiPromptOpen && (
-                        <div className="shrink-0 flex items-start gap-2 px-3 py-2 border-b border-white/10" style={{ background: "#1a1a2e" }}>
-                            <RobotIcon className="w-4 h-4 text-purple-400 flex-shrink-0 mt-1.5 animate-pulse" style={{ filter: "drop-shadow(0 0 6px #a855f7)" }} />
-                            <textarea
-                                ref={aiPromptRef as any}
-                                value={aiPrompt}
-                                onChange={e => {
-                                    setAiPrompt(e.target.value);
-                                    e.target.style.height = "auto";
-                                    e.target.style.height = Math.min(e.target.scrollHeight, 200) + "px";
-                                }}
-                                onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void runAiPrompt(); } if (e.key === "Escape") setAiPromptOpen(false); }}
-                                placeholder="Ask AI anything..."
-                                disabled={aiLoading}
-                                rows={1}
-                                className="flex-1 bg-transparent text-sm text-white placeholder:text-zinc-500 outline-none font-mono resize-none overflow-y-auto"
-                                style={{ caretColor: "#a855f7", minHeight: "24px", maxHeight: "200px" }}
-                            />
-                            {aiLoading ? (
-                                <span className="w-4 h-4 border-2 border-purple-400 border-t-transparent rounded-full animate-spin flex-shrink-0 mt-1.5" />
-                            ) : (
-                                <button type="button" onClick={() => void runAiPrompt()} disabled={!aiPrompt.trim()}
-                                    className="p-1 text-purple-400 hover:text-purple-300 disabled:text-zinc-600 transition flex-shrink-0">
-                                    <PaperAirplaneIcon className="w-4 h-4" />
-                                </button>
-                            )}
-                            <button type="button" onClick={() => { setAiPromptOpen(false); setAiPrompt(""); }}
-                                className="p-1 text-zinc-500 hover:text-white transition flex-shrink-0">
-                                <XMarkIcon className="w-4 h-4" />
-                            </button>
+                        <div className="flex-1 flex flex-col gap-2 px-3 py-2 overflow-hidden" style={{ background: noteColor || "#1a0d2e" }}>
+                            <div className="flex items-start gap-2 flex-1">
+                                <textarea
+                                    ref={aiPromptRef as any}
+                                    value={aiPrompt}
+                                    onChange={e => setAiPrompt(e.target.value)}
+                                    onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void runAiPrompt(); } if (e.key === "Escape") { setAiPromptOpen(false); setAiPrompt(""); } }}
+                                    placeholder="Ask AI anything..."
+                                    disabled={aiLoading}
+                                    className="flex-1 bg-transparent text-sm outline-none font-mono resize-none overflow-y-auto ai-prompt-input"
+                                    style={{ caretColor: "#000", color: "#1a1a1a", height: "100%" }}
+                                />
+                                {aiLoading && (
+                                    <span className="w-4 h-4 border-2 border-purple-400 border-t-transparent rounded-full animate-spin flex-shrink-0 mt-1.5" />
+                                )}
+                            </div>
                         </div>
                     )}
-                    <div className="relative flex-1 flex overflow-hidden bg-black font-mono">
+                    <div className="relative flex-1 flex overflow-hidden bg-black font-mono" style={{ display: aiPromptOpen ? "none" : "flex" }}>
                         {/* ── Note loading spinner — scoped to editor panel only ── */}
                         {noteContentLoading && (
                             <div className="absolute inset-0 z-[50] flex items-center justify-center bg-black/60 pointer-events-none">
@@ -6439,7 +6427,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                             const stickyFont = "ui-monospace,'Fira Code','Cascadia Code',monospace";
                             const stickyFontSize = "clamp(8px, 1.2vw, 12px)";
                             return (
-                            <div className="flex-1 flex overflow-auto relative" style={{ background: stickyBg }}>
+                            <div className="flex-1 flex overflow-auto relative" style={{ background: stickyBg, display: aiPromptOpen ? "none" : "flex" }}>
                                 {/* Highlight backdrop for find-in-note */}
                                 {showFindBar && findMatches.length > 0 && (
                                     <div aria-hidden="true" style={{
