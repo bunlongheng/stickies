@@ -5312,7 +5312,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                 @media (max-width: 1024px) { .md-preview { font-size: 10px; } }
                 @media (max-width: 640px) { .md-preview { font-size: 8px; } }
                 .md-preview p { color: #1a1a1a; }
-                .md-preview h1,.md-preview h2,.md-preview h3,.md-preview h4,.md-preview h5,.md-preview h6 { font-weight: 700; letter-spacing: -0.01em; color: #111; margin: 0.8em 0 0.4em; line-height: 1.3; text-align: left; }
+                .md-preview h1,.md-preview h2,.md-preview h3,.md-preview h4,.md-preview h5,.md-preview h6 { font-weight: 400; letter-spacing: -0.01em; color: #111; margin: 0.8em 0 0.4em; line-height: 1.3; text-align: left; }
                 .md-preview h1:first-child,.md-preview h2:first-child,.md-preview h3:first-child { margin-top: 0; }
                 .md-preview h1 { font-size: 2em; }
                 .md-preview h2 { font-size: 1.5em; }
@@ -6553,7 +6553,7 @@ body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
     font-size: 10pt; color: #1a1a1a; line-height: 1.6; margin: 0; padding: 1.8cm 2cm;
 }
-h1, h2, h3, h4, h5, h6 { font-weight: 700; color: #111; page-break-after: avoid; margin: 1.2em 0 0.5em; }
+h1, h2, h3, h4, h5, h6 { font-weight: 400; color: #111; page-break-after: avoid; margin: 1.2em 0 0.5em; }
 h1 { font-size: 22pt; border-bottom: 2px solid #ddd; padding-bottom: 8px; margin-top: 0; }
 h2 { font-size: 17pt; border-bottom: 1px solid #eee; padding-bottom: 6px; }
 h3 { font-size: 14pt; }
