@@ -5804,7 +5804,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     {editingNote?.id && noteIcons[String(editingNote.id)] ? <FolderIconDisplay value={noteIcons[String(editingNote.id)]} folderName={title || "N"} className="w-3.5 h-3.5" /> : noteBadgeLabel}
                                 </button>
                             )}
-                            <input ref={titleInputRef} onChange={(e) => { titleRaw.current = e.target.value; }} onBlur={(e) => setTitle(e.target.value)} onFocus={() => { closeEditorTools(); setShowNoteActions(false); }} autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false} className="bg-transparent border-0 appearance-none shadow-none ring-0 outline-none focus:outline-none focus:ring-0 px-1 min-w-0 flex-1 font-normal tracking-tight text-xs text-white placeholder:text-zinc-500" style={{ caretColor: activeAccentColor }} placeholder="NOTE TITLE" />
+                            <input ref={titleInputRef} onChange={(e) => { titleRaw.current = e.target.value; }} onBlur={(e) => setTitle(e.target.value)} onFocus={() => { closeEditorTools(); setShowNoteActions(false); }} autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false} className={`bg-transparent border-0 appearance-none shadow-none ring-0 outline-none focus:outline-none focus:ring-0 px-1 min-w-0 flex-1 tracking-tight text-white placeholder:text-zinc-500 ${noteType === "text" ? "text-base" : "text-xs font-normal"}`} style={{ caretColor: activeAccentColor, fontFamily: noteType === "text" ? "Caveat, cursive" : undefined }} placeholder="NOTE TITLE" />
                         </div>
 
                         {/* Mobile: badge + title */}
@@ -5822,7 +5822,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 {editingNote?.id && noteIcons[String(editingNote.id)] ? <FolderIconDisplay value={noteIcons[String(editingNote.id)]} folderName={title || "N"} className="w-4 h-4" /> : noteBadgeLabel}
                             </button>
                         )}
-                        <input ref={titleInputMobileRef} onChange={(e) => { titleRaw.current = e.target.value; }} onBlur={(e) => setTitle(e.target.value)} onFocus={() => { closeEditorTools(); setShowNoteActions(false); }} autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false} className="sm:hidden bg-transparent border-0 appearance-none shadow-none ring-0 outline-none focus:outline-none focus:ring-0 px-2 flex-grow min-w-0 text-sm text-white placeholder:text-zinc-500" style={{ caretColor: activeAccentColor, border: "none" }} placeholder="NOTE TITLE" />
+                        <input ref={titleInputMobileRef} onChange={(e) => { titleRaw.current = e.target.value; }} onBlur={(e) => setTitle(e.target.value)} onFocus={() => { closeEditorTools(); setShowNoteActions(false); }} autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false} className={`sm:hidden bg-transparent border-0 appearance-none shadow-none ring-0 outline-none focus:outline-none focus:ring-0 px-2 flex-grow min-w-0 text-white placeholder:text-zinc-500 ${noteType === "text" ? "text-lg" : "text-sm"}`} style={{ caretColor: activeAccentColor, border: "none", fontFamily: noteType === "text" ? "Caveat, cursive" : undefined }} placeholder="NOTE TITLE" />
 
                         {mermaidMode && (
                             <div className="flex items-center gap-1 flex-shrink-0">
@@ -6430,8 +6430,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                             const isStickyText = noteType === "text";
                             const stickyBg = isStickyText ? noteColor : "#000";
                             const stickyText = isStickyText ? "#1a1a1a" : "#f8f8f2";
-                            const stickyFont = isStickyText ? "Caveat, 'Comic Sans MS', cursive" : "ui-monospace,'Fira Code','Cascadia Code',monospace";
-                            const stickyFontSize = isStickyText ? "clamp(14px, 1.6vw, 18px)" : "clamp(8px, 1.2vw, 12px)";
+                            const stickyFont = "ui-monospace,'Fira Code','Cascadia Code',monospace";
+                            const stickyFontSize = "clamp(8px, 1.2vw, 12px)";
                             return (
                             <div className="flex-1 flex overflow-auto relative" style={{ background: stickyBg }}>
                                 {/* Highlight backdrop for find-in-note */}
