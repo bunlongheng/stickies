@@ -1234,7 +1234,7 @@ export default function NotesMaster() {
     const [aiPromptOpen, setAiPromptOpen] = useState(false);
     const [aiPrompt, setAiPrompt] = useState("");
     const [aiLoading, setAiLoading] = useState(false);
-    const aiPromptRef = useRef<HTMLInputElement | null>(null);
+    const aiPromptRef = useRef<HTMLTextAreaElement | null>(null);
     const colDragNoteRef = useRef<string | null>(null);
     const [colDragOver, setColDragOver] = useState<string | null>(null);
     const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set());
@@ -5904,21 +5904,25 @@ const fireIntegrations = (trigger: string, note: any) => {
                     </div>
                     {/* AI PROMPT BAR */}
                     {aiPromptOpen && (
-                        <div className="shrink-0 flex items-center gap-2 px-3 py-2 border-b border-white/10" style={{ background: "#1a1a2e" }}>
-                            <BoltIcon className="w-4 h-4 text-purple-400 flex-shrink-0" />
-                            <input
-                                ref={aiPromptRef}
-                                type="text"
+                        <div className="shrink-0 flex items-start gap-2 px-3 py-2 border-b border-white/10" style={{ background: "#1a1a2e" }}>
+                            <RobotIcon className="w-4 h-4 text-purple-400 flex-shrink-0 mt-1.5 animate-pulse" style={{ filter: "drop-shadow(0 0 6px #a855f7)" }} />
+                            <textarea
+                                ref={aiPromptRef as any}
                                 value={aiPrompt}
-                                onChange={e => setAiPrompt(e.target.value)}
+                                onChange={e => {
+                                    setAiPrompt(e.target.value);
+                                    e.target.style.height = "auto";
+                                    e.target.style.height = Math.min(e.target.scrollHeight, 200) + "px";
+                                }}
                                 onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void runAiPrompt(); } if (e.key === "Escape") setAiPromptOpen(false); }}
                                 placeholder="Ask AI anything..."
                                 disabled={aiLoading}
-                                className="flex-1 bg-transparent text-sm text-white placeholder:text-zinc-500 outline-none font-mono"
-                                style={{ caretColor: "#a855f7" }}
+                                rows={1}
+                                className="flex-1 bg-transparent text-sm text-white placeholder:text-zinc-500 outline-none font-mono resize-none overflow-y-auto"
+                                style={{ caretColor: "#a855f7", minHeight: "24px", maxHeight: "200px" }}
                             />
                             {aiLoading ? (
-                                <span className="w-5 h-5 border-2 border-purple-400 border-t-transparent rounded-full animate-spin flex-shrink-0" />
+                                <span className="w-4 h-4 border-2 border-purple-400 border-t-transparent rounded-full animate-spin flex-shrink-0 mt-1.5" />
                             ) : (
                                 <button type="button" onClick={() => void runAiPrompt()} disabled={!aiPrompt.trim()}
                                     className="p-1 text-purple-400 hover:text-purple-300 disabled:text-zinc-600 transition flex-shrink-0">
@@ -5926,7 +5930,9 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 </button>
                             )}
                             <button type="button" onClick={() => { setAiPromptOpen(false); setAiPrompt(""); }}
-                                className="text-zinc-500 hover:text-white transition text-sm leading-none flex-shrink-0">×</button>
+                                className="p-1 text-zinc-500 hover:text-white transition flex-shrink-0">
+                                <XMarkIcon className="w-4 h-4" />
+                            </button>
                         </div>
                     )}
                     <div className="relative flex-1 flex overflow-hidden bg-black font-mono">
@@ -6427,8 +6433,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 onClick={() => setCodeEditMode(true)}
                             />
                         ) : (() => {
-                            const isStickyText = noteType === "text";
-                            const stickyBg = isStickyText ? noteColor : "#000";
+                            const isStickyText = noteType === "text" && !!editingNote?.id;
+                            const stickyBg = aiPromptOpen ? "#1a0d2e" : (isStickyText ? noteColor : "#000");
                             const stickyText = isStickyText ? "#1a1a1a" : "#f8f8f2";
                             const stickyFont = "ui-monospace,'Fira Code','Cascadia Code',monospace";
                             const stickyFontSize = "clamp(8px, 1.2vw, 12px)";
