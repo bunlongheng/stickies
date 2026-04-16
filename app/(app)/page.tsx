@@ -4843,9 +4843,10 @@ const fireIntegrations = (trigger: string, note: any) => {
                         showToast(`${srcFolder} → ${destFolder}`, destColor);
                         enterFolder({ id: String(targetItem.id), name: destFolder, color: destColor });
                     } else if (!sourceItem?.is_folder) {
-                        // Note into folder → move
-                        await notesApi.update(sourceId, { folder_name: destFolder });
-                        setDbData((prev) => prev.map((r) => String(r.id) === sourceId ? { ...r, folder_name: destFolder } : r));
+                        // Note into folder → move (update name, color, and folder_id)
+                        const destFolderId = String(targetItem.id).startsWith("virtual-") ? null : String(targetItem.id);
+                        await notesApi.update(sourceId, { folder_name: destFolder, folder_color: destColor, ...(destFolderId ? { folder_id: destFolderId } : {}) });
+                        setDbData((prev) => prev.map((r) => String(r.id) === sourceId ? { ...r, folder_name: destFolder, folder_color: destColor, folder_id: destFolderId } : r));
                         showToast(`→ ${destFolder}`, destColor);
                     }
                     return;
