@@ -4,6 +4,35 @@ import Pusher from "pusher";
 import crypto from "crypto";
 import { query, queryOne, execute } from "@/lib/db-driver";
 
+/**
+ * Quality check for markdown notes.
+ * Returns true if content meets markdown standards.
+ *
+ * Standards:
+ * 1. Must have at least one heading (# Title)
+ * 2. Must have line breaks (not a wall of text)
+ * 3. Must have structure: list, code block, subsection, blockquote, or table
+ * 4. Title must be meaningful (>3 chars, not banned words)
+ */
+const BANNED_TITLES = new Set(["test", "true", "false", "untitled", "note", "tmp", "temp", "asdf", "qwerty"]);
+function isQualityMarkdown(title: string, content: string): boolean {
+    if (!content || content.length < 30) return false;
+    const t = (title || "").trim().toLowerCase();
+    if (t.length < 4 || BANNED_TITLES.has(t)) return false;
+    // Must have line breaks
+    const lineCount = content.split("\n").filter(l => l.trim()).length;
+    if (lineCount < 3) return false;
+    // Must have heading
+    if (!/^#{1,6}\s+\S/m.test(content)) return false;
+    // Must have at least one structural element
+    const hasList = /^\s*[-*+]\s|^\s*\d+\.\s/m.test(content);
+    const hasCode = /```|^\s{4,}\S/m.test(content);
+    const hasSubsection = /^#{2,6}\s/m.test(content);
+    const hasQuote = /^>\s/m.test(content);
+    const hasTable = /^\|.*\|/m.test(content);
+    return hasList || hasCode || hasSubsection || hasQuote || hasTable;
+}
+
 
 
 
@@ -477,7 +506,8 @@ export async function POST(req: Request) {
                     const folder_name = "folder" in item
                         ? (String(item.folder ?? "").trim() || (() => { throw new Error("folder cannot be empty"); })())
                         : "CLAUDE";
-                    const batchType = (typeof item.type === "string" && VALID_TYPES.has(item.type)) ? item.type : detectType(content, title);
+                    let batchType = (typeof item.type === "string" && VALID_TYPES.has(item.type)) ? item.type : detectType(content, title);
+                    if (batchType === "markdown" && !isQualityMarkdown(title, content)) batchType = "text";
                     const folder_color = pickColor(item.color as string);
                     const row = await queryOne(
                         `INSERT INTO "stickies" (is_folder, title, content, folder_name, type, folder_color, "order", created_at, updated_at, user_id)
@@ -698,7 +728,9 @@ export async function POST(req: Request) {
     );
     const existingNote = await queryOne<{ id: string }>(`${upsertSql} LIMIT 1`, upsertParams);
 
-    const noteType = explicitType ?? detectType(content, title);
+    let noteType = explicitType ?? detectType(content, title);
+    // Quality gate: if classified as markdown but fails quality check, downgrade to text
+    if (noteType === "markdown" && !isQualityMarkdown(title, content)) noteType = "text";
     let data: Record<string, unknown> | null;
 
     if (existingNote?.id) {
