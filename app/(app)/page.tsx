@@ -5313,9 +5313,9 @@ const fireIntegrations = (trigger: string, note: any) => {
                         );
                 }
                 @keyframes spin { to { transform: rotate(360deg); } }
-                .md-preview { color: #1a1a1a; line-height: 1.7; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; font-size: 12px; text-align: left; word-wrap: break-word; overflow-wrap: break-word; min-width: 0; }
-                @media (max-width: 1024px) { .md-preview { font-size: 10px; } }
-                @media (max-width: 640px) { .md-preview { font-size: 8px; } }
+                .md-preview { color: #1a1a1a; line-height: 1.7; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; font-size: 17px; text-align: left; word-wrap: break-word; overflow-wrap: break-word; min-width: 0; }
+                @media (max-width: 1024px) { .md-preview { font-size: 14px; } }
+                @media (max-width: 640px) { .md-preview { font-size: 12px; } }
                 .md-preview p { color: #1a1a1a; }
                 .md-preview h1,.md-preview h2,.md-preview h3,.md-preview h4,.md-preview h5,.md-preview h6 { font-weight: 400; letter-spacing: -0.01em; color: #111; margin: 0.8em 0 0.4em; line-height: 1.3; text-align: left; }
                 .md-preview h1:first-child,.md-preview h2:first-child,.md-preview h3:first-child { margin-top: 0; }
@@ -5919,8 +5919,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void runAiPrompt(); } if (e.key === "Escape") { setAiPromptOpen(false); setAiPrompt(""); } }}
                                     placeholder="Ask AI anything..."
                                     disabled={aiLoading}
-                                    className="flex-1 bg-transparent text-sm outline-none font-mono resize-none overflow-y-auto ai-prompt-input"
-                                    style={{ caretColor: "#000", color: "#1a1a1a", height: "100%" }}
+                                    className="flex-1 bg-transparent outline-none font-mono resize-none overflow-y-auto ai-prompt-input"
+                                    style={{ caretColor: "#000", color: "#1a1a1a", height: "100%", fontSize: "clamp(12px, 1.4vw, 17px)", lineHeight: 1.6 }}
                                 />
                                 {aiLoading && (
                                     <span className="w-4 h-4 border-2 border-purple-400 border-t-transparent rounded-full animate-spin flex-shrink-0 mt-1.5" />
@@ -6324,7 +6324,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     style={{
                                         flex: 1, background: "transparent", color: "#f8f8f2",
                                         fontFamily: "ui-monospace,'Fira Code','Cascadia Code',monospace",
-                                        fontSize: "clamp(8px, 1.2vw, 12px)", lineHeight: 1.6,
+                                        fontSize: "clamp(12px, 1.4vw, 17px)", lineHeight: 1.6,
                                         paddingTop: 8, paddingBottom: 24, paddingLeft: 24, paddingRight: 24,
                                         outline: "none", resize: "none", caretColor: "#f8f8f2",
                                         whiteSpace: "pre-wrap", overflowWrap: "break-word", wordBreak: "break-word",
@@ -6426,8 +6426,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 onClick={() => setCodeEditMode(true)}
                             />
                         ) : (() => {
-                            const isStickyText = noteType === "text" && !!editingNote?.id;
-                            const stickyBg = aiPromptOpen ? "#1a0d2e" : (isStickyText ? noteColor : "#000");
+                            const isStickyText = (noteType === "text" || !noteType) && !!noteColor;
+                            const stickyBg = aiPromptOpen ? (noteColor || "#1a0d2e") : (isStickyText ? noteColor : "#000");
                             const stickyText = isStickyText ? "#1a1a1a" : "#f8f8f2";
                             const stickyFont = "ui-monospace,'Fira Code','Cascadia Code',monospace";
                             const stickyFontSize = "clamp(8px, 1.2vw, 12px)";
