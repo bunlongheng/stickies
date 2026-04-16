@@ -6,6 +6,9 @@
 .ai-prompt-input::placeholder { color: rgba(0, 0, 0, 0.5) !important; }
 .sticky-editor::placeholder { color: rgba(0, 0, 0, 0.4) !important; }
 
+/* iOS: prevent text-size-adjust from inflating editor fonts */
+textarea, input { -webkit-text-size-adjust: 100% !important; text-size-adjust: 100% !important; }
+
 /* Square grid tiles — JS-measured height via CSS var (works on all browsers incl. iOS Safari) */
 .grid-square-tile {
   height: var(--cell-size, 100px);
