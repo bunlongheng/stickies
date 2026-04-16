@@ -1010,6 +1010,7 @@ export default function NotesMaster() {
     const [dbData, setDbData] = useState<any[]>([]);
     const [folderCounts, setFolderCounts] = useState<Record<string, number>>({});
     const [folderCountsById, setFolderCountsById] = useState<Record<string, number>>({});
+    const [folderLatestById, setFolderLatestById] = useState<Record<string, string>>({});
     const [folderNotesLoading, setFolderNotesLoading] = useState(false);
     const folderNotesLoadingRef = useRef(false);
     const syncHadTokenRef = useRef(false); // true after first sync() that got a valid auth token
@@ -1514,6 +1515,7 @@ export default function NotesMaster() {
             const freshCountsById = countsResult.countsByFolderId ?? {};
             setFolderCounts(freshCounts);
             setFolderCountsById(freshCountsById);
+            if (countsResult.latestByFolderId) setFolderLatestById(countsResult.latestByFolderId);
             // Persist folders + counts cache for instant next load
             try {
                 localStorage.setItem(DB_CACHE_KEY, JSON.stringify(folderItems));
@@ -2524,7 +2526,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                 return {
                     id: rowId,
                     order: typeof row.order === "number" ? row.order : Number.MAX_SAFE_INTEGER,
-                    latestUpdatedAt: latestUpdatedByFolderId.get(rowId) || String(row.updated_at || ""),
+                    latestUpdatedAt: folderLatestById[rowId] || latestUpdatedByFolderId.get(rowId) || String(row.updated_at || ""),
                     name: folderName,
                     color: folderName === "TRASH" ? "#3a3a3a" : (folderColors[folderName] || row.folder_color || palette12[0]),
                     count: (() => {
@@ -2557,6 +2559,7 @@ const fireIntegrations = (trigger: string, note: any) => {
             .map((folderName) => ({
                 id: `virtual-${folderName}`,
                 order: Number.MAX_SAFE_INTEGER,
+                latestUpdatedAt: "",
                 name: folderName,
                 color: folderName === "TRASH" ? "#3a3a3a" : (folderColors[folderName] || firstNoteColorByFolder.get(folderName) || palette12[0]),
                 count: noteCountByFolder.get(folderName) || 0,
@@ -2576,10 +2579,11 @@ const fireIntegrations = (trigger: string, note: any) => {
             const pinned = SYSTEM_BOTTOM.map(n => sorted.find(f => f.name === n)).filter(Boolean) as typeof all;
             return [...regular, ...pinned];
         }
-        const regular = all.filter(f => bottomOrder(f.name) === -1);
+        const regular = all.filter(f => bottomOrder(f.name) === -1)
+            .sort((a, b) => String(b.latestUpdatedAt || "").localeCompare(String(a.latestUpdatedAt || "")));
         const pinned = SYSTEM_BOTTOM.map(n => all.find(f => f.name === n)).filter(Boolean) as typeof all;
         return [...regular, ...pinned];
-    }, [dbData, folderColors, folderIcons, pendingFolderOrder, folderCounts]);
+    }, [dbData, folderColors, folderIcons, pendingFolderOrder, folderCounts, folderLatestById]);
 
     // Folders visible at the current navigation level (root or sub-folder)
     const currentLevelFolders = useMemo(() => {
