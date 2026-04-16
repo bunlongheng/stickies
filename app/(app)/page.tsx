@@ -8083,6 +8083,36 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                     })()}
                                 </div>
                             )}
+                            {/* MAGIC — AI icon + title assignment */}
+                            {activeFolder && !isGlobalSettings && (
+                                <button type="button" className="w-full flex items-center gap-4 px-6 py-4 text-left text-purple-400 hover:bg-purple-500/5 hover:text-purple-300 active:bg-purple-500/10 transition"
+                                    onClick={async () => {
+                                        setShowFolderActions(false);
+                                        showToast("AI assigning icons...", "#a78bfa");
+                                        try {
+                                            const token = await getAuthToken();
+                                            const res = await fetch("/api/stickies/magic", {
+                                                method: "POST",
+                                                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                                                body: JSON.stringify({ folder_name: activeFolder }),
+                                            });
+                                            if (!res.ok) { showToast("Magic failed", "#ef4444"); return; }
+                                            const { updated } = await res.json();
+                                            if (updated > 0) {
+                                                // Reload folder to show new icons/titles
+                                                void loadFolderNotes(activeFolder!, false);
+                                                void sync();
+                                                playSound("create");
+                                                showToast(`Magic: ${updated} item${updated !== 1 ? "s" : ""} updated`, "#a78bfa");
+                                            } else {
+                                                showToast("All items already have icons", "#71717a");
+                                            }
+                                        } catch { showToast("Magic failed", "#ef4444"); }
+                                    }}>
+                                    <SparklesIcon className="w-5 h-5 flex-shrink-0" />
+                                    <span className="text-xs font-black tracking-wide">Magic Icons & Titles</span>
+                                </button>
+                            )}
                             {/* COPY ALL NOTES TO CLIPBOARD */}
                             {activeFolder && !isGlobalSettings && (
                                 <button type="button" className="w-full flex items-center gap-4 px-6 py-4 text-left text-zinc-300 hover:bg-white/5 hover:text-white active:bg-white/10 transition"
