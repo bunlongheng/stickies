@@ -7215,12 +7215,24 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                         );
                     })()}
 
-                    {/* STATS BOTTOM BAR — mobile: date+time only */}
+                    {/* STATS BOTTOM BAR — mobile: folder contents count (inside folder) or time/date (root) */}
                     <div className="fixed bottom-4 left-0 right-0 z-[120] flex sm:hidden justify-center items-center select-none pointer-events-none tabular-nums" style={{ fontSize: 9, opacity: 0.7 }}>
                         <span className="flex items-center gap-1.5 px-3 py-1 rounded-full" style={{ border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.04)", backdropFilter: "blur(8px)" }}>
-                            <span className="text-white/70 font-bold">{now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
-                            <span className="text-zinc-600">/</span>
-                            <span className="text-white/50 uppercase tracking-wide font-bold">{now.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}</span>
+                            {activeFolder ? (() => {
+                                const items = displayItems.filter((i: any) => !i._header);
+                                const fCount = items.filter((i: any) => i.is_folder).length;
+                                const nCount = items.filter((i: any) => !i.is_folder).length;
+                                return (<>
+                                    {fCount > 0 && <span style={{ color: "#38bdf8" }} className="font-bold">{fCount} folder{fCount !== 1 ? "s" : ""}</span>}
+                                    {fCount > 0 && nCount > 0 && <span className="text-zinc-600">/</span>}
+                                    {nCount > 0 && <span style={{ color: "#fb923c" }} className="font-bold">{nCount} note{nCount !== 1 ? "s" : ""}</span>}
+                                    {fCount === 0 && nCount === 0 && <span className="text-white/50 font-bold">Empty folder</span>}
+                                </>);
+                            })() : (<>
+                                <span className="text-white/70 font-bold">{now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                                <span className="text-zinc-600">/</span>
+                                <span className="text-white/50 uppercase tracking-wide font-bold">{now.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}</span>
+                            </>)}
                         </span>
                     </div>
                     {/* STATS BOTTOM BAR — desktop: full stats */}
