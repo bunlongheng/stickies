@@ -3264,8 +3264,13 @@ const fireIntegrations = (trigger: string, note: any) => {
                 latestContentRef.current = result;
                 startContentTransition(() => setContent(result));
             }
-            // Restore title so AI doesn't overwrite it via auto-derive
-            if (savedTitle.trim()) { setTitle(savedTitle); titleRaw.current = savedTitle; }
+            // Restore title or derive from the prompt if empty
+            if (savedTitle.trim()) {
+                setTitle(savedTitle); titleRaw.current = savedTitle;
+            } else {
+                const promptTitle = aiPrompt.trim().slice(0, 60).replace(/[?!.]+$/, "");
+                if (promptTitle) { setTitle(promptTitle); titleRaw.current = promptTitle; }
+            }
             setAiPrompt("");
             setAiPromptOpen(false);
             noteEverDirtyRef.current = true;
