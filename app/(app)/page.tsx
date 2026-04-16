@@ -1401,48 +1401,28 @@ export default function NotesMaster() {
         }
     };
 
-    // --- PAGINATED FOLDER NOTES (with delta sync) ---
-    const loadFolderNotes = async (folderName: string, append = false) => {
+    // --- LOAD ALL FOLDER NOTES (no pagination) ---
+    const loadFolderNotes = async (folderName: string, _append = false) => {
         if (folderNotesLoadingRef.current) return;
-        const existing = folderPaginationRef.current.get(folderName);
-        const MAX_NOTES = 100;
-        if (append && existing && (existing.offset >= existing.total || existing.offset >= MAX_NOTES)) return;
-        const offset = append ? (existing?.offset ?? 0) : 0;
-        const limit = append ? 80 : 20;
-
-        // Paint cached notes instantly so UI is never blank
-        if (!append && offset === 0) {
-        }
-
         folderNotesLoadingRef.current = true;
         setFolderNotesLoading(true);
         try {
             const _t0 = performance.now();
             const token = await getAuthToken();
             const res = await fetch(
-                `/api/stickies?folder=${encodeURIComponent(folderName)}&limit=${limit}&offset=${offset}`,
+                `/api/stickies?folder=${encodeURIComponent(folderName)}`,
                 { headers: { Authorization: `Bearer ${token}` } }
             );
             if (!res.ok) return;
             const { notes = [], total = 0 } = await res.json();
             setApiTimings((prev) => ({ ...prev, folder: Math.round(performance.now() - _t0) }));
-            folderPaginationRef.current.set(folderName, { offset: offset + notes.length, total });
+            folderPaginationRef.current.set(folderName, { offset: notes.length, total });
 
             setDbData((prev) => {
                 const freshIds = new Set(notes.map((n: any) => String(n.id)));
-                if (append) {
-                    const seen = new Set(prev.map((r: any) => String(r.id)));
-                    return [...prev, ...notes.filter((n: any) => !seen.has(String(n.id)))];
-                }
-                // Remove notes that belong to this folder (by name or by being in fresh data)
                 const without = prev.filter((r: any) => r.is_folder || r._optimistic || (r.folder_name !== folderName && !freshIds.has(String(r.id))));
                 return [...without, ...notes];
             });
-
-            // Update cache so next visit paints instantly
-            if (!append && offset === 0) {
-                setNotesCacheForFolder(folderName, notes);
-            }
         } finally {
             folderNotesLoadingRef.current = false;
             setFolderNotesLoading(false);
@@ -1553,21 +1533,7 @@ export default function NotesMaster() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [activeFolder]);
 
-    // Infinite scroll — load 100 more when sentinel comes into view
-    useEffect(() => {
-        const el = notesEndRef.current;
-        if (!el || !activeFolder) return;
-        const obs = new IntersectionObserver(([entry]) => {
-            if (!entry.isIntersecting || folderNotesLoadingRef.current) return;
-            const pagination = folderPaginationRef.current.get(activeFolder);
-            if (pagination && pagination.offset < pagination.total && pagination.offset < 100) {
-                void loadFolderNotes(activeFolder, true);
-            }
-        }, { rootMargin: "300px" });
-        obs.observe(el);
-        return () => obs.disconnect();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [activeFolder, folderNotesLoading]);
+    // All notes load at once — no infinite scroll needed
 
     useEffect(() => {
         const updateCols = () => {
