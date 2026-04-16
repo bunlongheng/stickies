@@ -7252,7 +7252,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                     <span key={k} className="flex items-center gap-1 font-mono">
                                         {i > 0 && <span className="text-zinc-700">/</span>}
                                         <span style={{ color: "#6ee7b7" }}>{k}</span>
-                                        <span style={{ color: ms > 500 ? "#fbbf24" : "#34d399" }}>{ms}ms</span>
+                                        <span style={{ color: ms > 1000 ? "#ef4444" : ms > 500 ? "#fbbf24" : "#34d399" }}>{ms}ms</span>
                                     </span>
                                 ))}
                             </>)}
