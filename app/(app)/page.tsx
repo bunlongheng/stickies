@@ -6456,7 +6456,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     onFocus={() => closeEditorTools()}
                                     onBlur={() => void saveNote({ silent: true, deriveTitle: true })}
                                     onPaste={handleEditorPaste}
-                                    className="ios-editor-scroll overscroll-none touch-pan-y"
+                                    className={`ios-editor-scroll overscroll-none touch-pan-y ${isStickyText ? "sticky-editor" : ""}`}
                                     style={{
                                         flex: 1, background: "transparent", color: stickyText,
                                         fontFamily: stickyFont,
