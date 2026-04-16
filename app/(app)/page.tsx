@@ -3030,25 +3030,24 @@ const fireIntegrations = (trigger: string, note: any) => {
 
     const moveToFolder = useCallback(
         async (name: string) => {
-            const color = folders.find((f) => f.name === name)?.color || palette12[0];
+            const destColor = folders.find((f) => f.name === name)?.color || palette12[0];
             setTargetFolder(name);
-            setNoteColor(color);
             setShowSwitcher(false);
             setFolderSearchQuery("");
             playSound("move");
-            showToast(`→ "${name}"`, color);
+            showToast(`→ "${name}"`, destColor);
             if (editingNote?.id) {
-                // Optimistic update — happen immediately, before the API call
+                // Optimistic update — keep note's own color, only change folder
                 const noteId = String(editingNote.id);
                 const folderRow = folders.find((f) => f.name === name);
                 const folderId = folderRow?.id ?? `virtual-${name}`;
                 const newFolderId = folderId.startsWith("virtual-") ? null : folderId;
                 setDbData((prev) =>
                     prev.map((r) =>
-                        String(r.id) === noteId ? { ...r, folder_name: name, folder_color: color, folder_id: newFolderId } : r,
+                        String(r.id) === noteId ? { ...r, folder_name: name, folder_id: newFolderId } : r,
                     ),
                 );
-                setEditingNote((prev: any) => (prev ? { ...prev, folder_name: name, folder_color: color, folder_id: newFolderId } : prev));
+                setEditingNote((prev: any) => (prev ? { ...prev, folder_name: name, folder_id: newFolderId } : prev));
                 setShowNoteActions(false);
                 setEditorOpen(false);
                 // Remove from old folder cache, add to new
@@ -3057,7 +3056,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                 }
                 mergeIntoCachedNotes(name, [{ ...editingNote, id: noteId, folder_name: name, folder_color: color }]);
                 try {
-                    await notesApi.update(noteId, { folder_name: name, folder_color: color, ...(newFolderId ? { folder_id: newFolderId } : {}) });
+                    await notesApi.update(noteId, { folder_name: name, ...(newFolderId ? { folder_id: newFolderId } : {}) });
                     // Refresh target folder notes so the moved note shows immediately
                     void loadFolderNotes(name, false);
                 } catch (err) {
@@ -4843,10 +4842,10 @@ const fireIntegrations = (trigger: string, note: any) => {
                         showToast(`${srcFolder} → ${destFolder}`, destColor);
                         enterFolder({ id: String(targetItem.id), name: destFolder, color: destColor });
                     } else if (!sourceItem?.is_folder) {
-                        // Note into folder → move (update name, color, and folder_id)
+                        // Note into folder → move (keep note's own color)
                         const destFolderId = String(targetItem.id).startsWith("virtual-") ? null : String(targetItem.id);
-                        await notesApi.update(sourceId, { folder_name: destFolder, folder_color: destColor, ...(destFolderId ? { folder_id: destFolderId } : {}) });
-                        setDbData((prev) => prev.map((r) => String(r.id) === sourceId ? { ...r, folder_name: destFolder, folder_color: destColor, folder_id: destFolderId } : r));
+                        await notesApi.update(sourceId, { folder_name: destFolder, ...(destFolderId ? { folder_id: destFolderId } : {}) });
+                        setDbData((prev) => prev.map((r) => String(r.id) === sourceId ? { ...r, folder_name: destFolder, folder_id: destFolderId } : r));
                         showToast(`→ ${destFolder}`, destColor);
                     }
                     return;
