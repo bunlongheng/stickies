@@ -587,7 +587,19 @@ export async function POST(req: Request) {
         if (bodyType && VALID_TYPES.has(bodyType)) explicitType = bodyType;
     }
 
-    if (!title) return NextResponse.json({ error: "title required" }, { status: 400 });
+    // Auto-derive title from content if missing or "Untitled"
+    if (!title || title.toLowerCase() === "untitled") {
+        const fm = content.match(/^---\s*\n([\s\S]*?)\n---/);
+        if (fm) { const m = fm[1].match(/^title:\s*(.+)$/m); if (m) title = m[1].trim().slice(0, 80); }
+        if (!title || title.toLowerCase() === "untitled") {
+            const heading = content.match(/^#{1,6}\s+(.+)$/m);
+            if (heading) title = heading[1].trim().slice(0, 80);
+        }
+        if (!title || title.toLowerCase() === "untitled") {
+            const firstLine = content.trim().split("\n").find(l => l.trim() && !l.startsWith("---")) || "";
+            title = firstLine.replace(/^#+\s*/, "").slice(0, 80).trim() || "Untitled";
+        }
+    }
     if (!content?.trim()) return NextResponse.json({ error: "content required" }, { status: 400 });
     if (folder_name !== null && !folder_name?.trim()) return NextResponse.json({ error: "folder cannot be empty" }, { status: 400 });
     if (!folder_name?.trim()) folder_name = "CLAUDE";
