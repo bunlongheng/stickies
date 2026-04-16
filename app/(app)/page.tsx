@@ -189,6 +189,26 @@ const notesApi = {
 };
 
 const palette12 = ["#FF3B30", "#FF6B4E", "#FF9500", "#FFCC00", "#D4E157", "#34C759", "#00C7BE", "#32ADE6", "#007AFF", "#5856D6", "#AF52DE", "#FF2D55"];
+
+// View mode controlled via env var — switch via NEXT_PUBLIC_VIEW_MODE in .env.local
+// Mode 1 (default): icons on note badges + neutral row bg
+// Mode 2: no icons, full-width row tinted with parent folder color (each row uniquely shaded)
+const VIEW_MODE = (process.env.NEXT_PUBLIC_VIEW_MODE || "1") as "1" | "2";
+
+// Generate a unique solid shade per index for Mode 2 row backgrounds
+// Mixes the parent color with white at varying ratios to produce distinct solid shades
+function shadedRowBg(hex: string, index: number): string {
+    const h = hex.replace("#", "");
+    const r = parseInt(h.slice(0, 2), 16);
+    const g = parseInt(h.slice(2, 4), 16);
+    const b = parseInt(h.slice(4, 6), 16);
+    // 8-step lightness cycle: each row gets a slightly different shade
+    const mixRatios = [0, 0.06, 0.12, 0.18, 0.24, 0.18, 0.12, 0.06];
+    const ratio = mixRatios[index % mixRatios.length];
+    const mix = (c: number) => Math.round(c + (255 - c) * ratio);
+    const toHex = (n: number) => n.toString(16).padStart(2, "0");
+    return `#${toHex(mix(r))}${toHex(mix(g))}${toHex(mix(b))}`;
+}
 const colorPickerPalette = [...palette12, "#8E8E93", "#FFFFFF"];
 
 function isLightColor(hex: string): boolean {
@@ -6980,6 +7000,11 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                         const c = item.color || item.folder_color || "#888888";
                                         const isActive = false;
                                         if (isListMode) {
+                                            // Mode 2: shade non-folder rows with parent folder color
+                                            if (VIEW_MODE === "2" && !item.is_folder && activeFolder) {
+                                                const parentColor = folders.find(f => f.name === activeFolder)?.color || c;
+                                                return { position: "relative", isolation: "isolate", "--row-color": parentColor, "--fc": parentColor, background: shadedRowBg(parentColor, idx) } as unknown as React.CSSProperties;
+                                            }
                                             return { position: "relative", isolation: "isolate", "--row-color": c, "--fc": c, ...(isActive && !item.is_folder ? { borderRightColor: c, background: `${c}35` } : isActive ? { borderRightColor: c } : {}), ...(item.is_folder ? { background: `${c}18` } : {}) } as unknown as React.CSSProperties;
                                         }
                                         return item.is_folder
@@ -7021,8 +7046,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                     </button>
                                                 );
                                             })()}
-                                            {!item.is_folder && (() => {
-                                                const isChecklistItem = (item as any).type === "checklist" || listModeNotes.has(String(item.id));
+                                            {!item.is_folder && VIEW_MODE === "1" && (() => {
                                                 const nc = (item as any).color || (item as any).folder_color || "#71717a";
                                                 const initial = meaningfulInitial(item.title || "", "N");
                                                 const nIcon = noteIcons[String(item.id)];
