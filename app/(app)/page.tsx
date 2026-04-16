@@ -3927,12 +3927,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         // Open immediately with available metadata so the editor switches at once
         setPendingNoteType(null); // reset so noteType comes from note.type, not prior mode
         setEditingNote(note);
-        let rawTitle = note.title || "";
-        // If "Untitled", derive from content — check frontmatter, headings, first line
-        if (!rawTitle || rawTitle.toLowerCase() === "untitled") {
-            rawTitle = deriveTitleFromContent(note.content || "");
-        }
-        setTitle(rawTitle);
+        setTitle(note.title || "");
         setContent(note.content != null ? (note.type === "mermaid" || detectMermaid(note.content || "") ? cleanMermaidContent(note.content) : note.content) : "");
         setImages((note as any).images ?? []);
         setTargetFolder(note.folder_name || activeFolder || "General");
@@ -3962,12 +3957,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                         setEditingNote(fetched);
                         const body = (fetched.type === "mermaid" || detectMermaid(fetched.content || "")) ? cleanMermaidContent(fetched.content || "") : (fetched.content || "");
                         setContent(body);
-                        // Derive title if still empty after content loads
-                        const curTitle = titleRaw.current?.trim() || "";
-                        if (!curTitle || curTitle.toLowerCase() === "untitled") {
-                            const derived = deriveTitleFromContent(fetched.content || "");
-                            if (derived) setTitle(derived);
-                        }
+                        // Always use the DB title — no auto-derive
+                        if (fetched.title) setTitle(fetched.title);
                         if (fetched.id && looksLikeMarkdown(fetched.content || "")) setMarkdownModeNotes((p: Set<string>) => new Set([...p, String(fetched.id)]));
                         if (fetched.id && (fetched.list_mode || fetched.type === "checklist")) setListModeNotes((p: Set<string>) => new Set([...p, String(fetched.id)]));
                         if (fetched.id && fetched.mindmap_mode) setMindmapModeNotes((p: Set<string>) => new Set([...p, String(fetched.id)]));
