@@ -88,6 +88,29 @@ function segment(raw: string): Segment[] {
     return segments.length ? segments : [{ kind: "md", text: raw }];
 }
 
+// Preprocess GitHub-style alerts: > [!NOTE/TIP/WARNING/IMPORTANT/CAUTION/SUCCESS/INFO/TODO]
+function preprocessAlerts(text: string): string {
+    const ALERT_TYPES: Record<string, { emoji: string; color: string; label: string }> = {
+        NOTE:      { emoji: "📝", color: "#0969da", label: "Note" },
+        TIP:       { emoji: "💡", color: "#1a7f37", label: "Tip" },
+        IMPORTANT: { emoji: "⚡", color: "#8250df", label: "Important" },
+        WARNING:   { emoji: "⚠️", color: "#bf8700", label: "Warning" },
+        CAUTION:   { emoji: "🛑", color: "#cf222e", label: "Caution" },
+        SUCCESS:   { emoji: "✅", color: "#1a7f37", label: "Success" },
+        INFO:      { emoji: "ℹ️", color: "#0969da", label: "Info" },
+        TODO:      { emoji: "✔️", color: "#9a6700", label: "Todo" },
+        EXCEPTION: { emoji: "🔥", color: "#cf222e", label: "Exception" },
+    };
+    return text.replace(
+        /^> \[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION|SUCCESS|INFO|TODO|EXCEPTION)\]\s*\n((?:^>.*\n?)+)/gm,
+        (_m, type, body) => {
+            const config = ALERT_TYPES[type];
+            const cleanBody = body.replace(/^>\s?/gm, "").trim();
+            return `<div class="md-alert" style="border-left:4px solid ${config.color};background:${config.color}11;padding:0.8em 1em;margin:0.8em 0;border-radius:0 6px 6px 0;"><div style="font-weight:700;color:${config.color};font-size:0.9em;margin-bottom:0.4em;">${config.emoji} ${config.label}</div><div>${cleanBody.replace(/\n/g, "<br>")}</div></div>\n\n`;
+        }
+    );
+}
+
 export function MarkdownPreview({ content, theme = "dark" }: Props) {
     const segments = useMemo(() => segment(content), [content]);
 
@@ -106,7 +129,7 @@ export function MarkdownPreview({ content, theme = "dark" }: Props) {
                     ) : (
                         <div key={i}
                             className="md-preview max-w-none"
-                            dangerouslySetInnerHTML={{ __html: marked.parse(seg.text, { async: false, renderer }) as string }}
+                            dangerouslySetInnerHTML={{ __html: marked.parse(preprocessAlerts(seg.text), { async: false, renderer }) as string }}
                         />
                     )
                 )}
