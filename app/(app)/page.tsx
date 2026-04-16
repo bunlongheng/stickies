@@ -190,10 +190,7 @@ const notesApi = {
 
 const palette12 = ["#FF3B30", "#FF6B4E", "#FF9500", "#FFCC00", "#D4E157", "#34C759", "#00C7BE", "#32ADE6", "#007AFF", "#5856D6", "#AF52DE", "#FF2D55"];
 
-// View mode controlled via env var — switch via NEXT_PUBLIC_VIEW_MODE in .env.local
-// Mode 1 (default): icons on note badges + neutral row bg
-// Mode 2: no icons, full-width row tinted with parent folder color (each row uniquely shaded)
-const VIEW_MODE = (process.env.NEXT_PUBLIC_VIEW_MODE || "1") as "1" | "2";
+const SHOW_FILE_ICONS_KEY = "stickies:show-file-icons:v1";
 
 // Generate a unique solid shade per index for Mode 2 row backgrounds
 // Mixes the parent color with white at varying ratios to produce distinct solid shades
@@ -1212,6 +1209,7 @@ export default function NotesMaster() {
     const [isGlobalSettings, setIsGlobalSettings] = useState(false);
     const [lightMode, setLightMode] = useState<"off" | "flash" | "ambient">("flash");
     const [devMode, setDevMode] = useState(true);
+    const [showFileIcons, setShowFileIcons] = useState(true);
     const [gdriveConnected, setGdriveConnected] = useState(false);
     const [apiTimings, setApiTimings] = useState<Record<string, number>>({});
     const [aiConfirmPending, setAiConfirmPending] = useState<"magic" | "grammar" | null>(null);
@@ -1795,6 +1793,8 @@ export default function NotesMaster() {
         try {
             const rawTheme = localStorage.getItem(APP_THEME_KEY);
             if (rawTheme === "light" || rawTheme === "dark") setAppTheme(rawTheme);
+            const rawIcons = localStorage.getItem(SHOW_FILE_ICONS_KEY);
+            if (rawIcons === "false") setShowFileIcons(false);
         } catch { /* ignore */ }
         try {
             const rawDev = localStorage.getItem(DEV_MODE_KEY);
@@ -5826,7 +5826,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     className="w-6 h-6 flex-shrink-0 flex items-center justify-center font-black leading-none tracking-tight cursor-pointer hover:brightness-125 transition"
                                     style={{ backgroundColor: activeAccentColor, color: "#fff", borderRadius: "2px 2px 2px 10px", fontSize: noteBadgeFontSize }}
                                     title="Change icon">
-                                    {editingNote?.id && noteIcons[String(editingNote.id)] ? <FolderIconDisplay value={noteIcons[String(editingNote.id)]} folderName={title || "N"} className="w-3.5 h-3.5" /> : noteBadgeLabel}
+                                    {showFileIcons && editingNote?.id && noteIcons[String(editingNote.id)] ? <FolderIconDisplay value={noteIcons[String(editingNote.id)]} folderName={title || "N"} className="w-3.5 h-3.5" /> : noteBadgeLabel}
                                 </button>
                             )}
                             <input ref={titleInputRef} onChange={(e) => { titleRaw.current = e.target.value; }} onBlur={(e) => setTitle(e.target.value)} onFocus={() => { closeEditorTools(); setShowNoteActions(false); }} autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false} className="bg-transparent border-0 appearance-none shadow-none ring-0 outline-none focus:outline-none focus:ring-0 px-1 min-w-0 flex-1 tracking-tight font-normal text-white placeholder:text-zinc-500" style={{ caretColor: activeAccentColor, fontFamily: noteType === "text" ? "Caveat, cursive" : undefined, fontSize: "clamp(12px, 1.4vw, 17px)" }} placeholder="NOTE TITLE" />
@@ -5844,7 +5844,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 className="sm:hidden w-[30px] h-[30px] inline-flex items-center justify-center font-black leading-none tracking-tight flex-shrink-0 cursor-pointer hover:brightness-125 transition"
                                 style={{ backgroundColor: activeAccentColor, color: "#fff", borderRadius: "2px 2px 2px 10px", fontSize: noteBadgeFontSize }}
                                 title="Change icon">
-                                {editingNote?.id && noteIcons[String(editingNote.id)] ? <FolderIconDisplay value={noteIcons[String(editingNote.id)]} folderName={title || "N"} className="w-4 h-4" /> : noteBadgeLabel}
+                                {showFileIcons && editingNote?.id && noteIcons[String(editingNote.id)] ? <FolderIconDisplay value={noteIcons[String(editingNote.id)]} folderName={title || "N"} className="w-4 h-4" /> : noteBadgeLabel}
                             </button>
                         )}
                         <input ref={titleInputMobileRef} onChange={(e) => { titleRaw.current = e.target.value; }} onBlur={(e) => setTitle(e.target.value)} onFocus={() => { closeEditorTools(); setShowNoteActions(false); }} autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false} className="sm:hidden bg-transparent border-0 appearance-none shadow-none ring-0 outline-none focus:outline-none focus:ring-0 px-2 flex-grow min-w-0 text-white placeholder:text-zinc-500" style={{ caretColor: activeAccentColor, border: "none", fontFamily: noteType === "text" ? "Caveat, cursive" : undefined, fontSize: "clamp(12px, 1.4vw, 17px)" }} placeholder="NOTE TITLE" />
@@ -7001,7 +7001,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                         const isActive = false;
                                         if (isListMode) {
                                             // Mode 2: shade non-folder rows with parent folder color
-                                            if (VIEW_MODE === "2" && !item.is_folder && activeFolder) {
+                                            if (!showFileIcons && !item.is_folder && activeFolder) {
                                                 const parentColor = folders.find(f => f.name === activeFolder)?.color || c;
                                                 return { position: "relative", isolation: "isolate", "--row-color": parentColor, "--fc": parentColor, background: shadedRowBg(parentColor, idx) } as unknown as React.CSSProperties;
                                             }
@@ -7046,7 +7046,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                     </button>
                                                 );
                                             })()}
-                                            {!item.is_folder && VIEW_MODE === "1" && (() => {
+                                            {!item.is_folder && showFileIcons && (() => {
                                                 const nc = (item as any).color || (item as any).folder_color || "#71717a";
                                                 const initial = meaningfulInitial(item.title || "", "N");
                                                 const nIcon = noteIcons[String(item.id)];
@@ -7162,7 +7162,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                     <>
                                                         {(() => { const tc = "#fff"; return (<>
                                                         <div style={{ fontSize: "3rem", lineHeight: 1, color: tc }} className="font-black relative z-10">
-                                                            {noteIcons[String(item.id)]
+                                                            {showFileIcons && noteIcons[String(item.id)]
                                                                 ? <FolderIconDisplay value={noteIcons[String(item.id)]} folderName={item.title || "N"} className="w-10 h-10" />
                                                                 : meaningfulInitial(item.title || "", "N")}
                                                         </div>
@@ -8257,6 +8257,19 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                 onClick={() => setNavMode(mode)}
                                                 className={`flex-1 py-1.5 rounded text-[10px] font-black uppercase tracking-wide transition ${navMode === mode ? "bg-white text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"}`}>
                                                 {mode === "folders-and-files" ? "Folders" : "Files"}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                                {/* FILE ICONS */}
+                                <div className="px-6 py-2 border-b border-white/[0.06]">
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-1.5">File Icons</p>
+                                    <div className="flex gap-1.5">
+                                        {([true, false] as const).map((v) => (
+                                            <button key={String(v)} type="button"
+                                                onClick={() => { setShowFileIcons(v); try { localStorage.setItem(SHOW_FILE_ICONS_KEY, String(v)); } catch {} }}
+                                                className={`flex-1 py-1.5 rounded text-[10px] font-black uppercase tracking-wide transition ${showFileIcons === v ? "bg-white text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"}`}>
+                                                {v ? "On" : "Off"}
                                             </button>
                                         ))}
                                     </div>
