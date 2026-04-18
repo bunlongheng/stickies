@@ -8,6 +8,7 @@
     "dev": "node scripts/dev.mjs",
     "build": "next build",
     "start": "next start",
+    "prod": "next build && next start -p 4444 --hostname 0.0.0.0",
     "smoke": "sh -c 'set -a && . .env.local && set +a && NODE_TLS_REJECT_UNAUTHORIZED=0 BASE_URL=http://localhost:4444 npx tsx tests/smoke-signup.ts'",
     "smoke:images": "sh -c 'set -a && . .env.local && set +a && NODE_TLS_REJECT_UNAUTHORIZED=0 BASE_URL=http://localhost:4444 npx tsx tests/smoke-images.ts'",
     "smoke:flow": "sh -c 'set -a && . .env.local && set +a && NODE_TLS_REJECT_UNAUTHORIZED=0 BASE_URL=http://localhost:4444 npx tsx tests/smoke-user-flow.ts'",
@@ -21,7 +22,6 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.82.0",
-    "@floating-ui/dom": "^1.7.6",
     "@heroicons/react": "^2.2.0",
     "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.98.0",
@@ -32,7 +32,6 @@
     "googleapis": "^171.4.0",
     "lz-string": "^1.5.0",
     "marked": "^17.0.3",
-    "marked-highlight": "^2.2.3",
     "mermaid": "^11.13.0",
     "next": "16.1.6",
     "pdf-parse": "^2.4.5",
@@ -44,9 +43,7 @@
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-simple-code-editor": "^0.14.1",
-    "react-syntax-highlighter": "^16.1.1",
     "resend": "^6.9.3",
-    "sax": "^1.5.0",
     "web-push": "^3.6.7"
   },
   "devDependencies": {

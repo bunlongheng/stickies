@@ -1253,7 +1253,6 @@ export default function NotesMaster() {
     const [typeFilter, setTypeFilter] = useState<string | null>(null);
     const [pendingNoteType, setPendingNoteType] = useState<string | null>(null);
     const [showNoteTypePicker, setShowNoteTypePicker] = useState(false);
-    const [showAddMenu, setShowAddMenu] = useState(false);
     const [aiPromptOpen, setAiPromptOpen] = useState(false);
     const [aiPrompt, setAiPrompt] = useState("");
     const [aiLoading, setAiLoading] = useState(false);
@@ -1289,6 +1288,7 @@ export default function NotesMaster() {
     const isFlashingRef = useRef(false);
     const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const suppressOpenRef = useRef(false);
+    const navTimestampRef = useRef(0); // guards against click bleed-through on folder navigation
     const openingNoteIdRef = useRef<string | null>(null); // tracks most-recent openNote call; stale fetches are discarded
     const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const mainScrollRef = useRef<HTMLElement | null>(null);
@@ -1938,13 +1938,6 @@ export default function NotesMaster() {
     useEffect(() => {
         try { localStorage.setItem(NAV_MODE_KEY, navMode); } catch { /* ignore */ }
     }, [mainListMode]);
-
-    useEffect(() => {
-        if (!showAddMenu) return;
-        const close = () => setShowAddMenu(false);
-        document.addEventListener("click", close);
-        return () => document.removeEventListener("click", close);
-    }, [showAddMenu]);
 
     useEffect(() => {
         try { localStorage.setItem(KANBAN_MODE_KEY, String(kanbanMode)); } catch { /* ignore */ }
@@ -4795,6 +4788,28 @@ const fireIntegrations = (trigger: string, note: any) => {
 
             try {
                 await notesApi.bulkUpdate(updates.map((u) => ({ id: String(u.id), order: u.order })));
+                // Cascade position-based palette colors to all children (notes + subfolders)
+                const fullPalette = [...palette12, "#8E8E93", "#FFFFFF"];
+                const rootFolders = realFolders.filter(f => !f.parent_folder_name);
+                const colorUpdates: { id: string; folder_color: string }[] = [];
+                rootFolders.forEach((folder, idx) => {
+                    const newColor = fullPalette[idx % fullPalette.length];
+                    const folderName = folder.folder_name || folder.name;
+                    // Update the folder row itself
+                    colorUpdates.push({ id: String(folder.id), folder_color: newColor });
+                    // Find all notes and subfolders inside this folder
+                    dbData.forEach(r => {
+                        if (String(r.id) === String(folder.id)) return; // skip self
+                        if (r.folder_name === folderName || r.parent_folder_name === folderName) {
+                            colorUpdates.push({ id: String(r.id), folder_color: newColor });
+                        }
+                    });
+                });
+                // Optimistic local update
+                const colorMap = new Map(colorUpdates.map(u => [u.id, u.folder_color]));
+                setDbData(d => d.map(r => colorMap.has(String(r.id)) ? { ...r, folder_color: colorMap.get(String(r.id)) } : r));
+                // Persist to DB
+                void notesApi.bulkUpdate(colorUpdates);
             } catch (err) {
                 console.error("Folder reorder failed:", err);
                 setDbData(prev);
@@ -7017,8 +7032,11 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                         }
                                         if (item.is_folder) {
                                             playSound("navigate");
+                                            navTimestampRef.current = Date.now();
                                             enterFolder({ id: String(item.id), name: item.name, color: item.color || palette12[0] });
                                         } else {
+                                            // Guard: ignore clicks within 400ms of folder navigation (prevents bleed-through)
+                                            if (Date.now() - navTimestampRef.current < 400) return;
                                             void openNote(item);
                                             setTimeout(() => playSound("click"), 0);
                                         }
@@ -7029,20 +7047,24 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                         if (isListMode) {
                                             // Mode 2: shade ALL rows (folders + notes) with a gradual parent-color gradient
                                             if (!showFileIcons) {
+                                                // Parent color: folderStack (breadcrumb source) > folders useMemo > note's own color
                                                 const parentColor = activeFolder
-                                                    ? (folders.find(f => f.name === activeFolder)?.color || c)
+                                                    ? (folderStack.at(-1)?.color || folders.find(f => f.name === activeFolder)?.color || c)
                                                     : c;
                                                 const isRootFolder = !activeFolder && !!item.is_folder;
                                                 return { position: "relative", isolation: "isolate", "--row-color": parentColor, "--fc": parentColor, background: isRootFolder ? `${parentColor}12` : shadedRowBg(parentColor, idx, filteredDisplayItems.length) } as unknown as React.CSSProperties;
                                             }
-                                            return { position: "relative", isolation: "isolate", "--row-color": c, "--fc": c, ...(isActive && !item.is_folder ? { borderRightColor: c, background: `${c}35` } : isActive ? { borderRightColor: c } : {}), ...(item.is_folder ? { background: `${c}18` } : {}) } as unknown as React.CSSProperties;
+                                            {
+                                                const rowColor = activeFolder ? (folderStack.at(-1)?.color || c) : c;
+                                                return { position: "relative", isolation: "isolate", "--row-color": rowColor, "--fc": rowColor, ...(isActive && !item.is_folder ? { borderRightColor: rowColor, background: `${rowColor}35` } : isActive ? { borderRightColor: rowColor } : {}), ...(item.is_folder ? { background: `${rowColor}18` } : {}) } as unknown as React.CSSProperties;
+                                            }
                                         }
                                         return item.is_folder
                                             ? { isolation: "isolate", "--fc": c, "--tc": "#fff" } as React.CSSProperties
                                             : { isolation: "isolate", backgroundColor: c, borderRadius: "3px 3px 3px 14px" };
                                     })()}
                                     className={`${isListMode
-                                        ? `group list-row-hover flex items-center gap-3 pl-3 pr-3 min-h-[54px] border-b border-white/5 cursor-pointer select-none transition-colors active:bg-white/10 overflow-hidden ${!item.is_folder && incomingNoteIds.has(String(item.id)) ? "note-incoming" : ""} ${!item.is_folder && removingNoteIds.has(String(item.id)) ? "note-removing" : ""} ${isDragging ? "opacity-30" : dt?.mode === "into" ? "bg-cyan-950/60 ring-1 ring-inset ring-cyan-400" : ""} ${isSelectMode && !item.is_folder && selectedIds.has(String(item.id)) ? "bg-blue-950/50" : ""} border-r-[3px] border-r-transparent`
+                                        ? `group list-row-hover flex items-center gap-3 pl-3 pr-3 min-h-[64px] sm:min-h-[54px] border-b border-white/5 cursor-pointer select-none transition-colors active:bg-white/10 overflow-hidden ${!item.is_folder && incomingNoteIds.has(String(item.id)) ? "note-incoming" : ""} ${!item.is_folder && removingNoteIds.has(String(item.id)) ? "note-removing" : ""} ${isDragging ? "opacity-30" : dt?.mode === "into" ? "bg-cyan-950/60 ring-1 ring-inset ring-cyan-400" : ""} ${isSelectMode && !item.is_folder && selectedIds.has(String(item.id)) ? "bg-blue-950/50" : ""} border-r-[3px] border-r-transparent`
                                         : `grid-square-tile min-w-0 cursor-pointer transition-all group ${item.is_folder ? `folder-grid-tile${item.name === "CLAUDE" ? " folder-grid-tile-claude" : ""}` : ""} ${isDragging ? "opacity-30 scale-95" : dt?.mode === "into" ? "ring-4 ring-cyan-400 ring-inset z-10" : ""}`}`}>
                                     {/* Cursor spotlight glow — DOM-only, no React state */}
                                     {isListMode && <div data-glow className="absolute inset-0 pointer-events-none z-[-1]" style={{ transition: "background 0.4s ease" }} />}

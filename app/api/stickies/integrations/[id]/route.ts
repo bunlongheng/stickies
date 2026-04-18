@@ -1,4 +1,3 @@
-import crypto from "crypto";
 import { authorizeOwner } from "@/app/api/stickies/_auth";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
@@ -8,23 +7,6 @@ function getSupabase() {
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.SUPABASE_SERVICE_ROLE_KEY!,
     );
-}
-
-function authorize(req: Request): boolean {
-    const auth = req.headers.get("authorization") ?? "";
-    const candidates = [
-        process.env.STICKIES_API_KEY,
-        process.env.STICKIES_PASSWORD,
-    ].filter(Boolean) as string[];
-    for (const secret of candidates) {
-        const expected = `Bearer ${secret}`;
-        if (auth.length === expected.length) {
-            try {
-                if (crypto.timingSafeEqual(Buffer.from(auth), Buffer.from(expected))) return true;
-            } catch {}
-        }
-    }
-    return false;
 }
 
 type Params = { params: Promise<{ id: string }> };
