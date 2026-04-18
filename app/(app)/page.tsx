@@ -192,19 +192,14 @@ const palette12 = ["#FF3B30", "#FF6B4E", "#FF9500", "#FFCC00", "#D4E157", "#34C7
 
 const SHOW_FILE_ICONS_KEY = "stickies:show-file-icons:v1";
 
-// Generate a unique solid shade per index for Mode 2 row backgrounds
-// Mixes the parent color with white at varying ratios to produce distinct solid shades
-function shadedRowBg(hex: string, index: number): string {
-    const h = hex.replace("#", "");
-    const r = parseInt(h.slice(0, 2), 16);
-    const g = parseInt(h.slice(2, 4), 16);
-    const b = parseInt(h.slice(4, 6), 16);
-    // 8-step lightness cycle: each row gets a slightly different shade
-    const mixRatios = [0, 0.06, 0.12, 0.18, 0.24, 0.18, 0.12, 0.06];
-    const ratio = mixRatios[index % mixRatios.length];
-    const mix = (c: number) => Math.round(c + (255 - c) * ratio);
-    const toHex = (n: number) => n.toString(16).padStart(2, "0");
-    return `#${toHex(mix(r))}${toHex(mix(g))}${toHex(mix(b))}`;
+// Generate a gradual shade per row for Mode 2 row backgrounds
+// Opacity ramps linearly from min → max across the full list (no looping)
+function shadedRowBg(hex: string, index: number, total: number): string {
+    const minOpacity = 0x1f; // ~12% — gentle tint
+    const maxOpacity = 0x66; // ~40% — strong tint
+    const ratio = total <= 1 ? 0 : index / (total - 1);
+    const opacity = Math.round(minOpacity + (maxOpacity - minOpacity) * ratio);
+    return `${hex}${opacity.toString(16).padStart(2, "0")}`;
 }
 const colorPickerPalette = [...palette12, "#8E8E93", "#FFFFFF"];
 
@@ -2952,6 +2947,15 @@ const fireIntegrations = (trigger: string, note: any) => {
                 updated_at: new Date().toISOString(),
                 ...(folderId ? { folder_id: folderId } : {}),
             };
+            // Recompute checklist counts client-side so the file-list circle stays in sync
+            const isChecklistSave = payload.type === "checklist" || (editingNote as any)?.list_mode === true;
+            if (isChecklistSave) {
+                const isSep = (s: string) => /^[-–—=*#~_.]{2,}$/.test(s);
+                const lines = saveContent.split("\n").map(l => l.trim()).filter(l => l && !isSep(l));
+                payload.task_count = lines.length;
+                payload.task_remaining_count = lines.filter(l => !/^\[x\]/i.test(l)).length;
+                payload.task_done_count = lines.reduce((sum, l) => sum + (/^\[x\]/i.test(l) ? 1.0 : /^\[\/\]/.test(l) ? 0.5 : 0), 0);
+            }
             const existingNoteId = editingNote?.id ?? null;
             const existingNoteIdStr = existingNoteId !== null ? String(existingNoteId) : null;
             const optimisticId = existingNoteIdStr || `local-${Date.now()}`;
@@ -3484,6 +3488,39 @@ const fireIntegrations = (trigger: string, note: any) => {
         const htmlData = e.clipboardData.getData("text/html");
 
         const nid = editingNote?.id ? String(editingNote.id) : null;
+
+        // Excel / Sheets paste → tab-separated rows → convert to markdown table
+        if (imageItems.length === 0) {
+            const plain = e.clipboardData.getData("text/plain");
+            const rows = plain.split(/\r?\n/).filter(r => r.length > 0);
+            const looksLikeTsv = rows.length >= 2 && rows.every(r => r.includes("\t")) && rows[0].split("\t").length >= 2;
+            if (looksLikeTsv) {
+                e.preventDefault();
+                const cellRows = rows.map(r => r.split("\t"));
+                const colCount = Math.max(...cellRows.map(r => r.length));
+                const padded = cellRows.map(r => {
+                    const cells = r.map(c => c.replace(/\|/g, "\\|").trim());
+                    while (cells.length < colCount) cells.push("");
+                    return cells;
+                });
+                const header = padded[0];
+                const body = padded.slice(1);
+                const md = [
+                    `| ${header.join(" | ")} |`,
+                    `| ${header.map(() => "---").join(" | ")} |`,
+                    ...body.map(r => `| ${r.join(" | ")} |`),
+                ].join("\n");
+                const textarea = e.currentTarget;
+                const start = textarea.selectionStart ?? content.length;
+                const end = textarea.selectionEnd ?? content.length;
+                const needsBreaks = start > 0 && content[start - 1] !== "\n";
+                const insert = (needsBreaks ? "\n\n" : "") + md + "\n";
+                setContent(content.slice(0, start) + insert + content.slice(end));
+                setPendingNoteType("markdown");
+                showToast(`Table pasted (${cellRows.length}×${colCount}) ✓`, "#34C759");
+                return;
+            }
+        }
 
         // Direct image file paste → upload to Google Drive (fallback: Supabase), embed as short URL
         if (imageItems.length > 0) {
@@ -4251,18 +4288,20 @@ const fireIntegrations = (trigger: string, note: any) => {
     const parsedTasks = useMemo(() => {
         if (!listMode && !graphMode && !stackMode) return [];
         const isSeparator = (s: string) => /^[-–—=*#~_.]{2,}$/.test(s) || /^[-–—]{2,}.*[-–—]{2,}$/.test(s);
-        const result: { done: boolean; text: string; lineIdx: number }[] = [];
-        deferredContent.split("\n").forEach((line, lineIdx) => {
+        const result: { done: boolean; inProgress: boolean; text: string; lineIdx: number }[] = [];
+        // Use immediate `content` (not deferred) so checklist updates as soon as content arrives
+        content.split("\n").forEach((line, lineIdx) => {
             const trimmed = line.trim();
             if (trimmed.length === 0 || isSeparator(trimmed)) return;
             const noBullet = trimmed.replace(/^\s*[-*•+_]\s*/, "").replace(/^\s*\d+\.\s*/, "").trim();
             const done = /^\[x\]/i.test(noBullet) || /^\[x\]/i.test(trimmed);
-            const text = noBullet.replace(/^\[x\]\s*/i, "").replace(/^\[\s*\]\s*/, "").trim();
+            const inProgress = !done && (/^\[\/\]/.test(noBullet) || /^\[\/\]/.test(trimmed));
+            const text = noBullet.replace(/^\[x\]\s*/i, "").replace(/^\[\/\]\s*/, "").replace(/^\[\s*\]\s*/, "").trim();
             if (text.length === 0) return;
-            result.push({ done, text, lineIdx });
+            result.push({ done, inProgress, text, lineIdx });
         });
         return result;
-    }, [deferredContent, listMode, graphMode, stackMode]);
+    }, [content, listMode, graphMode, stackMode]);
 
     const pushTaskHistory = useCallback((c: string) => {
         taskContentHistory.current = [...taskContentHistory.current.slice(-30), c];
@@ -4275,14 +4314,25 @@ const fireIntegrations = (trigger: string, note: any) => {
         const trimmed = line.trim();
         const noBullet = trimmed.replace(/^\s*[-*•+_]\s*/, "").replace(/^\s*\d+\.\s*/, "").trim();
         const wasDone = /^\[x\]/i.test(noBullet) || /^\[x\]/i.test(trimmed);
+        const wasInProgress = !wasDone && (/^\[\/\]/.test(noBullet) || /^\[\/\]/.test(trimmed));
+        // Cycle: empty → in-progress → done → empty
+        let nextLine: string;
+        let nextState: "empty" | "in-progress" | "done";
+        const stripped = line.replace(/^\s*\[[ x\/]\]\s*/i, "");
+        if (wasDone) { nextLine = stripped; nextState = "empty"; }
+        else if (wasInProgress) { nextLine = `[x] ${stripped}`; nextState = "done"; }
+        else { nextLine = `[/] ${stripped}`; nextState = "in-progress"; }
         pushTaskHistory(content);
-        lines[lineIdx] = wasDone ? line.replace(/^\s*\[x\]\s*/i, "") : `[x] ${line}`;
-        playSound(wasDone ? "uncheck" : "check");
+        lines[lineIdx] = nextLine;
+        playSound(nextState === "done" ? "check" : nextState === "empty" ? "uncheck" : "click");
         setContent(lines.join("\n"));
         setEditingTaskIdx(null);
-        if (!wasDone) {
+        if (nextState === "done") {
             const label = noBullet.replace(/^\[.\]\s*/i, "").trim();
             showToast(`✓ ${label.length > 18 ? label.slice(0, 18) + "…" : label}`, "#34C759");
+        } else if (nextState === "in-progress") {
+            const label = noBullet.replace(/^\[.\]\s*/i, "").trim();
+            showToast(`◐ ${label.length > 18 ? label.slice(0, 18) + "…" : label}`, "#FF9500");
         }
     }, [content, pushTaskHistory]);
 
@@ -5731,7 +5781,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                     <path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/>
                                                 </svg>
                                             </span>
-                                            <span className="font-black uppercase tracking-wide text-[7px] sm:text-[8px] leading-snug max-w-[220px] break-words text-center">{toast}</span>
+                                            <span className="font-bold tracking-tight text-[11px] sm:text-[12px] leading-snug max-w-[220px] break-words text-center">{toast}</span>
                                         </div>
                                     );
                                 })()}
@@ -5797,57 +5847,9 @@ const fireIntegrations = (trigger: string, note: any) => {
                             <ArrowLeftIcon className="w-[38px] h-[38px]" />
                         </button>
 
-                        {/* Desktop: folder breadcrumbs + note title inline */}
-                        <div className="hidden sm:flex items-center gap-0.5 min-w-0 overflow-hidden flex-1">
-                            {folderStack.map((frame, i) => (
-                                <React.Fragment key={frame.id + i}>
-                                    {i > 0 && <span className="text-zinc-700 text-[10px] flex-shrink-0">/</span>}
-                                    <button type="button"
-                                        onClick={() => { goToIndex(i); void backToRootFromEditor(); }}
-                                        className="flex items-center gap-1 font-normal tracking-tight text-white hover:text-zinc-300 transition flex-shrink-0 text-xs px-0.5">
-                                        <span className="w-6 h-6 flex-shrink-0 flex items-center justify-center text-sm font-black leading-none overflow-hidden" style={{ background: frame.name === "CLAUDE" ? "#fff" : (folderColors[frame.name] || frame.color || "#888"), color: frame.name === "CLAUDE" ? (folderColors[frame.name] || "#888") : ("#fff"), borderRadius: 4 } as React.CSSProperties}>
-                                            {frame.name === "CLAUDE"
-                                                ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-0.5" />
-                                                : <FolderIconDisplay value={folderIcons[frame.name] || ""} folderName={frame.name} className="w-3.5 h-3.5" />}
-                                        </span>
-                                        <span className="uppercase">{frame.name}</span>
-                                    </button>
-                                </React.Fragment>
-                            ))}
-                            {folderStack.length > 0 && <span className="text-zinc-700 text-[10px] flex-shrink-0">/</span>}
-                            {isBreadcrumbChecklist ? (
-                                <div className="w-6 h-6 flex-shrink-0 relative overflow-hidden font-black" style={{ backgroundColor: activeAccentColor, borderRadius: "2px 2px 2px 10px" }}>
-                                    <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: `${breadcrumbFillPct}%`, background: "rgba(0,0,0,0.25)", transition: "height 0.4s ease" }} />
-                                    <div className="absolute inset-0 flex items-center justify-center" style={{ fontSize: breadcrumbTotal >= 10 ? 9 : 11, color: "#fff" }}>{breadcrumbTotal}</div>
-                                </div>
-                            ) : (
-                                <button type="button"
-                                    onClick={() => { if (editingNote?.id) setIconPickerFolder(`__note:${editingNote.id}`); }}
-                                    className="w-6 h-6 flex-shrink-0 flex items-center justify-center font-black leading-none tracking-tight cursor-pointer hover:brightness-125 transition"
-                                    style={{ backgroundColor: activeAccentColor, color: "#fff", borderRadius: "2px 2px 2px 10px", fontSize: noteBadgeFontSize }}
-                                    title="Change icon">
-                                    {showFileIcons && editingNote?.id && noteIcons[String(editingNote.id)] ? <FolderIconDisplay value={noteIcons[String(editingNote.id)]} folderName={title || "N"} className="w-3.5 h-3.5" /> : noteBadgeLabel}
-                                </button>
-                            )}
-                            <input ref={titleInputRef} onChange={(e) => { titleRaw.current = e.target.value; }} onBlur={(e) => setTitle(e.target.value)} onFocus={() => { closeEditorTools(); setShowNoteActions(false); }} autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false} className="bg-transparent border-0 appearance-none shadow-none ring-0 outline-none focus:outline-none focus:ring-0 px-1 min-w-0 flex-1 tracking-tight font-normal text-white placeholder:text-zinc-500" style={{ caretColor: activeAccentColor, fontFamily: noteType === "text" ? "Caveat, cursive" : undefined, fontSize: "clamp(12px, 1.4vw, 17px)" }} placeholder="NOTE TITLE" />
-                        </div>
-
-                        {/* Mobile: badge + title */}
-                        {isBreadcrumbChecklist ? (
-                            <div className="sm:hidden w-[30px] h-[30px] flex-shrink-0 relative overflow-hidden font-black" style={{ backgroundColor: activeAccentColor }}>
-                                <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: `${breadcrumbFillPct}%`, background: "rgba(0,0,0,0.25)", transition: "height 0.4s ease" }} />
-                                <div className="absolute inset-0 flex items-center justify-center" style={{ fontSize: breadcrumbTotal >= 10 ? 9 : 11, color: "#fff" }}>{breadcrumbTotal}</div>
-                            </div>
-                        ) : (
-                            <button type="button"
-                                onClick={() => { if (editingNote?.id) setIconPickerFolder(`__note:${editingNote.id}`); }}
-                                className="sm:hidden w-[30px] h-[30px] inline-flex items-center justify-center font-black leading-none tracking-tight flex-shrink-0 cursor-pointer hover:brightness-125 transition"
-                                style={{ backgroundColor: activeAccentColor, color: "#fff", borderRadius: "2px 2px 2px 10px", fontSize: noteBadgeFontSize }}
-                                title="Change icon">
-                                {showFileIcons && editingNote?.id && noteIcons[String(editingNote.id)] ? <FolderIconDisplay value={noteIcons[String(editingNote.id)]} folderName={title || "N"} className="w-4 h-4" /> : noteBadgeLabel}
-                            </button>
-                        )}
-                        <input ref={titleInputMobileRef} onChange={(e) => { titleRaw.current = e.target.value; }} onBlur={(e) => setTitle(e.target.value)} onFocus={() => { closeEditorTools(); setShowNoteActions(false); }} autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false} className="sm:hidden bg-transparent border-0 appearance-none shadow-none ring-0 outline-none focus:outline-none focus:ring-0 px-2 flex-grow min-w-0 text-white placeholder:text-zinc-500" style={{ caretColor: activeAccentColor, border: "none", fontFamily: noteType === "text" ? "Caveat, cursive" : undefined, fontSize: "clamp(12px, 1.4vw, 17px)" }} placeholder="NOTE TITLE" />
+                        {/* Title only — Apple Notes style */}
+                        <input ref={titleInputRef} defaultValue={title} key={`title-${editingNote?.id || "new"}`} onChange={(e) => { titleRaw.current = e.target.value; }} onBlur={(e) => setTitle(e.target.value)} onFocus={() => { closeEditorTools(); setShowNoteActions(false); }} autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false} className="hidden sm:block bg-transparent border-0 appearance-none shadow-none ring-0 outline-none focus:outline-none focus:ring-0 px-1 min-w-0 flex-1 tracking-tight font-bold text-white placeholder:text-zinc-500" style={{ caretColor: activeAccentColor, fontSize: "clamp(18px, 2vw, 24px)" }} placeholder="Note Title" />
+                        <input ref={titleInputMobileRef} defaultValue={title} key={`title-m-${editingNote?.id || "new"}`} onChange={(e) => { titleRaw.current = e.target.value; }} onBlur={(e) => setTitle(e.target.value)} onFocus={() => { closeEditorTools(); setShowNoteActions(false); }} autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false} className="sm:hidden bg-transparent border-0 appearance-none shadow-none ring-0 outline-none focus:outline-none focus:ring-0 px-2 flex-grow min-w-0 text-white placeholder:text-zinc-500" style={{ caretColor: activeAccentColor, border: "none", fontSize: "clamp(18px, 5vw, 24px)", fontWeight: 700 }} placeholder="Note Title" />
 
                         {mermaidMode && (
                             <div className="flex items-center gap-1 flex-shrink-0">
@@ -6242,17 +6244,20 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             <TrashIcon className="w-5 h-5 text-white" />
                                         </div>
                                         {/* Sliding content */}
-                                        <div className="flex items-center gap-3 px-4 py-1 min-h-[34px] sm:min-h-[32px] relative overflow-hidden"
+                                        <div className="flex items-center gap-3 px-4 py-3 min-h-[54px] leading-snug relative overflow-hidden"
                                             style={{
                                                 background: task.done ? "rgba(255,255,255,0.04)" : `${c}50`,
                                                 transform: `translateX(-${rowOffset}px)`,
                                                 transition: isDragging ? "none" : "transform 0.25s cubic-bezier(0.25,1,0.5,1)",
                                             }}>
                                             <span className="task-card-pattern absolute inset-0 pointer-events-none" />
-                                            {!task.done && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[36px] font-black leading-none pointer-events-none select-none" style={{ color: "rgba(255,255,255,0.25)", fontFamily: "monospace" }}>{String(sortedIdx + 1).padStart(2, "0")}</span>}
-                                            <button type="button" onClick={() => toggleTask(task.lineIdx)} className="relative flex-shrink-0 w-5 h-5 rounded-sm border-2 flex items-center justify-center transition-all" style={{ borderColor: task.done ? "rgba(255,255,255,0.25)" : c, backgroundColor: task.done ? "rgba(255,255,255,0.15)" : "transparent" }}>
+                                            {!task.done && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[14px] sm:text-[16px] font-black leading-none pointer-events-none select-none" style={{ color: "rgba(255,255,255,0.25)", fontFamily: "monospace" }}>{String(sortedIdx + 1).padStart(2, "0")}</span>}
+                                            <button type="button" onClick={() => toggleTask(task.lineIdx)} className="relative flex-shrink-0 w-5 h-5 rounded-sm border-2 flex items-center justify-center transition-all overflow-hidden" style={{ borderColor: task.done ? "rgba(255,255,255,0.25)" : c, backgroundColor: task.done ? "rgba(255,255,255,0.15)" : "transparent" }}>
                                                 {task.done && (
                                                     <svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="#000" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                                                )}
+                                                {task.inProgress && !task.done && (
+                                                    <span className="absolute left-0 right-0 bottom-0" style={{ height: "50%", background: c }} />
                                                 )}
                                             </button>
                                             {editingTaskIdx === origIdx && !task.done ? (
@@ -6952,7 +6957,10 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                     onMouseEnter={(e) => {
                                         playSound("hover");
                                         if (!isListMode) return;
-                                        const [ri, gi, bi] = hexToRgb(item.color || item.folder_color || "#888888");
+                                        const hoverColor = !showFileIcons && activeFolder
+                                            ? (folders.find(f => f.name === activeFolder)?.color || item.color || item.folder_color || "#888888")
+                                            : (item.color || item.folder_color || "#888888");
+                                        const [ri, gi, bi] = hexToRgb(hoverColor);
                                         const rect = e.currentTarget.getBoundingClientRect();
                                         const x = ((e.clientX - rect.left) / rect.width) * 100, y = ((e.clientY - rect.top) / rect.height) * 100;
                                         const glow = e.currentTarget.querySelector<HTMLElement>("[data-glow]");
@@ -6960,7 +6968,10 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                     }}
                                     onMouseMove={(e) => {
                                         if (!isListMode) return;
-                                        const [ri, gi, bi] = hexToRgb(item.color || item.folder_color || "#888888");
+                                        const hoverColor = !showFileIcons && activeFolder
+                                            ? (folders.find(f => f.name === activeFolder)?.color || item.color || item.folder_color || "#888888")
+                                            : (item.color || item.folder_color || "#888888");
+                                        const [ri, gi, bi] = hexToRgb(hoverColor);
                                         const rect = e.currentTarget.getBoundingClientRect();
                                         const x = ((e.clientX - rect.left) / rect.width) * 100, y = ((e.clientY - rect.top) / rect.height) * 100;
                                         const glow = e.currentTarget.querySelector<HTMLElement>("[data-glow]");
@@ -7000,10 +7011,12 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                         const c = item.color || item.folder_color || "#888888";
                                         const isActive = false;
                                         if (isListMode) {
-                                            // Mode 2: shade non-folder rows with parent folder color
-                                            if (!showFileIcons && !item.is_folder && activeFolder) {
-                                                const parentColor = folders.find(f => f.name === activeFolder)?.color || c;
-                                                return { position: "relative", isolation: "isolate", "--row-color": parentColor, "--fc": parentColor, background: shadedRowBg(parentColor, idx) } as unknown as React.CSSProperties;
+                                            // Mode 2: shade ALL rows (folders + notes) with a gradual parent-color gradient
+                                            if (!showFileIcons) {
+                                                const parentColor = activeFolder
+                                                    ? (folders.find(f => f.name === activeFolder)?.color || c)
+                                                    : c;
+                                                return { position: "relative", isolation: "isolate", "--row-color": parentColor, "--fc": parentColor, background: shadedRowBg(parentColor, idx, filteredDisplayItems.length) } as unknown as React.CSSProperties;
                                             }
                                             return { position: "relative", isolation: "isolate", "--row-color": c, "--fc": c, ...(isActive && !item.is_folder ? { borderRightColor: c, background: `${c}35` } : isActive ? { borderRightColor: c } : {}), ...(item.is_folder ? { background: `${c}18` } : {}) } as unknown as React.CSSProperties;
                                         }
@@ -7050,6 +7063,35 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                 const nc = (item as any).color || (item as any).folder_color || "#71717a";
                                                 const initial = meaningfulInitial(item.title || "", "N");
                                                 const nIcon = noteIcons[String(item.id)];
+                                                const isChecklistItem = (item as any).list_mode === true || (item as any).type === "checklist";
+                                                const taskCount = Number((item as any).task_count || 0);
+                                                const taskDoneCount = Number((item as any).task_done_count || 0);
+                                                const taskRemaining = Number((item as any).task_remaining_count ?? taskCount);
+                                                const noteTextColor = isLightColor(nc) ? "#1c1c1e" : "#fff";
+                                                if (isChecklistItem) {
+                                                    const pct = taskCount > 0 ? Math.min(1, taskDoneCount / taskCount) : 0;
+                                                    const RING = 24; // outer radius
+                                                    const STROKE = 3;
+                                                    const r = RING - STROKE / 2;
+                                                    const circ = 2 * Math.PI * r;
+                                                    return (
+                                                        <button type="button"
+                                                            onClick={(e) => { e.stopPropagation(); void openNote(item); closeEditorTools(); }}
+                                                            className="flex-shrink-0 w-[54px] h-[54px] sm:w-[46px] sm:h-[46px] m-1 sm:m-0 flex items-center justify-center font-black relative"
+                                                            style={{ color: noteTextColor, fontSize: taskRemaining >= 100 ? 14 : taskRemaining >= 10 ? 16 : 18 }}>
+                                                            {/* Disc with internal bottom-up fill */}
+                                                            <div className="absolute m-auto inset-0 rounded-full overflow-hidden" style={{ width: RING * 2, height: RING * 2, background: nc, boxShadow: `2px 3px 8px ${nc}55` }}>
+                                                                {pct < 1 && <div className="absolute left-0 right-0 top-0" style={{ height: `${(1 - pct) * 100}%`, background: "rgba(0,0,0,0.45)" }} />}
+                                                            </div>
+                                                            {/* Outer ring overlay */}
+                                                            <svg className="absolute inset-0 m-auto pointer-events-none" width={RING * 2} height={RING * 2} viewBox={`0 0 ${RING * 2} ${RING * 2}`} style={{ transform: "rotate(-90deg)" }}>
+                                                                <circle cx={RING} cy={RING} r={r} fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth={STROKE} />
+                                                                {pct > 0 && <circle cx={RING} cy={RING} r={r} fill="none" stroke="#fff" strokeWidth={STROKE} strokeLinecap="round" strokeDasharray={`${circ * pct} ${circ}`} />}
+                                                            </svg>
+                                                            <span className="relative">{taskRemaining}</span>
+                                                        </button>
+                                                    );
+                                                }
                                                 return (
                                                     <button type="button"
                                                         onClick={(e) => { e.stopPropagation(); void openNote(item); closeEditorTools(); }}
@@ -7057,7 +7099,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                         style={{
                                                             fontSize: 22,
                                                             backgroundColor: nc,
-                                                            color: "#fff",
+                                                            color: noteTextColor,
                                                             borderRadius: "6px 6px 6px 16px",
                                                             boxShadow: `2px 3px 8px ${nc}55`,
                                                         }}>
@@ -7160,7 +7202,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                     </>
                                                 ) : (
                                                     <>
-                                                        {(() => { const tc = "#fff"; return (<>
+                                                        {(() => { const tc = isLightColor(item.color || item.folder_color || "#888") ? "#1c1c1e" : "#fff"; return (<>
                                                         <div style={{ fontSize: "3rem", lineHeight: 1, color: tc }} className="font-black relative z-10">
                                                             {showFileIcons && noteIcons[String(item.id)]
                                                                 ? <FolderIconDisplay value={noteIcons[String(item.id)]} folderName={item.title || "N"} className="w-10 h-10" />
