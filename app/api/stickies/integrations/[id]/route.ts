@@ -26,7 +26,7 @@ export async function PATCH(req: Request, { params }: Params) {
 }
 
 export async function DELETE(_req: Request, { params }: Params) {
-    if (!authorize(_req)) {
+    if (!authorizeOwner(_req)) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const { id } = await params;
