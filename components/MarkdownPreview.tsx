@@ -2,29 +2,17 @@
 import { useMemo } from "react";
 import { marked, Renderer } from "marked";
 import dynamic from "next/dynamic";
-// @ts-expect-error — subpath import lacks declarations
 import hljs from "highlight.js/lib/core";
-// @ts-expect-error — subpath imports lack declarations
 import _js from "highlight.js/lib/languages/javascript";
-// @ts-expect-error
 import _ts from "highlight.js/lib/languages/typescript";
-// @ts-expect-error
 import _py from "highlight.js/lib/languages/python";
-// @ts-expect-error
 import _bash from "highlight.js/lib/languages/bash";
-// @ts-expect-error
 import _css from "highlight.js/lib/languages/css";
-// @ts-expect-error
 import _json from "highlight.js/lib/languages/json";
-// @ts-expect-error
 import _sql from "highlight.js/lib/languages/sql";
-// @ts-expect-error
 import _xml from "highlight.js/lib/languages/xml";
-// @ts-expect-error
 import _yaml from "highlight.js/lib/languages/yaml";
-// @ts-expect-error
 import _go from "highlight.js/lib/languages/go";
-// @ts-expect-error
 import _diff from "highlight.js/lib/languages/diff";
 hljs.registerLanguage("javascript", _js); hljs.registerLanguage("js", _js);
 hljs.registerLanguage("typescript", _ts); hljs.registerLanguage("ts", _ts);
