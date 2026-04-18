@@ -194,8 +194,15 @@ const SHOW_FILE_ICONS_KEY = "stickies:show-file-icons:v1";
 
 // Generate a gradual shade per row for Mode 2 row backgrounds
 // Opacity ramps linearly from min → max across the full list (no looping)
-function shadedRowBg(hex: string, index: number, total: number): string {
-    const minOpacity = 0x1f; // ~12% — gentle tint
+function shadedRowBg(hex: string, index: number, total: number, isFolder = false): string {
+    if (isFolder) {
+        // Folders get a brighter, whiter-tinted shade to stand out
+        const h = hex.replace("#", "");
+        const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16);
+        const mix = (c: number) => Math.round(c + (255 - c) * 0.35);
+        return `rgba(${mix(r)},${mix(g)},${mix(b)},0.19)`;
+    }
+    const minOpacity = 0x22; // ~13% — gentle tint
     const maxOpacity = 0x66; // ~40% — strong tint
     const ratio = total <= 1 ? 0 : index / (total - 1);
     const opacity = Math.round(minOpacity + (maxOpacity - minOpacity) * ratio);
@@ -437,9 +444,12 @@ function timeAgo(dateStr: string): string {
     if (min < 60) return `${min}m ago`;
     const hr = Math.floor(min / 60);
     if (hr < 24) return `${hr}h ago`;
-    // Anything older than today: show "Feb 9" or "Feb 9, 2023" if different year
-    const sameYear = d.getFullYear() === now.getFullYear();
-    return d.toLocaleDateString("en-US", { month: "short", day: "numeric", ...(!sameYear && { year: "numeric" }) });
+    const days = Math.floor(hr / 24);
+    if (days < 30) return `${days}d ago`;
+    const months = Math.floor(days / 30);
+    if (months < 12) return `${months}mo ago`;
+    const years = Math.floor(months / 12);
+    return `${years}y ago`;
 }
 
 function shortDate(dateStr: string): string {
@@ -477,7 +487,7 @@ const PINNED_KEY = "stickies_pinned_ids";
 const EMPTY_QUOTES =["🧠 Your second brain starts here. Write it down.", "✨ Great ideas deserve a home. Start now.", "📌 No more forgetting. Capture it.", "🚀 Dreams without notes are just wishes.", "📝 Plan it. Track it. Win it.", "🎯 Nothing works without priorities. Start here.", "💡 One note today. Clarity tomorrow.", "📚 Build your thinking system. One note at a time.", "⚡ Preparing is everything. Write first.", "🏆 Goals become real when you record them."];
 const VIEW_STATE_KEY = "stickies:last-view:v1";
 const ACTIVE_DRAFT_KEY = "stickies:active-draft:v1";
-const FOLDER_COLOR_KEY = "stickies:folder-colors:v1";
+const FOLDER_COLOR_KEY = "stickies:folder-colors:v2";
 const FOLDER_ICON_KEY = "stickies:folder-icons:v1";
 const NOTE_ICON_KEY = "stickies:note-icons:v1";
 const looksLikeMarkdown = (text: string) =>
@@ -496,7 +506,7 @@ const MINDMAP_MODE_KEY = "stickies:mindmap-mode-notes:v1";
 const STACK_MODE_KEY = "stickies:stack-mode-notes:v1";
 const DEFAULT_FOLDER_KEY = "stickies:default-folder:v1";
 const LAST_FOLDER_KEY = "stickies:last-folder:v1"; // persists last active folder across sessions
-const DB_CACHE_KEY = "stickies:db-cache:v1";
+const DB_CACHE_KEY = "stickies:db-cache:v2";
 const COUNTS_CACHE_KEY = "stickies:counts-cache:v1";
 // Note cache removed — API is fast enough, cache caused stale data bugs
 const DEV_MODE_KEY = "stickies:dev-mode:v1";
@@ -1174,6 +1184,7 @@ export default function NotesMaster() {
     const [showAddTask, setShowAddTask] = useState(false);
     const [newTaskText, setNewTaskText] = useState("");
     const [confirmDeleteTask, setConfirmDeleteTask] = useState<number | null>(null);
+    const [showEmptyTrashModal, setShowEmptyTrashModal] = useState(false);
     const [activeTaskIdx, setActiveTaskIdx] = useState<number | null>(null);
     const [editingTaskIdx, setEditingTaskIdx] = useState<number | null>(null);
     const [swipedTaskIdx, setSwipedTaskIdx] = useState<number | null>(null);
@@ -1206,7 +1217,6 @@ export default function NotesMaster() {
     const [devMode, setDevMode] = useState(true);
     const [showFileIcons, setShowFileIcons] = useState(true);
     const [gdriveConnected, setGdriveConnected] = useState(false);
-    const [apiTimings, setApiTimings] = useState<Record<string, number>>({});
     const [aiConfirmPending, setAiConfirmPending] = useState<"magic" | "grammar" | null>(null);
     const [isEditingFolderTitle, setIsEditingFolderTitle] = useState(false);
     const [editingFolderTitleValue, setEditingFolderTitleValue] = useState("");
@@ -1398,7 +1408,6 @@ export default function NotesMaster() {
             const res = await fetch(`/api/stickies`, { headers: { Authorization: `Bearer ${token}` } });
             if (!res.ok) return;
             const { notes = [] } = await res.json();
-            setApiTimings((prev) => ({ ...prev, allNotes: Math.round(performance.now() - _t0) }));
             setDbData((prev) => {
                 const folders = prev.filter((r: any) => r.is_folder);
                 // Only keep optimistic notes not yet confirmed by server
@@ -1428,7 +1437,6 @@ export default function NotesMaster() {
             );
             if (!res.ok) return;
             const { notes = [], total = 0 } = await res.json();
-            setApiTimings((prev) => ({ ...prev, folder: Math.round(performance.now() - _t0) }));
             folderPaginationRef.current.set(folderName, { offset: notes.length, total });
 
             setDbData((prev) => {
@@ -1497,7 +1505,6 @@ export default function NotesMaster() {
                     headers: { Authorization: `Bearer ${token}` },
                 }).then((r) => r.ok ? r.json() : { counts: {} }).catch(() => ({ counts: {} })),
             ]);
-            setApiTimings((prev) => ({ ...prev, sync: Math.round(performance.now() - _t0) }));
             const folderItems = (foldersRes.folders ?? []).map((f: any) => ({ ...f, is_folder: true }));
             // Preserve any already-loaded notes in dbData (from prior folder navigations)
             setDbData((prev) => {
@@ -2509,7 +2516,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                     order: typeof row.order === "number" ? row.order : Number.MAX_SAFE_INTEGER,
                     latestUpdatedAt: folderLatestById[rowId] || latestUpdatedByFolderId.get(rowId) || String(row.updated_at || ""),
                     name: folderName,
-                    color: folderName === "TRASH" ? "#3a3a3a" : (folderColors[folderName] || row.folder_color || palette12[0]),
+                    color: row.folder_color || folderColors[folderName] || palette12[0],
                     count: (() => {
                         // If this is the only folder with this name, name-based count is authoritative
                         // (captures notes with wrong/missing folder_id)
@@ -2550,20 +2557,17 @@ const fireIntegrations = (trigger: string, note: any) => {
             }));
 
         const all = [...foldersFromRows, ...missingFolders];
-        // These three always pin to the bottom in order: INTEGRATIONS, CLAUDE, TRASH
-        const SYSTEM_BOTTOM = ["INTEGRATIONS", "CLAUDE", "TRASH"];
-        const bottomOrder = (name: string) => SYSTEM_BOTTOM.indexOf(name); // -1 = not pinned
-        if (pendingFolderOrder) {
-            const idx = new Map(pendingFolderOrder.map((name, i) => [name, i]));
-            const sorted = [...all].sort((a, b) => (idx.has(a.name) ? idx.get(a.name)! : all.length) - (idx.has(b.name) ? idx.get(b.name)! : all.length));
-            const regular = sorted.filter(f => bottomOrder(f.name) === -1);
-            const pinned = SYSTEM_BOTTOM.map(n => sorted.find(f => f.name === n)).filter(Boolean) as typeof all;
-            return [...regular, ...pinned];
-        }
-        const regular = all.filter(f => bottomOrder(f.name) === -1)
-            .sort((a, b) => String(b.latestUpdatedAt || "").localeCompare(String(a.latestUpdatedAt || "")));
-        const pinned = SYSTEM_BOTTOM.map(n => all.find(f => f.name === n)).filter(Boolean) as typeof all;
-        return [...regular, ...pinned];
+        // Sort by DB order column, then assign palette color by position
+        const sorted = all.sort((a, b) => a.order - b.order);
+        const fullPalette = [...palette12, "#8E8E93", "#FFFFFF"];
+        // Root folders get color from position index (not array index)
+        let rootIdx = 0;
+        sorted.forEach((f) => {
+            if (f.parent_folder_name) return; // subfolders keep parent color
+            f.color = fullPalette[rootIdx % fullPalette.length];
+            rootIdx++;
+        });
+        return sorted;
     }, [dbData, folderColors, folderIcons, pendingFolderOrder, folderCounts, folderLatestById]);
 
     // Folders visible at the current navigation level (root or sub-folder)
@@ -2572,7 +2576,7 @@ const fireIntegrations = (trigger: string, note: any) => {
             .filter((f) => {
                 // f.parent_folder_name is already set in the folders useMemo — no dbData.find() needed
                 const parentName = f.parent_folder_name ?? null;
-                if (folderStack.length === 0) return parentName === null;
+                if (folderStack.length === 0) return parentName === null && f.name !== "TRASH";
                 return parentName === activeFolder;
             })
             .map((f) => ({ ...f, is_folder: true as const }));
@@ -2609,7 +2613,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                 .sort((a, b) => { const sd = score(a) - score(b); return sd !== 0 ? sd : byUpdated(a, b); });
         }
         if (activeFolder) {
-            // Inside a folder: subfolders first, then notes
+            // Inside a folder: icons on = subfolders first; icons off = notes first, folders at bottom
             const activeFolderId = folderStack.at(-1)?.id ?? null;
             const useUuid = activeFolderId && !activeFolderId.startsWith("virtual-");
             const notes = dbData.filter((n) => !n.is_folder && (
@@ -2617,7 +2621,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                     ? (useUuid && String(n.folder_id) === activeFolderId)
                     : n.folder_name === activeFolder
             ) && (activeFolder === "TRASH" || (n.folder_name !== "TRASH" && !n.trashed_at))).sort(byUpdated);
-            return [...currentLevelFolders, ...notes];
+            return showFileIcons ? [...currentLevelFolders, ...notes] : [...notes, ...currentLevelFolders];
         }
         // Root: files-only mode → all notes sorted by newest first, then alpha by folder/title
         if (navMode === "files-only") {
@@ -4473,10 +4477,21 @@ const fireIntegrations = (trigger: string, note: any) => {
             if (!activeFolder) return;
             setFolderColors((prev) => ({ ...prev, [activeFolder]: color }));
             setFolderStack((prev) => prev.map((f) => f.name === activeFolder ? { ...f, color } : f));
-            // Persist to DB — update the folder row (is_folder=true)
+            // Persist to DB — update folder row, all subfolders, and all notes inside
             const folderRow = dbData.find((r) => r.is_folder && r.folder_name === activeFolder);
-            setDbData((prev) => prev.map((r) => r.folder_name === activeFolder && r.is_folder ? { ...r, folder_color: color } : r));
+            setDbData((prev) => prev.map((r) => {
+                if (r.folder_name === activeFolder) return { ...r, folder_color: color };
+                if (r.is_folder && r.parent_folder_name === activeFolder) return { ...r, folder_color: color };
+                return r;
+            }));
             if (folderRow) void notesApi.update(String(folderRow.id), { folder_color: color });
+            // Update all notes and subfolders in DB
+            const children = dbData.filter((r) => !r.is_folder && r.folder_name === activeFolder);
+            const subfolders = dbData.filter((r) => r.is_folder && r.parent_folder_name === activeFolder);
+            void Promise.all([
+                ...children.map((n) => notesApi.update(String(n.id), { folder_color: color })),
+                ...subfolders.map((f) => notesApi.update(String(f.id), { folder_color: color })),
+            ]);
             showToast(`${activeFolder} updated`, color);
         },
         [activeFolder, dbData],
@@ -6752,6 +6767,10 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                             Cancel
                                                         </button>
                                                     </div>
+                                                ) : activeFolder === "TRASH" ? (
+                                                    <button type="button" onClick={() => setShowEmptyTrashModal(true)} className="px-3 py-1.5 text-xs font-black text-red-400 bg-red-500/10 hover:bg-red-500/20 rounded transition">
+                                                        Empty Trash
+                                                    </button>
                                                 ) : (
                                                     <>
                                                         <button type="button" onClick={() => openNewNote()} className="p-2 mx-1 rounded-full bg-white/15 hover:bg-white/25 text-white transition" title="New note" aria-label="New note">
@@ -6770,7 +6789,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                             <div className="flex flex-col flex-1 min-h-0 overflow-hidden relative" style={{ background: "black" }}>
 
                     <main ref={mainScrollRef}
-                        onDoubleClick={(e) => { if ((e.target as HTMLElement) === e.currentTarget) openNewNote(); }}
+                        onDoubleClick={(e) => { if ((e.target as HTMLElement) === e.currentTarget && activeFolder !== "TRASH") openNewNote(); }}
                         onDragOver={(e) => { if (Array.from(e.dataTransfer.items).some(i => i.kind === "file")) e.preventDefault(); }}
                         onDrop={(e) => {
                             const files = Array.from(e.dataTransfer.files);
@@ -6957,25 +6976,22 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                     onMouseEnter={(e) => {
                                         playSound("hover");
                                         if (!isListMode) return;
-                                        const hoverColor = !showFileIcons && activeFolder
-                                            ? (folders.find(f => f.name === activeFolder)?.color || item.color || item.folder_color || "#888888")
-                                            : (item.color || item.folder_color || "#888888");
-                                        const [ri, gi, bi] = hexToRgb(hoverColor);
                                         const rect = e.currentTarget.getBoundingClientRect();
                                         const x = ((e.clientX - rect.left) / rect.width) * 100, y = ((e.clientY - rect.top) / rect.height) * 100;
                                         const glow = e.currentTarget.querySelector<HTMLElement>("[data-glow]");
-                                        if (glow) glow.style.background = `radial-gradient(circle at ${x}% ${y}%, rgba(${ri},${gi},${bi},0.22) 0%, rgba(${ri},${gi},${bi},0.1) 50%, rgba(${ri},${gi},${bi},0.01) 100%)`;
+                                        if (glow) glow.style.background = `radial-gradient(circle at ${x}% ${y}%, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.03) 50%, transparent 100%)`;
+                                        // Shake folder icon (inner icon only) on root hover
+                                        if (item.is_folder && !activeFolder) {
+                                            const inner = e.currentTarget.querySelector<HTMLElement>(".folder-icon-badge svg, .folder-icon-badge img");
+                                            if (inner) { inner.style.animation = "iconShake 0.4s ease 2"; inner.addEventListener("animationend", () => { inner.style.animation = ""; }, { once: true }); }
+                                        }
                                     }}
                                     onMouseMove={(e) => {
                                         if (!isListMode) return;
-                                        const hoverColor = !showFileIcons && activeFolder
-                                            ? (folders.find(f => f.name === activeFolder)?.color || item.color || item.folder_color || "#888888")
-                                            : (item.color || item.folder_color || "#888888");
-                                        const [ri, gi, bi] = hexToRgb(hoverColor);
                                         const rect = e.currentTarget.getBoundingClientRect();
                                         const x = ((e.clientX - rect.left) / rect.width) * 100, y = ((e.clientY - rect.top) / rect.height) * 100;
                                         const glow = e.currentTarget.querySelector<HTMLElement>("[data-glow]");
-                                        if (glow) glow.style.background = `radial-gradient(circle at ${x}% ${y}%, rgba(${ri},${gi},${bi},0.22) 0%, rgba(${ri},${gi},${bi},0.1) 50%, rgba(${ri},${gi},${bi},0.01) 100%)`;
+                                        if (glow) glow.style.background = `radial-gradient(circle at ${x}% ${y}%, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.03) 50%, transparent 100%)`;
                                     }}
                                     onMouseLeave={(e) => { const glow = e.currentTarget.querySelector<HTMLElement>("[data-glow]"); if (glow) glow.style.background = ""; }}
                                     onTouchStart={() => {
@@ -7016,7 +7032,8 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                 const parentColor = activeFolder
                                                     ? (folders.find(f => f.name === activeFolder)?.color || c)
                                                     : c;
-                                                return { position: "relative", isolation: "isolate", "--row-color": parentColor, "--fc": parentColor, background: shadedRowBg(parentColor, idx, filteredDisplayItems.length) } as unknown as React.CSSProperties;
+                                                const isRootFolder = !activeFolder && !!item.is_folder;
+                                                return { position: "relative", isolation: "isolate", "--row-color": parentColor, "--fc": parentColor, background: isRootFolder ? `${parentColor}12` : shadedRowBg(parentColor, idx, filteredDisplayItems.length) } as unknown as React.CSSProperties;
                                             }
                                             return { position: "relative", isolation: "isolate", "--row-color": c, "--fc": c, ...(isActive && !item.is_folder ? { borderRightColor: c, background: `${c}35` } : isActive ? { borderRightColor: c } : {}), ...(item.is_folder ? { background: `${c}18` } : {}) } as unknown as React.CSSProperties;
                                         }
@@ -7028,7 +7045,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                         ? `group list-row-hover flex items-center gap-3 pl-3 pr-3 min-h-[54px] border-b border-white/5 cursor-pointer select-none transition-colors active:bg-white/10 overflow-hidden ${!item.is_folder && incomingNoteIds.has(String(item.id)) ? "note-incoming" : ""} ${!item.is_folder && removingNoteIds.has(String(item.id)) ? "note-removing" : ""} ${isDragging ? "opacity-30" : dt?.mode === "into" ? "bg-cyan-950/60 ring-1 ring-inset ring-cyan-400" : ""} ${isSelectMode && !item.is_folder && selectedIds.has(String(item.id)) ? "bg-blue-950/50" : ""} border-r-[3px] border-r-transparent`
                                         : `grid-square-tile min-w-0 cursor-pointer transition-all group ${item.is_folder ? `folder-grid-tile${item.name === "CLAUDE" ? " folder-grid-tile-claude" : ""}` : ""} ${isDragging ? "opacity-30 scale-95" : dt?.mode === "into" ? "ring-4 ring-cyan-400 ring-inset z-10" : ""}`}`}>
                                     {/* Cursor spotlight glow — DOM-only, no React state */}
-                                    {isListMode && <div data-glow className="absolute inset-0 pointer-events-none z-[-1]" />}
+                                    {isListMode && <div data-glow className="absolute inset-0 pointer-events-none z-[-1]" style={{ transition: "background 0.4s ease" }} />}
                                     {/* Insertion line indicator — before */}
                                     {dt?.mode === "before" && (
                                         <div className={`absolute z-20 bg-cyan-400 pointer-events-none ${isListMode ? "left-0 right-0 top-0 h-0.5" : "top-0 left-0 bottom-0 w-1"}`} />
@@ -7044,7 +7061,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                     {selectedIds.has(String(item.id)) && <CheckIcon className="w-3 h-3 text-white" />}
                                                 </div>
                                             )}
-                                            {item.is_folder && (() => {
+                                            {item.is_folder && (showFileIcons || !activeFolder) && (() => {
                                                 const c = item.color || item.folder_color || palette12[0];
                                                 return (
                                                     <button type="button"
@@ -7108,11 +7125,14 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                 );
                                             })()}
                                             <div className="flex-1 min-w-0">
-                                                <div className="text-[14px] font-normal tracking-tight text-white truncate">
-                                                    {item.is_folder ? <><span className="uppercase">{item.name}</span><span className="text-white/30 ml-0.5">/</span></> : ((item.title?.trim() || "Untitled").length > 50 ? (item.title?.trim() || "Untitled").slice(0, 50) + "…" : (item.title?.trim() || "Untitled"))}
+                                                <div className={`text-[14px] tracking-tight text-white truncate ${item.is_folder && !showFileIcons ? "font-bold" : "font-normal"}`}>
+                                                    <span className="inline relative">
+                                                        <span className="absolute bottom-0 left-0 h-px bg-white/50 w-0 group-hover:w-full transition-all duration-300 ease-out" />
+                                                        {item.is_folder ? <><span className="uppercase">{item.name}</span>{showFileIcons && activeFolder && <span className="text-white/30 ml-0.5">/</span>}</> : ((item.title?.trim() || "Untitled").length > 50 ? (item.title?.trim() || "Untitled").slice(0, 50) + "…" : (item.title?.trim() || "Untitled"))}
+                                                    </span>
                                                 </div>
                                                 {item.is_folder ? (
-                                                    <div className="text-[10px] text-zinc-500">
+                                                    <div className={`text-[10px] ${!showFileIcons || !activeFolder ? "text-white/50" : "text-zinc-500"}`}>
                                                         {item.subfolderCount > 0 && <span>{item.subfolderCount} folder{item.subfolderCount !== 1 ? "s" : ""}{item.count > 0 ? " · " : ""}</span>}
                                                         {item.count > 0 && <span>{item.count} note{item.count !== 1 ? "s" : ""}</span>}
                                                     </div>
@@ -7143,18 +7163,22 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                             {!item.is_folder && pinnedIds.has(String(item.id)) && !isSelectMode && (
                                                 <HeartSolidIcon className="w-3.5 h-3.5 text-white flex-shrink-0" />
                                             )}
-                                            {item.is_folder && !!activeFolder && <ArrowRightIcon className="w-4 h-4 text-zinc-600 flex-shrink-0" />}
-                                            {/* Date only — badge moved to bottom status bar */}
+                                            {/* Right-aligned: date + arrow */}
                                             {!item.is_folder && (item as any).trashed_at && (
                                                 <span className="text-sm text-red-500/70 font-medium whitespace-nowrap flex-shrink-0">
                                                     {(() => { const days = 7 - Math.floor((Date.now() - new Date((item as any).trashed_at).getTime()) / 86400000); return days > 0 ? `${days}d left` : "expiring"; })()}
                                                 </span>
                                             )}
                                             {!item.is_folder && !(item as any).trashed_at && item.updated_at && (
-                                                <span className="text-sm text-zinc-500 whitespace-nowrap flex-shrink-0">{timeAgo(item.updated_at)}</span>
+                                                <span className={`text-[10px] whitespace-nowrap flex-shrink-0 ${!showFileIcons ? "text-white/40" : "text-zinc-500"}`}>{timeAgo(item.updated_at)} · {new Date(item.updated_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
                                             )}
-                                            {item.is_folder && item.latestUpdatedAt && (
-                                                <span className="text-[11px] text-zinc-500 whitespace-nowrap flex-shrink-0">{timeAgo(item.latestUpdatedAt)}</span>
+                                            {item.is_folder && (
+                                                <div className="flex items-center gap-1.5 flex-shrink-0">
+                                                    {(!!activeFolder || !showFileIcons) && <ArrowRightIcon className={`w-4 h-4 ${!showFileIcons ? "text-white/40" : "text-zinc-600"}`} />}
+                                                    {item.latestUpdatedAt && (
+                                                        <span className={`text-[10px] whitespace-nowrap ${!showFileIcons ? "text-white/40" : "text-zinc-500"}`}>{timeAgo(item.latestUpdatedAt)} · {new Date(item.latestUpdatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
+                                                    )}
+                                                </div>
                                             )}
                                         </>
                                     ) : (
@@ -7280,8 +7304,8 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                         );
                     })()}
 
-                    {/* STATS BOTTOM BAR — mobile: folder contents count (inside folder) or time/date (root) */}
-                    <div className="fixed bottom-4 left-0 right-0 z-[120] flex sm:hidden justify-center items-center select-none pointer-events-none tabular-nums" style={{ fontSize: 9, opacity: 0.7 }}>
+                    {/* STATS BOTTOM BAR — mobile: root only */}
+                    <div className={`fixed bottom-4 left-0 right-0 z-[120] ${!activeFolder && !editorOpen ? "flex sm:hidden" : "hidden"} justify-center items-center select-none pointer-events-none tabular-nums`} style={{ fontSize: 9, opacity: 0.7 }}>
                         <span className="flex items-center gap-1.5 px-3 py-1 rounded-full" style={{ border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.04)", backdropFilter: "blur(8px)" }}>
                             {activeFolder ? (() => {
                                 const items = displayItems.filter((i: any) => !i._header);
@@ -7300,8 +7324,8 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                             </>)}
                         </span>
                     </div>
-                    {/* STATS BOTTOM BAR — desktop: full stats */}
-                    <div className="fixed bottom-4 left-0 right-0 z-[120] hidden sm:flex justify-center items-center select-none pointer-events-none tabular-nums" style={{ fontSize: 9, opacity: 0.7 }}>
+                    {/* STATS BOTTOM BAR — desktop: full stats — root only */}
+                    <div className={`fixed bottom-4 left-0 right-0 z-[120] ${!activeFolder && !editorOpen ? "hidden sm:flex" : "hidden"} justify-center items-center select-none pointer-events-none tabular-nums`} style={{ fontSize: 9, opacity: 0.7 }}>
                         <span className="flex items-center gap-1.5 px-3 py-1 rounded-full" style={{ border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.04)", backdropFilter: "blur(8px)" }}>
                             {/* Clock */}
                             <span className="text-white/70 font-bold">{now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
@@ -7322,17 +7346,6 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                     <span style={{ color: chip.startsWith("Edited") ? "#a78bfa" : "#94a3b8" }}>{chip}</span>
                                 </span>
                             ))}
-                            {/* API timings — only in dev mode */}
-                            {devMode && Object.keys(apiTimings).length > 0 && (<>
-                                <span className="text-zinc-600">/</span>
-                                {Object.entries(apiTimings).map(([k, ms], i) => (
-                                    <span key={k} className="flex items-center gap-1 font-mono">
-                                        {i > 0 && <span className="text-zinc-700">/</span>}
-                                        <span style={{ color: "#6ee7b7" }}>{k}</span>
-                                        <span style={{ color: ms > 1000 ? "#ef4444" : ms > 500 ? "#fbbf24" : "#34d399" }}>{ms}ms</span>
-                                    </span>
-                                ))}
-                            </>)}
                             {/* Dice — only in a folder */}
                             {activeFolder && (
                                 <button
@@ -7406,7 +7419,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                 <div className="fixed inset-0 z-[510] bg-black/30 backdrop-blur-[2px] flex items-center justify-center p-4 lg:bg-transparent lg:backdrop-blur-none lg:items-stretch lg:justify-end lg:p-0" onClick={() => { setShowNoteActions(false); closeEditorTools(); }}>
                     <div
                         ref={editorToolsRef}
-                        className="note-actions-panel bg-zinc-900 border w-full max-w-sm flex flex-col overflow-hidden lg:max-w-[300px] lg:w-[300px] lg:h-full lg:border-l lg:border-r-0 lg:border-t-0 lg:border-b-0 lg:rounded-none"
+                        className="note-actions-panel bg-zinc-900 border w-full max-w-sm flex flex-col overflow-hidden rounded-2xl lg:max-w-[300px] lg:w-[300px] lg:h-full lg:border-l lg:border-r-0 lg:border-t-0 lg:border-b-0 lg:rounded-none"
                         style={{ borderColor: noteColor }}
                         onClick={(e) => e.stopPropagation()}
                     >
@@ -7648,7 +7661,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
             {/* SETTINGS + INTEGRATIONS PANEL (single sliding container) */}
             {showFolderActions && (
                 <div className="fixed inset-0 z-[510] flex items-center justify-center p-4 lg:items-stretch lg:justify-end lg:p-0" onClick={() => { setShowFolderActions(false); setIsGlobalSettings(false); setShowIntegrationsPanel(false); setConfiguringIntegration(null); setShowAutomationsPanel(false); setSelectedAutomation(null); setShowFolderColorPicker(false); setShowFolderIconPicker(false); setShowFolderMovePicker(false); setShowDefaultFolderPicker(false); }}>
-                    <div className="note-actions-panel bg-zinc-900 border border-white/15 w-full max-w-sm flex flex-col overflow-hidden lg:max-w-[300px] lg:w-[300px] lg:h-full lg:border-l lg:border-r-0 lg:border-t-0 lg:border-b-0 lg:rounded-none relative" onClick={(e) => e.stopPropagation()}>
+                    <div className="note-actions-panel bg-zinc-900 border border-white/15 w-full max-w-sm flex flex-col overflow-hidden rounded-2xl lg:max-w-[300px] lg:w-[300px] lg:h-full lg:border-l lg:border-r-0 lg:border-t-0 lg:border-b-0 lg:rounded-none relative" onClick={(e) => e.stopPropagation()}>
 
                         {/* Depth level watermark */}
                         <div className="absolute inset-0 flex items-end justify-end pointer-events-none z-0 overflow-hidden pb-16 pr-4">
@@ -8305,7 +8318,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                 </div>
                                 {/* FILE ICONS */}
                                 <div className="px-6 py-2 border-b border-white/[0.06]">
-                                    <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-1.5">File Icons</p>
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-1.5">Sub-folder Icons</p>
                                     <div className="flex gap-1.5">
                                         {([true, false] as const).map((v) => (
                                             <button key={String(v)} type="button"
@@ -8327,10 +8340,19 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                         <ArrowRightIcon className="w-4 h-4 text-zinc-600 flex-shrink-0" />
                                     </div>
                                 </button>
+                                <button type="button" className="w-full flex items-center gap-4 px-6 py-4 text-left text-zinc-300 hover:bg-white/5 hover:text-white active:bg-white/10 transition"
+                                    onClick={() => { setShowFolderActions(false); setIsGlobalSettings(false); enterFolder({ id: String(dbData.find(r => r.is_folder && r.folder_name === "TRASH")?.id || ""), name: "TRASH", color: "#8E8E93" }); }}>
+                                    <TrashIcon className="w-5 h-5 flex-shrink-0" />
+                                    <span className="text-xs font-black tracking-wide flex-1">Trash</span>
+                                    <div className="flex items-center gap-2">
+                                        {(() => { const tc = dbData.filter(r => !r.is_folder && r.folder_name === "TRASH").length; return tc > 0 ? <span className="text-[10px] font-black text-red-400">{tc}</span> : null; })()}
+                                        <ArrowRightIcon className="w-4 h-4 text-zinc-600 flex-shrink-0" />
+                                    </div>
+                                </button>
                             </>)}
                         </div>
                         <div className="border-t border-white/10 p-4 flex gap-3">
-                            <button type="button" onClick={() => { setShowFolderActions(false); setIsGlobalSettings(false); setShowFolderColorPicker(false); setShowFolderIconPicker(false); setShowFolderMovePicker(false); }} className="flex-1 py-3 bg-white text-black font-black uppercase text-xs tracking-wide hover:bg-zinc-100 transition">Close</button>
+                            <button type="button" onClick={() => { setShowFolderActions(false); setIsGlobalSettings(false); setShowFolderColorPicker(false); setShowFolderIconPicker(false); setShowFolderMovePicker(false); }} className="flex-1 py-3 rounded-xl bg-white text-black font-black uppercase text-xs tracking-wide hover:bg-zinc-100 transition">Close</button>
                             {(folderStack.length === 0 || isGlobalSettings) && (
                                 <button type="button"
                                     onClick={async () => {
@@ -8355,7 +8377,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
             {showCmdK && (
                 <div className="fixed inset-0 z-[99990] flex items-center justify-center px-4 bg-black/60 backdrop-blur-sm"
                     onClick={() => setShowCmdK(false)}>
-                    <div className="w-full max-w-lg bg-zinc-900 border border-white/15 shadow-2xl overflow-hidden"
+                    <div className="w-full max-w-lg bg-zinc-900 border border-white/15 shadow-2xl overflow-hidden rounded-2xl"
                         onClick={(e) => e.stopPropagation()}
                         onKeyDown={(e) => {
                             if (e.key === "Escape") { setShowCmdK(false); return; }
@@ -8434,8 +8456,8 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                             void loadFolderNotes(folder.name, false);
                                                         }}
                                                         className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition ${i === cmdKCursor ? "bg-white/10" : "hover:bg-white/5"}`}>
-                                                        <div className="w-7 h-7 flex-shrink-0 flex items-center justify-center text-sm font-black overflow-hidden"
-                                                            style={{ backgroundColor: "#fff", color: folder.name === "CLAUDE" ? "#000" : (folder.color || "#3f3f46") }}>
+                                                        <div className="w-7 h-7 flex-shrink-0 flex items-center justify-center text-sm font-black overflow-hidden rounded-lg"
+                                                            style={{ backgroundColor: folder.color || "#3f3f46", color: "#fff" }}>
                                                             {folder.name === "CLAUDE"
                                                                 ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-0.5" />
                                                                 : <FolderIconDisplay value={folder.icon || ""} folderName={folder.name || "F"} className="w-4 h-4" />}
@@ -8467,8 +8489,8 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                     onClick={(e) => openNoteFromCmdK(note, e.metaKey)}
                                                     onMouseEnter={() => setCmdKCursor(i)}
                                                     className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition ${i === cmdKCursor ? "bg-white/10" : "hover:bg-white/5"}`}>
-                                                    <div className="relative w-7 h-7 flex-shrink-0 flex items-center justify-center text-sm font-black text-white"
-                                                        style={{ backgroundColor: note.color || note.folder_color || "#3f3f46" }}>
+                                                    <div className="relative w-7 h-7 flex-shrink-0 flex items-center justify-center text-sm font-black text-white overflow-hidden"
+                                                        style={{ backgroundColor: note.color || note.folder_color || "#3f3f46", borderRadius: "6px 6px 6px 12px" }}>
                                                         {[...(note.title || "N")][0]?.toUpperCase()}
                                                         {looksLikeUrl(note.content || "") && (
                                                             <BookmarkIcon className="absolute -top-1 -right-1 w-3 h-3 text-white drop-shadow-sm" style={{ filter: "drop-shadow(0 0 2px rgba(0,0,0,0.8))" }} />
@@ -8815,6 +8837,34 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                     </div>
                 </div>
             )}
+
+            {/* EMPTY TRASH MODAL */}
+            {showEmptyTrashModal && (() => {
+                const trashNotes = dbData.filter(r => !r.is_folder && r.folder_name === "TRASH");
+                return (
+                    <div className="fixed inset-0 z-[99999] flex items-center justify-center px-4 bg-black/70 backdrop-blur-sm" onClick={() => setShowEmptyTrashModal(false)}>
+                        <div className="w-full max-w-sm bg-zinc-900 border border-white/15 rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+                            <div className="px-6 pt-8 pb-4 text-center">
+                                <div className="w-16 h-16 mx-auto mb-4 flex items-center justify-center rounded-full bg-red-500/15">
+                                    <TrashIcon className="w-8 h-8 text-red-400" />
+                                </div>
+                                <h3 className="text-lg font-bold text-white mb-1">Empty Trash?</h3>
+                                <p className="text-sm text-zinc-400">
+                                    {trashNotes.length === 0
+                                        ? "Trash is already empty."
+                                        : <>Permanently delete <span className="text-red-400 font-bold">{trashNotes.length}</span> {trashNotes.length === 1 ? "note" : "notes"}? This cannot be undone.</>}
+                                </p>
+                            </div>
+                            <div className="px-6 pb-6 pt-2 flex gap-3">
+                                <button type="button" onClick={() => setShowEmptyTrashModal(false)} className="flex-1 py-3 rounded-xl bg-white/10 text-white font-bold text-sm hover:bg-white/15 transition">Cancel</button>
+                                {trashNotes.length > 0 && (
+                                    <button type="button" onClick={() => { trashNotes.forEach(n => void notesApi.delete(String(n.id))); setDbData(prev => prev.filter(n => n.is_folder || n.folder_name !== "TRASH")); setShowEmptyTrashModal(false); showToast("Trash emptied"); }} className="flex-1 py-3 rounded-xl bg-red-500 text-white font-bold text-sm hover:bg-red-600 transition">Delete All</button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                );
+            })()}
 
             {confirmDelete && (() => {
                 const isFolder = confirmDelete.type === "folder";
