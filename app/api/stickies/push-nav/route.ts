@@ -1,20 +1,10 @@
-import crypto from "crypto";
 import { authorizeOwner } from "@/app/api/stickies/_auth";
 import { NextResponse } from "next/server";
 import Pusher from "pusher";
 import webpush from "web-push";
 import { createClient } from "@supabase/supabase-js";
 
-function authorize(req: Request): boolean {
-    const auth = req.headers.get("authorization") ?? "";
-    const candidates = [process.env.STICKIES_API_KEY, process.env.STICKIES_PASSWORD].filter(Boolean) as string[];
-    for (const secret of candidates) {
-        const expected = `Bearer ${secret}`;
-        if (auth.length !== expected.length) continue;
-        try { if (crypto.timingSafeEqual(Buffer.from(auth), Buffer.from(expected))) return true; } catch {}
-    }
-    return false;
-}
+
 
 function getPusher() {
     return new Pusher({
