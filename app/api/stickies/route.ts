@@ -314,7 +314,7 @@ export async function GET(req: Request) {
     }
 
     if (folderFilter) {
-        const FOLDER_COLS = `id, title, folder_name, folder_color, folder_id, parent_folder_name, "order", updated_at, created_at, type, is_folder, is_public, trashed_at, icon`;
+        const FOLDER_COLS = `id, title, folder_name, folder_color, folder_id, parent_folder_name, "order", updated_at, created_at, type, is_folder, is_public, trashed_at, icon, list_mode, CASE WHEN (type = 'checklist' OR list_mode = true) AND content IS NOT NULL AND length(content) > 0 THEN (SELECT COUNT(*)::int FROM regexp_split_to_table(content, E'\\n') AS line WHERE TRIM(line) <> '' AND TRIM(line) !~ '^[-=*#~_.]{2,}$') ELSE 0 END AS task_count, CASE WHEN (type = 'checklist' OR list_mode = true) AND content IS NOT NULL AND length(content) > 0 THEN COALESCE((SELECT SUM(CASE WHEN TRIM(line) ~* '^\\[x\\]' THEN 1.0 WHEN TRIM(line) ~ '^\\[/\\]' THEN 0.5 ELSE 0 END)::float FROM regexp_split_to_table(content, E'\\n') AS line), 0) ELSE 0 END AS task_done_count, CASE WHEN (type = 'checklist' OR list_mode = true) AND content IS NOT NULL AND length(content) > 0 THEN (SELECT COUNT(*)::int FROM regexp_split_to_table(content, E'\\n') AS line WHERE TRIM(line) <> '' AND TRIM(line) !~ '^[-=*#~_.]{2,}$' AND TRIM(line) !~* '^\\[x\\]') ELSE 0 END AS task_remaining_count`;
         const limitParam = parseInt(url.searchParams.get("limit") ?? "0");
         const offsetParam = parseInt(url.searchParams.get("offset") ?? "0");
         const sinceParam = url.searchParams.get("since"); // ISO timestamp — delta sync
@@ -397,7 +397,7 @@ export async function GET(req: Request) {
         return NextResponse.json({ notes: rows, total: rows.length });
     }
 
-    const LIST_COLS = `id, title, folder_name, folder_color, folder_id, parent_folder_name, "order", updated_at, created_at, type, is_folder, is_public, trashed_at, icon`;
+    const LIST_COLS = `id, title, folder_name, folder_color, folder_id, parent_folder_name, "order", updated_at, created_at, type, is_folder, is_public, trashed_at, icon, list_mode, CASE WHEN (type = 'checklist' OR list_mode = true) AND content IS NOT NULL AND length(content) > 0 THEN (SELECT COUNT(*)::int FROM regexp_split_to_table(content, E'\\n') AS line WHERE TRIM(line) <> '' AND TRIM(line) !~ '^[-=*#~_.]{2,}$') ELSE 0 END AS task_count, CASE WHEN (type = 'checklist' OR list_mode = true) AND content IS NOT NULL AND length(content) > 0 THEN COALESCE((SELECT SUM(CASE WHEN TRIM(line) ~* '^\\[x\\]' THEN 1.0 WHEN TRIM(line) ~ '^\\[/\\]' THEN 0.5 ELSE 0 END)::float FROM regexp_split_to_table(content, E'\\n') AS line), 0) ELSE 0 END AS task_done_count, CASE WHEN (type = 'checklist' OR list_mode = true) AND content IS NOT NULL AND length(content) > 0 THEN (SELECT COUNT(*)::int FROM regexp_split_to_table(content, E'\\n') AS line WHERE TRIM(line) <> '' AND TRIM(line) !~ '^[-=*#~_.]{2,}$' AND TRIM(line) !~* '^\\[x\\]') ELSE 0 END AS task_remaining_count`;
     const { sql, params } = withUser(
         `SELECT ${LIST_COLS} FROM "${table}" WHERE is_folder = false`,
         [],
