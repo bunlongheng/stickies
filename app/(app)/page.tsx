@@ -495,7 +495,6 @@ const looksLikeMarkdown = (text: string) =>
 const looksLikeHtml = (text: string) =>
     /^\s*<!DOCTYPE\s+html/i.test(text) || /^\s*<html[\s>]/i.test(text);
 const MAIN_LIST_MODE_KEY = "stickies:main-list-mode:v1";
-const NAV_MODE_KEY = "stickies:nav-mode:v1";
 const KANBAN_MODE_KEY = "stickies:kanban-mode:v1";
 const APP_THEME_KEY = "stickies:app-theme:v1";
 const LIST_MODE_KEY = "stickies:list-mode-notes:v1";
@@ -1198,6 +1197,8 @@ export default function NotesMaster() {
     const [newTaskText, setNewTaskText] = useState("");
     const [confirmDeleteTask, setConfirmDeleteTask] = useState<number | null>(null);
     const [showEmptyTrashModal, setShowEmptyTrashModal] = useState(false);
+    const [showImportGuide, setShowImportGuide] = useState(false);
+    const [importApiKey, setImportApiKey] = useState("");
     const [activeTaskIdx, setActiveTaskIdx] = useState<number | null>(null);
     const [editingTaskIdx, setEditingTaskIdx] = useState<number | null>(null);
     const [swipedTaskIdx, setSwipedTaskIdx] = useState<number | null>(null);
@@ -1258,7 +1259,6 @@ export default function NotesMaster() {
     const [showNotebookPicker, setShowNotebookPicker] = useState(false);
     const [notebookPickerSearch, setNotebookPickerSearch] = useState("");
     const [notebookPickerCursor, setNotebookPickerCursor] = useState(-1);
-    const [navMode, setNavMode] = useState<"folders-and-files" | "files-only">("folders-and-files");
     const [kanbanMode, setKanbanMode] = useState(false);
     const [appTheme, setAppTheme] = useState<"dark" | "light">("dark");
     const [mermaidShowCode, setMermaidShowCode] = useState(false);
@@ -1798,8 +1798,6 @@ export default function NotesMaster() {
             }
         } catch { /* ignore */ }
         try {
-            const rawNavMode = localStorage.getItem(NAV_MODE_KEY);
-            if (rawNavMode === "files-only" || rawNavMode === "folders-and-files") setNavMode(rawNavMode);
         } catch { /* ignore */ }
         try {
             const rawKanban = localStorage.getItem(KANBAN_MODE_KEY);
@@ -1826,8 +1824,6 @@ export default function NotesMaster() {
             else if (viewParam === "thumb") { setMainListMode("thumb"); setKanbanMode(false); }
             else if (viewParam === "kanban") { setMainListMode("thumb"); setKanbanMode(true); }
             const navParam = urlParams.get("nav");
-            if (navParam === "folders" || navParam === "folders-and-files") setNavMode("folders-and-files");
-            else if (navParam === "files" || navParam === "files-only") setNavMode("files-only");
             const gdriveParam = urlParams.get("gdrive");
             if (gdriveParam === "connected") {
                 setTimeout(() => { showToast("Google Drive connected", "#34d399"); setGdriveConnected(true); }, 500);
@@ -1949,7 +1945,6 @@ export default function NotesMaster() {
         try { localStorage.setItem(MAIN_LIST_MODE_KEY, String(mainListMode)); } catch { /* ignore */ }
     }, [mainListMode]);
     useEffect(() => {
-        try { localStorage.setItem(NAV_MODE_KEY, navMode); } catch { /* ignore */ }
     }, [mainListMode]);
 
     useEffect(() => {
@@ -2260,17 +2255,22 @@ const fireIntegrations = (trigger: string, note: any) => {
         const folderToken = lastSegmentToken;
         const matchedFolder = folderToken ? allFolders.find((name) => toUrlToken(name) === folderToken) || null : null;
 
-        // Restore full folder stack for nested paths
-        if (folderSegments.length > 1) {
-            const stackFrames: { id: string; name: string; color: string }[] = [];
-            for (const seg of folderSegments) {
-                const name = allFolders.find((n) => toUrlToken(n) === seg);
-                if (name) {
-                    const row = dbData.find((r) => r.is_folder && r.folder_name === name);
-                    stackFrames.push({ id: row?.id || `virtual-${name}`, name, color: row?.folder_color || palette12[0] });
+        // Restore full folder stack — build parent chain even for single-segment URLs
+        if (folderSegments.length >= 1) {
+            const buildChain = (name: string): { id: string; name: string; color: string }[] => {
+                const row = dbData.find((r) => r.is_folder && r.folder_name === name);
+                const frame = { id: row?.id || `virtual-${name}`, name, color: row?.folder_color || palette12[0] };
+                if (row?.parent_folder_name) {
+                    return [...buildChain(row.parent_folder_name), frame];
                 }
+                return [frame];
+            };
+            // Use last segment as target, build its full parent chain
+            const targetName = allFolders.find((n) => toUrlToken(n) === folderSegments[folderSegments.length - 1]);
+            if (targetName) {
+                setFolderStack(buildChain(targetName));
+                void loadFolderNotes(targetName, false);
             }
-            if (stackFrames.length > 0) setFolderStack(stackFrames);
         }
 
         let matchedNote: any = null;
@@ -2348,12 +2348,8 @@ const fireIntegrations = (trigger: string, note: any) => {
             setNoteColor(matchedDraft.folder_color || palette12[0]);
             setEditorOpen(true);
         } else if (matchedFolder) {
-            if (folderSegments.length <= 1) {
-                // Single folder — simple activate
-                const row = dbData.find((r) => r.is_folder && r.folder_name === matchedFolder);
-                setFolderStack([{ id: row?.id || `virtual-${matchedFolder}`, name: matchedFolder, color: row?.folder_color || palette12[0] }]);
-            }
-            // Multi-segment stack already set above
+            // Full stack already built by buildChain above — also trigger note load
+            void loadFolderNotes(matchedFolder, false);
         }
 
         setPendingFolderQuery(null);
@@ -2623,15 +2619,9 @@ const fireIntegrations = (trigger: string, note: any) => {
             ) && (activeFolder === "TRASH" || (n.folder_name !== "TRASH" && !n.trashed_at))).sort(byUpdated);
             return showFileIcons ? [...currentLevelFolders, ...notes] : [...notes, ...currentLevelFolders];
         }
-        // Root: files-only mode → all notes sorted by newest first, then alpha by folder/title
-        if (navMode === "files-only") {
-            return dbData
-                .filter((n) => !n.is_folder && n.folder_name !== "TRASH" && !n.trashed_at)
-                .sort(byUpdated);
-        }
         // Root: show folders
         return currentLevelFolders;
-    }, [dbData, activeFolder, folderStack, search, currentLevelFolders, pendingNoteOrder, pinnedIds, navMode]);
+    }, [dbData, activeFolder, folderStack, search, currentLevelFolders, pendingNoteOrder, pinnedIds]);
 
     // Available type chips for the filter row (only types present in current view, notes only)
     // Debounced content — heavy computations (JSON parse, tree walk, line split) only run 400ms after typing stops
@@ -7055,13 +7045,13 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                             setSelectedIds((prev) => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
                                             return;
                                         }
+                                        // Guard: ignore ALL clicks within 600ms of folder navigation (prevents bleed-through)
+                                        if (!item.is_folder && Date.now() - navTimestampRef.current < 600) return;
                                         if (item.is_folder) {
                                             playSound("navigate");
                                             navTimestampRef.current = Date.now();
                                             enterFolder({ id: String(item.id), name: item.name, color: item.color || palette12[0] });
                                         } else {
-                                            // Guard: ignore clicks within 400ms of folder navigation (prevents bleed-through)
-                                            if (Date.now() - navTimestampRef.current < 400) return;
                                             void openNote(item);
                                             setTimeout(() => playSound("click"), 0);
                                         }
@@ -8323,7 +8313,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                 className="w-full flex items-center gap-2.5 px-3 py-2 text-left transition rounded"
                                                 style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}>
                                                 {dfColor ? (
-                                                    <span className="w-5 h-5 flex-shrink-0 flex items-center justify-center text-[11px] font-black leading-none overflow-hidden" style={{ backgroundColor: "#fff", color: defaultFolder === "CLAUDE" ? "#000" : dfColor, fontSize: 13 }}>
+                                                    <span className="w-5 h-5 flex-shrink-0 flex items-center justify-center text-[11px] font-black leading-none overflow-hidden rounded" style={{ backgroundColor: dfColor, color: isLightColor(dfColor) ? "#1c1c1e" : "#fff", fontSize: 13 }}>
                                                         {defaultFolder === "CLAUDE"
                                                             ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-0.5" />
                                                             : <FolderIconDisplay value={folderIcons[defaultFolder] || ""} folderName={defaultFolder || "F"} className="w-3.5 h-3.5" />}
@@ -8338,7 +8328,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                         <button key={f.name} type="button"
                                                             onClick={(e) => { e.stopPropagation(); setDefaultFolder(f.name); localStorage.setItem(DEFAULT_FOLDER_KEY, f.name); setShowDefaultFolderPicker(false); setShowFolderActions(false); }}
                                                             className="flex items-center gap-2.5 px-3 py-1.5 text-left transition hover:bg-white/5 rounded">
-                                                            <span className="w-5 h-5 flex-shrink-0 flex items-center justify-center text-[11px] font-black leading-none overflow-hidden" style={{ backgroundColor: "#fff", color: f.name === "CLAUDE" ? "#000" : f.color, fontSize: 13 }}>
+                                                            <span className="w-5 h-5 flex-shrink-0 flex items-center justify-center text-[11px] font-black leading-none overflow-hidden rounded" style={{ backgroundColor: f.color, color: isLightColor(f.color) ? "#1c1c1e" : "#fff", fontSize: 13 }}>
                                                                 {f.name === "CLAUDE"
                                                                     ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-0.5" />
                                                                     : <FolderIconDisplay value={folderIcons[f.name] || ""} folderName={f.name || "F"} className="w-3.5 h-3.5" />}
@@ -8351,19 +8341,6 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                         </div>
                                     );
                                 })()}
-                                {/* NAV MODE */}
-                                <div className="px-6 py-2 border-b border-white/[0.06]">
-                                    <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-1.5">Navigation</p>
-                                    <div className="flex gap-1.5">
-                                        {(["folders-and-files", "files-only"] as const).map((mode) => (
-                                            <button key={mode} type="button"
-                                                onClick={() => setNavMode(mode)}
-                                                className={`flex-1 py-1.5 rounded text-[10px] font-black uppercase tracking-wide transition ${navMode === mode ? "bg-white text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"}`}>
-                                                {mode === "folders-and-files" ? "Folders" : "Files"}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
                                 {/* FILE ICONS */}
                                 <div className="px-6 py-2 border-b border-white/[0.06]">
                                     <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-1.5">Sub-folder Icons</p>
@@ -8387,6 +8364,12 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                         )}
                                         <ArrowRightIcon className="w-4 h-4 text-zinc-600 flex-shrink-0" />
                                     </div>
+                                </button>
+                                <button type="button" className="w-full flex items-center gap-4 px-6 py-4 text-left text-zinc-300 hover:bg-white/5 hover:text-white active:bg-white/10 transition"
+                                    onClick={async () => { setShowFolderActions(false); setIsGlobalSettings(false); setShowImportGuide(true); if (!importApiKey) { try { const token = await getAuthToken(); const res = await fetch("/api/stickies?apikey=1", { headers: { Authorization: `Bearer ${token}` } }); if (res.ok) { const { key } = await res.json(); setImportApiKey(key); } } catch {} } }}>
+                                    <RobotIcon className="w-5 h-5 flex-shrink-0" />
+                                    <span className="text-xs font-black tracking-wide flex-1">AI Import Guide</span>
+                                    <ArrowRightIcon className="w-4 h-4 text-zinc-600 flex-shrink-0" />
                                 </button>
                                 <button type="button" className="w-full flex items-center gap-4 px-6 py-4 text-left text-zinc-300 hover:bg-white/5 hover:text-white active:bg-white/10 transition"
                                     onClick={() => { setShowFolderActions(false); setIsGlobalSettings(false); enterFolder({ id: String(dbData.find(r => r.is_folder && r.folder_name === "TRASH")?.id || ""), name: "TRASH", color: "#8E8E93" }); }}>
@@ -8885,6 +8868,101 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                     </div>
                 </div>
             )}
+
+            {/* AI IMPORT GUIDE MODAL */}
+            {showImportGuide && (() => {
+                const baseUrl = typeof window !== "undefined" ? window.location.origin : "https://stickies-bheng.vercel.app";
+                const copyBlock = (text: string) => { void secureCopy(text); showToast("Copied", noteColor || "#34C759"); };
+                const CodeBlock = ({ label, text, color = "text-emerald-400" }: { label: string; text: string; color?: string }) => (
+                    <div>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-2">{label}</p>
+                        <div className="relative group/cb">
+                            <pre className={`bg-black/40 px-3 py-2 rounded-lg text-xs font-mono ${color} overflow-x-auto whitespace-pre-wrap`}>{text}</pre>
+                            <button type="button" onClick={() => copyBlock(text)} className="absolute top-1.5 right-1.5 px-2 py-0.5 rounded text-[9px] font-bold bg-white/10 text-zinc-400 hover:bg-white/20 hover:text-white opacity-0 group-hover/cb:opacity-100 transition">Copy</button>
+                        </div>
+                    </div>
+                );
+                const maskedKey = importApiKey ? importApiKey.slice(0, 8) + "..." + importApiKey.slice(-4) : "loading...";
+                return (
+                <div className="fixed inset-0 z-[99999] flex items-center justify-center px-4 bg-black/70 backdrop-blur-sm" onClick={() => setShowImportGuide(false)}>
+                    <div className="w-full max-w-lg bg-zinc-900 border border-white/15 rounded-2xl shadow-2xl overflow-hidden max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+                        <div className="px-6 pt-6 pb-3 flex items-center gap-3 border-b border-white/10">
+                            <RobotIcon className="w-6 h-6 text-white" />
+                            <h3 className="text-lg font-bold text-white flex-1">AI Import Guide</h3>
+                            <button type="button" onClick={() => copyBlock(importApiKey)} className="px-2 py-1 rounded text-[10px] font-bold bg-white/10 text-zinc-400 hover:bg-white/20 hover:text-white transition">Copy Key</button>
+                        </div>
+                        <div className="flex-1 overflow-y-auto px-6 py-4 text-sm text-zinc-300 space-y-4" style={{ scrollbarWidth: "thin" }}>
+                            <CodeBlock label="Endpoint" text={`POST ${baseUrl}/api/stickies/ext`} />
+                            <CodeBlock label="API Key" text={maskedKey} color="text-yellow-400" />
+                            <CodeBlock label="Auth Header" text={`Authorization: Bearer ${importApiKey || "<STICKIES_API_KEY>"}`} color="text-yellow-400" />
+                            <CodeBlock label="JSON Body" text={`{
+  "title": "My Note Title",
+  "content": "# Heading\\n\\nBody text here...",
+  "type": "markdown",
+  "folder_name": "CLAUDE",
+  "folder_color": "#AF52DE",
+  "tags": ["ai", "report"]
+}`} color="text-blue-300" />
+                            <div>
+                                <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-2">Folder Targeting</p>
+                                <ul className="space-y-1 text-xs text-zinc-400">
+                                    <li><span className="text-white font-bold">folder_name</span> — target folder. Use <code className="text-emerald-400">/</code> for subfolders:</li>
+                                    <li className="pl-3"><code className="text-emerald-400">"Reporting"</code> → root folder</li>
+                                    <li className="pl-3"><code className="text-emerald-400">"Today/PM2026"</code> → PM2026 inside Today</li>
+                                    <li className="pl-3"><code className="text-emerald-400">"Work/Team/Sprint"</code> → deep nesting (auto-creates missing folders)</li>
+                                    <li><span className="text-white font-bold">Default:</span> <code className="text-emerald-400">CLAUDE</code> if omitted</li>
+                                    <li><span className="text-white font-bold">folder_color</span> — hex color (e.g. <code className="text-emerald-400">"#FF3B30"</code>)</li>
+                                </ul>
+                            </div>
+                            <div>
+                                <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-2">Supported Types</p>
+                                <div className="flex flex-wrap gap-1.5">
+                                    {["text", "markdown", "checklist", "json", "mermaid", "javascript", "typescript", "python", "css", "sql", "bash", "html"].map(t => (
+                                        <span key={t} className="px-2 py-0.5 rounded bg-white/5 text-[10px] font-mono text-zinc-300">{t}</span>
+                                    ))}
+                                </div>
+                            </div>
+                            <div>
+                                <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-2">Markdown Standards</p>
+                                <ul className="space-y-1 text-xs text-zinc-400">
+                                    <li>Title {">"} 3 chars (no "test", "untitled", "tmp")</li>
+                                    <li>Content {">"} 30 chars, 3+ line breaks</li>
+                                    <li>At least one <code className="text-emerald-400"># Heading</code></li>
+                                    <li>Structure: list, code block, table, or blockquote</li>
+                                    <li>Alerts: <code className="text-emerald-400">{">"} [!NOTE]</code> <code className="text-emerald-400">{">"} [!WARNING]</code> <code className="text-emerald-400">{">"} [!TIP]</code></li>
+                                </ul>
+                            </div>
+                            <CodeBlock label="CLI Example" text={`stickies "My quick note" --path=/AI
+echo "content" | stickies --title="Note" --tags=ai
+stickies --file ./report.md --path=/Reporting`} color="text-cyan-300" />
+                            <CodeBlock label="cURL — Root Folder" text={`curl -X POST \\
+  ${baseUrl}/api/stickies/ext \\
+  -H "Authorization: Bearer ${importApiKey || "$STICKIES_API_KEY"}" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "title": "Weekly Report",
+    "content": "# Summary\\n- Item 1\\n- Item 2",
+    "type": "markdown",
+    "folder_name": "Reporting"
+  }'`} color="text-orange-300" />
+                            <CodeBlock label="cURL — Subfolder (auto-creates if missing)" text={`curl -X POST \\
+  ${baseUrl}/api/stickies/ext \\
+  -H "Authorization: Bearer ${importApiKey || "$STICKIES_API_KEY"}" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "title": "Sprint Retro",
+    "content": "# Retro Notes\\n- What went well\\n- What to improve",
+    "type": "markdown",
+    "folder_name": "Today/PM2026"
+  }'`} color="text-cyan-300" />
+                        </div>
+                        <div className="px-6 pb-6 pt-3">
+                            <button type="button" onClick={() => setShowImportGuide(false)} className="w-full py-3 rounded-xl bg-white text-black font-bold text-sm hover:bg-zinc-100 transition">Close</button>
+                        </div>
+                    </div>
+                </div>
+                );
+            })()}
 
             {/* EMPTY TRASH MODAL */}
             {showEmptyTrashModal && (() => {

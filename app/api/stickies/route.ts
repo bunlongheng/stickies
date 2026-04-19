@@ -214,6 +214,25 @@ async function getNextOrder(userId: string, isFolderOnly = false): Promise<numbe
     return typeof row?.order === "number" ? row.order + 1 : 0;
 }
 
+// ── Fuzzy folder name matcher ────────────────────────────────────────────────
+function normalize(s: string): string { return s.toLowerCase().replace(/[-_ ]/g, ""); }
+function fuzzyMatchFolder<T extends { folder_name: string }>(folders: T[], input: string, parentFilter?: (f: T) => boolean): T | undefined {
+    const norm = normalize(input);
+    const pool = parentFilter ? folders.filter(parentFilter) : folders;
+    // 1. Exact case-insensitive
+    let m = pool.find(f => f.folder_name.toLowerCase() === input.toLowerCase());
+    if (m) return m;
+    // 2. Normalized (strip dashes/underscores/spaces)
+    m = pool.find(f => normalize(f.folder_name) === norm);
+    if (m) return m;
+    // 3. Starts with
+    m = pool.find(f => normalize(f.folder_name).startsWith(norm) || norm.startsWith(normalize(f.folder_name)));
+    if (m) return m;
+    // 4. Contains
+    m = pool.find(f => normalize(f.folder_name).includes(norm) || norm.includes(normalize(f.folder_name)));
+    return m;
+}
+
 // ── Folder path resolver ─────────────────────────────────────────────────────
 async function resolveFolderPath(raw: string, userId: string): Promise<{ folder_name: string; folder_id: string | null }> {
     const parts = raw.split("/").map((p) => p.trim()).filter(Boolean);
@@ -262,6 +281,12 @@ export async function GET(req: Request) {
         );
     } catch { /* column may not exist yet — migration pending */ }
     const url = new URL(req.url);
+
+    // Return API key for import guide (owner-only, never cached)
+    if (url.searchParams.get("apikey") === "1") {
+        return NextResponse.json({ key: process.env.STICKIES_API_KEY || "" }, { headers: { "Cache-Control": "no-store" } });
+    }
+
     const foldersOnly = url.searchParams.get("folders") === "1";
     const folderFilter = url.searchParams.get("folder");
     const q = url.searchParams.get("q")?.trim();
@@ -648,9 +673,11 @@ export async function POST(req: Request) {
             `SELECT folder_name FROM "stickies" WHERE is_folder = true AND parent_folder_name IS NULL AND user_id = $1`,
             [userId]
         );
-        const rootNames = rootFolders.map((f) => f.folder_name.toLowerCase());
-        if (!rootNames.includes(folder_name!.toLowerCase())) {
+        const rootMatch = fuzzyMatchFolder(rootFolders, folder_name!);
+        if (!rootMatch) {
             folder_name = `CLAUDE/${folder_name}`;
+        } else {
+            folder_name = rootMatch.folder_name; // normalize to real DB name
         }
     }
 
@@ -671,9 +698,8 @@ export async function POST(req: Request) {
         const nowTs = new Date().toISOString();
 
         for (const segment of folderPathParts) {
-            const match = allFolders.find((f) =>
-                f.folder_name.toLowerCase() === segment.toLowerCase() &&
-                (parentName === null ? !f.parent_folder_name : f.parent_folder_name?.toLowerCase() === parentName.toLowerCase())
+            const match = fuzzyMatchFolder(allFolders, segment, (f) =>
+                parentName === null ? !f.parent_folder_name : f.parent_folder_name?.toLowerCase() === parentName?.toLowerCase()
             );
             if (match) {
                 parentName = match.folder_name;
@@ -702,18 +728,19 @@ export async function POST(req: Request) {
         resolved_folder_name = folderPathParts[folderPathParts.length - 1];
         resolved_folder_id = parentId;
     } else {
-        // Simple folder — look up existing
-        const folderRows = await query<{ id: string; folder_name: string; parent_folder_name: string | null }>(
-            `SELECT id::text, folder_name, parent_folder_name FROM "stickies" WHERE is_folder = true AND folder_name = $1 AND user_id = $2`,
-            [folder_name!, userId]
+        // Simple folder — fuzzy look up existing
+        const allFolderRows = await query<{ id: string; folder_name: string; parent_folder_name: string | null }>(
+            `SELECT id::text, folder_name, parent_folder_name FROM "stickies" WHERE is_folder = true AND user_id = $1`,
+            [userId]
         );
-        if (folderRows.length > 0) {
-            const match = parentFolderHint
-                ? folderRows.find((r) => r.parent_folder_name?.toLowerCase() === parentFolderHint!.toLowerCase())
-                : folderRows[0];
-            if (match) resolved_folder_id = String(match.id);
+        const match = fuzzyMatchFolder(allFolderRows, folder_name!, parentFolderHint
+            ? (f) => f.parent_folder_name?.toLowerCase() === parentFolderHint!.toLowerCase()
+            : undefined
+        );
+        if (match) {
+            resolved_folder_id = String(match.id);
+            resolved_folder_name = match.folder_name; // use the real DB name, not the fuzzy input
         }
-        resolved_folder_name = folder_name!;
     }
 
     const folder_color = await pickLeastUsedColor(userId, rawColor);
