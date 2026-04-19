@@ -507,7 +507,7 @@ const STACK_MODE_KEY = "stickies:stack-mode-notes:v1";
 const DEFAULT_FOLDER_KEY = "stickies:default-folder:v1";
 const LAST_FOLDER_KEY = "stickies:last-folder:v1"; // persists last active folder across sessions
 const DB_CACHE_KEY = "stickies:db-cache:v2";
-const COUNTS_CACHE_KEY = "stickies:counts-cache:v1";
+const COUNTS_CACHE_KEY = "stickies:counts-cache:v2";
 // Note cache removed — API is fast enough, cache caused stale data bugs
 const DEV_MODE_KEY = "stickies:dev-mode:v1";
 
@@ -1103,6 +1103,19 @@ export default function NotesMaster() {
 
     const [, startContentTransition] = useTransition();
     const [editorOpen, setEditorOpen] = useState(false);
+    // Sync folder path to URL params — enables shareable/bookmarkable folder links
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+        const url = new URL(window.location.href);
+        if (folderStack.length > 0 && !editorOpen) {
+            url.searchParams.set("folder", folderStack.map(f => toUrlToken(f.name)).join("/"));
+        } else if (!editorOpen) {
+            url.searchParams.delete("folder");
+        }
+        if (url.toString() !== window.location.href) {
+            window.history.replaceState({}, "", url.toString());
+        }
+    }, [folderStack, editorOpen]);
     const [noteContentLoading, setNoteContentLoading] = useState(false);
     const [editingNote, setEditingNote] = useState<any | null>(null);
     const [showFloatCopy, setShowFloatCopy] = useState(true);
@@ -2371,17 +2384,11 @@ const fireIntegrations = (trigger: string, note: any) => {
         if (!hydratedViewState || isUrlChecking) return;
         try {
             const next = new URL(window.location.href);
-            const noteIdToken = editorOpen && editingNote?.id ? String(editingNote.id) : "";
-
-            // Keep URL clean — only noteId needed
-            next.searchParams.delete("folder");
+            // Keep URL clean — strip note-level params (use copy link for sharing)
             next.searchParams.delete("note");
-
-            if (noteIdToken) next.searchParams.set("noteId", noteIdToken);
-            else next.searchParams.delete("noteId");
-
-            if (editorOpen && mdViewMode !== "text") next.searchParams.set("view", mdViewMode);
-            else next.searchParams.delete("view");
+            next.searchParams.delete("noteId");
+            next.searchParams.delete("view");
+            // Folder param is managed by the folderStack useEffect — don't touch it here
 
             const currentPath = `${window.location.pathname}${window.location.search}`;
             const nextPath = `${next.pathname}${next.search}`;
@@ -3561,26 +3568,45 @@ const fireIntegrations = (trigger: string, note: any) => {
             } catch {
                 showError("Image paste failed");
             }
-        }
-    }
-
-    function handlePlainModePaste(e: React.ClipboardEvent) {
-        const text = e.clipboardData.getData("text/plain");
-        if (!text) return;
-        // Auto-format JSON
-        try {
-            const parsed = JSON.parse(text);
-            e.preventDefault();
-            const formatted = JSON.stringify(parsed, null, 2);
-            setContent(formatted);
-            setPendingNoteType("json");
-            showToast("JSON formatted ✦", "#34C759", true);
             return;
-        } catch {}
-        // Auto-detect and tag language
-        const detected = detectNoteType(text);
-        if (detected && detected !== "text") {
-            setPendingNoteType(detected);
+        }
+
+        // Auto-trim leading/trailing spaces on each line (common from email/web paste)
+        const plain = e.clipboardData.getData("text/plain");
+        if (plain) {
+            // Auto-format JSON
+            try {
+                const parsed = JSON.parse(plain);
+                e.preventDefault();
+                const formatted = JSON.stringify(parsed, null, 2);
+                setContent(formatted);
+                setPendingNoteType("json");
+                showToast("JSON formatted", "#34C759", true);
+                return;
+            } catch {}
+
+            const trimmed = plain.replace(/^[ \t\u00a0\u200b]+/gm, "");
+            const spacesRemoved = plain.length - trimmed.length;
+            if (spacesRemoved > 0) {
+                e.preventDefault();
+                const textarea = e.currentTarget;
+                const start = textarea.selectionStart ?? content.length;
+                const end = textarea.selectionEnd ?? content.length;
+                // Blink red on textarea to show spaces being removed
+                const orig = textarea.style.backgroundColor;
+                textarea.style.backgroundColor = "rgba(255,59,48,0.25)";
+                setTimeout(() => { textarea.style.backgroundColor = orig; }, 150);
+                setTimeout(() => { textarea.style.backgroundColor = "rgba(255,59,48,0.25)"; }, 300);
+                setTimeout(() => { textarea.style.backgroundColor = orig; }, 450);
+                setContent(content.slice(0, start) + trimmed + content.slice(end));
+                showToast(`${spacesRemoved} spaces removed`, noteColor || "#FF9500");
+                return;
+            }
+            // Auto-detect and tag language
+            const detected = detectNoteType(plain);
+            if (detected && detected !== "text") {
+                setPendingNoteType(detected);
+            }
         }
     }
 
@@ -4583,7 +4609,7 @@ const fireIntegrations = (trigger: string, note: any) => {
             return;
         }
 
-        const color = pickRandomPaletteColor();
+        const color = activeFolder ? (folderStack.at(-1)?.color || pickRandomPaletteColor()) : pickRandomPaletteColor();
         const optimisticId = `folder-${Date.now()}`;
         const payload = {
             title: `ROOT_${folderName}`,
@@ -6804,7 +6830,6 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                             <div className="flex flex-col flex-1 min-h-0 overflow-hidden relative" style={{ background: "black" }}>
 
                     <main ref={mainScrollRef}
-                        onDoubleClick={(e) => { if ((e.target as HTMLElement) === e.currentTarget && activeFolder !== "TRASH") openNewNote(); }}
                         onDragOver={(e) => { if (Array.from(e.dataTransfer.items).some(i => i.kind === "file")) e.preventDefault(); }}
                         onDrop={(e) => {
                             const files = Array.from(e.dataTransfer.files);
@@ -7087,7 +7112,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                 const c = item.color || item.folder_color || palette12[0];
                                                 return (
                                                     <button type="button"
-                                                        onClick={(e) => { e.stopPropagation(); enterFolder({ id: String(item.id), name: item.name, color: item.color || palette12[0] }); setIsGlobalSettings(false); setShowFolderColorPicker(false); setShowFolderIconPicker(false); setShowFolderMovePicker(false); setShowFolderActions(true); }}
+                                                        onClick={(e) => { e.stopPropagation(); enterFolder({ id: String(item.id), name: item.name, color: item.color || palette12[0] }); }}
                                                         className={`folder-icon-badge${item.name === "CLAUDE" ? " folder-icon-badge-claude" : ""} flex-shrink-0 w-[54px] h-[54px] sm:w-[46px] sm:h-[46px] m-2 sm:m-0 flex items-center justify-center font-black overflow-hidden`}
                                                         style={{ fontSize: 22, "--fc": c, "--ic": "#fff", boxShadow: `2px 3px 8px ${c}55` } as React.CSSProperties}>
                                                         {item.name === "CLAUDE"
@@ -7291,7 +7316,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                             const nCount = realItems.filter((i: any) => !i.is_folder).length;
                             const totalChars = realItems.filter((i: any) => !i.is_folder).reduce((acc: number, i: any) => acc + (i.content || "").length, 0);
                             const sizeStr = totalChars >= 1_000_000 ? `${(totalChars / 1_000_000).toFixed(1)}M chars` : totalChars >= 1000 ? `${(totalChars / 1000).toFixed(1)}k chars` : `${totalChars} chars`;
-                            const parts = [fCount > 0 && `${fCount} folder${fCount !== 1 ? "s" : ""}`, nCount > 0 && `${nCount} note${nCount !== 1 ? "s" : ""}`, sizeStr].filter(Boolean);
+                            const parts = [fCount > 0 && `${fCount} folder${fCount !== 1 ? "s" : ""}`, nCount > 0 && `${nCount} note${nCount !== 1 ? "s" : ""}`, totalChars > 0 && sizeStr].filter(Boolean);
                             return (
                                 <div className="hidden sm:block text-right px-4 py-2 text-[10px] text-zinc-700 font-medium select-none pointer-events-none">
                                     {parts.join(" · ")}
@@ -7310,9 +7335,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                 <button
                                     key={`fab-${depth}`}
                                     type="button"
-                                    onClick={() => {
-                                        if (depth === 0) { openCreateFolder(); } else { openNewNote(); }
-                                    }}
+                                    onClick={() => openCreateFolder()}
                                     className="fab-alive rounded-full flex items-center justify-center text-black"
                                     style={{
                                         width: fabSize,
@@ -7320,14 +7343,14 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                         background: "#ffffff",
                                         boxShadow: "0 0 0 2px rgba(0,0,0,0.25), 0 8px 28px rgba(255,255,255,0.35)",
                                     }}>
-                                    {depth === 0 ? <FolderIcon style={{ width: iconSize, height: iconSize }} /> : <PlusIcon style={{ width: iconSize, height: iconSize }} />}
+                                    <FolderIcon style={{ width: iconSize, height: iconSize }} />
                                 </button>
                             </div>
                         );
                     })()}
 
-                    {/* STATS BOTTOM BAR — mobile: root only */}
-                    <div className={`fixed bottom-4 left-0 right-0 z-[120] ${!activeFolder && !editorOpen ? "flex sm:hidden" : "hidden"} justify-center items-center select-none pointer-events-none tabular-nums`} style={{ fontSize: 9, opacity: 0.7 }}>
+                    {/* STATS BOTTOM BAR — mobile: all folder levels */}
+                    <div className={`fixed bottom-4 left-0 right-0 z-[120] ${!editorOpen ? "flex sm:hidden" : "hidden"} justify-center items-center select-none pointer-events-none tabular-nums`} style={{ fontSize: 9, opacity: 0.7 }}>
                         <span className="flex items-center gap-1.5 px-3 py-1 rounded-full" style={{ border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.04)", backdropFilter: "blur(8px)" }}>
                             {activeFolder ? (() => {
                                 const items = displayItems.filter((i: any) => !i._header);
@@ -7346,28 +7369,31 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                             </>)}
                         </span>
                     </div>
-                    {/* STATS BOTTOM BAR — desktop: full stats — root only */}
-                    <div className={`fixed bottom-4 left-0 right-0 z-[120] ${!activeFolder && !editorOpen ? "hidden sm:flex" : "hidden"} justify-center items-center select-none pointer-events-none tabular-nums`} style={{ fontSize: 9, opacity: 0.7 }}>
+                    {/* STATS BOTTOM BAR — desktop: show on all folder levels */}
+                    <div className={`fixed bottom-4 left-0 right-0 z-[120] ${!editorOpen ? "hidden sm:flex" : "hidden"} justify-center items-center select-none pointer-events-none tabular-nums`} style={{ fontSize: 9, opacity: 0.7 }}>
                         <span className="flex items-center gap-1.5 px-3 py-1 rounded-full" style={{ border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.04)", backdropFilter: "blur(8px)" }}>
                             {/* Clock */}
                             <span className="text-white/70 font-bold">{now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
                             <span className="text-zinc-600">/</span>
                             {/* Date */}
                             <span className="text-white/50 uppercase tracking-wide font-bold">{now.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}</span>
-                            {/* Stats — only in dev mode */}
-                            {devMode && (<>
-                                <span className="text-zinc-600">/</span>
-                                <span style={{ color: "#38bdf8" }}>{dbStats.folderCount} folders</span>
-                                <span className="text-zinc-600">/</span>
-                                <span style={{ color: "#fb923c" }}>{dbStats.noteCount} notes</span>
-                            </>)}
-                            {/* Folder/note stats — only in dev mode */}
-                            {devMode && (noteStats ?? folderStats)?.map((chip, i) => (
-                                <span key={i} className="flex items-center gap-1.5">
+                            {/* Stats: global at root, folder-specific inside */}
+                            {!activeFolder ? (
+                                devMode ? (<>
                                     <span className="text-zinc-600">/</span>
-                                    <span style={{ color: chip.startsWith("Edited") ? "#a78bfa" : "#94a3b8" }}>{chip}</span>
-                                </span>
-                            ))}
+                                    <span style={{ color: "#38bdf8" }}>{dbStats.folderCount} folders</span>
+                                    <span className="text-zinc-600">/</span>
+                                    <span style={{ color: "#fb923c" }}>{dbStats.noteCount} notes</span>
+                                </>) : null
+                            ) : (() => {
+                                const items = filteredDisplayItems.filter((i: any) => !i._header);
+                                const fCount = items.filter((i: any) => i.is_folder).length;
+                                const nCount = items.filter((i: any) => !i.is_folder).length;
+                                return (<>
+                                    {fCount > 0 && <><span className="text-zinc-600">/</span><span style={{ color: "#38bdf8" }}>{fCount} folder{fCount !== 1 ? "s" : ""}</span></>}
+                                    {nCount > 0 && <><span className="text-zinc-600">/</span><span style={{ color: "#fb923c" }}>{nCount} note{nCount !== 1 ? "s" : ""}</span></>}
+                                </>);
+                            })()}
                             {/* Dice — only in a folder */}
                             {activeFolder && (
                                 <button
