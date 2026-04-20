@@ -1199,6 +1199,9 @@ export default function NotesMaster() {
     const [showEmptyTrashModal, setShowEmptyTrashModal] = useState(false);
     const [showImportGuide, setShowImportGuide] = useState(false);
     const [importApiKey, setImportApiKey] = useState("");
+    const [openTabs, setOpenTabs] = useState<string[]>([]); // note IDs
+    const [showTabs, setShowTabs] = useState(() => { try { return localStorage.getItem("stickies:show-tabs:v1") !== "false"; } catch { return true; } });
+    const [dismissedTabs, setDismissedTabs] = useState<Set<string>>(() => { try { const raw = localStorage.getItem("stickies:dismissed-tabs:v1"); return raw ? new Set(JSON.parse(raw)) : new Set(); } catch { return new Set(); } });
     const [activeTaskIdx, setActiveTaskIdx] = useState<number | null>(null);
     const [editingTaskIdx, setEditingTaskIdx] = useState<number | null>(null);
     const [swipedTaskIdx, setSwipedTaskIdx] = useState<number | null>(null);
@@ -1602,16 +1605,14 @@ export default function NotesMaster() {
                 sessionStorage.removeItem("stickies:session-started");
                 setShowWelcomeBack(true);
                 void sync().then(() => {
+                    void loadAllNotes();
                     const lastFolder = localStorage.getItem(LAST_FOLDER_KEY);
                     if (lastFolder === "__all__") {
                         setActiveFolder(null);
-                        void loadAllNotes();
                     } else {
                         const target = lastFolder || localStorage.getItem(DEFAULT_FOLDER_KEY) || "CLAUDE";
                         setActiveFolder(target);
-                        void loadFolderNotes(target, false);
                     }
-                    // auto-open effect handles opening the note once dbData is ready
                 });
             }
         });
@@ -1624,15 +1625,15 @@ export default function NotesMaster() {
     useEffect(() => {
         setMounted(true);
         void sync().then(() => {
-            // Restore last active folder — LAST_FOLDER_KEY wins, fall back to default folder
+            // Load all notes (metadata only, no content) — powers today-tabs + folder views
+            void loadAllNotes();
+            // Restore last active folder
             const lastFolder = localStorage.getItem(LAST_FOLDER_KEY);
             if (lastFolder === "__all__") {
                 setActiveFolder(null);
-                void loadAllNotes();
             } else {
                 const target = lastFolder || localStorage.getItem(DEFAULT_FOLDER_KEY) || "CLAUDE";
                 setActiveFolder(target);
-                void loadFolderNotes(target, false);
             }
             // Note: openNote is intentionally NOT called here — the auto-open effect handles it
             // once dbData is populated, avoiding a race between two concurrent openNote calls.
@@ -2793,7 +2794,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         return folderCounts[activeFolder] ?? dbData.filter((row) => !row.is_folder && String(row.folder_name || "") === activeFolder).length;
     }, [activeFolder, folders, dbData, folderCounts, folderCountsById]);
     const canDeleteActiveFolder = Boolean(activeFolder);
-    const isEmptyView = isDataLoaded && !editorOpen && !search.trim() && displayItems.length === 0;
+    const isEmptyView = isDataLoaded && !editorOpen && !search.trim() && !folderNotesLoading && displayItems.length === 0 && dbData.some(r => r.is_folder);
     const folderNames = useMemo(() => {
         const names = new Set<string>();
         // Only include folders that actually exist as is_folder rows — no ghost names
@@ -2932,9 +2933,11 @@ const fireIntegrations = (trigger: string, note: any) => {
                 type: (() => {
                     if (pendingNoteType) return pendingNoteType;
                     const saved = (editingNote as any)?.type ?? null;
+                    // Don't auto-upgrade plain text notes — user must explicitly switch modes
+                    if (saved === "text") return "text";
                     // Never overwrite a code/mermaid type with a weaker detection
                     if (saved && CODE_TYPES.has(saved)) return saved;
-                    // Always re-detect on save so markdown/json/html get the right type
+                    // Auto-detect for new notes or notes without a saved type
                     return detectNoteType(saveContent) || saved || "text";
                 })(),
                 ...(extractedTags.length > 0 ? { tags: extractedTags } : {}),
@@ -3575,7 +3578,9 @@ const fireIntegrations = (trigger: string, note: any) => {
                 return;
             } catch {}
 
-            const trimmed = plain.replace(/^[ \t\u00a0\u200b]+/gm, "");
+            const trimmed = plain
+                .replace(/^[•·*]\s*/gm, "") // strip leading bullets that misalign tables
+                .replace(/^[ \t\u00a0\u200b]+/gm, ""); // strip leading whitespace
             const spacesRemoved = plain.length - trimmed.length;
             if (spacesRemoved > 0) {
                 e.preventDefault();
@@ -4116,7 +4121,8 @@ const fireIntegrations = (trigger: string, note: any) => {
         if (noteType !== "text" || listMode) return false;
         const rawLines = content.split("\n");
         const lines = rawLines.filter(l => l.trim());
-        if (lines.length === 0 || lines.length > 12) return false;
+        if (lines.length < 4 || lines.length > 12) return false;
+        if (lines.some(l => l.length > 200)) return false;
         const hasBlankBetween = rawLines.some((l, i) => i > 0 && i < rawLines.length - 1 && !l.trim() && rawLines[i - 1].trim());
         return !hasBlankBetween;
     }, [noteType, listMode, content]);
@@ -5466,8 +5472,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                 .md-preview hr { border: none; border-top: 1px solid #e5e5e5; margin: 1.5em 0; }
                 .md-preview li { color: #1a1a1a; }
                 .md-preview li::marker { color: #555; }
-                .md-preview table { border-collapse: separate; border-spacing: 0; margin: 0.75em 0; border: 1px solid #d0d7de; border-radius: 8px; overflow: hidden; width: 100%; table-layout: fixed; }
-                .md-preview th,.md-preview td { border-bottom: 1px solid #d0d7de; border-right: 1px solid #d0d7de; padding: 8px 14px; text-align: left; color: #1a1a1a; }
+                .md-preview table { border-collapse: separate; border-spacing: 0; margin: 0.75em 0; border: 1px solid #d0d7de; border-radius: 8px; overflow: hidden; width: 100%; table-layout: auto; }
+                .md-preview th,.md-preview td { border-bottom: 1px solid #d0d7de; border-right: 1px solid #d0d7de; padding: 4px 8px; text-align: left; color: #1a1a1a; font-size: 0.85em; line-height: 1.3; }
                 .md-preview th:last-child,.md-preview td:last-child { border-right: none; }
                 .md-preview tr:last-child td { border-bottom: none; }
                 .md-preview th { font-weight: 600; background: #f0f3f6; color: #111; font-size: 0.85em; }
@@ -5883,7 +5889,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                         </div>
                     )}
                     <div className="safe-top-bar shrink-0" style={{ background: "#2a2a2a" }} />
-                    <div className="relative h-auto min-h-[3.5rem] sm:min-h-[4rem] px-2 sm:px-4 border-b border-white/10 flex items-center gap-1 sm:gap-2 shrink-0" style={{ background: "#2a2a2a" }}>
+                    <div className="relative h-auto min-h-[3.5rem] sm:min-h-[4rem] px-2 sm:px-4 flex items-center gap-1 sm:gap-2 shrink-0" style={{ background: "#2a2a2a" }}>
                         {/* Back button — hidden on desktop or in edit mode (left panel always visible) */}
                         <button
                             onClick={(e) => { e.stopPropagation(); void backToRootFromEditor(); }}
@@ -5996,6 +6002,67 @@ const fireIntegrations = (trigger: string, note: any) => {
                             </div>
                         </div>
                     )}
+                    {/* ── Tab bar — today's notes across all folders ── */}
+                    {showTabs && editingNote?.id && (() => {
+                        const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+                        const todayNotes = dbData
+                            .filter(n => !n.is_folder && !n.trashed_at && !dismissedTabs.has(String(n.id)) && new Date(n.updated_at || n.created_at || 0) >= todayStart)
+                            .sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")));
+                        if (todayNotes.length <= 1) return null;
+                        const activeId = String(editingNote.id);
+                        const dismissTab = (id: string) => {
+                            setDismissedTabs(prev => {
+                                const next = new Set(prev); next.add(id);
+                                try { localStorage.setItem("stickies:dismissed-tabs:v1", JSON.stringify([...next])); } catch {}
+                                return next;
+                            });
+                        };
+                        return (
+                            <div className="shrink-0 flex items-stretch gap-0 overflow-x-auto" style={{ scrollbarWidth: "none", minHeight: 28 }}>
+                                <button type="button" onClick={() => openNewNote()} className="flex-shrink-0 flex items-center justify-center px-2.5 bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition" title="New note">
+                                    <PlusIcon className="w-3.5 h-3.5" />
+                                </button>
+                                {todayNotes.map(n => {
+                                    const isActive = String(n.id) === activeId;
+                                    const c = n.folder_color || noteColor || "#888";
+                                    return (
+                                        <div key={n.id} className={`flex-shrink-0 flex items-center transition-all ${isActive ? "" : "hover:brightness-110"}`}
+                                            style={{ background: isActive ? c : `${c}90`, color: isLightColor(c) ? "#1c1c1e" : "#fff" }}>
+                                            <button type="button"
+                                                onClick={() => {
+                                                    if (isActive) return;
+                                                    if (n.folder_name && n.folder_name !== activeFolder) {
+                                                        const fr = dbData.find(r => r.is_folder && r.folder_name === n.folder_name);
+                                                        if (fr) enterFolder({ id: String(fr.id), name: n.folder_name, color: fr.folder_color || c });
+                                                    }
+                                                    void openNote(n);
+                                                }}
+                                                className="flex items-center gap-1.5 pl-3 pr-1 py-1.5 text-[10px] font-bold truncate max-w-[150px]">
+                                                <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: c }} />
+                                                {(n.title || "Untitled").slice(0, 20)}{(n.title || "").length > 20 ? "…" : ""}
+                                            </button>
+                                            {isActive && (
+                                                <button type="button"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        const nid = String(n.id);
+                                                        dismissTab(nid);
+                                                        const remaining = todayNotes.filter(t => String(t.id) !== nid);
+                                                        if (remaining.length > 0) void openNote(remaining[0]);
+                                                        else void backToRootFromEditor();
+                                                    }}
+                                                    className="px-1 py-1 hover:opacity-60 transition flex-shrink-0"
+                                                    style={{ color: isLightColor(c) ? "#1c1c1e" : "#fff" }}>
+                                                    <span className="text-[8px] leading-none">✕</span>
+                                                </button>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        );
+                    })()}
+
                     <div className="relative flex-1 flex overflow-hidden bg-black font-mono" style={{ display: aiPromptOpen ? "none" : "flex" }}>
                         {/* ── Note loading spinner — scoped to editor panel only ── */}
                         {noteContentLoading && (
@@ -7608,6 +7675,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                 <div className="grid grid-cols-2 gap-1.5">
                                     {(["Text", "Checklist", "Graph", "Mindmap", "Stack"] as const).map((mode) => {
                                         const active = noteViewMode === mode;
+                                        const disabled = mode !== "Text" && contentLineCount < 15;
                                         const icon = mode === "Text" ? (
                                             <Bars3Icon className="w-4 h-4" />
                                         ) : mode === "Checklist" ? (
@@ -7622,7 +7690,9 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                         const isLastOdd = mode === "Stack"; // 5th item — span full width
                                         return (
                                             <button key={mode} type="button"
+                                                disabled={disabled}
                                                 onClick={() => {
+                                                    if (disabled) return;
                                                     if (mode === "Checklist") {
                                                         if (graphMode) toggleGraphMode();
                                                         if (mindmapMode) toggleMindmapMode();
@@ -7643,7 +7713,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                     }
                                                     if (window.innerWidth < 1024) setShowNoteActions(false);
                                                 }}
-                                                className={`flex flex-col items-center gap-1.5 py-3 px-1 transition-all text-[10px] font-black${isLastOdd ? " col-span-2" : ""}`}
+                                                className={`flex flex-col items-center gap-1.5 py-3 px-1 rounded-lg transition-all text-[10px] font-black${isLastOdd ? " col-span-2" : ""}${disabled ? " cursor-not-allowed" : ""}`}
                                                 style={{
                                                     background: active ? `${noteColor}25` : "rgba(255,255,255,0.04)",
                                                     color: active ? noteColor : "#71717a",
@@ -7703,7 +7773,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
 
                         {/* Depth level watermark */}
                         <div className="absolute inset-0 flex items-end justify-end pointer-events-none z-0 overflow-hidden pb-16 pr-4">
-                            <span className="text-[160px] font-black text-white/[0.04] select-none leading-none tracking-tighter">
+                            <span className="text-[160px] font-black text-white/[0.02] select-none leading-none tracking-tighter">
                                 {isGlobalSettings ? "APP" : `L${Math.min(folderStack.length + 1, 3)}`}
                             </span>
                         </div>
@@ -8028,10 +8098,13 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                         <div className="border-b border-white/10 px-6 py-4 flex items-center gap-3">
                             {activeFolder && !isGlobalSettings ? (
                                 <>
-                                    <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center text-sm font-black leading-none overflow-hidden rounded-lg"
-                                        style={{ backgroundColor: activeFolder === "CLAUDE" ? "#fff" : (activeFolderColor || "#888"), color: activeFolder === "CLAUDE" ? "#000" : "#fff" }}>
+                                    <button type="button"
+                                        onClick={() => { setShowFolderColorPicker((v) => !v); setShowFolderIconPicker(false); setShowFolderMovePicker(false); }}
+                                        className="w-8 h-8 flex-shrink-0 flex items-center justify-center text-sm font-black leading-none overflow-hidden rounded-lg cursor-pointer hover:brightness-110 transition"
+                                        style={{ backgroundColor: activeFolder === "CLAUDE" ? "#fff" : (activeFolderColor || "#888"), color: activeFolder === "CLAUDE" ? "#000" : "#fff" }}
+                                        title="Change color">
                                         {activeFolder === "CLAUDE" ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-1" /> : <FolderIconDisplay value={folderIcons[activeFolder] || ""} folderName={activeFolder} className="w-4 h-4" />}
-                                    </div>
+                                    </button>
                                     {isEditingFolderTitle ? (
                                         <input autoFocus
                                             className="text-sm font-black text-white bg-transparent outline-none border-b border-white/40 flex-1 min-w-0 pb-0.5"
@@ -8051,18 +8124,28 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                 <h2 className="text-sm font-black uppercase tracking-widest text-white">Stickies</h2>
                             )}
                         </div>
+                        {/* Color swatches — shown below header when icon is clicked */}
+                        {activeFolder && !isGlobalSettings && showFolderColorPicker && (
+                            <div className="border-b border-white/10 px-5 py-3">
+                                <div className="grid grid-cols-7 gap-2">
+                                    {colorPickerPalette.map((c) => (
+                                        <button key={c} type="button"
+                                            onClick={() => { applySingleFolderColor(c); setShowFolderColorPicker(false); }}
+                                            className="aspect-square w-full transition-all"
+                                            style={{
+                                                background: c,
+                                                border: activeFolderColor === c ? `2.5px solid rgba(255,255,255,0.9)` : `1.5px solid rgba(255,255,255,0.15)`,
+                                                boxShadow: activeFolderColor === c ? `0 0 0 2px ${c}80` : "none",
+                                                borderRadius: 4,
+                                            }} />
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                         <div className="flex flex-col divide-y divide-white/10 overflow-y-auto flex-1">
-                            {/* COLOR ROW */}
                             {activeFolder && !isGlobalSettings && (
                                 <div>
-                                    <button type="button"
-                                        onClick={() => { setShowFolderColorPicker((v) => !v); setShowFolderIconPicker(false); setShowFolderMovePicker(false); }}
-                                        className="w-full flex items-center gap-4 px-6 py-4 text-left text-zinc-300 hover:bg-white/5 hover:text-white active:bg-white/10 transition">
-                                        <SwatchIcon className="w-5 h-5 flex-shrink-0" />
-                                        <span className="text-xs font-black tracking-wide flex-1">Color</span>
-                                        <div className="w-7 h-7 flex-shrink-0 border border-white/40" style={{ backgroundColor: activeFolderColor, borderRadius: 4 }} />
-                                    </button>
-                                    {showFolderColorPicker && (
+                                    {false && (
                                         <div className="grid grid-cols-7 gap-2 px-5 pb-5 pt-1">
                                             {colorPickerPalette.map((c) => (
                                                 <button key={c} type="button"
@@ -8104,7 +8187,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                     <span className="px-3 py-1 text-[11px] font-black tracking-wide text-white">ICONS</span>
                                                     <button type="button" onClick={clearIcon} className="ml-auto px-3 py-1 text-[11px] font-black tracking-wide text-zinc-600 hover:text-zinc-300 transition-colors">NONE</button>
                                                 </div>
-                                                <input type="text" value={iconPickerSearch} onChange={e => setIconPickerSearch(e.target.value)} placeholder="Search..." className="w-full bg-black border border-white/15 outline-none focus:border-white/40 px-3 py-1.5 text-xs text-white placeholder:text-zinc-600 font-mono mb-2" />
+                                                <input type="text" value={iconPickerSearch} onChange={e => setIconPickerSearch(e.target.value)} placeholder="Search..." className="w-full bg-black border border-white/15 outline-none focus:border-white/40 px-3 py-1.5 text-xs text-white placeholder:text-zinc-600 font-mono mb-2 rounded-lg" />
                                                 <div className="grid grid-cols-8 gap-1 max-h-44 overflow-y-auto">
                                                     {filteredHero.map(({ key, label, Icon }) => {
                                                         const val = `__hero:${key}`;
@@ -8341,6 +8424,19 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                         </div>
                                     );
                                 })()}
+                                {/* TODAY TABS */}
+                                <div className="px-6 py-2 border-b border-white/[0.06]">
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-1.5">Today Tabs</p>
+                                    <div className="flex gap-1.5">
+                                        {([true, false] as const).map((v) => (
+                                            <button key={String(v)} type="button"
+                                                onClick={() => { setShowTabs(v); try { localStorage.setItem("stickies:show-tabs:v1", String(v)); } catch {} }}
+                                                className={`flex-1 py-1.5 rounded text-[10px] font-black uppercase tracking-wide transition ${showTabs === v ? "bg-white text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"}`}>
+                                                {v ? "On" : "Off"}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
                                 {/* FILE ICONS */}
                                 <div className="px-6 py-2 border-b border-white/[0.06]">
                                     <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-1.5">Sub-folder Icons</p>
