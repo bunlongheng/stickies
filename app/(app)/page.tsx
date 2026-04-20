@@ -1175,6 +1175,7 @@ export default function NotesMaster() {
     const [showNoteActions, setShowNoteActions] = useState(false);
     const [confirmDelete, setConfirmDelete] = useState<{ type: "note"; noteId: string | null; noteName: string; noteColor?: string } | { type: "folder"; folderName: string } | null>(null);
     const [showCreateFolder, setShowCreateFolder] = useState(false);
+    const [showFabMenu, setShowFabMenu] = useState(false);
     const [newFolderName, setNewFolderName] = useState("");
     const [newFolderIcon, setNewFolderIcon] = useState("");
     const newFolderInputRef = useRef<HTMLInputElement | null>(null);
@@ -6847,9 +6848,6 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                     <span className="w-full pl-12 pr-3 py-3 text-sm font-black tracking-tight text-white/30">SEARCH</span>
                                                 </button>
                                                 <div className="ml-auto flex items-center gap-2">
-                                                    <button type="button" onClick={() => openNewNote()} className="p-2 mx-1 rounded-full bg-white/15 hover:bg-white/25 text-white transition" title="New note" aria-label="New note">
-                                                        <PlusIcon className="w-6 h-6 stroke-[2.5]" />
-                                                    </button>
                                                     <HeaderIconBtn icon={mainListMode === "list" ? Bars3Icon : Squares2X2Icon} label={mainListMode === "list" ? "List" : "Thumb"} active={!kanbanMode} onClick={() => { setMainListMode(v => v === "thumb" ? "list" : "thumb"); setKanbanMode(false); }} />
                                                     <HeaderIconBtn icon={Cog6ToothIcon} label="Settings" onClick={() => { const hueInt = integrationsRef.current.find(ig => ig.type === "hue"); setLightMode((hueInt?.config?.mode as any) ?? "flash"); setIsGlobalSettings(true); setShowFolderActions(true); }} />
                                                 </div>
@@ -6871,9 +6869,6 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                     </button>
                                                 ) : (
                                                     <>
-                                                        <button type="button" onClick={() => openNewNote()} className="p-2 mx-1 rounded-full bg-white/15 hover:bg-white/25 text-white transition" title="New note" aria-label="New note">
-                                                            <PlusIcon className="w-6 h-6 stroke-[2.5]" />
-                                                        </button>
                                                         <HeaderIconBtn icon={mainListMode === "list" ? Bars3Icon : Squares2X2Icon} label={mainListMode === "list" ? "List" : "Thumb"} active={!kanbanMode} onClick={() => { setMainListMode(v => v === "thumb" ? "list" : "thumb"); setKanbanMode(false); }} />
                                                         <HeaderIconBtn icon={Cog6ToothIcon} label="Settings" onClick={() => { const hueInt = integrationsRef.current.find(ig => ig.type === "hue"); setLightMode((hueInt?.config?.mode as any) ?? "flash"); setIsGlobalSettings(false); setShowFolderActions(true); }} />
                                                     </>
@@ -7382,29 +7377,52 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                         })()}
                     </main>
 
-                    {/* FAB — floating + button bottom right */}
-                    {!isSelectMode && (() => {
-                        const depth = folderStack.length; // 0=root, 1=L1, 2=L2, 3+=L3
-                        const fabSize = 48;
-                        const iconSize = 24;
-                        return (
-                            <div className="fixed bottom-5 right-4 z-[130]" style={{ filter: "drop-shadow(0 6px 20px rgba(0,0,0,0.55))" }}>
-                                <button
-                                    key={`fab-${depth}`}
-                                    type="button"
-                                    onClick={() => openCreateFolder()}
-                                    className="fab-alive rounded-full flex items-center justify-center text-black"
-                                    style={{
-                                        width: fabSize,
-                                        height: fabSize,
-                                        background: "#ffffff",
-                                        boxShadow: "0 0 0 2px rgba(0,0,0,0.25), 0 8px 28px rgba(255,255,255,0.35)",
-                                    }}>
-                                    <FolderIcon style={{ width: iconSize, height: iconSize }} />
-                                </button>
-                            </div>
-                        );
-                    })()}
+                    {/* FAB — floating + button with speed dial */}
+                    {!isSelectMode && (
+                        <div className="fixed bottom-5 right-4 z-[130]" style={{ filter: "drop-shadow(0 6px 20px rgba(0,0,0,0.55))" }}>
+                            {/* Speed dial bubbles */}
+                            {showFabMenu && (
+                                <>
+                                    <div className="fixed inset-0 z-[-1]" onClick={() => setShowFabMenu(false)} onTouchMove={() => setShowFabMenu(false)} />
+                                    {(() => {
+                                        const radius = 70;
+                                        const items = [
+                                            { angle: 225, icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>, action: () => { setShowFabMenu(false); openNewNote(); }, label: "File" },
+                                            { angle: 270, icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>, action: () => { setShowFabMenu(false); openCreateFolder(); }, label: "Folder" },
+                                        ];
+                                        return items.map((item, i) => {
+                                            const rad = (item.angle * Math.PI) / 180;
+                                            const x = Math.cos(rad) * radius;
+                                            const y = Math.sin(rad) * radius;
+                                            return (
+                                                <button key={i} type="button"
+                                                    onClick={item.action}
+                                                    className="absolute rounded-full flex items-center justify-center bg-white text-black hover:scale-110 active:scale-95 transition-all shadow-lg"
+                                                    style={{ width: 42, height: 42, bottom: 3 - y, right: 3 - x, animation: `fabFanIn 0.2s ease-out ${i * 0.06}s both` }}
+                                                    title={item.label}>
+                                                    {item.icon}
+                                                </button>
+                                            );
+                                        });
+                                    })()}
+                                </>
+                            )}
+                            <button
+                                type="button"
+                                onClick={() => setShowFabMenu(v => !v)}
+                                className="fab-alive rounded-full flex items-center justify-center text-black"
+                                style={{
+                                    width: 48,
+                                    height: 48,
+                                    background: "#ffffff",
+                                    boxShadow: "0 0 0 2px rgba(0,0,0,0.25), 0 8px 28px rgba(255,255,255,0.35)",
+                                    transform: showFabMenu ? "rotate(45deg)" : "rotate(0deg)",
+                                    transition: "transform 0.2s ease",
+                                }}>
+                                <PlusIcon style={{ width: 24, height: 24 }} />
+                            </button>
+                        </div>
+                    )}
 
                     {/* STATS BOTTOM BAR — mobile: all folder levels */}
                     <div className={`fixed bottom-4 left-0 right-0 z-[120] ${!editorOpen ? "flex sm:hidden" : "hidden"} justify-center items-center select-none pointer-events-none tabular-nums`} style={{ fontSize: 9, opacity: 0.7 }}>
@@ -8425,30 +8443,24 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                     );
                                 })()}
                                 {/* TODAY TABS */}
-                                <div className="px-6 py-2 border-b border-white/[0.06]">
-                                    <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-1.5">Today Tabs</p>
-                                    <div className="flex gap-1.5">
-                                        {([true, false] as const).map((v) => (
-                                            <button key={String(v)} type="button"
-                                                onClick={() => { setShowTabs(v); try { localStorage.setItem("stickies:show-tabs:v1", String(v)); } catch {} }}
-                                                className={`flex-1 py-1.5 rounded text-[10px] font-black uppercase tracking-wide transition ${showTabs === v ? "bg-white text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"}`}>
-                                                {v ? "On" : "Off"}
-                                            </button>
-                                        ))}
-                                    </div>
+                                <div className="px-6 py-3 border-b border-white/[0.06] flex items-center justify-between">
+                                    <span className="text-xs font-black tracking-wide text-zinc-300">Today Tabs</span>
+                                    <button type="button"
+                                        onClick={() => { const v = !showTabs; setShowTabs(v); try { localStorage.setItem("stickies:show-tabs:v1", String(v)); } catch {} }}
+                                        className="relative w-11 h-6 rounded-full transition-colors duration-200"
+                                        style={{ background: showTabs ? "#34C759" : "rgba(255,255,255,0.15)" }}>
+                                        <span className="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200" style={{ transform: showTabs ? "translateX(20px)" : "translateX(0)" }} />
+                                    </button>
                                 </div>
-                                {/* FILE ICONS */}
-                                <div className="px-6 py-2 border-b border-white/[0.06]">
-                                    <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-1.5">Sub-folder Icons</p>
-                                    <div className="flex gap-1.5">
-                                        {([true, false] as const).map((v) => (
-                                            <button key={String(v)} type="button"
-                                                onClick={() => { setShowFileIcons(v); try { localStorage.setItem(SHOW_FILE_ICONS_KEY, String(v)); } catch {} }}
-                                                className={`flex-1 py-1.5 rounded text-[10px] font-black uppercase tracking-wide transition ${showFileIcons === v ? "bg-white text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"}`}>
-                                                {v ? "On" : "Off"}
-                                            </button>
-                                        ))}
-                                    </div>
+                                {/* SUB-FOLDER ICONS */}
+                                <div className="px-6 py-3 border-b border-white/[0.06] flex items-center justify-between">
+                                    <span className="text-xs font-black tracking-wide text-zinc-300">Sub-folder Icons</span>
+                                    <button type="button"
+                                        onClick={() => { const v = !showFileIcons; setShowFileIcons(v); try { localStorage.setItem(SHOW_FILE_ICONS_KEY, String(v)); } catch {} }}
+                                        className="relative w-11 h-6 rounded-full transition-colors duration-200"
+                                        style={{ background: showFileIcons ? "#34C759" : "rgba(255,255,255,0.15)" }}>
+                                        <span className="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200" style={{ transform: showFileIcons ? "translateX(20px)" : "translateX(0)" }} />
+                                    </button>
                                 </div>
                                 <button type="button" className="w-full flex items-center gap-4 px-6 py-4 text-left text-zinc-300 hover:bg-white/5 hover:text-white active:bg-white/10 transition"
                                     onClick={() => { setIntegrationsSnapshot([...integrationsRef.current]); setShowIntegrationsPanel(true); }}>
@@ -8490,7 +8502,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                         await fetch("/api/stickies/logout", { method: "POST" });
                                         setTimeout(() => { window.location.href = "/sign-in"; }, 1800);
                                     }}
-                                    className="flex items-center gap-2 px-5 py-3 bg-red-500 text-white hover:bg-red-600 active:bg-red-700 transition font-black uppercase text-xs tracking-wide">
+                                    className="flex items-center gap-2 px-5 py-3 rounded-xl bg-red-500 text-white hover:bg-red-600 active:bg-red-700 transition font-black uppercase text-xs tracking-wide">
                                     <ArrowRightOnRectangleIcon className="w-4 h-4 flex-shrink-0" />
                                     Sign Out
                                 </button>

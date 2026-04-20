@@ -265,6 +265,10 @@ body {
   0%, 100% { opacity: 0.6; transform: scale(1); }
   50%       { opacity: 1;   transform: scale(1.08); }
 }
+@keyframes fabFanIn {
+  from { opacity: 0; transform: scale(0.3) translateY(20px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
 @keyframes iconShake {
   0%, 100% { transform: rotate(0deg); }
   25%      { transform: rotate(-8deg); }
