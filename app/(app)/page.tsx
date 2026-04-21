@@ -3877,11 +3877,24 @@ const fireIntegrations = (trigger: string, note: any) => {
                 localStorage.removeItem(ACTIVE_DRAFT_KEY);
                 setPendingShare(null);
                 closeEditorTools();
+                playSound("delete");
+                // If tabs are open, switch to next tab instead of closing editor
+                if (showTabs && typeof window !== "undefined" && window.innerWidth >= 640) {
+                    const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+                    const remaining = dbData.filter(n =>
+                        !n.is_folder && !n.trashed_at && String(n.id) !== noteId &&
+                        !dismissedTabs.has(String(n.id)) &&
+                        new Date(n.updated_at || n.created_at || 0) >= todayStart
+                    );
+                    if (remaining.length > 0) {
+                        void openNote(remaining[0]);
+                        return;
+                    }
+                }
                 setEditingNote(null);
                 setTitle("");
                 setContent("");
                 setEditorOpen(false);
-                playSound("delete");
             } catch (err) {
                 console.error("Delete note failed:", err);
                 showError("Delete Failed");
@@ -5882,7 +5895,7 @@ const fireIntegrations = (trigger: string, note: any) => {
             <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
 
                 {/* RIGHT PANEL: editor — only shown in edit mode or when a note is open (mobile nav) */}
-                <div className={`flex-1 flex flex-col overflow-hidden ${editorOpen ? "flex" : "hidden"} `} style={{ background: appTheme === "light" ? "#f2f2f7" : "#222222" }}>
+                <div className={`flex-1 flex flex-col overflow-hidden ${editorOpen ? "flex" : "hidden"} `} style={{ background: appTheme === "light" ? "#ffffff" : "#222222" }}>
                 {editorOpen ? (
                 <section className="flex-1 min-h-0 flex flex-col overflow-hidden overscroll-none" onClick={(e) => e.stopPropagation()}>
                     {pendingShare && (
@@ -5903,8 +5916,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                             </div>
                         </div>
                     )}
-                    <div className="safe-top-bar shrink-0" style={{ background: appTheme === "light" ? "#f2f2f7" : "#2a2a2a" }} />
-                    <div className="relative h-auto min-h-[3.5rem] sm:min-h-[4rem] px-2 sm:px-4 flex items-center gap-1 sm:gap-2 shrink-0" style={{ background: appTheme === "light" ? "#f2f2f7" : "#2a2a2a" }}>
+                    <div className="safe-top-bar shrink-0" style={{ background: appTheme === "light" ? "#e8e8ed" : "#2a2a2a" }} />
+                    <div className="relative h-auto min-h-[3.5rem] sm:min-h-[4rem] px-2 sm:px-4 flex items-center gap-1 sm:gap-2 shrink-0" style={{ background: appTheme === "light" ? "#e8e8ed" : "#2a2a2a" }}>
                         {/* Back button — hidden on desktop or in edit mode (left panel always visible) */}
                         <button
                             onClick={(e) => { e.stopPropagation(); void backToRootFromEditor(); }}
@@ -6023,11 +6036,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                         const activeId = String(editingNote.id);
                         const todayNotes = dbData
                             .filter(n => !n.is_folder && !n.trashed_at && !dismissedTabs.has(String(n.id)) && new Date(n.updated_at || n.created_at || 0) >= todayStart)
-                            .sort((a, b) => {
-                                if (String(a.id) === activeId) return -1;
-                                if (String(b.id) === activeId) return 1;
-                                return String(b.updated_at || "").localeCompare(String(a.updated_at || ""));
-                            });
+                            .sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")));
                         if (todayNotes.length <= 1) return null;
                         const dismissTab = (id: string) => {
                             setDismissedTabs(prev => {
@@ -6037,16 +6046,20 @@ const fireIntegrations = (trigger: string, note: any) => {
                             });
                         };
                         return (
-                            <div className="shrink-0 flex items-stretch gap-0 overflow-x-auto" style={{ scrollbarWidth: "none", minHeight: 28 }}>
-                                <button type="button" onClick={() => openNewNote()} className="flex-shrink-0 flex items-center justify-center px-2.5 bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition" title="New note">
+                            <div className="shrink-0 flex items-stretch gap-0" style={{ minHeight: 28 }}>
+                                <button type="button" onClick={() => openNewNote()} className="flex-shrink-0 flex items-center justify-center px-2.5 bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition sticky left-0 z-10" title="New note" style={{ backdropFilter: "blur(8px)" }}>
                                     <PlusIcon className="w-3.5 h-3.5" />
                                 </button>
+                                <div className="flex items-stretch gap-0 overflow-x-auto" style={{ scrollbarWidth: "none" }} ref={(el) => {
+                                    // Auto-scroll to active tab
+                                    if (el) { const active = el.querySelector("[data-tab-active]"); if (active) active.scrollIntoView({ inline: "nearest", block: "nearest" }); }
+                                }}>
                                 {todayNotes.map(n => {
                                     const isActive = String(n.id) === activeId;
                                     const c = n.folder_color || noteColor || "#888";
                                     return (
-                                        <div key={n.id} className={`flex-shrink-0 flex items-center transition-all ${isActive ? "" : "hover:brightness-110"}`}
-                                            style={{ background: isActive ? c : `${c}90`, color: isLightColor(c) ? "#1c1c1e" : "#fff" }}>
+                                        <div key={n.id} {...(isActive ? { "data-tab-active": "" } : {})} className={`flex-shrink-0 flex items-center transition-all ${isActive ? "relative z-10" : "hover:brightness-110 opacity-75"}`}
+                                            style={{ background: isActive ? c : `${c}99`, color: isLightColor(c) ? "#1c1c1e" : "#fff" }}>
                                             <button type="button"
                                                 onClick={() => {
                                                     if (isActive) return;
@@ -6077,6 +6090,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         </div>
                                     );
                                 })}
+                                </div>
                             </div>
                         );
                     })()}
@@ -8158,9 +8172,28 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                         </button>
                                     )}
                                 </>
-                            ) : (
-                                <h2 className="text-sm font-black uppercase tracking-widest text-white">Stickies</h2>
-                            )}
+                            ) : (<>
+                                <h2 className="text-sm font-black uppercase tracking-widest text-white flex-1">Stickies</h2>
+                                <button type="button" title="Open Today's workspace"
+                                    onClick={() => {
+                                        setShowFolderActions(false); setIsGlobalSettings(false);
+                                        const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+                                        const latest = dbData
+                                            .filter(n => !n.is_folder && !n.trashed_at && new Date(n.updated_at || n.created_at || 0) >= todayStart)
+                                            .sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")));
+                                        if (latest.length > 0) {
+                                            const note = latest[0];
+                                            if (note.folder_name) {
+                                                const fr = dbData.find(r => r.is_folder && r.folder_name === note.folder_name);
+                                                if (fr) enterFolder({ id: String(fr.id), name: note.folder_name, color: fr.folder_color || "#888" });
+                                            }
+                                            void openNote(note);
+                                        } else { showToast("No notes today"); }
+                                    }}
+                                    className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 transition">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+                                </button>
+                            </>)}
                         </div>
                         {/* Color swatches — shown below header when icon is clicked */}
                         {activeFolder && !isGlobalSettings && showFolderColorPicker && (
