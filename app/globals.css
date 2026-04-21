@@ -202,6 +202,29 @@ body {
 [data-theme="light"] input.bg-transparent { color: #1c1c1e !important; }
 [data-theme="light"] input.bg-transparent::placeholder { color: rgba(0,0,0,0.35) !important; }
 [data-theme="light"] .bg-black { background: #ffffff !important; }
+
+/* Icons — dark in light mode */
+[data-theme="light"] .text-zinc-400 { color: #48484a !important; }
+[data-theme="light"] .text-zinc-500 { color: #636366 !important; }
+[data-theme="light"] .text-zinc-600 { color: #8e8e93 !important; }
+[data-theme="light"] .text-zinc-700 { color: #aeaeb2 !important; }
+
+/* Title text */
+[data-theme="light"] .text-white { color: #1c1c1e !important; }
+[data-theme="light"] .font-bold.text-white { color: #000000 !important; }
+
+/* Editor header */
+[data-theme="light"] .hover\:bg-white\/10:hover { background: rgba(0,0,0,0.06) !important; }
+
+/* Main content area */
+[data-theme="light"] .bg-black { background: #ffffff !important; }
+[data-theme="light"] [style*="background: black"] { background: #ffffff !important; }
+
+/* Toast */
+[data-theme="light"] .text-white\/85 { color: rgba(0,0,0,0.85) !important; }
+[data-theme="light"] .text-white\/70 { color: rgba(0,0,0,0.70) !important; }
+[data-theme="light"] .text-white\/50 { color: rgba(0,0,0,0.50) !important; }
+[data-theme="light"] .text-white\/40 { color: rgba(0,0,0,0.40) !important; }
 /* Modal backdrops */
 [data-theme="light"] .bg-black\/60 { background: rgba(0,0,0,0.35) !important; }
 
