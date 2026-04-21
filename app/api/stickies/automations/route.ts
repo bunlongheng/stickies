@@ -1,46 +1,42 @@
 import { authorizeOwner } from "@/app/api/stickies/_auth";
-import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
-
-function getSupabase() {
-    return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
-}
-
-
+import { query, queryOne } from "@/lib/db-driver";
 
 // GET /api/stickies/automations — list all automations with last_fired
 export async function GET(req: Request) {
     if (!await authorizeOwner(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const supabase = getSupabase();
-    const { data, error } = await supabase
-        .from("automations")
-        .select(`
-            id, name, trigger_type, trigger_integration_id, condition,
-            action_type, action_integration_id, action_config, active,
-            created_at, updated_at
-        `)
-        .order("created_at", { ascending: true });
+    try {
+        const data = await query(
+            `SELECT id, name, trigger_type, trigger_integration_id, condition,
+                    action_type, action_integration_id, action_config, active,
+                    created_at, updated_at
+             FROM automations
+             ORDER BY created_at ASC`
+        );
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-    // Attach last_fired from automation_logs
-    const ids = (data ?? []).map((a: any) => a.id);
-    let lastFiredMap: Record<string, string> = {};
-    if (ids.length > 0) {
-        const { data: logs } = await supabase
-            .from("automation_logs")
-            .select("automation_id, triggered_at")
-            .in("automation_id", ids)
-            .eq("result", "ok")
-            .order("triggered_at", { ascending: false });
-        for (const log of logs ?? []) {
-            if (!lastFiredMap[log.automation_id]) lastFiredMap[log.automation_id] = log.triggered_at;
+        // Attach last_fired from automation_logs
+        const ids = (data ?? []).map((a: any) => a.id);
+        let lastFiredMap: Record<string, string> = {};
+        if (ids.length > 0) {
+            const placeholders = ids.map((_: any, i: number) => `$${i + 1}`).join(", ");
+            const logs = await query(
+                `SELECT automation_id, triggered_at
+                 FROM automation_logs
+                 WHERE automation_id IN (${placeholders}) AND result = 'ok'
+                 ORDER BY triggered_at DESC`,
+                ids
+            );
+            for (const log of (logs ?? []) as any[]) {
+                if (!lastFiredMap[log.automation_id]) lastFiredMap[log.automation_id] = log.triggered_at;
+            }
         }
-    }
 
-    const enriched = (data ?? []).map((a: any) => ({ ...a, last_fired: lastFiredMap[a.id] ?? null }));
-    return NextResponse.json(enriched);
+        const enriched = (data ?? []).map((a: any) => ({ ...a, last_fired: lastFiredMap[a.id] ?? null }));
+        return NextResponse.json(enriched);
+    } catch (e: any) {
+        return NextResponse.json({ error: e.message }, { status: 500 });
+    }
 }
 
 // POST /api/stickies/automations — create a new automation
@@ -56,23 +52,28 @@ export async function POST(req: Request) {
     if (!action_type?.trim()) return NextResponse.json({ error: "action_type required" }, { status: 400 });
 
     const now = new Date().toISOString();
-    const { data, error } = await getSupabase()
-        .from("automations")
-        .insert([{
-            name: name.trim(),
-            trigger_type: trigger_type.trim(),
-            trigger_integration_id: trigger_integration_id ?? null,
-            condition: condition ?? {},
-            action_type: action_type.trim(),
-            action_integration_id: action_integration_id ?? null,
-            action_config: action_config ?? {},
-            active: true,
-            created_at: now,
-            updated_at: now,
-        }])
-        .select()
-        .single();
-
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return NextResponse.json(data, { status: 201 });
+    try {
+        const row = await queryOne(
+            `INSERT INTO automations (name, trigger_type, trigger_integration_id, condition,
+                                      action_type, action_integration_id, action_config, active,
+                                      created_at, updated_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+             RETURNING *`,
+            [
+                name.trim(),
+                trigger_type.trim(),
+                trigger_integration_id ?? null,
+                JSON.stringify(condition ?? {}),
+                action_type.trim(),
+                action_integration_id ?? null,
+                JSON.stringify(action_config ?? {}),
+                true,
+                now,
+                now,
+            ]
+        );
+        return NextResponse.json(row, { status: 201 });
+    } catch (e: any) {
+        return NextResponse.json({ error: e.message }, { status: 500 });
+    }
 }

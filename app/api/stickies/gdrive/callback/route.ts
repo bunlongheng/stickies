@@ -2,15 +2,8 @@
  * GET /api/stickies/gdrive/callback
  * Receives OAuth code from Google, exchanges for tokens, stores in integrations table.
  */
-import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
-
-function getSupabase() {
-    return createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY!
-    );
-}
+import { queryOne, execute } from "@/lib/db-driver";
 
 export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
@@ -44,41 +37,25 @@ export async function GET(req: NextRequest) {
             return NextResponse.redirect(`${baseUrl}/?gdrive=error&msg=no_refresh_token`);
         }
 
-        const supabase = getSupabase();
-
         // Check if gdrive integration already exists
-        const { data: existing } = await supabase
-            .from("integrations")
-            .select("id")
-            .eq("type", "gdrive")
-            .single();
+        const existing = await queryOne<{ id: string }>(
+            `SELECT id FROM integrations WHERE type = $1 LIMIT 1`,
+            ["gdrive"]
+        );
 
         const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
 
         if (existing) {
-            await supabase
-                .from("integrations")
-                .update({
-                    access_token: tokens.access_token,
-                    refresh_token: tokens.refresh_token,
-                    token_expires_at: expiresAt,
-                    active: true,
-                })
-                .eq("id", existing.id);
+            await execute(
+                `UPDATE integrations SET access_token = $1, refresh_token = $2, token_expires_at = $3, active = true WHERE id = $4`,
+                [tokens.access_token, tokens.refresh_token, expiresAt, existing.id]
+            );
         } else {
-            await supabase
-                .from("integrations")
-                .insert({
-                    name: "Google Drive",
-                    type: "gdrive",
-                    trigger: "upload",
-                    condition: {},
-                    config: {},
-                    active: true,
-                    access_token: tokens.access_token,
-                    refresh_token: tokens.refresh_token,
-                    token_expires_at: expiresAt,
-                });
+            await execute(
+                `INSERT INTO integrations (name, type, trigger, condition, config, active, access_token, refresh_token, token_expires_at)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+                ["Google Drive", "gdrive", "upload", "{}", "{}", true, tokens.access_token, tokens.refresh_token, expiresAt]
+            );
         }
 
         return NextResponse.redirect(`${baseUrl}/?gdrive=connected`);

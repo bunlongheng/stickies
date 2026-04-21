@@ -1,10 +1,8 @@
 import { authorizeOwner } from "@/app/api/stickies/_auth";
+import { query } from "@/lib/db-driver";
 import { NextResponse } from "next/server";
 import Pusher from "pusher";
 import webpush from "web-push";
-import { createClient } from "@supabase/supabase-js";
-
-
 
 function getPusher() {
     return new Pusher({
@@ -14,13 +12,6 @@ function getPusher() {
         cluster: process.env.PUSHER_CLUSTER!,
         useTLS: true,
     });
-}
-
-function getSupabase() {
-    return createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    );
 }
 
 export async function POST(req: Request) {
@@ -43,8 +34,7 @@ export async function POST(req: Request) {
         process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
         process.env.VAPID_PRIVATE_KEY!,
     );
-    const sb = getSupabase();
-    const { data: subs } = await sb.from("push_subscriptions").select("endpoint, keys");
+    const subs = await query(`SELECT endpoint, keys FROM push_subscriptions`);
     const payload = JSON.stringify({ title: title || "Stickies", body: "Tap to open", url });
     await Promise.allSettled(
         (subs ?? [])
