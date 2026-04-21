@@ -12,26 +12,16 @@
  */
 import { Readable } from "stream";
 import { google } from "googleapis";
-import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { authorizeOwner } from "../_auth";
-
-function getSupabase() {
-    return createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY!
-    );
-}
+import { queryOne, execute } from "@/lib/db-driver";
 
 /** Get a valid access token, refreshing if needed */
 async function getAccessToken(): Promise<string> {
-    const supabase = getSupabase();
-
-    const { data } = await supabase
-        .from("integrations")
-        .select("id, access_token, refresh_token, token_expires_at")
-        .eq("type", "gdrive")
-        .single();
+    const data = await queryOne<{ id: string; access_token: string | null; refresh_token: string | null; token_expires_at: string | null }>(
+        `SELECT id, access_token, refresh_token, token_expires_at FROM integrations WHERE type = $1 LIMIT 1`,
+        ["gdrive"]
+    );
 
     if (!data?.refresh_token) throw new Error("Google Drive not connected. Go to Settings → Connect Google Drive.");
 
@@ -58,13 +48,10 @@ async function getAccessToken(): Promise<string> {
 
     // Update stored token
     const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
-    await supabase
-        .from("integrations")
-        .update({
-            access_token: tokens.access_token,
-            token_expires_at: expiresAt,
-        })
-        .eq("id", data.id);
+    await execute(
+        `UPDATE integrations SET access_token = $1, token_expires_at = $2 WHERE id = $3`,
+        [tokens.access_token, expiresAt, data.id]
+    );
 
     return tokens.access_token;
 }

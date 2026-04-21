@@ -1,10 +1,6 @@
 import https from "node:https";
-import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
-
-function getSupabase() {
-    return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
-}
+import { queryOne, execute } from "@/lib/db-driver";
 
 function localFetch(bridgeIp: string, appKey: string, path: string): Promise<any> {
     return new Promise((resolve, reject) => {
@@ -46,27 +42,22 @@ async function getRemoteToken(integration: any): Promise<string | null> {
     const tokens = await res.json();
     const token_expires_at = new Date(Date.now() + (tokens.expires_in ?? 604800) * 1000).toISOString();
 
-    await getSupabase().from("integrations").update({
-        access_token: tokens.access_token,
-        refresh_token: tokens.refresh_token ?? integration.refresh_token,
-        token_expires_at,
-        updated_at: new Date().toISOString(),
-    }).eq("id", integration.id);
+    await execute(
+        `UPDATE integrations SET access_token = $1, refresh_token = $2, token_expires_at = $3, updated_at = $4 WHERE id = $5`,
+        [tokens.access_token, tokens.refresh_token ?? integration.refresh_token, token_expires_at, new Date().toISOString(), integration.id]
+    );
 
     return tokens.access_token;
 }
 
 // GET /api/hue/groups — returns all grouped_light resources
 export async function GET() {
-    const supabase = getSupabase();
-    const { data: integration, error } = await supabase
-        .from("integrations")
-        .select("*")
-        .eq("type", "hue")
-        .eq("active", true)
-        .single();
+    const integration = await queryOne<any>(
+        `SELECT * FROM integrations WHERE type = $1 AND active = true LIMIT 1`,
+        ["hue"]
+    );
 
-    if (error || !integration) {
+    if (!integration) {
         return NextResponse.json({ error: "No active Hue integration found" }, { status: 503 });
     }
 

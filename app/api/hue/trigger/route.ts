@@ -1,6 +1,6 @@
 import https from "node:https";
-import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { queryOne, execute } from "@/lib/db-driver";
 
 const RESTORE_DELAY = 60_000; // 1 minute of inactivity → restore
 
@@ -9,10 +9,6 @@ let restoreTimer: ReturnType<typeof setTimeout> | null = null;
 let origXySnapshot: { x: number; y: number } | null = null;
 let origBrightnessSnapshot: number | null = null;
 let lastTriggerAt = 0; // epoch ms — updated on every incoming trigger
-
-function getSupabase() {
-    return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
-}
 
 function hexToXy(hex: string): { x: number; y: number } {
     const r = parseInt(hex.slice(1, 3), 16) / 255;
@@ -79,12 +75,10 @@ async function getRemoteToken(integration: any): Promise<string | null> {
     const tokens = await res.json();
     const token_expires_at = new Date(Date.now() + (tokens.expires_in ?? 604800) * 1000).toISOString();
 
-    await getSupabase().from("integrations").update({
-        access_token: tokens.access_token,
-        refresh_token: tokens.refresh_token ?? integration.refresh_token,
-        token_expires_at,
-        updated_at: new Date().toISOString(),
-    }).eq("id", integration.id);
+    await execute(
+        `UPDATE integrations SET access_token = $1, refresh_token = $2, token_expires_at = $3, updated_at = $4 WHERE id = $5`,
+        [tokens.access_token, tokens.refresh_token ?? integration.refresh_token, token_expires_at, new Date().toISOString(), integration.id]
+    );
 
     return tokens.access_token;
 }
@@ -105,7 +99,7 @@ function scheduleRestore(targetGroup: string, via: "remote" | "local", token: st
 
         try {
             if (via === "remote" && token) {
-                const { data: freshInt } = await getSupabase().from("integrations").select("*").eq("type", "hue").eq("active", true).single();
+                const freshInt = await queryOne<any>(`SELECT * FROM integrations WHERE type = 'hue' AND active = true LIMIT 1`);
                 const freshToken = freshInt ? await getRemoteToken(freshInt) : token;
                 if (!freshToken) return;
                 const base = `https://api.meethue.com/route/clip/v2/resource/grouped_light/${targetGroup}`;
@@ -124,17 +118,13 @@ function scheduleRestore(targetGroup: string, via: "remote" | "local", token: st
 export async function POST(req: Request) {
     lastTriggerAt = Date.now(); // stamp immediately — blocks any pending restore timer
 
-    const supabase = getSupabase();
-
     // Load active Hue integration
-    const { data: integration, error } = await supabase
-        .from("integrations")
-        .select("*")
-        .eq("type", "hue")
-        .eq("active", true)
-        .single();
+    const integration = await queryOne<any>(
+        `SELECT * FROM integrations WHERE type = $1 AND active = true LIMIT 1`,
+        ["hue"]
+    );
 
-    if (error || !integration) {
+    if (!integration) {
         return NextResponse.json({ ok: false, error: "No active Hue integration found" }, { status: 503 });
     }
 
@@ -220,8 +210,10 @@ export async function DELETE() {
     origXySnapshot = null;
     origBrightnessSnapshot = null;
 
-    const supabase = getSupabase();
-    const { data: integration } = await supabase.from("integrations").select("*").eq("type", "hue").eq("active", true).single();
+    const integration = await queryOne<any>(
+        `SELECT * FROM integrations WHERE type = $1 AND active = true LIMIT 1`,
+        ["hue"]
+    );
     if (!integration) return NextResponse.json({ ok: false, error: "No active Hue integration" }, { status: 503 });
 
     const appKey  = integration.config?.app_key?.trim();
