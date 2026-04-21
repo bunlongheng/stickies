@@ -1264,7 +1264,10 @@ export default function NotesMaster() {
     const [notebookPickerSearch, setNotebookPickerSearch] = useState("");
     const [notebookPickerCursor, setNotebookPickerCursor] = useState(-1);
     const [kanbanMode, setKanbanMode] = useState(false);
-    const [appTheme, setAppTheme] = useState<"dark" | "light">("dark");
+    const [appThemeMode, setAppThemeMode] = useState<"dark" | "light" | "auto">("auto");
+    const appTheme = appThemeMode === "auto"
+        ? ((() => { const h = new Date().getHours(); return h >= 6 && h < 18 ? "light" : "dark"; })())
+        : appThemeMode;
     const [mermaidShowCode, setMermaidShowCode] = useState(false);
     const [codeEditMode, setCodeEditMode] = useState(false);
     const [typeFilter, setTypeFilter] = useState<string | null>(null);
@@ -1607,12 +1610,15 @@ export default function NotesMaster() {
                 setShowWelcomeBack(true);
                 void sync().then(() => {
                     void loadAllNotes();
-                    const lastFolder = localStorage.getItem(LAST_FOLDER_KEY);
-                    if (lastFolder === "__all__") {
-                        setActiveFolder(null);
-                    } else {
-                        const target = lastFolder || localStorage.getItem(DEFAULT_FOLDER_KEY) || "CLAUDE";
-                        setActiveFolder(target);
+                    const urlFolder = new URLSearchParams(window.location.search).get("folder");
+                    if (!urlFolder) {
+                        const lastFolder = localStorage.getItem(LAST_FOLDER_KEY);
+                        if (lastFolder === "__all__") {
+                            setActiveFolder(null);
+                        } else {
+                            const target = lastFolder || localStorage.getItem(DEFAULT_FOLDER_KEY) || "CLAUDE";
+                            setActiveFolder(target);
+                        }
                     }
                 });
             }
@@ -1626,15 +1632,17 @@ export default function NotesMaster() {
     useEffect(() => {
         setMounted(true);
         void sync().then(() => {
-            // Load all notes (metadata only, no content) — powers today-tabs + folder views
             void loadAllNotes();
-            // Restore last active folder
-            const lastFolder = localStorage.getItem(LAST_FOLDER_KEY);
-            if (lastFolder === "__all__") {
-                setActiveFolder(null);
-            } else {
-                const target = lastFolder || localStorage.getItem(DEFAULT_FOLDER_KEY) || "CLAUDE";
-                setActiveFolder(target);
+            // Skip folder restore if URL has a ?folder param (URL takes priority)
+            const urlFolder = new URLSearchParams(window.location.search).get("folder");
+            if (!urlFolder) {
+                const lastFolder = localStorage.getItem(LAST_FOLDER_KEY);
+                if (lastFolder === "__all__") {
+                    setActiveFolder(null);
+                } else {
+                    const target = lastFolder || localStorage.getItem(DEFAULT_FOLDER_KEY) || "CLAUDE";
+                    setActiveFolder(target);
+                }
             }
             // Note: openNote is intentionally NOT called here — the auto-open effect handles it
             // once dbData is populated, avoiding a race between two concurrent openNote calls.
@@ -1701,8 +1709,14 @@ export default function NotesMaster() {
                 if (folderParam) setPendingFolderQuery(folderParam);
                 if (noteParam) setPendingNoteQuery(noteParam);
                 if (noteIdParam) setPendingNoteIdQuery(noteIdParam);
-                // Strip URL params immediately so refresh doesn't re-apply them
-                window.history.replaceState({}, "", window.location.pathname);
+                // Strip note params but keep folder param so refresh stays in the same folder
+                if (noteParam || noteIdParam) {
+                    const cleanUrl = new URL(window.location.href);
+                    cleanUrl.searchParams.delete("note");
+                    cleanUrl.searchParams.delete("noteId");
+                    cleanUrl.searchParams.delete("view");
+                    window.history.replaceState({}, "", cleanUrl.toString());
+                }
             }
         } catch (err) {
             console.error("Failed to restore URL state:", err);
@@ -1807,7 +1821,7 @@ export default function NotesMaster() {
         } catch { /* ignore */ }
         try {
             const rawTheme = localStorage.getItem(APP_THEME_KEY);
-            if (rawTheme === "light" || rawTheme === "dark") setAppTheme(rawTheme);
+            if (rawTheme === "light" || rawTheme === "dark" || rawTheme === "auto") setAppThemeMode(rawTheme);
             const rawIcons = localStorage.getItem(SHOW_FILE_ICONS_KEY);
             if (rawIcons === "false") setShowFileIcons(false);
         } catch { /* ignore */ }
@@ -1820,7 +1834,7 @@ export default function NotesMaster() {
         try {
             const urlParams = new URLSearchParams(window.location.search);
             const themeParam = urlParams.get("theme");
-            if (themeParam === "light" || themeParam === "dark") setAppTheme(themeParam);
+            if (themeParam === "light" || themeParam === "dark" || themeParam === "auto") setAppThemeMode(themeParam);
             const viewParam = urlParams.get("view");
             if (viewParam === "list") { setMainListMode("list"); setKanbanMode(false); }
             else if (viewParam === "thumb") { setMainListMode("thumb"); setKanbanMode(false); }
@@ -1954,9 +1968,15 @@ export default function NotesMaster() {
     }, [kanbanMode]);
 
     useEffect(() => {
-        try { localStorage.setItem(APP_THEME_KEY, appTheme); } catch { /* ignore */ }
+        try { localStorage.setItem(APP_THEME_KEY, appThemeMode); } catch { /* ignore */ }
         document.documentElement.setAttribute("data-theme", appTheme);
-    }, [appTheme]);
+    }, [appTheme, appThemeMode]);
+    // Auto-theme: re-check every minute when in auto mode
+    useEffect(() => {
+        if (appThemeMode !== "auto") return;
+        const id = setInterval(() => { /* force re-render */ setAppThemeMode(m => m); }, 60000);
+        return () => clearInterval(id);
+    }, [appThemeMode]);
 
     useEffect(() => {
         try { localStorage.setItem(DEV_MODE_KEY, String(devMode)); } catch { /* ignore */ }
@@ -2020,12 +2040,6 @@ export default function NotesMaster() {
                 e.preventDefault();
                 setCmdKGlobal(true); setCmdKInFile(false);
                 setShowCmdK(v => { if (!v) { setCmdKQuery(""); setCmdKCursor(0); } return true; });
-            } else if (!e.shiftKey && e.key.toLowerCase() === "f") {
-                e.preventDefault();
-                setShowFindBar(true);
-                setFindQuery("");
-                setFindCursor(0);
-                setTimeout(() => findInputRef.current?.focus(), 30);
             } else if (!e.shiftKey && e.key.toLowerCase() === "d") {
                 const sel = window.getSelection()?.toString().trim() ||
                     (() => { const ta = editorTextRef.current; return ta ? ta.value.substring(ta.selectionStart, ta.selectionEnd).trim() : ""; })();
@@ -5868,7 +5882,7 @@ const fireIntegrations = (trigger: string, note: any) => {
             <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
 
                 {/* RIGHT PANEL: editor — only shown in edit mode or when a note is open (mobile nav) */}
-                <div className={`flex-1 flex flex-col overflow-hidden ${editorOpen ? "flex" : "hidden"} `} style={{ background: "#222222" }}>
+                <div className={`flex-1 flex flex-col overflow-hidden ${editorOpen ? "flex" : "hidden"} `} style={{ background: appTheme === "light" ? "#f2f2f7" : "#222222" }}>
                 {editorOpen ? (
                 <section className="flex-1 min-h-0 flex flex-col overflow-hidden overscroll-none" onClick={(e) => e.stopPropagation()}>
                     {pendingShare && (
@@ -5889,8 +5903,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                             </div>
                         </div>
                     )}
-                    <div className="safe-top-bar shrink-0" style={{ background: "#2a2a2a" }} />
-                    <div className="relative h-auto min-h-[3.5rem] sm:min-h-[4rem] px-2 sm:px-4 flex items-center gap-1 sm:gap-2 shrink-0" style={{ background: "#2a2a2a" }}>
+                    <div className="safe-top-bar shrink-0" style={{ background: appTheme === "light" ? "#f2f2f7" : "#2a2a2a" }} />
+                    <div className="relative h-auto min-h-[3.5rem] sm:min-h-[4rem] px-2 sm:px-4 flex items-center gap-1 sm:gap-2 shrink-0" style={{ background: appTheme === "light" ? "#f2f2f7" : "#2a2a2a" }}>
                         {/* Back button — hidden on desktop or in edit mode (left panel always visible) */}
                         <button
                             onClick={(e) => { e.stopPropagation(); void backToRootFromEditor(); }}
@@ -6004,13 +6018,17 @@ const fireIntegrations = (trigger: string, note: any) => {
                         </div>
                     )}
                     {/* ── Tab bar — today's notes across all folders ── */}
-                    {showTabs && editingNote?.id && (() => {
+                    {showTabs && editingNote?.id && typeof window !== "undefined" && window.innerWidth >= 640 && (() => {
                         const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+                        const activeId = String(editingNote.id);
                         const todayNotes = dbData
                             .filter(n => !n.is_folder && !n.trashed_at && !dismissedTabs.has(String(n.id)) && new Date(n.updated_at || n.created_at || 0) >= todayStart)
-                            .sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")));
+                            .sort((a, b) => {
+                                if (String(a.id) === activeId) return -1;
+                                if (String(b.id) === activeId) return 1;
+                                return String(b.updated_at || "").localeCompare(String(a.updated_at || ""));
+                            });
                         if (todayNotes.length <= 1) return null;
-                        const activeId = String(editingNote.id);
                         const dismissTab = (id: string) => {
                             setDismissedTabs(prev => {
                                 const next = new Set(prev); next.add(id);
@@ -6039,7 +6057,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                     void openNote(n);
                                                 }}
                                                 className="flex items-center gap-1.5 pl-3 pr-1 py-1.5 text-[10px] font-bold truncate max-w-[150px]">
-                                                <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: c }} />
                                                 {(n.title || "Untitled").slice(0, 20)}{(n.title || "").length > 20 ? "…" : ""}
                                             </button>
                                             {isActive && (
@@ -6064,7 +6081,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                         );
                     })()}
 
-                    <div className="relative flex-1 flex overflow-hidden bg-black font-mono" style={{ display: aiPromptOpen ? "none" : "flex" }}>
+                    <div className={`relative flex-1 flex overflow-hidden font-mono ${appTheme === "light" ? "bg-white" : "bg-black"}`} style={{ display: aiPromptOpen ? "none" : "flex" }}>
                         {/* ── Note loading spinner — scoped to editor panel only ── */}
                         {noteContentLoading && (
                             <div className="absolute inset-0 z-[50] flex items-center justify-center bg-black/60 pointer-events-none">
@@ -6565,9 +6582,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 onClick={() => setCodeEditMode(true)}
                             />
                         ) : (() => {
-                            const isStickyText = (noteType === "text" || !noteType) && !!noteColor;
-                            const stickyBg = aiPromptOpen ? (noteColor || "#1a0d2e") : (isStickyText ? noteColor : "#000");
-                            const stickyText = isStickyText ? "#1a1a1a" : "#f8f8f2";
+                            const stickyBg = appTheme === "light" ? "#ffffff" : "#000";
+                            const stickyText = appTheme === "light" ? "#1a1a1a" : "#f8f8f2";
                             const stickyFont = "ui-monospace,'Fira Code','Cascadia Code',monospace";
                             const stickyFontSize = "clamp(8px, 1.2vw, 12px)";
                             return (
@@ -6595,7 +6611,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     onFocus={() => closeEditorTools()}
                                     onBlur={() => void saveNote({ silent: true, deriveTitle: true })}
                                     onPaste={handleEditorPaste}
-                                    className={`ios-editor-scroll overscroll-none touch-pan-y ${isStickyText ? "sticky-editor" : ""}`}
+                                    className="ios-editor-scroll overscroll-none touch-pan-y"
                                     style={{
                                         flex: 1, background: "transparent", color: stickyText,
                                         fontFamily: stickyFont,
@@ -7110,8 +7126,12 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                         // Guard: ignore ALL clicks within 600ms of folder navigation (prevents bleed-through)
                                         if (!item.is_folder && Date.now() - navTimestampRef.current < 600) return;
                                         if (item.is_folder) {
+                                            e.preventDefault();
                                             playSound("navigate");
                                             navTimestampRef.current = Date.now();
+                                            // Block pointer events on the list to prevent bleed-through on re-render
+                                            const main = (e.currentTarget as HTMLElement).closest("main");
+                                            if (main) { (main as HTMLElement).style.pointerEvents = "none"; setTimeout(() => { (main as HTMLElement).style.pointerEvents = ""; }, 800); }
                                             enterFolder({ id: String(item.id), name: item.name, color: item.color || palette12[0] });
                                         } else {
                                             void openNote(item);
@@ -8442,6 +8462,19 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                         </div>
                                     );
                                 })()}
+                                {/* THEME */}
+                                <div className="px-6 py-3 border-b border-white/[0.06]">
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-1.5">Theme</p>
+                                    <div className="flex gap-1.5">
+                                        {(["auto", "light", "dark"] as const).map((mode) => (
+                                            <button key={mode} type="button"
+                                                onClick={() => setAppThemeMode(mode)}
+                                                className={`flex-1 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wide transition ${appThemeMode === mode ? "bg-white text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"}`}>
+                                                {mode === "auto" ? "Auto" : mode === "light" ? "Light" : "Dark"}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
                                 {/* TODAY TABS */}
                                 <div className="px-6 py-3 border-b border-white/[0.06] flex items-center justify-between">
                                     <span className="text-xs font-black tracking-wide text-zinc-300">Today Tabs</span>
