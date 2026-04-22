@@ -331,7 +331,7 @@ function detectNoteType(content: string): string {
     if (MERMAID_KEYWORDS.test(extractMermaid(t))) return "mermaid";
     if ((t.startsWith("{") || t.startsWith("[")) && detectJson(t).ok) return "json";
     if (/^\s*<!DOCTYPE\s+html/i.test(t) || /^\s*<html[\s>]/i.test(t)) return "html";
-    if (/^#{1,6}\s|^\*\*|^>\s/m.test(t) && !/<[a-z][^>]*>/i.test(t)) return "markdown";
+    if (/^#{1,6}\s|^\*\*|^>\s|^\|.+\|/m.test(t) && !/<[a-z][^>]*>/i.test(t)) return "markdown";
     return "text";
 }
 
@@ -4043,7 +4043,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         setShowSwitcher(false);
         // On mobile, auto-show preview for markdown notes
         const isMobileView = window.innerWidth < 640;
-        const isMarkdown = note.type === "markdown" || (note.content && /^#{1,6}\s|^\*\*|^>\s/m.test(note.content));
+        const isMarkdown = note.type === "markdown" || (note.content && /^#{1,6}\s|^\*\*|^>\s|^\|.+\|/m.test(note.content));
         setMdViewMode(isMobileView && isMarkdown ? "preview" : "text");
         setEditorOpen(true);
 
