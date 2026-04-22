@@ -325,6 +325,52 @@ function deriveTitleFromContent(content: string): string {
 }
 
 /** Client-side fallback type detection — used only when DB type is null (legacy notes) */
+/** Convert ASCII box-drawing table (│ ├ ─ ┌ └) to a markdown table string, or return null. */
+function parseBoxTable(text: string): string | null {
+    // Strip leading junk chars (⏺, bullets, spaces) before box-drawing chars
+    const lines = text
+        .split(/\r?\n/)
+        .map(l => l.replace(/^[\s⏺•\-\*]+(?=[│├┌└┐┘])/, ""));
+
+    if (!lines.some(l => /^│/.test(l))) return null;
+
+    // Group consecutive │-lines into one row; separator lines (├ ┌ └) flush the group
+    const rowGroups: string[][] = [];
+    let group: string[] = [];
+    for (const line of lines) {
+        if (/^│/.test(line)) {
+            group.push(line);
+        } else if (/^[├┌└]/.test(line) && group.length) {
+            rowGroups.push(group);
+            group = [];
+        }
+    }
+    if (group.length) rowGroups.push(group);
+    if (rowGroups.length < 2) return null;
+
+    function parseCells(grp: string[]): string[] {
+        const allCells = grp.map(line =>
+            line.split("│").slice(1, -1).map(c => c.trim())
+        );
+        const colCount = allCells[0]?.length ?? 0;
+        const merged: string[] = [];
+        for (let col = 0; col < colCount; col++) {
+            const parts = allCells.map(row => row[col] ?? "").filter(p => p.length > 0);
+            merged.push(parts.join(" "));
+        }
+        return merged;
+    }
+
+    const rows = rowGroups.map(parseCells);
+    const header = rows[0];
+    const body = rows.slice(1);
+    return [
+        `| ${header.join(" | ")} |`,
+        `| ${header.map(() => "---").join(" | ")} |`,
+        ...body.map(r => `| ${r.join(" | ")} |`),
+    ].join("\n");
+}
+
 function detectNoteType(content: string): string {
     const t = content.trim();
     if (!t) return "text";
@@ -3504,6 +3550,20 @@ const fireIntegrations = (trigger: string, note: any) => {
         // Excel / Sheets paste → tab-separated rows → convert to markdown table
         if (imageItems.length === 0) {
             let plain = e.clipboardData.getData("text/plain");
+            // ASCII box-drawing table (│ ├ ─) → convert to markdown table
+            const boxMd = parseBoxTable(plain);
+            if (boxMd) {
+                e.preventDefault();
+                const textarea = e.currentTarget;
+                const start = textarea.selectionStart ?? content.length;
+                const end = textarea.selectionEnd ?? content.length;
+                const insert = (start > 0 && content[start - 1] !== "\n" ? "\n\n" : "") + boxMd + "\n";
+                setContent(content.slice(0, start) + insert + content.slice(end));
+                setPendingNoteType("markdown");
+                setMdViewMode("preview");
+                showToast("Box table → markdown ✓", "#34C759");
+                return;
+            }
             // Fix broken table paste: strip leading bullets/spaces only on lines that have | but
             // start with junk chars (e.g. "• | col |" → "| col |"). Leave pure bullet lines alone.
             // Then intercept and re-insert as markdown so the note auto-renders.
