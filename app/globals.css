@@ -339,6 +339,8 @@ body {
   border-collapse: collapse;
   width: 100%;
   table-layout: fixed;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 .md-preview table th,
 .md-preview table td {
