@@ -3504,7 +3504,8 @@ const fireIntegrations = (trigger: string, note: any) => {
 
         // Excel / Sheets paste → tab-separated rows → convert to markdown table
         if (imageItems.length === 0) {
-            const plain = e.clipboardData.getData("text/plain");
+            let plain = e.clipboardData.getData("text/plain");
+            plain = plain.replace(/^[⏺\s]+(?=[┌│├└])/m, "");
             const rows = plain.split(/\r?\n/).filter(r => r.length > 0);
             const looksLikeTsv = rows.length >= 2 && rows.every(r => r.includes("\t")) && rows[0].split("\t").length >= 2;
             if (looksLikeTsv) {
