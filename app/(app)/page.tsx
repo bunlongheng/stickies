@@ -3503,7 +3503,18 @@ const fireIntegrations = (trigger: string, note: any) => {
 
         // Excel / Sheets paste → tab-separated rows → convert to markdown table
         if (imageItems.length === 0) {
-            const plain = e.clipboardData.getData("text/plain");
+            let plain = e.clipboardData.getData("text/plain");
+            // Strip leading junk (bullets, spaces, dashes) before markdown table lines on paste
+            if (/^\s*[•\-\*\s]*\s*\|/m.test(plain)) {
+                const cleaned = plain
+                    .split(/\r?\n/)
+                    .map(l => l.replace(/^[\s•\-\*]+(?=\|)/, ""))  // strip leading junk before |
+                    .join("\n");
+                // Drop leading non-table lines (blank lines / bullet-only lines before first | row)
+                const lines = cleaned.split(/\r?\n/);
+                const firstTable = lines.findIndex(l => l.trimStart().startsWith("|"));
+                plain = firstTable > 0 ? lines.slice(firstTable).join("\n") : cleaned;
+            }
             const rows = plain.split(/\r?\n/).filter(r => r.length > 0);
             const looksLikeTsv = rows.length >= 2 && rows.every(r => r.includes("\t")) && rows[0].split("\t").length >= 2;
             if (looksLikeTsv) {
