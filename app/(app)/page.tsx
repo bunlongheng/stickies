@@ -3504,41 +3504,7 @@ const fireIntegrations = (trigger: string, note: any) => {
 
         // Excel / Sheets paste → tab-separated rows → convert to markdown table
         if (imageItems.length === 0) {
-            let plain = e.clipboardData.getData("text/plain");
-            // Fix broken table paste: strip leading bullets/spaces only on lines that have | but
-            // start with junk chars (e.g. "• | col |" → "| col |"). Leave pure bullet lines alone.
-            // Then intercept and re-insert as markdown so the note auto-renders.
-            const hasBrokenTableLine = /^[\s•\-\*]+\|/m.test(plain);
-            const looksLikeMarkdownTable = /^\|.+\|/m.test(plain);
-            if (hasBrokenTableLine) {
-                e.preventDefault();
-                plain = plain
-                    .split(/\r?\n/)
-                    .map(l => /^[\s•\-\*]+\|/.test(l) ? l.replace(/^[\s•\-\*]+/, "") : l)
-                    .join("\n");
-                const textarea = e.currentTarget;
-                const start = textarea.selectionStart ?? content.length;
-                const end = textarea.selectionEnd ?? content.length;
-                const needsBreaks = start > 0 && content[start - 1] !== "\n";
-                const insert = (needsBreaks ? "\n\n" : "") + plain.trim() + "\n";
-                setContent(content.slice(0, start) + insert + content.slice(end));
-                setPendingNoteType("markdown");
-                setMdViewMode("preview");
-                showToast("Table cleaned + rendered ✓", "#34C759");
-                return;
-            } else if (looksLikeMarkdownTable) {
-                e.preventDefault();
-                const textarea = e.currentTarget;
-                const start = textarea.selectionStart ?? content.length;
-                const end = textarea.selectionEnd ?? content.length;
-                const needsBreaks = start > 0 && content[start - 1] !== "\n";
-                const insert = (needsBreaks ? "\n\n" : "") + plain.trim() + "\n";
-                setContent(content.slice(0, start) + insert + content.slice(end));
-                setPendingNoteType("markdown");
-                setMdViewMode("preview");
-                showToast("Table pasted ✓", "#34C759");
-                return;
-            }
+            const plain = e.clipboardData.getData("text/plain");
             const rows = plain.split(/\r?\n/).filter(r => r.length > 0);
             const looksLikeTsv = rows.length >= 2 && rows.every(r => r.includes("\t")) && rows[0].split("\t").length >= 2;
             if (looksLikeTsv) {
