@@ -1202,8 +1202,8 @@ export default function NotesMaster() {
     const [showImportGuide, setShowImportGuide] = useState(false);
     const [importApiKey, setImportApiKey] = useState("");
     const [openTabs, setOpenTabs] = useState<string[]>([]); // note IDs
-    const [showTabs, setShowTabs] = useState(() => { try { return localStorage.getItem("stickies:show-tabs:v1") !== "false"; } catch { return true; } });
-    const [dismissedTabs, setDismissedTabs] = useState<Set<string>>(() => { try { const raw = localStorage.getItem("stickies:dismissed-tabs:v1"); return raw ? new Set(JSON.parse(raw)) : new Set(); } catch { return new Set(); } });
+    const [showTabs, setShowTabs] = useState(() => { try { if (typeof window === "undefined") return true; return localStorage.getItem("stickies:show-tabs:v1") !== "false"; } catch { return true; } });
+    const [dismissedTabs, setDismissedTabs] = useState<Set<string>>(() => { try { if (typeof window === "undefined") return new Set(); const raw = localStorage.getItem("stickies:dismissed-tabs:v1"); return raw ? new Set(JSON.parse(raw)) : new Set(); } catch { return new Set(); } });
     const [activeTaskIdx, setActiveTaskIdx] = useState<number | null>(null);
     const [editingTaskIdx, setEditingTaskIdx] = useState<number | null>(null);
     const [swipedTaskIdx, setSwipedTaskIdx] = useState<number | null>(null);
