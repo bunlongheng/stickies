@@ -2555,7 +2555,7 @@ const fireIntegrations = (trigger: string, note: any) => {
 
         const knownFolderNames = new Set(foldersFromRows.map((f) => f.name));
         const missingFolders = Array.from(noteCountByFolder.keys())
-            .filter((folderName) => !knownFolderNames.has(folderName))
+            .filter((folderName) => !knownFolderNames.has(folderName) && (noteCountByFolder.get(folderName) ?? 0) > 0)
             .sort((a, b) => a.localeCompare(b))
             .map((folderName) => ({
                 id: `virtual-${folderName}`,
@@ -6033,7 +6033,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                         </div>
                     )}
                     {/* ── Tab bar — today's notes across all folders ── */}
-                    {showTabs && editingNote?.id && typeof window !== "undefined" && window.innerWidth >= 640 && (() => {
+                    {showTabs && typeof window !== "undefined" && window.innerWidth >= 640 && (() => {
                         const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
                         const activeId = String(editingNote.id);
                         const todayNotes = dbData
