@@ -3504,16 +3504,14 @@ const fireIntegrations = (trigger: string, note: any) => {
         // Excel / Sheets paste → tab-separated rows → convert to markdown table
         if (imageItems.length === 0) {
             let plain = e.clipboardData.getData("text/plain");
-            // Strip leading junk (bullets, spaces, dashes) before markdown table lines on paste
-            if (/^\s*[•\-\*\s]*\s*\|/m.test(plain)) {
-                const cleaned = plain
+            // Fix broken table paste: strip leading bullets/spaces only on lines that have | but
+            // start with junk chars (e.g. "• | col |" → "| col |"). Leave pure bullet lines alone.
+            const hasBrokenTableLine = /^[\s•\-\*]+\|/m.test(plain);
+            if (hasBrokenTableLine) {
+                plain = plain
                     .split(/\r?\n/)
-                    .map(l => l.replace(/^[\s•\-\*]+(?=\|)/, ""))  // strip leading junk before |
+                    .map(l => /^[\s•\-\*]+\|/.test(l) ? l.replace(/^[\s•\-\*]+/, "") : l)
                     .join("\n");
-                // Drop leading non-table lines (blank lines / bullet-only lines before first | row)
-                const lines = cleaned.split(/\r?\n/);
-                const firstTable = lines.findIndex(l => l.trimStart().startsWith("|"));
-                plain = firstTable > 0 ? lines.slice(firstTable).join("\n") : cleaned;
             }
             const rows = plain.split(/\r?\n/).filter(r => r.length > 0);
             const looksLikeTsv = rows.length >= 2 && rows.every(r => r.includes("\t")) && rows[0].split("\t").length >= 2;
