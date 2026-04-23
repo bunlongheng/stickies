@@ -6039,7 +6039,13 @@ const fireIntegrations = (trigger: string, note: any) => {
                         const todayNotes = dbData
                             .filter(n => !n.is_folder && !n.trashed_at && !dismissedTabs.has(String(n.id)) && new Date(n.updated_at || n.created_at || 0) >= todayStart)
                             .sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")));
-                        if (todayNotes.length <= 1) return null;
+                        if (todayNotes.length === 0) return (
+                            <div className="shrink-0 flex items-stretch gap-0" style={{ minHeight: 28 }}>
+                                <button type="button" onClick={() => openNewNote()} className="flex-shrink-0 flex items-center justify-center px-2.5 bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition" title="New note">
+                                    <PlusIcon className="w-3.5 h-3.5" />
+                                </button>
+                            </div>
+                        );
                         const dismissTab = (id: string) => {
                             setDismissedTabs(prev => {
                                 const next = new Set(prev); next.add(id);
