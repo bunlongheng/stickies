@@ -6035,7 +6035,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                     {/* ── Tab bar — today's notes across all folders ── */}
                     {showTabs && typeof window !== "undefined" && window.innerWidth >= 640 && (() => {
                         const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
-                        const activeId = String(editingNote.id);
                         const todayNotes = dbData
                             .filter(n => !n.is_folder && !n.trashed_at && !dismissedTabs.has(String(n.id)) && new Date(n.updated_at || n.created_at || 0) >= todayStart)
                             .sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")));
@@ -6046,6 +6045,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 </button>
                             </div>
                         );
+                        const activeId = String(editingNote?.id ?? "");
                         const dismissTab = (id: string) => {
                             setDismissedTabs(prev => {
                                 const next = new Set(prev); next.add(id);
