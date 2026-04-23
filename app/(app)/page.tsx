@@ -3526,8 +3526,25 @@ const fireIntegrations = (trigger: string, note: any) => {
         if (imageItems.length === 0) {
             let plain = e.clipboardData.getData("text/plain");
             plain = plain.replace(/^[⏺\s]+(?=[┌│├└])/m, "");
+            // Collapse double blank lines → single newline on paste
+            plain = plain.replace(/\n{2,}/g, "\n");
             const rows = plain.split(/\r?\n/).filter(r => r.length > 0);
             const looksLikeTsv = rows.length >= 2 && rows.every(r => r.includes("\t")) && rows[0].split("\t").length >= 2;
+            // Intercept plain text with double blank lines — collapse before inserting
+            if (!looksLikeTsv && plain.includes("\n\n")) {
+                e.preventDefault();
+                const textarea = e.currentTarget;
+                const start = textarea.selectionStart ?? content.length;
+                const end = textarea.selectionEnd ?? content.length;
+                const newContent = content.slice(0, start) + plain + content.slice(end);
+                setContent(newContent);
+                latestContentRef.current = newContent;
+                requestAnimationFrame(() => {
+                    const pos = start + plain.length;
+                    textarea.setSelectionRange(pos, pos);
+                });
+                return;
+            }
             if (looksLikeTsv) {
                 e.preventDefault();
                 const cellRows = rows.map(r => r.split("\t"));
