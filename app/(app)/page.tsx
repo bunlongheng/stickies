@@ -484,6 +484,26 @@ function renderFindHighlights(text: string, matches: { start: number; end: numbe
     if (last < text.length) parts.push(<span key="tail" style={{ color: "transparent" }}>{text.slice(last)}</span>);
     return parts;
 }
+function renderDividerHighlights(text: string): React.ReactNode {
+    const lines = text.split("\n");
+    const parts: React.ReactNode[] = [];
+    lines.forEach((line, i) => {
+        const isDivider = /^[=\-_]{3,}\s*$/.test(line);
+        if (isDivider) {
+            parts.push(
+                <span key={i} style={{
+                    color: "rgba(255,255,255,0.9)",
+                    textShadow: "0 0 8px rgba(255,255,255,0.9), 0 0 16px rgba(255,255,255,0.5)",
+                    display: "inline",
+                }}>{line}</span>
+            );
+        } else {
+            parts.push(<span key={i} style={{ color: "transparent" }}>{line}</span>);
+        }
+        if (i < lines.length - 1) parts.push(<span key={`nl${i}`} style={{ color: "transparent" }}>{"\n"}</span>);
+    });
+    return parts;
+}
 const PINNED_KEY = "stickies_pinned_ids";
 const EMPTY_QUOTES =["🧠 Your second brain starts here. Write it down.", "✨ Great ideas deserve a home. Start now.", "📌 No more forgetting. Capture it.", "🚀 Dreams without notes are just wishes.", "📝 Plan it. Track it. Win it.", "🎯 Nothing works without priorities. Start here.", "💡 One note today. Clarity tomorrow.", "📚 Build your thinking system. One note at a time.", "⚡ Preparing is everything. Write first.", "🏆 Goals become real when you record them."];
 const VIEW_STATE_KEY = "stickies:last-view:v1";
@@ -3881,7 +3901,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                 closeEditorTools();
                 playSound("delete");
                 // If tabs are open, switch to next tab instead of closing editor
-                if (showTabs && typeof window !== "undefined" && window.innerWidth >= 640) {
+                if (showTabs) {
                     const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
                     const remaining = dbData.filter(n =>
                         !n.is_folder && !n.trashed_at && String(n.id) !== noteId &&
@@ -6033,7 +6053,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                         </div>
                     )}
                     {/* ── Tab bar — today's notes across all folders ── */}
-                    {showTabs && typeof window !== "undefined" && window.innerWidth >= 640 && (() => {
+                    {showTabs && (() => {
                         const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
                         const todayNotes = dbData
                             .filter(n => !n.is_folder && !n.trashed_at && !dismissedTabs.has(String(n.id)) && new Date(n.updated_at || n.created_at || 0) >= todayStart)
@@ -6610,6 +6630,20 @@ const fireIntegrations = (trigger: string, note: any) => {
                             const stickyFontSize = "clamp(8px, 1.2vw, 12px)";
                             return (
                             <div className="flex-1 flex overflow-auto relative" style={{ background: stickyBg, display: aiPromptOpen ? "none" : "flex" }}>
+                                {/* Divider glow backdrop */}
+                                {/^[=\-_]{3,}\s*$/m.test(content || "") && (
+                                    <div aria-hidden="true" style={{
+                                        position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
+                                        pointerEvents: "none",
+                                        fontFamily: stickyFont,
+                                        fontSize: stickyFontSize, lineHeight: 1.6,
+                                        paddingTop: 8, paddingBottom: 24, paddingLeft: 24, paddingRight: 24,
+                                        whiteSpace: "pre-wrap", overflowWrap: "break-word", wordBreak: "break-word",
+                                        color: "transparent", zIndex: 0,
+                                    }}>
+                                        {renderDividerHighlights(content || "")}
+                                    </div>
+                                )}
                                 {/* Highlight backdrop for find-in-note */}
                                 {showFindBar && findMatches.length > 0 && (
                                     <div aria-hidden="true" style={{
