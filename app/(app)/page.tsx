@@ -6134,20 +6134,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                             </div>
                         )}
                         {/* ── Float copy pill — fades after 10s of editing ── */}
-                        {showFloatCopy && !showNoteActions && !showFindBar && content.trim() && !listMode && !graphMode && !mindmapMode && !stackMode && noteType !== "html" && (
-                        <div className="absolute top-3 right-3 z-[2147483647] pointer-events-auto">
-                            <button type="button"
-                                onClick={() => {
-                                    let toCopy = content;
-                                    if (jsonMode) toCopy = JSON.stringify(jsonDetect.parsed, null, 2);
-                                    else toCopy = content.replace(/<[^>]+>/g, "");
-                                    void secureCopy(toCopy).then(() => showToast("Copied!"));
-                                }}
-                                className="h-7 w-7 flex items-center justify-center bg-zinc-800/90 border border-white/10 text-zinc-400 hover:text-white hover:bg-zinc-700/90 transition backdrop-blur-sm">
-                                <ClipboardIcon className="w-3.5 h-3.5" />
-                            </button>
-                        </div>
-                        )}
                         {/* ── Inline find bar (Cmd+F) ── */}
                         {showFindBar && (
                         <div className="absolute top-2 right-2 z-[2147483647] pointer-events-auto flex items-center gap-1 border border-white/10 shadow-2xl backdrop-blur-sm px-2 py-1.5" style={{ minWidth: 240, background: "rgba(24,24,27,0.97)" }}>
