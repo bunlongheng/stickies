@@ -6511,7 +6511,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         fontSize: "clamp(12px, 1.4vw, 17px)", lineHeight: 1.6,
                                         paddingTop: 8, paddingBottom: 24, paddingLeft: 24, paddingRight: 24,
                                         outline: "none", resize: "none", caretColor: "#f8f8f2",
-                                        whiteSpace: "pre-wrap", overflowWrap: "break-word", wordBreak: "break-word",
+                                        whiteSpace: "pre", overflowX: "auto",
                                         borderRight: "1px solid rgba(255,255,255,0.1)",
                                     }}
                                     spellCheck={false}
@@ -6624,7 +6624,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         fontFamily: stickyFont,
                                         fontSize: stickyFontSize, lineHeight: 1.6,
                                         paddingTop: 8, paddingBottom: 24, paddingLeft: 24, paddingRight: 24,
-                                        whiteSpace: "pre-wrap", overflowWrap: "break-word", wordBreak: "break-word",
+                                        whiteSpace: "pre", overflow: "hidden",
                                         color: "transparent", zIndex: 0,
                                     }}>
                                         {renderDividerHighlights(content || "")}
@@ -6638,7 +6638,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         fontFamily: stickyFont,
                                         fontSize: stickyFontSize, lineHeight: 1.6,
                                         paddingTop: 8, paddingBottom: 24, paddingLeft: 24, paddingRight: 24,
-                                        whiteSpace: "pre-wrap", overflowWrap: "break-word", wordBreak: "break-word",
+                                        whiteSpace: "pre", overflow: "hidden",
                                         color: "transparent", zIndex: 0,
                                     }}>
                                         {renderFindHighlights(content || "", findMatches, findCursor)}
@@ -6660,8 +6660,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         fontSize: stickyFontSize, lineHeight: 1.6,
                                         paddingTop: 8, paddingBottom: 24, paddingLeft: 24, paddingRight: 24,
                                         outline: "none", resize: "none", caretColor: stickyText,
-                                        whiteSpace: "pre-wrap", overflowWrap: "break-word", wordBreak: "break-word",
-                                        overflow: "auto",
+                                        whiteSpace: "pre", overflowX: "auto", overflowY: "auto",
                                         position: "relative", zIndex: 1,
                                     }}
                                     placeholder="START TYPING..."
