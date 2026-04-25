@@ -6093,15 +6093,18 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 <button type="button" onClick={() => openNewNote()} className="flex-shrink-0 flex items-center justify-center px-2.5 bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition sticky left-0 z-10" title="New note" style={{ backdropFilter: "blur(8px)" }}>
                                     <PlusIcon className="w-3.5 h-3.5" />
                                 </button>
-                                {/* Day navigation */}
-                                <button type="button" disabled={tabDayOffset >= 6} onClick={() => setTabDayOffset(d => Math.min(d + 1, 6))} className="flex-shrink-0 flex items-center justify-center px-1.5 bg-white/5 hover:bg-white/10 text-zinc-500 hover:text-white transition disabled:opacity-20" title="Previous day">
+                                {/* < = toward today (newer), > = toward past (older) */}
+                                {tabDayOffset > 0 && <button type="button" onClick={() => {
+                                    const next = Math.max(tabDayOffset - 1, 0);
+                                    setTabDayOffset(next);
+                                    const ds = new Date(); ds.setHours(0, 0, 0, 0); ds.setDate(ds.getDate() - next);
+                                    const de = new Date(ds); de.setDate(de.getDate() + 1);
+                                    const notes = dbData.filter(n => !n.is_folder && !n.trashed_at && !dismissedTabs.has(String(n.id)) && (() => { const d = new Date(n.updated_at || n.created_at || 0); return d >= ds && d < de; })()).sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")));
+                                    if (notes.length > 0) void openNote(notes[0]);
+                                }} className="flex-shrink-0 flex items-center justify-center px-1.5 bg-white/5 hover:bg-white/10 text-zinc-500 hover:text-white transition" title="Newer">
                                     <ChevronLeftIcon className="w-3 h-3" />
-                                </button>
-                                <span className="flex-shrink-0 flex items-center px-2 text-[9px] font-bold text-zinc-400 uppercase tracking-wide select-none">{dayLabel} <span className="ml-1 text-zinc-600">({dayNotes.length})</span></span>
-                                <button type="button" disabled={tabDayOffset <= 0} onClick={() => setTabDayOffset(d => Math.max(d - 1, 0))} className="flex-shrink-0 flex items-center justify-center px-1.5 bg-white/5 hover:bg-white/10 text-zinc-500 hover:text-white transition disabled:opacity-20" title="Next day">
-                                    <ChevronRightIcon className="w-3 h-3" />
-                                </button>
-                                <div className="flex items-stretch gap-0 overflow-x-auto" style={{ scrollbarWidth: "none" }} ref={(el) => {
+                                </button>}
+                                <div className="flex flex-wrap items-stretch gap-0" ref={(el) => {
                                     if (el) { const active = el.querySelector("[data-tab-active]"); if (active) active.scrollIntoView({ inline: "nearest", block: "nearest" }); }
                                 }}>
                                 {dayNotes.map(n => {
@@ -6109,7 +6112,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     const c = n.folder_color || noteColor || "#888";
                                     return (
                                         <div key={n.id} {...(isActive ? { "data-tab-active": "" } : {})} className={`flex-shrink-0 flex items-center transition-all ${isActive ? "relative z-10" : "hover:brightness-110 opacity-75"}`}
-                                            style={{ background: isActive ? c : `${c}99`, color: isLightColor(c) ? "#1c1c1e" : "#fff" }}>
+                                            style={{ background: isActive ? c : `${c}99`, color: "#1c1c1e", border: isActive ? "2px solid #000" : "1px solid rgba(0,0,0,0.15)" }}>
                                             <button type="button"
                                                 onClick={() => {
                                                     if (isActive) return;
@@ -6141,11 +6144,25 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     );
                                 })}
                                 </div>
+                                {/* Date label + right arrow — pinned right */}
+                                <div className="flex-shrink-0 flex items-center ml-auto sticky right-0 z-10" style={{ backdropFilter: "blur(8px)" }}>
+                                    <span className="flex items-center px-2 text-[9px] font-bold text-zinc-400 uppercase tracking-wide select-none">{dayLabel} <span className="ml-1 text-zinc-600">({dayNotes.length})</span></span>
+                                    <button type="button" disabled={tabDayOffset >= 6} onClick={() => {
+                                        const next = Math.min(tabDayOffset + 1, 6);
+                                        setTabDayOffset(next);
+                                        const ds = new Date(); ds.setHours(0, 0, 0, 0); ds.setDate(ds.getDate() - next);
+                                        const de = new Date(ds); de.setDate(de.getDate() + 1);
+                                        const notes = dbData.filter(n => !n.is_folder && !n.trashed_at && !dismissedTabs.has(String(n.id)) && (() => { const d = new Date(n.updated_at || n.created_at || 0); return d >= ds && d < de; })()).sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")));
+                                        if (notes.length > 0) void openNote(notes[0]);
+                                    }} className="flex-shrink-0 flex items-center justify-center px-1.5 bg-white/5 hover:bg-white/10 text-zinc-500 hover:text-white transition disabled:opacity-20" title="Older">
+                                        <ChevronRightIcon className="w-3 h-3" />
+                                    </button>
+                                </div>
                             </div>
                         );
                     })()}
 
-                    <div className={`relative flex-1 flex overflow-hidden font-mono ${appTheme === "light" ? "bg-white" : "bg-black"}`} style={{ display: aiPromptOpen ? "none" : "flex" }}>
+                    <div className={`relative flex-1 flex overflow-hidden font-mono ${appTheme === "light" ? "bg-white" : "bg-black"}`} style={{ display: aiPromptOpen ? "none" : "flex", border: appTheme === "light" ? "1px solid rgba(0,0,0,0.12)" : "none" }}>
                         {/* ── Note loading spinner — scoped to editor panel only ── */}
                         {noteContentLoading && (
                             <div className="absolute inset-0 z-[50] flex items-center justify-center bg-black/60 pointer-events-none">
