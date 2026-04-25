@@ -6079,7 +6079,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                         </div>
                     )}
                     {/* ── Tab bar — today's notes across all folders ── */}
-                    {showTabs && (() => {
+                    {showTabs && typeof window !== "undefined" && window.innerWidth >= 640 && (() => {
                         const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0); dayStart.setDate(dayStart.getDate() - tabDayOffset);
                         const dayEnd = new Date(dayStart); dayEnd.setDate(dayEnd.getDate() + 1);
                         const dayLabel = tabDayOffset === 0 ? "Today" : tabDayOffset === 1 ? "Yesterday" : dayStart.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
@@ -8555,7 +8555,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                         <button key={f.name} type="button"
                                                             onClick={(e) => { e.stopPropagation(); setDefaultFolder(f.name); localStorage.setItem(DEFAULT_FOLDER_KEY, f.name); setShowDefaultFolderPicker(false); setShowFolderActions(false); }}
                                                             className="flex items-center gap-2.5 px-3 py-1.5 text-left transition hover:bg-white/5 rounded">
-                                                            <span className="w-5 h-5 flex-shrink-0 flex items-center justify-center text-[11px] font-black leading-none overflow-hidden rounded" style={{ backgroundColor: f.color, color: isLightColor(f.color) ? "#1c1c1e" : "#fff", fontSize: 13 }}>
+                                                            <span className="w-5 h-5 flex-shrink-0 flex items-center justify-center text-[11px] font-black leading-none overflow-hidden rounded" style={{ backgroundColor: f.color, color: isLightColor(f.color) ? "#1c1c1e" : "#fff", fontSize: 13, border: isLightColor(f.color) ? "1px solid rgba(0,0,0,0.15)" : "none" }}>
                                                                 {f.name === "CLAUDE"
                                                                     ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-0.5" />
                                                                     : <FolderIconDisplay value={folderIcons[f.name] || ""} folderName={f.name || "F"} className="w-3.5 h-3.5" />}
@@ -8575,7 +8575,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                         {(["auto", "light", "dark"] as const).map((mode) => (
                                             <button key={mode} type="button"
                                                 onClick={() => setAppThemeMode(mode)}
-                                                className={`flex-1 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wide transition ${appThemeMode === mode ? "bg-white text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"}`}>
+                                                className={`flex-1 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wide transition ${appThemeMode === mode ? (appTheme === "light" ? "bg-black text-white" : "bg-white text-black") : (appTheme === "light" ? "bg-black/5 text-zinc-500 hover:bg-black/10" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200")}`}>
                                                 {mode === "auto" ? "Auto" : mode === "light" ? "Light" : "Dark"}
                                             </button>
                                         ))}
@@ -8587,7 +8587,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                     <button type="button"
                                         onClick={() => { const v = !showTabs; setShowTabs(v); try { localStorage.setItem("stickies:show-tabs:v1", String(v)); } catch {} }}
                                         className="relative w-11 h-6 rounded-full transition-colors duration-200"
-                                        style={{ background: showTabs ? "#34C759" : "rgba(255,255,255,0.15)" }}>
+                                        style={{ background: showTabs ? "#34C759" : appTheme === "light" ? "rgba(0,0,0,0.15)" : "rgba(255,255,255,0.15)" }}>
                                         <span className="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200" style={{ transform: showTabs ? "translateX(20px)" : "translateX(0)" }} />
                                     </button>
                                 </div>
@@ -8597,7 +8597,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                     <button type="button"
                                         onClick={() => { const v = !showFileIcons; setShowFileIcons(v); try { localStorage.setItem(SHOW_FILE_ICONS_KEY, String(v)); } catch {} }}
                                         className="relative w-11 h-6 rounded-full transition-colors duration-200"
-                                        style={{ background: showFileIcons ? "#34C759" : "rgba(255,255,255,0.15)" }}>
+                                        style={{ background: showFileIcons ? "#34C759" : appTheme === "light" ? "rgba(0,0,0,0.18)" : "rgba(255,255,255,0.15)" }}>
                                         <span className="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200" style={{ transform: showFileIcons ? "translateX(20px)" : "translateX(0)" }} />
                                     </button>
                                 </div>
