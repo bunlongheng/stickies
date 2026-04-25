@@ -48,6 +48,7 @@ import DevicePhoneMobileIcon from "@heroicons/react/24/outline/DevicePhoneMobile
 import CalendarDaysIcon from "@heroicons/react/24/outline/CalendarDaysIcon";
 import PuzzlePieceIcon from "@heroicons/react/24/outline/PuzzlePieceIcon";
 import ChevronRightIcon from "@heroicons/react/24/outline/ChevronRightIcon";
+import ChevronLeftIcon from "@heroicons/react/24/outline/ChevronLeftIcon";
 import BoltIcon from "@heroicons/react/24/outline/BoltIcon";
 import LightBulbIcon from "@heroicons/react/24/outline/LightBulbIcon";
 import ShareIcon from "@heroicons/react/24/outline/ShareIcon";
@@ -1224,6 +1225,7 @@ export default function NotesMaster() {
     const [openTabs, setOpenTabs] = useState<string[]>([]); // note IDs
     const [showTabs, setShowTabs] = useState(() => { try { if (typeof window === "undefined") return true; return localStorage.getItem("stickies:show-tabs:v1") !== "false"; } catch { return true; } });
     const [dismissedTabs, setDismissedTabs] = useState<Set<string>>(() => { try { if (typeof window === "undefined") return new Set(); const raw = localStorage.getItem("stickies:dismissed-tabs:v1"); return raw ? new Set(JSON.parse(raw)) : new Set(); } catch { return new Set(); } });
+    const [tabDayOffset, setTabDayOffset] = useState(0); // 0=today, 1=yesterday, max 6
     const [activeTaskIdx, setActiveTaskIdx] = useState<number | null>(null);
     const [editingTaskIdx, setEditingTaskIdx] = useState<number | null>(null);
     const [swipedTaskIdx, setSwipedTaskIdx] = useState<number | null>(null);
@@ -3919,11 +3921,12 @@ const fireIntegrations = (trigger: string, note: any) => {
                 playSound("delete");
                 // If tabs are open, switch to next tab instead of closing editor
                 if (showTabs) {
-                    const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+                    const ds = new Date(); ds.setHours(0, 0, 0, 0); ds.setDate(ds.getDate() - tabDayOffset);
+                    const de = new Date(ds); de.setDate(de.getDate() + 1);
                     const remaining = dbData.filter(n =>
                         !n.is_folder && !n.trashed_at && String(n.id) !== noteId &&
                         !dismissedTabs.has(String(n.id)) &&
-                        new Date(n.updated_at || n.created_at || 0) >= todayStart
+                        (() => { const d = new Date(n.updated_at || n.created_at || 0); return d >= ds && d < de; })()
                     );
                     if (remaining.length > 0) {
                         void openNote(remaining[0]);
@@ -6071,17 +6074,12 @@ const fireIntegrations = (trigger: string, note: any) => {
                     )}
                     {/* ── Tab bar — today's notes across all folders ── */}
                     {showTabs && (() => {
-                        const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
-                        const todayNotes = dbData
-                            .filter(n => !n.is_folder && !n.trashed_at && !dismissedTabs.has(String(n.id)) && new Date(n.updated_at || n.created_at || 0) >= todayStart)
+                        const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0); dayStart.setDate(dayStart.getDate() - tabDayOffset);
+                        const dayEnd = new Date(dayStart); dayEnd.setDate(dayEnd.getDate() + 1);
+                        const dayLabel = tabDayOffset === 0 ? "Today" : tabDayOffset === 1 ? "Yesterday" : dayStart.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+                        const dayNotes = dbData
+                            .filter(n => !n.is_folder && !n.trashed_at && !dismissedTabs.has(String(n.id)) && (() => { const d = new Date(n.updated_at || n.created_at || 0); return d >= dayStart && d < dayEnd; })())
                             .sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")));
-                        if (todayNotes.length === 0) return (
-                            <div className="shrink-0 flex items-stretch gap-0" style={{ minHeight: 28 }}>
-                                <button type="button" onClick={() => openNewNote()} className="flex-shrink-0 flex items-center justify-center px-2.5 bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition" title="New note">
-                                    <PlusIcon className="w-3.5 h-3.5" />
-                                </button>
-                            </div>
-                        );
                         const activeId = String(editingNote?.id ?? "");
                         const dismissTab = (id: string) => {
                             setDismissedTabs(prev => {
@@ -6095,11 +6093,18 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 <button type="button" onClick={() => openNewNote()} className="flex-shrink-0 flex items-center justify-center px-2.5 bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition sticky left-0 z-10" title="New note" style={{ backdropFilter: "blur(8px)" }}>
                                     <PlusIcon className="w-3.5 h-3.5" />
                                 </button>
+                                {/* Day navigation */}
+                                <button type="button" disabled={tabDayOffset >= 6} onClick={() => setTabDayOffset(d => Math.min(d + 1, 6))} className="flex-shrink-0 flex items-center justify-center px-1.5 bg-white/5 hover:bg-white/10 text-zinc-500 hover:text-white transition disabled:opacity-20" title="Previous day">
+                                    <ChevronLeftIcon className="w-3 h-3" />
+                                </button>
+                                <span className="flex-shrink-0 flex items-center px-2 text-[9px] font-bold text-zinc-400 uppercase tracking-wide select-none">{dayLabel} <span className="ml-1 text-zinc-600">({dayNotes.length})</span></span>
+                                <button type="button" disabled={tabDayOffset <= 0} onClick={() => setTabDayOffset(d => Math.max(d - 1, 0))} className="flex-shrink-0 flex items-center justify-center px-1.5 bg-white/5 hover:bg-white/10 text-zinc-500 hover:text-white transition disabled:opacity-20" title="Next day">
+                                    <ChevronRightIcon className="w-3 h-3" />
+                                </button>
                                 <div className="flex items-stretch gap-0 overflow-x-auto" style={{ scrollbarWidth: "none" }} ref={(el) => {
-                                    // Auto-scroll to active tab
                                     if (el) { const active = el.querySelector("[data-tab-active]"); if (active) active.scrollIntoView({ inline: "nearest", block: "nearest" }); }
                                 }}>
-                                {todayNotes.map(n => {
+                                {dayNotes.map(n => {
                                     const isActive = String(n.id) === activeId;
                                     const c = n.folder_color || noteColor || "#888";
                                     return (
@@ -6123,7 +6128,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                         e.stopPropagation();
                                                         const nid = String(n.id);
                                                         dismissTab(nid);
-                                                        const remaining = todayNotes.filter(t => String(t.id) !== nid);
+                                                        const remaining = dayNotes.filter(t => String(t.id) !== nid);
                                                         if (remaining.length > 0) void openNote(remaining[0]);
                                                         else void backToRootFromEditor();
                                                     }}
