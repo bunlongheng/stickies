@@ -195,17 +195,22 @@ const SHOW_FILE_ICONS_KEY = "stickies:show-file-icons:v1";
 
 // Generate a gradual shade per row for Mode 2 row backgrounds
 // Opacity ramps linearly from min → max across the full list (no looping)
-function shadedRowBg(hex: string, index: number, total: number, isFolder = false): string {
+function shadedRowBg(hex: string, index: number, total: number, isFolder = false, light = false): string {
+    const h = hex.replace("#", "");
+    const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16);
     if (isFolder) {
-        // Folders get a brighter, whiter-tinted shade to stand out
-        const h = hex.replace("#", "");
-        const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16);
         const mix = (c: number) => Math.round(c + (255 - c) * 0.35);
-        return `rgba(${mix(r)},${mix(g)},${mix(b)},0.19)`;
+        return `rgba(${mix(r)},${mix(g)},${mix(b)},${light ? 0.35 : 0.19})`;
+    }
+    const ratio = total <= 1 ? 0 : index / (total - 1);
+    if (light) {
+        // Light mode: use rgba for visible gradient on white bg
+        const minA = 0.25, maxA = 0.95;
+        const alpha = minA + (maxA - minA) * ratio;
+        return `rgba(${r},${g},${b},${alpha.toFixed(2)})`;
     }
     const minOpacity = 0x22; // ~13% — gentle tint
     const maxOpacity = 0x66; // ~40% — strong tint
-    const ratio = total <= 1 ? 0 : index / (total - 1);
     const opacity = Math.round(minOpacity + (maxOpacity - minOpacity) * ratio);
     return `${hex}${opacity.toString(16).padStart(2, "0")}`;
 }
@@ -3291,6 +3296,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         shouldFocusTitleOnOpenRef.current = !isStandup;
         closeEditorTools();
         setEditorOpen(true);
+        setTabDayOffset(0); // always jump to today when creating new note
         playSound("create");
     }, [activeFolder, closeEditorTools, pickUniqueColor]);
 
@@ -6089,7 +6095,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                             });
                         };
                         return (
-                            <div className="shrink-0 flex items-stretch gap-0" style={{ minHeight: 28 }}>
+                            <div className="shrink-0 flex items-end gap-0 overflow-visible" style={{ minHeight: 28, background: appTheme === "light" ? "#e8e8ed" : "#2a2a2a" }}>
                                 <button type="button" onClick={() => openNewNote()} className="flex-shrink-0 flex items-center justify-center px-2.5 bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition sticky left-0 z-10" title="New note" style={{ backdropFilter: "blur(8px)" }}>
                                     <PlusIcon className="w-3.5 h-3.5" />
                                 </button>
@@ -6104,7 +6110,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 }} className="flex-shrink-0 flex items-center justify-center px-1.5 bg-white/5 hover:bg-white/10 text-zinc-500 hover:text-white transition" title="Newer">
                                     <ChevronLeftIcon className="w-3 h-3" />
                                 </button>}
-                                <div className="flex flex-wrap items-stretch gap-0" ref={(el) => {
+                                <div className="flex items-stretch gap-0 overflow-x-auto" style={{ scrollbarWidth: "none" }} ref={(el) => {
                                     if (el) { const active = el.querySelector("[data-tab-active]"); if (active) active.scrollIntoView({ inline: "nearest", block: "nearest" }); }
                                 }}>
                                 {dayNotes.map(n => {
@@ -6112,7 +6118,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     const c = n.folder_color || noteColor || "#888";
                                     return (
                                         <div key={n.id} {...(isActive ? { "data-tab-active": "" } : {})} className={`flex-shrink-0 flex items-center transition-all ${isActive ? "relative z-10" : "hover:brightness-110 opacity-75"}`}
-                                            style={{ background: isActive ? c : `${c}99`, color: "#1c1c1e", border: isActive ? "2px solid #000" : "1px solid rgba(0,0,0,0.15)" }}>
+                                            style={{ background: isActive ? c : `${c}99`, color: "#1c1c1e", height: isActive ? "calc(100% + 4px)" : "100%" }}>
                                             <button type="button"
                                                 onClick={() => {
                                                     if (isActive) return;
@@ -6135,9 +6141,9 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                         if (remaining.length > 0) void openNote(remaining[0]);
                                                         else void backToRootFromEditor();
                                                     }}
-                                                    className="px-1 py-1 hover:opacity-60 transition flex-shrink-0"
+                                                    className="px-1.5 flex items-center justify-center self-center hover:opacity-60 transition flex-shrink-0"
                                                     style={{ color: isLightColor(c) ? "#1c1c1e" : "#fff" }}>
-                                                    <span className="text-[8px] leading-none">✕</span>
+                                                    <span className="text-[9px] leading-none">✕</span>
                                                 </button>
                                             )}
                                         </div>
@@ -6162,7 +6168,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                         );
                     })()}
 
-                    <div className={`relative flex-1 flex overflow-hidden font-mono ${appTheme === "light" ? "bg-white" : "bg-black"}`} style={{ display: aiPromptOpen ? "none" : "flex", border: appTheme === "light" ? "1px solid rgba(0,0,0,0.12)" : "none" }}>
+                    <div className={`relative flex-1 flex overflow-hidden font-mono ${appTheme === "light" ? "bg-white" : "bg-black"}`} style={{ display: aiPromptOpen ? "none" : "flex", border: `2px solid ${noteColor || "#888"}` }}>
                         {/* ── Note loading spinner — scoped to editor panel only ── */}
                         {noteContentLoading && (
                             <div className="absolute inset-0 z-[50] flex items-center justify-center bg-black/60 pointer-events-none">
@@ -7229,7 +7235,8 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                     ? (folderStack.at(-1)?.color || folders.find(f => f.name === activeFolder)?.color || c)
                                                     : c;
                                                 const isRootFolder = !activeFolder && !!item.is_folder;
-                                                return { position: "relative", isolation: "isolate", "--row-color": parentColor, "--fc": parentColor, background: isRootFolder ? `${parentColor}12` : shadedRowBg(parentColor, idx, filteredDisplayItems.length) } as unknown as React.CSSProperties;
+                                                const isLight = appTheme === "light";
+                                                return { position: "relative", isolation: "isolate", "--row-color": parentColor, "--fc": parentColor, background: isRootFolder ? `${parentColor}${isLight ? "18" : "12"}` : shadedRowBg(parentColor, idx, filteredDisplayItems.length, false, isLight) } as unknown as React.CSSProperties;
                                             }
                                             {
                                                 const rowColor = activeFolder ? (folderStack.at(-1)?.color || c) : c;
@@ -9240,11 +9247,11 @@ stickies --file ./report.md --path=/Reporting`} color="text-cyan-300" />
                 const nc = isFolder ? null : ((confirmDelete as any).noteColor || "#71717a");
                 const initial = isFolder ? null : meaningfulInitial(label, "N");
                 return (
-                    <div className="fixed inset-0 z-[620] bg-black/90 flex items-center justify-center p-4" onClick={() => setConfirmDelete(null)}>
-                        <div className="bg-zinc-900 border-2 border-red-500 p-6 w-full max-w-xs text-center" onClick={e => e.stopPropagation()}>
+                    <div className="fixed inset-0 z-[620] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setConfirmDelete(null)}>
+                        <div className="bg-zinc-900 border-2 rounded-2xl p-6 w-full max-w-xs text-center" style={{ borderColor: nc || folderColor || "#71717a" }} onClick={e => e.stopPropagation()}>
                             {/* Icon */}
                             {isFolder ? (
-                                <div className="w-14 h-14 mx-auto mb-4 flex items-center justify-center" style={{ background: folderColor ?? "#3a3a3a", borderRadius: 8 }}>
+                                <div className="w-14 h-14 mx-auto mb-4 flex items-center justify-center rounded-xl" style={{ background: folderColor ?? "#3a3a3a" }}>
                                     <FolderIcon className="w-7 h-7 text-white" />
                                 </div>
                             ) : (
@@ -9257,10 +9264,10 @@ stickies --file ./report.md --path=/Reporting`} color="text-cyan-300" />
                             <div className="flex flex-col gap-2">
                                 <button type="button"
                                     onClick={() => { const action = confirmDelete; setConfirmDelete(null); if (action.type === "folder") void deleteFolderByName(action.folderName); else void deleteCurrentNote(action.noteId, action.noteName); }}
-                                    className="w-full py-3 bg-red-600 text-white font-black uppercase text-xs tracking-widest">
+                                    className="w-full py-3 rounded-xl bg-red-600 text-white font-black uppercase text-xs tracking-widest">
                                     {isTrash ? "Delete Forever" : isFolder ? "Delete Folder" : "Move to Trash"}
                                 </button>
-                                <button type="button" onClick={() => setConfirmDelete(null)} className="w-full py-3 bg-white text-black font-black uppercase text-xs tracking-widest">
+                                <button type="button" onClick={() => setConfirmDelete(null)} className="w-full py-3 rounded-xl bg-white text-black font-black uppercase text-xs tracking-widest">
                                     Cancel
                                 </button>
                             </div>
