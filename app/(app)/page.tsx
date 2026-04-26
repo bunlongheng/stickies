@@ -2615,9 +2615,12 @@ const fireIntegrations = (trigger: string, note: any) => {
             const pinnedFromSub = folders
                 .filter(f => pinnedFolders.has(f.name) && f.parent_folder_name && !filtered.some(r => r.name === f.name))
                 .map(f => ({ ...f, is_folder: true as const }));
-            const pinned = [...pinnedFromSub, ...filtered.filter(f => pinnedFolders.has(f.name))];
-            const unpinned = filtered.filter(f => !pinnedFolders.has(f.name));
-            return [...pinned, ...unpinned];
+            const pinnedNames = new Set(pinnedFromSub.map(f => f.name));
+            const pinnedFromRoot = filtered.filter(f => pinnedFolders.has(f.name) && !pinnedNames.has(f.name));
+            const allPinned = [...pinnedFromSub, ...pinnedFromRoot];
+            const allPinnedNames = new Set(allPinned.map(f => f.name));
+            const unpinned = filtered.filter(f => !allPinnedNames.has(f.name));
+            return [...allPinned, ...unpinned];
         }
         return filtered;
     }, [folders, folderStack, activeFolder, pinnedFolders]);
