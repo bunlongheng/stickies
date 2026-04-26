@@ -2612,8 +2612,14 @@ const fireIntegrations = (trigger: string, note: any) => {
             .map((f) => ({ ...f, is_folder: true as const }));
         // At root: pinned folders first (including subfolders promoted to root), then the rest
         if (folderStack.length === 0) {
+            const seenPinned = new Set<string>();
             const pinnedFromSub = folders
-                .filter(f => pinnedFolders.has(f.name) && f.parent_folder_name && !filtered.some(r => r.name === f.name))
+                .filter(f => {
+                    if (!pinnedFolders.has(f.name) || !f.parent_folder_name || filtered.some(r => r.name === f.name)) return false;
+                    if (seenPinned.has(f.name)) return false;
+                    seenPinned.add(f.name);
+                    return true;
+                })
                 .map(f => ({ ...f, is_folder: true as const }));
             const pinnedNames = new Set(pinnedFromSub.map(f => f.name));
             const pinnedFromRoot = filtered.filter(f => pinnedFolders.has(f.name) && !pinnedNames.has(f.name));
