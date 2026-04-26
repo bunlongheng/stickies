@@ -6092,14 +6092,13 @@ const fireIntegrations = (trigger: string, note: any) => {
                     {/* ── Tab bar — folder notes or today's notes (no folder) ── */}
                     {(showTabs || mainListMode === "tabs") && typeof window !== "undefined" && window.innerWidth >= 640 && (() => {
                         const inFolder = !!activeFolder;
-                        const allNotes = inFolder
+                        const allNotes = (inFolder
                             ? dbData.filter(n => !n.is_folder && !n.trashed_at && !dismissedTabs.has(String(n.id)) && n.folder_name === activeFolder)
-                                .sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")))
                             : dbData.filter(n => !n.is_folder && !n.trashed_at && !dismissedTabs.has(String(n.id)))
-                                .sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")));
+                        ).sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")));
                         const dayNotes = allNotes.slice(0, tabLimit);
                         const hasMore = allNotes.length > tabLimit;
-                        const dayLabel = inFolder ? activeFolder : "Recent";
+                        const dayLabel = inFolder ? activeFolder : "All";
                         const activeId = String(editingNote?.id ?? "");
                         const dismissTab = (id: string) => {
                             setDismissedTabs(prev => {
