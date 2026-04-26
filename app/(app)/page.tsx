@@ -7327,35 +7327,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                 const nc = (item as any).color || (item as any).folder_color || "#71717a";
                                                 const initial = meaningfulInitial(item.title || "", "N");
                                                 const nIcon = noteIcons[String(item.id)];
-                                                const isChecklistItem = (item as any).list_mode === true || (item as any).type === "checklist";
-                                                const taskCount = Number((item as any).task_count || 0);
-                                                const taskDoneCount = Number((item as any).task_done_count || 0);
-                                                const taskRemaining = Number((item as any).task_remaining_count ?? taskCount);
                                                 const noteTextColor = isLightColor(nc) ? "#1c1c1e" : "#fff";
-                                                if (isChecklistItem) {
-                                                    const pct = taskCount > 0 ? Math.min(1, taskDoneCount / taskCount) : 0;
-                                                    const RING = 24; // outer radius
-                                                    const STROKE = 3;
-                                                    const r = RING - STROKE / 2;
-                                                    const circ = 2 * Math.PI * r;
-                                                    return (
-                                                        <button type="button"
-                                                            onClick={(e) => { e.stopPropagation(); void openNote(item); closeEditorTools(); }}
-                                                            className="flex-shrink-0 w-[54px] h-[54px] sm:w-[46px] sm:h-[46px] m-1 sm:m-0 flex items-center justify-center font-black relative"
-                                                            style={{ color: noteTextColor, fontSize: taskRemaining >= 100 ? 14 : taskRemaining >= 10 ? 16 : 18 }}>
-                                                            {/* Disc with internal bottom-up fill */}
-                                                            <div className="absolute m-auto inset-0 rounded-full overflow-hidden" style={{ width: RING * 2, height: RING * 2, background: nc, boxShadow: `2px 3px 8px ${nc}55` }}>
-                                                                {pct < 1 && <div className="absolute left-0 right-0 top-0" style={{ height: `${(1 - pct) * 100}%`, background: "rgba(0,0,0,0.45)" }} />}
-                                                            </div>
-                                                            {/* Outer ring overlay */}
-                                                            <svg className="absolute inset-0 m-auto pointer-events-none" width={RING * 2} height={RING * 2} viewBox={`0 0 ${RING * 2} ${RING * 2}`} style={{ transform: "rotate(-90deg)" }}>
-                                                                <circle cx={RING} cy={RING} r={r} fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth={STROKE} />
-                                                                {pct > 0 && <circle cx={RING} cy={RING} r={r} fill="none" stroke="#fff" strokeWidth={STROKE} strokeLinecap="round" strokeDasharray={`${circ * pct} ${circ}`} />}
-                                                            </svg>
-                                                            <span className="relative">{taskRemaining}</span>
-                                                        </button>
-                                                    );
-                                                }
                                                 return (
                                                     <button type="button"
                                                         onClick={(e) => { e.stopPropagation(); void openNote(item); closeEditorTools(); }}
