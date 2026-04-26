@@ -1143,6 +1143,7 @@ export default function NotesMaster() {
     const [hydratedViewState, setHydratedViewState] = useState(false);
     const [showColorPicker, setShowColorPicker] = useState(false);
     const [showSwitcher, setShowSwitcher] = useState(false);
+    const [showFooterFolderPicker, setShowFooterFolderPicker] = useState(false);
     const [folderSearchQuery, setFolderSearchQuery] = useState("");
     const folderSearchCursorRef = useRef(0);
     const folderSearchListRef = useRef<HTMLDivElement | null>(null);
@@ -6817,13 +6818,37 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                 {editingNote?.is_public && (
                                     <GlobeAltIcon className="w-3 h-3 text-emerald-400 flex-shrink-0" title="Public note" />
                                 )}
-                                {/* Folder pill */}
-                                <button type="button"
-                                    onClick={() => { setShowSwitcher(v => !v); setShowColorPicker(false); }}
-                                    className="font-mono font-black uppercase tracking-wide whitespace-nowrap px-1.5 py-px rounded-full hover:brightness-125 transition"
-                                    style={{ fontSize: 8, background: `${noteColor}22`, color: noteColor, border: `1px solid ${noteColor}44` }}>
-                                    {targetFolder || activeFolder || editingNote?.folder_name || "General"}
-                                </button>
+                                {/* Folder pill + dropdown */}
+                                <div className="relative">
+                                    <button type="button"
+                                        onClick={() => setShowFooterFolderPicker(v => !v)}
+                                        className="font-mono font-black uppercase tracking-wide whitespace-nowrap px-1.5 py-px rounded-full hover:brightness-125 transition"
+                                        style={{ fontSize: 8, background: `${noteColor}22`, color: noteColor, border: `1px solid ${noteColor}44` }}>
+                                        {targetFolder || activeFolder || editingNote?.folder_name || "General"}
+                                    </button>
+                                    {showFooterFolderPicker && (
+                                        <>
+                                            <div className="fixed inset-0 z-[999]" onClick={() => setShowFooterFolderPicker(false)} />
+                                            <div className="absolute bottom-6 right-0 z-[1000] w-48 max-h-[240px] overflow-y-auto rounded-xl bg-zinc-900 border border-white/15 shadow-2xl py-1" style={{ scrollbarWidth: "thin" }}>
+                                                {folders.filter(f => !f.parent_folder_name && f.name !== "TRASH").map(f => {
+                                                    const current = (targetFolder || activeFolder || editingNote?.folder_name) === f.name;
+                                                    return (
+                                                        <button key={f.name} type="button"
+                                                            onClick={() => {
+                                                                setShowFooterFolderPicker(false);
+                                                                if (current) return;
+                                                                void moveToFolder(f.name);
+                                                            }}
+                                                            className={`w-full flex items-center gap-2 px-3 py-1.5 text-left text-[10px] font-bold uppercase tracking-wide transition ${current ? "text-white" : "text-zinc-400 hover:text-white hover:bg-white/5"}`}>
+                                                            <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: f.color }} />
+                                                            {f.name}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
                                 {/* Type pill */}
                                 {(() => {
                                     const badge = TYPE_BADGE[noteType] ?? TYPE_BADGE["text"];
