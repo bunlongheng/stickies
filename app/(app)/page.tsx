@@ -1213,7 +1213,7 @@ export default function NotesMaster() {
     const [openTabs, setOpenTabs] = useState<string[]>([]); // note IDs
     const [showTabs, setShowTabs] = useState(() => { try { if (typeof window === "undefined") return true; return localStorage.getItem("stickies:show-tabs:v1") !== "false"; } catch { return true; } });
     const [dismissedTabs, setDismissedTabs] = useState<Set<string>>(() => { try { if (typeof window === "undefined") return new Set(); const raw = localStorage.getItem("stickies:dismissed-tabs:v1"); return raw ? new Set(JSON.parse(raw)) : new Set(); } catch { return new Set(); } });
-    const [tabDayOffset, setTabDayOffset] = useState(0); // 0=today, 1=yesterday, max 6
+    const [tabLimit, setTabLimit] = useState(10);
     const [activeTaskIdx, setActiveTaskIdx] = useState<number | null>(null);
     const [editingTaskIdx, setEditingTaskIdx] = useState<number | null>(null);
     const [swipedTaskIdx, setSwipedTaskIdx] = useState<number | null>(null);
@@ -2488,6 +2488,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                 }
                 return;
             }
+            if (item.trashed_at) return;
             noteCountByFolder.set(folderName, (noteCountByFolder.get(folderName) || 0) + 1);
             if (!firstNoteColorByFolder.has(folderName) && item.folder_color) firstNoteColorByFolder.set(folderName, item.folder_color);
         });
@@ -2504,8 +2505,8 @@ const fireIntegrations = (trigger: string, note: any) => {
         // Notes without folder_id fall back to name-match, but only counted once
         // (avoid double-counting when two folders share the same name)
         const noteCountByFolderId = new Map<string, number>();
-        const notesWithoutFolderId = dbData.filter((item) => !item.is_folder && !item.folder_id);
-        dbData.filter((item) => !item.is_folder && item.folder_id).forEach((item) => {
+        const notesWithoutFolderId = dbData.filter((item) => !item.is_folder && !item.trashed_at && !item.folder_id);
+        dbData.filter((item) => !item.is_folder && !item.trashed_at && item.folder_id).forEach((item) => {
             const fid = String(item.folder_id);
             noteCountByFolderId.set(fid, (noteCountByFolderId.get(fid) || 0) + 1);
         });
@@ -3110,9 +3111,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                 const isTabView = showTabs && typeof window !== "undefined" && window.innerWidth >= 640;
                 if (isTabView) {
                     // Find next tab to switch to
-                    const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0); dayStart.setDate(dayStart.getDate() - tabDayOffset);
-                    const dayEnd = new Date(dayStart); dayEnd.setDate(dayEnd.getDate() + 1);
-                    const remaining = dbData.filter(n => !n.is_folder && !n.trashed_at && String(n.id) !== noteId && !dismissedTabs.has(String(n.id)) && (() => { const d = new Date(n.updated_at || n.created_at || 0); return d >= dayStart && d < dayEnd; })());
+                    const remaining = dbData.filter(n => !n.is_folder && !n.trashed_at && String(n.id) !== noteId && !dismissedTabs.has(String(n.id)) && (activeFolder ? n.folder_name === activeFolder : true))
+                        .sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || ""))).slice(0, tabLimit);
                     if (remaining.length > 0) void openNote(remaining[0]);
                 } else {
                     setEditorOpen(false);
@@ -3299,7 +3299,6 @@ const fireIntegrations = (trigger: string, note: any) => {
         shouldFocusTitleOnOpenRef.current = !isStandup;
         closeEditorTools();
         setEditorOpen(true);
-        setTabDayOffset(0);
         playSound("create");
     }, [activeFolder, closeEditorTools, pickUniqueColor]);
 
@@ -3930,13 +3929,11 @@ const fireIntegrations = (trigger: string, note: any) => {
                 playSound("delete");
                 // If tabs are open, switch to next tab instead of closing editor
                 if (showTabs) {
-                    const ds = new Date(); ds.setHours(0, 0, 0, 0); ds.setDate(ds.getDate() - tabDayOffset);
-                    const de = new Date(ds); de.setDate(de.getDate() + 1);
                     const remaining = dbData.filter(n =>
                         !n.is_folder && !n.trashed_at && String(n.id) !== noteId &&
                         !dismissedTabs.has(String(n.id)) &&
-                        (() => { const d = new Date(n.updated_at || n.created_at || 0); return d >= ds && d < de; })()
-                    );
+                        (activeFolder ? n.folder_name === activeFolder : true)
+                    ).sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || ""))).slice(0, tabLimit);
                     if (remaining.length > 0) {
                         void openNote(remaining[0]);
                         return;
@@ -6090,16 +6087,14 @@ const fireIntegrations = (trigger: string, note: any) => {
                     {/* ── Tab bar — folder notes or today's notes (no folder) ── */}
                     {showTabs && typeof window !== "undefined" && window.innerWidth >= 640 && (() => {
                         const inFolder = !!activeFolder;
-                        const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0); dayStart.setDate(dayStart.getDate() - tabDayOffset);
-                        const dayEnd = new Date(dayStart); dayEnd.setDate(dayEnd.getDate() + 1);
-                        const dayLabel = inFolder
-                            ? activeFolder
-                            : tabDayOffset === 0 ? "Today" : tabDayOffset === 1 ? "Yesterday" : dayStart.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
-                        const dayNotes = inFolder
+                        const allNotes = inFolder
                             ? dbData.filter(n => !n.is_folder && !n.trashed_at && !dismissedTabs.has(String(n.id)) && n.folder_name === activeFolder)
                                 .sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")))
-                            : dbData.filter(n => !n.is_folder && !n.trashed_at && !dismissedTabs.has(String(n.id)) && (() => { const d = new Date(n.updated_at || n.created_at || 0); return d >= dayStart && d < dayEnd; })())
+                            : dbData.filter(n => !n.is_folder && !n.trashed_at && !dismissedTabs.has(String(n.id)))
                                 .sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")));
+                        const dayNotes = allNotes.slice(0, tabLimit);
+                        const hasMore = allNotes.length > tabLimit;
+                        const dayLabel = inFolder ? activeFolder : "Recent";
                         const activeId = String(editingNote?.id ?? "");
                         const dismissTab = (id: string) => {
                             setDismissedTabs(prev => {
@@ -6108,15 +6103,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 return next;
                             });
                         };
-                        const H = 30; // consistent tab bar height
-                        const navDay = (dir: 1 | -1) => {
-                            const next = dir === 1 ? Math.min(tabDayOffset + 1, 6) : Math.max(tabDayOffset - 1, 0);
-                            setTabDayOffset(next);
-                            const ds = new Date(); ds.setHours(0, 0, 0, 0); ds.setDate(ds.getDate() - next);
-                            const de = new Date(ds); de.setDate(de.getDate() + 1);
-                            const notes = dbData.filter(n => !n.is_folder && !n.trashed_at && !dismissedTabs.has(String(n.id)) && (() => { const d = new Date(n.updated_at || n.created_at || 0); return d >= ds && d < de; })()).sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")));
-                            if (notes.length > 0) void openNote(notes[0]);
-                        };
+                        const H = 30;
                         const btnCls = "flex-shrink-0 flex items-center justify-center text-zinc-500 hover:text-white transition";
                         return (
                             <div className="shrink-0 flex items-end overflow-hidden" style={{ height: H + 8, background: appTheme === "light" ? "#e8e8ed" : "#2a2a2a" }}>
@@ -6124,38 +6111,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 <button type="button" onClick={() => openNewNote(undefined, inFolder ? activeFolder : "Today")} className={`${btnCls} px-2`} style={{ height: H }} title="New note">
                                     <PlusIcon className="w-3.5 h-3.5" />
                                 </button>
-                                {/* < toward today (only in day mode, not folder mode) */}
-                                {!inFolder && tabDayOffset > 0 && (
-                                    <button type="button" onClick={() => navDay(-1)} className={`${btnCls} px-1.5`} style={{ height: H }} title="Newer">
-                                        <ChevronLeftIcon className="w-3 h-3" />
-                                    </button>
-                                )}
-                                {/* Folder shortcuts (today mode only) */}
-                                {!inFolder && (() => {
-                                    // Show folders that have notes from the selected day
-                                    const activeFolders = new Map<string, string>();
-                                    dayNotes.forEach(n => {
-                                        if (n.folder_name && !activeFolders.has(n.folder_name)) {
-                                            const f = folders.find(f => f.name === n.folder_name);
-                                            activeFolders.set(n.folder_name, f?.color || "#888");
-                                        }
-                                    });
-                                    if (activeFolders.size <= 1) return null;
-                                    return Array.from(activeFolders.entries()).map(([name, color]) => (
-                                        <button key={name} type="button"
-                                            onClick={() => {
-                                                const fr = dbData.find(r => r.is_folder && r.folder_name === name);
-                                                if (fr) enterFolder({ id: String(fr.id), name, color });
-                                                const firstNote = dayNotes.find(n => n.folder_name === name);
-                                                if (firstNote) void openNote(firstNote);
-                                            }}
-                                            className="flex-shrink-0 flex items-center gap-1 px-2 text-[8px] font-bold uppercase tracking-wide text-zinc-400 hover:text-white transition"
-                                            style={{ height: H }}>
-                                            <span className="w-1.5 h-1.5 rounded-full" style={{ background: color }} />
-                                            {name.length > 8 ? name.slice(0, 8) : name}
-                                        </button>
-                                    ));
-                                })()}
                                 {/* Tabs */}
                                 <div className="flex items-end gap-0.5 overflow-x-auto flex-1 min-w-0" style={{ scrollbarWidth: "none", height: H + 8 }} ref={(el) => {
                                     if (el) { const a = el.querySelector("[data-tab-active]"); if (a) a.scrollIntoView({ inline: "nearest", block: "nearest" }); }
@@ -6185,9 +6140,9 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 </div>
                                 {/* Label + > */}
                                 <div className="flex-shrink-0 flex items-center sticky right-0 z-10" style={{ height: H, backdropFilter: "blur(8px)" }}>
-                                    <span className="px-2 text-[9px] font-bold text-zinc-400 uppercase tracking-wide select-none">{dayLabel} ({dayNotes.length})</span>
-                                    {!inFolder && (
-                                        <button type="button" disabled={tabDayOffset >= 6} onClick={() => navDay(1)} className={`${btnCls} px-1.5 disabled:opacity-20`} style={{ height: H }} title="Older">
+                                    <span className="px-2 text-[9px] font-bold text-zinc-400 uppercase tracking-wide select-none">{dayLabel} ({allNotes.length})</span>
+                                    {hasMore && (
+                                        <button type="button" onClick={() => setTabLimit(prev => prev + 10)} className={`${btnCls} px-1.5`} style={{ height: H }} title="Show 10 more">
                                             <ChevronRightIcon className="w-3 h-3" />
                                         </button>
                                     )}
