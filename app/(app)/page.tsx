@@ -491,6 +491,7 @@ function renderFindHighlights(text: string, matches: { start: number; end: numbe
     return parts;
 }
 const PINNED_KEY = "stickies_pinned_ids";
+const PINNED_FOLDERS_KEY = "stickies:pinned-folders:v1";
 const EMPTY_QUOTES =["🧠 Your second brain starts here. Write it down.", "✨ Great ideas deserve a home. Start now.", "📌 No more forgetting. Capture it.", "🚀 Dreams without notes are just wishes.", "📝 Plan it. Track it. Win it.", "🎯 Nothing works without priorities. Start here.", "💡 One note today. Clarity tomorrow.", "📚 Build your thinking system. One note at a time.", "⚡ Preparing is everything. Write first.", "🏆 Goals become real when you record them."];
 const VIEW_STATE_KEY = "stickies:last-view:v1";
 const ACTIVE_DRAFT_KEY = "stickies:active-draft:v1";
@@ -1289,6 +1290,15 @@ export default function NotesMaster() {
     const colDragNoteRef = useRef<string | null>(null);
     const [colDragOver, setColDragOver] = useState<string | null>(null);
     const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set());
+    const [pinnedFolders, setPinnedFolders] = useState<Set<string>>(() => { try { if (typeof window === "undefined") return new Set(); const raw = localStorage.getItem(PINNED_FOLDERS_KEY); return raw ? new Set(JSON.parse(raw)) : new Set(); } catch { return new Set(); } });
+    const togglePinFolder = useCallback((name: string) => {
+        setPinnedFolders(prev => {
+            const next = new Set(prev);
+            if (next.has(name)) next.delete(name); else next.add(name);
+            try { localStorage.setItem(PINNED_FOLDERS_KEY, JSON.stringify([...next])); } catch {}
+            return next;
+        });
+    }, []);
     // glowCard converted to DOM-only (no React state) to avoid re-renders on every mousemove
     const [imgPopover, setImgPopover] = useState<{ src: string; alt: string; x: number; y: number } | null>(null);
     const [now, setNow] = useState(() => new Date());
@@ -2593,15 +2603,24 @@ const fireIntegrations = (trigger: string, note: any) => {
 
     // Folders visible at the current navigation level (root or sub-folder)
     const currentLevelFolders = useMemo(() => {
-        return folders
+        const filtered = folders
             .filter((f) => {
-                // f.parent_folder_name is already set in the folders useMemo — no dbData.find() needed
                 const parentName = f.parent_folder_name ?? null;
                 if (folderStack.length === 0) return parentName === null && f.name !== "TRASH";
                 return parentName === activeFolder;
             })
             .map((f) => ({ ...f, is_folder: true as const }));
-    }, [folders, folderStack, activeFolder]);
+        // At root: pinned folders first (including subfolders promoted to root), then the rest
+        if (folderStack.length === 0) {
+            const pinnedFromSub = folders
+                .filter(f => pinnedFolders.has(f.name) && f.parent_folder_name && !filtered.some(r => r.name === f.name))
+                .map(f => ({ ...f, is_folder: true as const }));
+            const pinned = [...pinnedFromSub, ...filtered.filter(f => pinnedFolders.has(f.name))];
+            const unpinned = filtered.filter(f => !pinnedFolders.has(f.name));
+            return [...pinned, ...unpinned];
+        }
+        return filtered;
+    }, [folders, folderStack, activeFolder, pinnedFolders]);
 
     const displayItems = useMemo(() => {
         const byUpdated = (a: any, b: any) => {
@@ -3095,7 +3114,17 @@ const fireIntegrations = (trigger: string, note: any) => {
                 );
                 setEditingNote((prev: any) => (prev ? { ...prev, folder_name: name, folder_id: newFolderId } : prev));
                 setShowNoteActions(false);
-                setEditorOpen(false);
+                // In tab view, stay open and move to next tab
+                const isTabView = showTabs && typeof window !== "undefined" && window.innerWidth >= 640;
+                if (isTabView) {
+                    // Find next tab to switch to
+                    const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0); dayStart.setDate(dayStart.getDate() - tabDayOffset);
+                    const dayEnd = new Date(dayStart); dayEnd.setDate(dayEnd.getDate() + 1);
+                    const remaining = dbData.filter(n => !n.is_folder && !n.trashed_at && String(n.id) !== noteId && !dismissedTabs.has(String(n.id)) && (() => { const d = new Date(n.updated_at || n.created_at || 0); return d >= dayStart && d < dayEnd; })());
+                    if (remaining.length > 0) void openNote(remaining[0]);
+                } else {
+                    setEditorOpen(false);
+                }
                 // Remove from old folder cache, add to new
                 if (editingNote.folder_name && editingNote.folder_name !== name) {
                     removeFromCachedNotes(editingNote.folder_name, noteId);
@@ -4550,21 +4579,13 @@ const fireIntegrations = (trigger: string, note: any) => {
             if (!activeFolder) return;
             setFolderColors((prev) => ({ ...prev, [activeFolder]: color }));
             setFolderStack((prev) => prev.map((f) => f.name === activeFolder ? { ...f, color } : f));
-            // Persist to DB — update folder row, all subfolders, and all notes inside
+            // Persist to DB — update folder row only
             const folderRow = dbData.find((r) => r.is_folder && r.folder_name === activeFolder);
             setDbData((prev) => prev.map((r) => {
-                if (r.folder_name === activeFolder) return { ...r, folder_color: color };
-                if (r.is_folder && r.parent_folder_name === activeFolder) return { ...r, folder_color: color };
+                if (r.is_folder && r.folder_name === activeFolder) return { ...r, folder_color: color };
                 return r;
             }));
             if (folderRow) void notesApi.update(String(folderRow.id), { folder_color: color });
-            // Update all notes and subfolders in DB
-            const children = dbData.filter((r) => !r.is_folder && r.folder_name === activeFolder);
-            const subfolders = dbData.filter((r) => r.is_folder && r.parent_folder_name === activeFolder);
-            void Promise.all([
-                ...children.map((n) => notesApi.update(String(n.id), { folder_color: color })),
-                ...subfolders.map((f) => notesApi.update(String(f.id), { folder_color: color })),
-            ]);
             showToast(`${activeFolder} updated`, color);
         },
         [activeFolder, dbData],
@@ -6060,14 +6081,19 @@ const fireIntegrations = (trigger: string, note: any) => {
                             </div>
                         </div>
                     )}
-                    {/* ── Tab bar — today's notes across all folders ── */}
+                    {/* ── Tab bar — folder notes or today's notes (no folder) ── */}
                     {showTabs && typeof window !== "undefined" && window.innerWidth >= 640 && (() => {
+                        const inFolder = !!activeFolder;
                         const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0); dayStart.setDate(dayStart.getDate() - tabDayOffset);
                         const dayEnd = new Date(dayStart); dayEnd.setDate(dayEnd.getDate() + 1);
-                        const dayLabel = tabDayOffset === 0 ? "Today" : tabDayOffset === 1 ? "Yesterday" : dayStart.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
-                        const dayNotes = dbData
-                            .filter(n => !n.is_folder && !n.trashed_at && !dismissedTabs.has(String(n.id)) && (() => { const d = new Date(n.updated_at || n.created_at || 0); return d >= dayStart && d < dayEnd; })())
-                            .sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")));
+                        const dayLabel = inFolder
+                            ? activeFolder
+                            : tabDayOffset === 0 ? "Today" : tabDayOffset === 1 ? "Yesterday" : dayStart.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+                        const dayNotes = inFolder
+                            ? dbData.filter(n => !n.is_folder && !n.trashed_at && !dismissedTabs.has(String(n.id)) && n.folder_name === activeFolder)
+                                .sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")))
+                            : dbData.filter(n => !n.is_folder && !n.trashed_at && !dismissedTabs.has(String(n.id)) && (() => { const d = new Date(n.updated_at || n.created_at || 0); return d >= dayStart && d < dayEnd; })())
+                                .sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")));
                         const activeId = String(editingNote?.id ?? "");
                         const dismissTab = (id: string) => {
                             setDismissedTabs(prev => {
@@ -6089,15 +6115,41 @@ const fireIntegrations = (trigger: string, note: any) => {
                         return (
                             <div className="shrink-0 flex items-end" style={{ height: H + 4, background: appTheme === "light" ? "#e8e8ed" : "#2a2a2a" }}>
                                 {/* + */}
-                                <button type="button" onClick={() => openNewNote(undefined, "Today")} className={`${btnCls} px-2`} style={{ height: H }} title="New note">
+                                <button type="button" onClick={() => openNewNote(undefined, inFolder ? activeFolder : "Today")} className={`${btnCls} px-2`} style={{ height: H }} title="New note">
                                     <PlusIcon className="w-3.5 h-3.5" />
                                 </button>
-                                {/* < toward today */}
-                                {tabDayOffset > 0 && (
+                                {/* < toward today (only in day mode, not folder mode) */}
+                                {!inFolder && tabDayOffset > 0 && (
                                     <button type="button" onClick={() => navDay(-1)} className={`${btnCls} px-1.5`} style={{ height: H }} title="Newer">
                                         <ChevronLeftIcon className="w-3 h-3" />
                                     </button>
                                 )}
+                                {/* Folder shortcuts (today mode only) */}
+                                {!inFolder && (() => {
+                                    // Show folders that have notes from the selected day
+                                    const activeFolders = new Map<string, string>();
+                                    dayNotes.forEach(n => {
+                                        if (n.folder_name && !activeFolders.has(n.folder_name)) {
+                                            const f = folders.find(f => f.name === n.folder_name);
+                                            activeFolders.set(n.folder_name, f?.color || "#888");
+                                        }
+                                    });
+                                    if (activeFolders.size <= 1) return null;
+                                    return Array.from(activeFolders.entries()).map(([name, color]) => (
+                                        <button key={name} type="button"
+                                            onClick={() => {
+                                                const fr = dbData.find(r => r.is_folder && r.folder_name === name);
+                                                if (fr) enterFolder({ id: String(fr.id), name, color });
+                                                const firstNote = dayNotes.find(n => n.folder_name === name);
+                                                if (firstNote) void openNote(firstNote);
+                                            }}
+                                            className="flex-shrink-0 flex items-center gap-1 px-2 text-[8px] font-bold uppercase tracking-wide text-zinc-400 hover:text-white transition"
+                                            style={{ height: H }}>
+                                            <span className="w-1.5 h-1.5 rounded-full" style={{ background: color }} />
+                                            {name.length > 8 ? name.slice(0, 8) : name}
+                                        </button>
+                                    ));
+                                })()}
                                 {/* Tabs */}
                                 <div className="flex items-end gap-0 overflow-x-auto flex-1 min-w-0" style={{ scrollbarWidth: "none", height: H }} ref={(el) => {
                                     if (el) { const a = el.querySelector("[data-tab-active]"); if (a) a.scrollIntoView({ inline: "nearest", block: "nearest" }); }
@@ -6125,12 +6177,14 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         );
                                     })}
                                 </div>
-                                {/* Date + > */}
+                                {/* Label + > */}
                                 <div className="flex-shrink-0 flex items-center sticky right-0 z-10" style={{ height: H, backdropFilter: "blur(8px)" }}>
                                     <span className="px-2 text-[9px] font-bold text-zinc-400 uppercase tracking-wide select-none">{dayLabel} ({dayNotes.length})</span>
-                                    <button type="button" disabled={tabDayOffset >= 6} onClick={() => navDay(1)} className={`${btnCls} px-1.5 disabled:opacity-20`} style={{ height: H }} title="Older">
-                                        <ChevronRightIcon className="w-3 h-3" />
-                                    </button>
+                                    {!inFolder && (
+                                        <button type="button" disabled={tabDayOffset >= 6} onClick={() => navDay(1)} className={`${btnCls} px-1.5 disabled:opacity-20`} style={{ height: H }} title="Older">
+                                            <ChevronRightIcon className="w-3 h-3" />
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                         );
@@ -6830,16 +6884,27 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                         <>
                                             <div className="fixed inset-0 z-[999]" onClick={() => setShowFooterFolderPicker(false)} />
                                             <div className="absolute bottom-6 right-0 z-[1000] w-48 max-h-[240px] overflow-y-auto rounded-xl bg-zinc-900 border border-white/15 shadow-2xl py-1" style={{ scrollbarWidth: "thin" }}>
-                                                {folders.filter(f => !f.parent_folder_name && f.name !== "TRASH").map(f => {
-                                                    const current = (targetFolder || activeFolder || editingNote?.folder_name) === f.name;
+                                                {folders.filter(f => {
+                                                    if (f.name === "TRASH") return false;
+                                                    const currentFolder = targetFolder || activeFolder || editingNote?.folder_name;
+                                                    if (f.name === currentFolder) return false;
+                                                    // Show root folders + pinned subfolders
+                                                    if (!f.parent_folder_name) return true;
+                                                    if (pinnedFolders.has(f.name)) return true;
+                                                    return false;
+                                                }).sort((a, b) => {
+                                                    // Pinned first
+                                                    const ap = pinnedFolders.has(a.name) ? 0 : 1;
+                                                    const bp = pinnedFolders.has(b.name) ? 0 : 1;
+                                                    return ap - bp || a.order - b.order;
+                                                }).map(f => {
                                                     return (
                                                         <button key={f.name} type="button"
                                                             onClick={() => {
                                                                 setShowFooterFolderPicker(false);
-                                                                if (current) return;
                                                                 void moveToFolder(f.name);
                                                             }}
-                                                            className={`w-full flex items-center gap-2 px-3 py-1.5 text-left text-[10px] font-bold uppercase tracking-wide transition ${current ? "text-white" : "text-zinc-400 hover:text-white hover:bg-white/5"}`}>
+                                                            className="w-full flex items-center gap-2 px-3 py-1.5 text-left text-[10px] font-bold uppercase tracking-wide transition text-zinc-400 hover:text-white hover:bg-white/5">
                                                             <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: f.color }} />
                                                             {f.name}
                                                         </button>
@@ -8336,7 +8401,13 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                 </div>
                             )}
                             {/* NEW SUBFOLDER */}
-                            {activeFolder && !isGlobalSettings && (
+                            {activeFolder && !isGlobalSettings && (<>
+                                <button type="button"
+                                    className="w-full flex items-center gap-4 px-6 py-4 text-left text-zinc-300 hover:bg-white/5 hover:text-white active:bg-white/10 transition"
+                                    onClick={() => { if (activeFolder) togglePinFolder(activeFolder); }}>
+                                    {pinnedFolders.has(activeFolder || "") ? <HeartSolidIcon className="w-5 h-5 flex-shrink-0 text-red-400" /> : <HeartIcon className="w-5 h-5 flex-shrink-0" />}
+                                    <span className="text-xs font-black tracking-wide">{pinnedFolders.has(activeFolder || "") ? "Unpin Folder" : "Pin Folder"}</span>
+                                </button>
                                 <button type="button"
                                     className="w-full flex items-center gap-4 px-6 py-4 text-left text-zinc-300 hover:bg-white/5 hover:text-white active:bg-white/10 transition"
                                     onClick={() => { setShowFolderActions(false); openCreateFolder(); }}>
@@ -8346,7 +8417,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                     </span>
                                     <span className="text-xs font-black tracking-wide">New Folder</span>
                                 </button>
-                            )}
+                            </>)}
                             {/* MOVE FOLDER */}
                             {activeFolder && !isGlobalSettings && (
                                 <div>
