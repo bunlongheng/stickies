@@ -88,8 +88,8 @@ export async function POST(req: Request) {
         return NextResponse.json({ updated: 0, message: "No items to process" });
     }
 
-    // Process all items — assign icons to everything for consistency
-    const needsWork = items;
+    // Only process items that don't already have icons
+    const needsWork = items.filter(i => !i.hasIcon);
 
     if (needsWork.length === 0) {
         return NextResponse.json({ updated: 0, message: "No items in folder" });
