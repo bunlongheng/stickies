@@ -8392,15 +8392,12 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                             )}
                             {/* NEW SUBFOLDER */}
                             {activeFolder && !isGlobalSettings && (<>
-                                {/* Pin — only for subfolders (root folders are already visible) */}
-                                {folderStack.length > 1 && (
-                                    <button type="button"
-                                        className="w-full flex items-center gap-4 px-6 py-4 text-left text-zinc-300 hover:bg-white/5 hover:text-white active:bg-white/10 transition"
-                                        onClick={() => { if (activeFolder) togglePinFolder(activeFolder); }}>
-                                        {pinnedFolders.has(activeFolder || "") ? <HeartSolidIcon className="w-5 h-5 flex-shrink-0 text-red-400" /> : <HeartIcon className="w-5 h-5 flex-shrink-0" />}
-                                        <span className="text-xs font-black tracking-wide">{pinnedFolders.has(activeFolder || "") ? "Unpin Folder" : "Pin Folder"}</span>
-                                    </button>
-                                )}
+                                <button type="button"
+                                    className="w-full flex items-center gap-4 px-6 py-4 text-left text-zinc-300 hover:bg-white/5 hover:text-white active:bg-white/10 transition"
+                                    onClick={() => { if (activeFolder) togglePinFolder(activeFolder); }}>
+                                    {pinnedFolders.has(activeFolder || "") ? <HeartSolidIcon className="w-5 h-5 flex-shrink-0 text-red-400" /> : <HeartIcon className="w-5 h-5 flex-shrink-0" />}
+                                    <span className="text-xs font-black tracking-wide">{pinnedFolders.has(activeFolder || "") ? "Unpin" : "Pin"}</span>
+                                </button>
                                 <button type="button"
                                     className="w-full flex items-center gap-4 px-6 py-4 text-left text-zinc-300 hover:bg-white/5 hover:text-white active:bg-white/10 transition"
                                     onClick={() => { setShowFolderActions(false); openCreateFolder(); }}>
