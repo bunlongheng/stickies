@@ -2612,21 +2612,18 @@ const fireIntegrations = (trigger: string, note: any) => {
             .map((f) => ({ ...f, is_folder: true as const }));
         // At root: pinned folders first (including subfolders promoted to root), then the rest
         if (folderStack.length === 0) {
+            // Promote pinned subfolders to root (root folders can't be pinned — they're already there)
             const seenPinned = new Set<string>();
             const pinnedFromSub = folders
                 .filter(f => {
-                    if (!pinnedFolders.has(f.name) || !f.parent_folder_name || filtered.some(r => r.name === f.name)) return false;
+                    if (!pinnedFolders.has(f.name) || !f.parent_folder_name) return false;
+                    if (filtered.some(r => r.name === f.name)) return false;
                     if (seenPinned.has(f.name)) return false;
                     seenPinned.add(f.name);
                     return true;
                 })
                 .map(f => ({ ...f, is_folder: true as const }));
-            const pinnedNames = new Set(pinnedFromSub.map(f => f.name));
-            const pinnedFromRoot = filtered.filter(f => pinnedFolders.has(f.name) && !pinnedNames.has(f.name));
-            const allPinned = [...pinnedFromSub, ...pinnedFromRoot];
-            const allPinnedNames = new Set(allPinned.map(f => f.name));
-            const unpinned = filtered.filter(f => !allPinnedNames.has(f.name));
-            return [...allPinned, ...unpinned];
+            return [...pinnedFromSub, ...filtered];
         }
         return filtered;
     }, [folders, folderStack, activeFolder, pinnedFolders]);
@@ -6897,16 +6894,9 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                     if (f.name === "TRASH") return false;
                                                     const currentFolder = targetFolder || activeFolder || editingNote?.folder_name;
                                                     if (f.name === currentFolder) return false;
-                                                    // Show root folders + pinned subfolders
-                                                    if (!f.parent_folder_name) return true;
-                                                    if (pinnedFolders.has(f.name)) return true;
-                                                    return false;
-                                                }).sort((a, b) => {
-                                                    // Pinned first
-                                                    const ap = pinnedFolders.has(a.name) ? 0 : 1;
-                                                    const bp = pinnedFolders.has(b.name) ? 0 : 1;
-                                                    return ap - bp || a.order - b.order;
-                                                }).map(f => {
+                                                    // Only show pinned folders in footer
+                                                    return pinnedFolders.has(f.name);
+                                                }).sort((a, b) => a.order - b.order).map(f => {
                                                     return (
                                                         <button key={f.name} type="button"
                                                             onClick={() => {
@@ -8411,12 +8401,15 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                             )}
                             {/* NEW SUBFOLDER */}
                             {activeFolder && !isGlobalSettings && (<>
-                                <button type="button"
-                                    className="w-full flex items-center gap-4 px-6 py-4 text-left text-zinc-300 hover:bg-white/5 hover:text-white active:bg-white/10 transition"
-                                    onClick={() => { if (activeFolder) togglePinFolder(activeFolder); }}>
-                                    {pinnedFolders.has(activeFolder || "") ? <HeartSolidIcon className="w-5 h-5 flex-shrink-0 text-red-400" /> : <HeartIcon className="w-5 h-5 flex-shrink-0" />}
-                                    <span className="text-xs font-black tracking-wide">{pinnedFolders.has(activeFolder || "") ? "Unpin Folder" : "Pin Folder"}</span>
-                                </button>
+                                {/* Pin — only for subfolders (root folders are already visible) */}
+                                {folderStack.length > 1 && (
+                                    <button type="button"
+                                        className="w-full flex items-center gap-4 px-6 py-4 text-left text-zinc-300 hover:bg-white/5 hover:text-white active:bg-white/10 transition"
+                                        onClick={() => { if (activeFolder) togglePinFolder(activeFolder); }}>
+                                        {pinnedFolders.has(activeFolder || "") ? <HeartSolidIcon className="w-5 h-5 flex-shrink-0 text-red-400" /> : <HeartIcon className="w-5 h-5 flex-shrink-0" />}
+                                        <span className="text-xs font-black tracking-wide">{pinnedFolders.has(activeFolder || "") ? "Unpin Folder" : "Pin Folder"}</span>
+                                    </button>
+                                )}
                                 <button type="button"
                                     className="w-full flex items-center gap-4 px-6 py-4 text-left text-zinc-300 hover:bg-white/5 hover:text-white active:bg-white/10 transition"
                                     onClick={() => { setShowFolderActions(false); openCreateFolder(); }}>
