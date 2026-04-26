@@ -6877,20 +6877,14 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                             <div className="absolute bottom-6 right-0 z-[1000] w-48 max-h-[240px] overflow-y-auto rounded-xl bg-zinc-900 border border-white/15 shadow-2xl py-1" style={{ scrollbarWidth: "thin" }}>
                                                 {(() => {
                                                     const currentFolder = targetFolder || activeFolder || editingNote?.folder_name;
-                                                    const all = folders.filter(f => {
-                                                        if (f.name === "TRASH") return false;
-                                                        if (f.name === currentFolder) return false;
-                                                        return !f.parent_folder_name || pinnedFolders.has(f.name);
-                                                    });
-                                                    // Dedup by name (pinned sub might share name with root)
                                                     const seen = new Set<string>();
-                                                    const deduped = all.filter(f => { if (seen.has(f.name)) return false; seen.add(f.name); return true; });
-                                                    // Pinned first, then root
-                                                    return deduped.sort((a, b) => {
-                                                        const ap = pinnedFolders.has(a.name) ? 0 : 1;
-                                                        const bp = pinnedFolders.has(b.name) ? 0 : 1;
-                                                        return ap - bp || a.order - b.order;
-                                                    });
+                                                    return folders.filter(f => {
+                                                        if (!pinnedFolders.has(f.name)) return false;
+                                                        if (f.name === "TRASH" || f.name === currentFolder) return false;
+                                                        if (seen.has(f.name)) return false;
+                                                        seen.add(f.name);
+                                                        return true;
+                                                    }).sort((a, b) => a.order - b.order);
                                                 })().map(f => {
                                                     return (
                                                         <button key={f.name} type="button"
@@ -6899,7 +6893,9 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                                 void moveToFolder(f.name);
                                                             }}
                                                             className="w-full flex items-center gap-2 px-3 py-1.5 text-left text-[10px] font-bold uppercase tracking-wide transition text-zinc-400 hover:text-white hover:bg-white/5">
-                                                            <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: f.color }} />
+                                                            <span className="w-4 h-4 flex-shrink-0 flex items-center justify-center rounded overflow-hidden" style={{ background: f.color, color: isLightColor(f.color) ? "#1c1c1e" : "#fff", fontSize: 8 }}>
+                                                                <FolderIconDisplay value={folderIcons[f.name] || ""} folderName={f.name} className="w-2.5 h-2.5" />
+                                                            </span>
                                                             {f.name}
                                                         </button>
                                                     );
