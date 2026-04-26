@@ -1268,7 +1268,7 @@ export default function NotesMaster() {
     const [botColor, setBotColor] = useState({ primary: "#7c3aed", secondary: "#a78bfa", light: "#c4b5fd" });
     const [userEmail, setUserEmail] = useState<string | null>(null);
     const isAdmin = userEmail === "bheng.code@gmail.com";
-    const [mainListMode, setMainListMode] = useState<"thumb" | "list">("thumb");
+    const [mainListMode, setMainListMode] = useState<"thumb" | "list" | "tabs">("thumb");
     const [defaultFolder, setDefaultFolder] = useState<string>("CLAUDE");
     const [showDefaultFolderPicker, setShowDefaultFolderPicker] = useState(false);
     const [showNotebookPicker, setShowNotebookPicker] = useState(false);
@@ -1830,7 +1830,7 @@ export default function NotesMaster() {
             const rawMainList = localStorage.getItem(MAIN_LIST_MODE_KEY);
             if (rawMainList) {
                 const v = rawMainList === "true" ? "list" : rawMainList === "false" ? "thumb" : rawMainList;
-                if (v === "list" || v === "thumb") setMainListMode(v as any);
+                if (v === "list" || v === "thumb" || v === "tabs") setMainListMode(v as any);
             }
         } catch { /* ignore */ }
         try {
@@ -1858,6 +1858,7 @@ export default function NotesMaster() {
             const viewParam = urlParams.get("view");
             if (viewParam === "list") { setMainListMode("list"); setKanbanMode(false); }
             else if (viewParam === "thumb") { setMainListMode("thumb"); setKanbanMode(false); }
+            else if (viewParam === "tabs") { setMainListMode("tabs"); setKanbanMode(false); }
             else if (viewParam === "kanban") { setMainListMode("thumb"); setKanbanMode(true); }
             const navParam = urlParams.get("nav");
             const gdriveParam = urlParams.get("gdrive");
@@ -1979,8 +1980,12 @@ export default function NotesMaster() {
 
     useEffect(() => {
         try { localStorage.setItem(MAIN_LIST_MODE_KEY, String(mainListMode)); } catch { /* ignore */ }
-    }, [mainListMode]);
-    useEffect(() => {
+        // Auto-open first note when entering tabs mode
+        if (mainListMode === "tabs" && !editorOpen) {
+            const allNotes = dbData.filter(n => !n.is_folder && !n.trashed_at && (activeFolder ? n.folder_name === activeFolder : true))
+                .sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")));
+            if (allNotes.length > 0) void openNote(allNotes[0]);
+        }
     }, [mainListMode]);
 
     useEffect(() => {
@@ -3108,7 +3113,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                 setEditingNote((prev: any) => (prev ? { ...prev, folder_name: name, folder_id: newFolderId, folder_color: destColor } : prev));
                 setShowNoteActions(false);
                 // In tab view, stay open and move to next tab
-                const isTabView = showTabs && typeof window !== "undefined" && window.innerWidth >= 640;
+                const isTabView = (showTabs || mainListMode === "tabs") && typeof window !== "undefined" && window.innerWidth >= 640;
                 if (isTabView) {
                     // Find next tab to switch to
                     const remaining = dbData.filter(n => !n.is_folder && !n.trashed_at && String(n.id) !== noteId && !dismissedTabs.has(String(n.id)) && (activeFolder ? n.folder_name === activeFolder : true))
@@ -3928,7 +3933,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                 closeEditorTools();
                 playSound("delete");
                 // If tabs are open, switch to next tab instead of closing editor
-                if (showTabs) {
+                if (showTabs || mainListMode === "tabs") {
                     const remaining = dbData.filter(n =>
                         !n.is_folder && !n.trashed_at && String(n.id) !== noteId &&
                         !dismissedTabs.has(String(n.id)) &&
@@ -5949,7 +5954,7 @@ const fireIntegrations = (trigger: string, note: any) => {
             <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
 
                 {/* RIGHT PANEL: editor — only shown in edit mode or when a note is open (mobile nav) */}
-                <div className={`flex-1 flex flex-col overflow-hidden ${editorOpen ? "flex" : "hidden"} `} style={{ background: appTheme === "light" ? "#ffffff" : "#222222" }}>
+                <div className={`flex-1 flex flex-col overflow-hidden ${editorOpen || mainListMode === "tabs" ? "flex" : "hidden"} `} style={{ background: appTheme === "light" ? "#ffffff" : "#222222" }}>
                 {editorOpen ? (
                 <section className="flex-1 min-h-0 flex flex-col overflow-hidden overscroll-none" onClick={(e) => e.stopPropagation()}>
                     {pendingShare && (
@@ -5974,7 +5979,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                     <div className="relative h-auto min-h-[3.5rem] sm:min-h-[4rem] px-2 sm:px-4 flex items-center gap-1 sm:gap-2 shrink-0" style={{ background: appTheme === "light" ? "#e8e8ed" : "#2a2a2a" }}>
                         {/* Back button — hidden on desktop or in edit mode (left panel always visible) */}
                         <button
-                            onClick={(e) => { e.stopPropagation(); void backToRootFromEditor(); }}
+                            onClick={(e) => { e.stopPropagation(); if (mainListMode === "tabs") { setMainListMode("list"); } void backToRootFromEditor(); }}
                             className="flex p-2 text-zinc-400 hover:bg-white/10 transition flex-shrink-0"
                             title={`Back to ${targetFolder || "folders"}`}
                             aria-label={`Back to ${targetFolder || "folders"}`}>
@@ -6085,7 +6090,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                         </div>
                     )}
                     {/* ── Tab bar — folder notes or today's notes (no folder) ── */}
-                    {showTabs && typeof window !== "undefined" && window.innerWidth >= 640 && (() => {
+                    {(showTabs || mainListMode === "tabs") && typeof window !== "undefined" && window.innerWidth >= 640 && (() => {
                         const inFolder = !!activeFolder;
                         const allNotes = inFolder
                             ? dbData.filter(n => !n.is_folder && !n.trashed_at && !dismissedTabs.has(String(n.id)) && n.folder_name === activeFolder)
@@ -6910,7 +6915,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                 {/* LEFT NOTE LIST PANEL */}
                 {(() => {
                     return (
-                        <div className={`flex flex-col flex-1 min-h-0 overflow-hidden relative ${editorOpen ? "hidden" : ""}`}
+                        <div className={`flex flex-col flex-1 min-h-0 overflow-hidden relative ${editorOpen || mainListMode === "tabs" ? "hidden" : ""}`}
                              style={{ background: "black" }}>
 
                             {/* TOP HEADER — breadcrumbs + buttons */}
@@ -6961,7 +6966,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                     <span className="w-full pl-12 pr-3 py-3 text-sm font-black tracking-tight text-white/30">SEARCH</span>
                                                 </button>
                                                 <div className="ml-auto flex items-center gap-2">
-                                                    <HeaderIconBtn icon={mainListMode === "list" ? Bars3Icon : Squares2X2Icon} label={mainListMode === "list" ? "List" : "Thumb"} active={!kanbanMode} onClick={() => { setMainListMode(v => v === "thumb" ? "list" : "thumb"); setKanbanMode(false); }} />
+                                                    <HeaderIconBtn icon={mainListMode === "list" ? Bars3Icon : mainListMode === "tabs" ? RectangleStackIcon : Squares2X2Icon} label={mainListMode === "list" ? "List" : mainListMode === "tabs" ? "Tabs" : "Thumb"} active={!kanbanMode} onClick={() => { setMainListMode(v => v === "thumb" ? "list" : v === "list" ? "tabs" : "thumb"); setKanbanMode(false); }} />
                                                     <HeaderIconBtn icon={Cog6ToothIcon} label="Settings" onClick={() => { const hueInt = integrationsRef.current.find(ig => ig.type === "hue"); setLightMode((hueInt?.config?.mode as any) ?? "flash"); setIsGlobalSettings(true); setShowFolderActions(true); }} />
                                                 </div>
                                             </>
@@ -6982,7 +6987,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                     </button>
                                                 ) : (
                                                     <>
-                                                        <HeaderIconBtn icon={mainListMode === "list" ? Bars3Icon : Squares2X2Icon} label={mainListMode === "list" ? "List" : "Thumb"} active={!kanbanMode} onClick={() => { setMainListMode(v => v === "thumb" ? "list" : "thumb"); setKanbanMode(false); }} />
+                                                        <HeaderIconBtn icon={mainListMode === "list" ? Bars3Icon : mainListMode === "tabs" ? RectangleStackIcon : Squares2X2Icon} label={mainListMode === "list" ? "List" : mainListMode === "tabs" ? "Tabs" : "Thumb"} active={!kanbanMode} onClick={() => { setMainListMode(v => v === "thumb" ? "list" : v === "list" ? "tabs" : "thumb"); setKanbanMode(false); }} />
                                                         <HeaderIconBtn icon={Cog6ToothIcon} label="Settings" onClick={() => { const hueInt = integrationsRef.current.find(ig => ig.type === "hue"); setLightMode((hueInt?.config?.mode as any) ?? "flash"); setIsGlobalSettings(false); setShowFolderActions(true); }} />
                                                     </>
                                                 )}
