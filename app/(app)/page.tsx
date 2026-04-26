@@ -6817,6 +6817,14 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                 {editingNote?.is_public && (
                                     <GlobeAltIcon className="w-3 h-3 text-emerald-400 flex-shrink-0" title="Public note" />
                                 )}
+                                {/* Folder pill */}
+                                <button type="button"
+                                    onClick={() => { setShowSwitcher(v => !v); setShowColorPicker(false); }}
+                                    className="font-mono font-black uppercase tracking-wide whitespace-nowrap px-1.5 py-px rounded-full hover:brightness-125 transition"
+                                    style={{ fontSize: 8, background: `${noteColor}22`, color: noteColor, border: `1px solid ${noteColor}44` }}>
+                                    {targetFolder || activeFolder || editingNote?.folder_name || "General"}
+                                </button>
+                                {/* Type pill */}
                                 {(() => {
                                     const badge = TYPE_BADGE[noteType] ?? TYPE_BADGE["text"];
                                     if (!badge) return null;
