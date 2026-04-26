@@ -1107,7 +1107,6 @@ export default function NotesMaster() {
     const [incomingNoteIds, setIncomingNoteIds] = useState<Set<string>>(new Set());
     const [iconAnimIds, setIconAnimIds] = useState<Set<string>>(new Set());
     const [iconSpinIds, setIconSpinIds] = useState<Set<string>>(new Set());
-    const [diceColors, setDiceColors] = useState<Record<string, string>>({});
     const [removingNoteIds, setRemovingNoteIds] = useState<Set<string>>(new Set());
 
     const [, startContentTransition] = useTransition();
@@ -4597,15 +4596,20 @@ const fireIntegrations = (trigger: string, note: any) => {
         } else {
             allItems.forEach(n => { picks[String(n.id)] = palette12[Math.floor(Math.random() * palette12.length)]; });
         }
-        // Only update icon colors - no list re-render
-        setDiceColors(picks);
+        // DOM-only color update — zero React re-renders
+        for (const [id, color] of Object.entries(picks)) {
+            const el = document.querySelector(`[data-note-id="${id}"] [data-icon-sq]`) as HTMLElement;
+            if (!el) continue;
+            el.style.backgroundColor = color;
+            el.style.boxShadow = `2px 3px 8px ${color}55`;
+            el.style.setProperty("--fc", color);
+        }
         showToast(`🎲 ${allItems.length} colors randomized`, "#AF52DE");
-        // Persist in background, then sync dbData silently
+        // Persist then sync dbData silently
         await Promise.all(allItems.map(n =>
             notesApi.update(String(n.id), { folder_color: picks[String(n.id)] })
         ));
         setDbData(prev => prev.map(r => picks[String(r.id)] ? { ...r, folder_color: picks[String(r.id)] } : r));
-        setDiceColors({});
     }, [activeFolder, dbData]);
 
     const renameFolderTo = useCallback(async (newName: string) => {
@@ -6153,7 +6157,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     ));
                                 })()}
                                 {/* Tabs */}
-                                <div className="flex items-end gap-0 overflow-x-auto flex-1 min-w-0" style={{ scrollbarWidth: "none", height: H }} ref={(el) => {
+                                <div className="flex items-end gap-0.5 overflow-x-auto flex-1 min-w-0" style={{ scrollbarWidth: "none", height: H + 8 }} ref={(el) => {
                                     if (el) { const a = el.querySelector("[data-tab-active]"); if (a) a.scrollIntoView({ inline: "nearest", block: "nearest" }); }
                                 }}>
                                     {dayNotes.map(n => {
@@ -6162,7 +6166,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         return (
                                             <div key={n.id} {...(isActive ? { "data-tab-active": "" } : {})}
                                                 className={`flex-shrink-0 flex items-center transition-all ${isActive ? "relative z-10" : "hover:brightness-110 opacity-75"}`}
-                                                style={{ background: isActive ? c : `${c}99`, color: "#1c1c1e", height: isActive ? H + 4 : H, borderRadius: "8px 8px 0 0" }}>
+                                                style={{ background: isActive ? c : `${c}99`, color: "#1c1c1e", height: isActive ? H + 6 : H, borderRadius: "8px 8px 0 0" }}>
                                                 <button type="button"
                                                     onClick={() => { if (!isActive) { if (n.folder_name && n.folder_name !== activeFolder) { const fr = dbData.find(r => r.is_folder && r.folder_name === n.folder_name); if (fr) enterFolder({ id: String(fr.id), name: n.folder_name, color: fr.folder_color || c }); } void openNote(n); } }}
                                                     className="flex items-center pl-3 pr-1 text-[10px] font-bold truncate max-w-[150px]" style={{ height: "100%" }}>
@@ -7213,6 +7217,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                             return (
                                 <div
                                     key={item.id || idx}
+                                    data-note-id={tileId}
                                     draggable={canDrag}
                                     onDragStart={(e) => handleTileDragStart(e, item)}
                                     onDragOver={(e) => handleTileDragOver(e, item)}
@@ -7332,9 +7337,9 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                 </div>
                                             )}
                                             {item.is_folder && (showFileIcons || !activeFolder) && (() => {
-                                                const c = diceColors[String(item.id)] || item.color || item.folder_color || palette12[0];
+                                                const c = item.color || item.folder_color || palette12[0];
                                                 return (
-                                                    <button type="button"
+                                                    <button type="button" data-icon-sq
                                                         onClick={(e) => { e.stopPropagation(); enterFolder({ id: String(item.id), name: item.name, color: item.color || palette12[0] }); }}
                                                         className={`folder-icon-badge${item.name === "CLAUDE" ? " folder-icon-badge-claude" : ""} flex-shrink-0 w-[54px] h-[54px] sm:w-[46px] sm:h-[46px] m-2 sm:m-0 flex items-center justify-center font-black overflow-hidden`}
                                                         style={{ fontSize: 22, "--fc": c, "--ic": "#fff", boxShadow: `2px 3px 8px ${c}55` } as React.CSSProperties}>
@@ -7347,12 +7352,12 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                 );
                                             })()}
                                             {!item.is_folder && showFileIcons && (() => {
-                                                const nc = diceColors[String(item.id)] || (item as any).color || (item as any).folder_color || "#71717a";
+                                                const nc = (item as any).color || (item as any).folder_color || "#71717a";
                                                 const initial = meaningfulInitial(item.title || "", "N");
                                                 const nIcon = noteIcons[String(item.id)];
                                                 const noteTextColor = isLightColor(nc) ? "#1c1c1e" : "#fff";
                                                 return (
-                                                    <button type="button"
+                                                    <button type="button" data-icon-sq
                                                         onClick={(e) => { e.stopPropagation(); void openNote(item); closeEditorTools(); }}
                                                         className="flex-shrink-0 w-[54px] h-[54px] sm:w-[46px] sm:h-[46px] m-1 sm:m-0 flex items-center justify-center font-black overflow-hidden relative"
                                                         style={{
