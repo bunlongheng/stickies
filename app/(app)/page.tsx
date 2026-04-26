@@ -1106,6 +1106,8 @@ export default function NotesMaster() {
     const [flashNote, setFlashNote] = useState<any | null>(null);
     const [incomingNoteIds, setIncomingNoteIds] = useState<Set<string>>(new Set());
     const [iconAnimIds, setIconAnimIds] = useState<Set<string>>(new Set());
+    const [iconSpinIds, setIconSpinIds] = useState<Set<string>>(new Set());
+    const [diceColors, setDiceColors] = useState<Record<string, string>>({});
     const [removingNoteIds, setRemovingNoteIds] = useState<Set<string>>(new Set());
 
     const [, startContentTransition] = useTransition();
@@ -4585,16 +4587,25 @@ const fireIntegrations = (trigger: string, note: any) => {
     const randomizeFolderColors = useCallback(async () => {
         if (!activeFolder) return;
         const folderNotes = dbData.filter(r => !r.is_folder && r.folder_name === activeFolder);
-        if (folderNotes.length === 0) return;
+        const subfolders = dbData.filter(r => r.is_folder && r.parent_folder_name === activeFolder);
+        const allItems = [...subfolders, ...folderNotes];
+        if (allItems.length === 0) return;
         const picks: Record<string, string> = {};
-        folderNotes.forEach(n => { picks[String(n.id)] = palette12[Math.floor(Math.random() * palette12.length)]; });
-        // Optimistic update
-        setDbData(prev => prev.map(r => picks[String(r.id)] ? { ...r, folder_color: picks[String(r.id)] } : r));
-        showToast(`🎲 ${folderNotes.length} colors randomized`, "#AF52DE");
-        // Persist via notes API
-        await Promise.all(folderNotes.map(n =>
+        if (allItems.length <= 12) {
+            const shuffled = [...palette12].sort(() => Math.random() - 0.5);
+            allItems.forEach((n, i) => { picks[String(n.id)] = shuffled[i]; });
+        } else {
+            allItems.forEach(n => { picks[String(n.id)] = palette12[Math.floor(Math.random() * palette12.length)]; });
+        }
+        // Only update icon colors - no list re-render
+        setDiceColors(picks);
+        showToast(`🎲 ${allItems.length} colors randomized`, "#AF52DE");
+        // Persist in background, then sync dbData silently
+        await Promise.all(allItems.map(n =>
             notesApi.update(String(n.id), { folder_color: picks[String(n.id)] })
         ));
+        setDbData(prev => prev.map(r => picks[String(r.id)] ? { ...r, folder_color: picks[String(r.id)] } : r));
+        setDiceColors({});
     }, [activeFolder, dbData]);
 
     const renameFolderTo = useCallback(async (newName: string) => {
@@ -6104,7 +6115,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                         };
                         const btnCls = "flex-shrink-0 flex items-center justify-center text-zinc-500 hover:text-white transition";
                         return (
-                            <div className="shrink-0 flex items-end" style={{ height: H + 4, background: appTheme === "light" ? "#e8e8ed" : "#2a2a2a" }}>
+                            <div className="shrink-0 flex items-end overflow-hidden" style={{ height: H + 8, background: appTheme === "light" ? "#e8e8ed" : "#2a2a2a" }}>
                                 {/* + */}
                                 <button type="button" onClick={() => openNewNote(undefined, inFolder ? activeFolder : "Today")} className={`${btnCls} px-2`} style={{ height: H }} title="New note">
                                     <PlusIcon className="w-3.5 h-3.5" />
@@ -6151,7 +6162,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         return (
                                             <div key={n.id} {...(isActive ? { "data-tab-active": "" } : {})}
                                                 className={`flex-shrink-0 flex items-center transition-all ${isActive ? "relative z-10" : "hover:brightness-110 opacity-75"}`}
-                                                style={{ background: isActive ? c : `${c}99`, color: "#1c1c1e", height: isActive ? H + 4 : H }}>
+                                                style={{ background: isActive ? c : `${c}99`, color: "#1c1c1e", height: isActive ? H + 4 : H, borderRadius: "8px 8px 0 0" }}>
                                                 <button type="button"
                                                     onClick={() => { if (!isActive) { if (n.folder_name && n.folder_name !== activeFolder) { const fr = dbData.find(r => r.is_folder && r.folder_name === n.folder_name); if (fr) enterFolder({ id: String(fr.id), name: n.folder_name, color: fr.folder_color || c }); } void openNote(n); } }}
                                                     className="flex items-center pl-3 pr-1 text-[10px] font-bold truncate max-w-[150px]" style={{ height: "100%" }}>
@@ -7234,7 +7245,11 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                         longPressTimer.current = setTimeout(() => {
                                             longPressTimer.current = null;
                                             suppressOpenRef.current = true;
-                                            if (!item.is_folder) {
+                                            if (item.is_folder) {
+                                                enterFolder({ id: String(item.id), name: item.name, color: item.color || palette12[0] });
+                                                setIsGlobalSettings(false);
+                                                setShowFolderActions(true);
+                                            } else {
                                                 setIsSelectMode(true);
                                                 setSelectedIds(new Set([String(item.id)]));
                                             }
@@ -7242,6 +7257,14 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                     }}
                                     onTouchMove={() => { if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; } }}
                                     onTouchEnd={() => { if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; } }}
+                                    onContextMenu={(e) => {
+                                        if (item.is_folder) {
+                                            e.preventDefault();
+                                            enterFolder({ id: String(item.id), name: item.name, color: item.color || palette12[0] });
+                                            setIsGlobalSettings(false);
+                                            setShowFolderActions(true);
+                                        }
+                                    }}
                                     onClick={(e) => {
                                         if (suppressOpenRef.current) { suppressOpenRef.current = false; return; }
                                         e.stopPropagation();
@@ -7309,7 +7332,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                 </div>
                                             )}
                                             {item.is_folder && (showFileIcons || !activeFolder) && (() => {
-                                                const c = item.color || item.folder_color || palette12[0];
+                                                const c = diceColors[String(item.id)] || item.color || item.folder_color || palette12[0];
                                                 return (
                                                     <button type="button"
                                                         onClick={(e) => { e.stopPropagation(); enterFolder({ id: String(item.id), name: item.name, color: item.color || palette12[0] }); }}
@@ -7324,7 +7347,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                 );
                                             })()}
                                             {!item.is_folder && showFileIcons && (() => {
-                                                const nc = (item as any).color || (item as any).folder_color || "#71717a";
+                                                const nc = diceColors[String(item.id)] || (item as any).color || (item as any).folder_color || "#71717a";
                                                 const initial = meaningfulInitial(item.title || "", "N");
                                                 const nIcon = noteIcons[String(item.id)];
                                                 const noteTextColor = isLightColor(nc) ? "#1c1c1e" : "#fff";
@@ -7339,7 +7362,11 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                             borderRadius: "6px 6px 6px 16px",
                                                             boxShadow: `2px 3px 8px ${nc}55`,
                                                         }}>
-                                                        {nIcon ? <FolderIconDisplay value={nIcon} folderName={item.title || "N"} className={`w-6 h-6${iconAnimIds.has(String(item.id)) ? " animate-pulse" : ""}`} /> : initial}
+                                                        {nIcon ? <FolderIconDisplay value={nIcon} folderName={item.title || "N"} className={`w-6 h-6${iconAnimIds.has(String(item.id)) ? " animate-[iconBlink3_1.2s_ease-in-out]" : ""}`} /> : <span className={iconSpinIds.has(String(item.id)) ? "animate-[iconSpin_0.25s_linear_infinite] inline-block" : ""}>{initial}</span>}
+                                                        {iconSpinIds.has(String(item.id)) && <>
+                                                            <span className="absolute inset-0 rounded-[6px_6px_6px_16px] animate-[iconWindSwirl_0.5s_linear_infinite] pointer-events-none" style={{ background: "conic-gradient(from 0deg, transparent 40%, rgba(255,255,255,0.35) 50%, transparent 60%)" }} />
+                                                            <span className="absolute inset-0 rounded-[6px_6px_6px_16px] animate-[iconWindSwirl_0.8s_linear_infinite] pointer-events-none" style={{ background: "conic-gradient(from 180deg, transparent 40%, rgba(255,255,255,0.2) 50%, transparent 60%)" }} />
+                                                        </>}
                                                     </button>
                                                 );
                                             })()}
@@ -8469,6 +8496,9 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                 <button type="button" className="w-full flex items-center gap-4 px-6 py-4 text-left text-purple-400 hover:bg-purple-500/5 hover:text-purple-300 active:bg-purple-500/10 transition"
                                     onClick={async () => {
                                         setShowFolderActions(false);
+                                        // Spin icons that don't have one yet (they're about to change)
+                                        const noIconIds = new Set(dbData.filter(n => n.folder_name === activeFolder && !n.is_folder && !n.icon).map(n => String(n.id)));
+                                        setIconSpinIds(noIconIds);
                                         showToast("AI assigning icons...", "#a78bfa");
                                         try {
                                             const token = await getAuthToken();
@@ -8477,22 +8507,22 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                 headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
                                                 body: JSON.stringify({ folder_name: activeFolder }),
                                             });
+                                            setIconSpinIds(new Set());
                                             if (!res.ok) { showToast("Magic failed", "#ef4444"); return; }
                                             const { updated } = await res.json();
                                             if (updated > 0) {
                                                 // Reload folder to show new icons/titles
                                                 await loadFolderNotes(activeFolder!, false);
                                                 void sync();
-                                                // Blink all items to indicate update
-                                                const allIds = new Set(dbData.filter(n => n.folder_name === activeFolder && !n.is_folder).map(n => String(n.id)));
-                                                setIconAnimIds(allIds);
-                                                setTimeout(() => setIconAnimIds(new Set()), 2000);
+                                                // Blink 3 times on the newly updated items
+                                                setIconAnimIds(noIconIds);
+                                                setTimeout(() => setIconAnimIds(new Set()), 1400);
                                                 playSound("create");
                                                 showToast(`Magic: ${updated} item${updated !== 1 ? "s" : ""} updated`, "#a78bfa");
                                             } else {
                                                 showToast("All items already have icons", "#71717a");
                                             }
-                                        } catch { showToast("Magic failed", "#ef4444"); }
+                                        } catch { setIconSpinIds(new Set()); showToast("Magic failed", "#ef4444"); }
                                     }}>
                                     <SparklesIcon className="w-5 h-5 flex-shrink-0" />
                                     <span className="text-xs font-black tracking-wide">Magic Icons & Titles</span>
