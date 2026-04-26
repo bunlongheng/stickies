@@ -490,26 +490,6 @@ function renderFindHighlights(text: string, matches: { start: number; end: numbe
     if (last < text.length) parts.push(<span key="tail" style={{ color: "transparent" }}>{text.slice(last)}</span>);
     return parts;
 }
-function renderDividerHighlights(text: string): React.ReactNode {
-    const lines = text.split("\n");
-    const parts: React.ReactNode[] = [];
-    lines.forEach((line, i) => {
-        const isDivider = /^[=\-_]{3,}\s*$/.test(line);
-        if (isDivider) {
-            parts.push(
-                <span key={i} style={{
-                    color: "rgba(255,255,255,0.9)",
-                    textShadow: "0 0 8px rgba(255,255,255,0.9), 0 0 16px rgba(255,255,255,0.5)",
-                    display: "inline",
-                }}>{line}</span>
-            );
-        } else {
-            parts.push(<span key={i} style={{ color: "transparent" }}>{line}</span>);
-        }
-        if (i < lines.length - 1) parts.push(<span key={`nl${i}`} style={{ color: "transparent" }}>{"\n"}</span>);
-    });
-    return parts;
-}
 const PINNED_KEY = "stickies_pinned_ids";
 const EMPTY_QUOTES =["🧠 Your second brain starts here. Write it down.", "✨ Great ideas deserve a home. Start now.", "📌 No more forgetting. Capture it.", "🚀 Dreams without notes are just wishes.", "📝 Plan it. Track it. Win it.", "🎯 Nothing works without priorities. Start here.", "💡 One note today. Clarity tomorrow.", "📚 Build your thinking system. One note at a time.", "⚡ Preparing is everything. Write first.", "🏆 Goals become real when you record them."];
 const VIEW_STATE_KEY = "stickies:last-view:v1";
@@ -2953,9 +2933,10 @@ const fireIntegrations = (trigger: string, note: any) => {
             })() : (titleRaw.current.trim() || "Untitled");
             if (shouldDerive && !hasRealTitle) setTitle(resolvedTitle);
 
-            const folderName = targetFolder || activeFolder || editingNote?.folder_name || "General";
-            const activeFolderRow = folderStack.at(-1);
-            const folderId = activeFolderRow && !activeFolderRow.id.startsWith("virtual-") ? activeFolderRow.id : null;
+            let folderName = targetFolder || activeFolder || editingNote?.folder_name || "General";
+            // Resolve folderId from folderName — don't blindly use folderStack (tab+ may target a different folder)
+            const matchedFolderRow = dbData.find(r => r.is_folder && r.folder_name === folderName);
+            let folderId = matchedFolderRow && !String(matchedFolderRow.id).startsWith("virtual-") ? String(matchedFolderRow.id) : null;
             const extractedTags = Array.from(new Set(
                 (saveContent.match(/#[a-zA-Z][a-zA-Z0-9_-]+/g) ?? [])
                     .map(t => t.toLowerCase())
@@ -3278,12 +3259,12 @@ const fireIntegrations = (trigger: string, note: any) => {
         showToast(`Auto-assigned ${count} icon${count !== 1 ? "s" : ""}`, "#34d399");
     }, [dbData, noteIcons, folderIcons, folders]);
 
-    const openNewNote = useCallback((type?: string) => {
+    const openNewNote = useCallback((type?: string, folder?: string) => {
         noteEverDirtyRef.current = false;
-        // Cancel any pending autosave and clear stale content ref — prevents ghost "Untitled" saves
         if (autoSaveTimerRef.current) { clearTimeout(autoSaveTimerRef.current); autoSaveTimerRef.current = null; }
         latestContentRef.current = "";
-        const isStandup = (activeFolder || "").toLowerCase() === "standup";
+        const target = folder || activeFolder || "CLAUDE";
+        const isStandup = target.toLowerCase() === "standup";
         const today = new Date();
         const dateStr = `${today.getMonth() + 1}/${today.getDate()}/${String(today.getFullYear()).slice(-2)}`;
         setEditingNote(null);
@@ -3291,12 +3272,12 @@ const fireIntegrations = (trigger: string, note: any) => {
         setContent("");
         setImages([]);
         setPendingNoteType(type ?? "text");
-        setTargetFolder(activeFolder || "CLAUDE");
+        setTargetFolder(target);
         setNoteColor(pickUniqueColor());
         shouldFocusTitleOnOpenRef.current = !isStandup;
         closeEditorTools();
         setEditorOpen(true);
-        setTabDayOffset(0); // always jump to today when creating new note
+        setTabDayOffset(0);
         playSound("create");
     }, [activeFolder, closeEditorTools, pickUniqueColor]);
 
@@ -6094,73 +6075,59 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 return next;
                             });
                         };
+                        const H = 30; // consistent tab bar height
+                        const navDay = (dir: 1 | -1) => {
+                            const next = dir === 1 ? Math.min(tabDayOffset + 1, 6) : Math.max(tabDayOffset - 1, 0);
+                            setTabDayOffset(next);
+                            const ds = new Date(); ds.setHours(0, 0, 0, 0); ds.setDate(ds.getDate() - next);
+                            const de = new Date(ds); de.setDate(de.getDate() + 1);
+                            const notes = dbData.filter(n => !n.is_folder && !n.trashed_at && !dismissedTabs.has(String(n.id)) && (() => { const d = new Date(n.updated_at || n.created_at || 0); return d >= ds && d < de; })()).sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")));
+                            if (notes.length > 0) void openNote(notes[0]);
+                        };
+                        const btnCls = "flex-shrink-0 flex items-center justify-center text-zinc-500 hover:text-white transition";
                         return (
-                            <div className="shrink-0 flex items-end gap-0 overflow-visible" style={{ minHeight: 28, background: appTheme === "light" ? "#e8e8ed" : "#2a2a2a" }}>
-                                <button type="button" onClick={() => openNewNote()} className="flex-shrink-0 flex items-center justify-center px-2.5 bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition sticky left-0 z-10" title="New note" style={{ backdropFilter: "blur(8px)" }}>
+                            <div className="shrink-0 flex items-end" style={{ height: H + 4, background: appTheme === "light" ? "#e8e8ed" : "#2a2a2a" }}>
+                                {/* + */}
+                                <button type="button" onClick={() => openNewNote(undefined, "Today")} className={`${btnCls} px-2`} style={{ height: H }} title="New note">
                                     <PlusIcon className="w-3.5 h-3.5" />
                                 </button>
-                                {/* < = toward today (newer), > = toward past (older) */}
-                                {tabDayOffset > 0 && <button type="button" onClick={() => {
-                                    const next = Math.max(tabDayOffset - 1, 0);
-                                    setTabDayOffset(next);
-                                    const ds = new Date(); ds.setHours(0, 0, 0, 0); ds.setDate(ds.getDate() - next);
-                                    const de = new Date(ds); de.setDate(de.getDate() + 1);
-                                    const notes = dbData.filter(n => !n.is_folder && !n.trashed_at && !dismissedTabs.has(String(n.id)) && (() => { const d = new Date(n.updated_at || n.created_at || 0); return d >= ds && d < de; })()).sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")));
-                                    if (notes.length > 0) void openNote(notes[0]);
-                                }} className="flex-shrink-0 flex items-center justify-center px-1.5 bg-white/5 hover:bg-white/10 text-zinc-500 hover:text-white transition" title="Newer">
-                                    <ChevronLeftIcon className="w-3 h-3" />
-                                </button>}
-                                <div className="flex items-stretch gap-0 overflow-x-auto" style={{ scrollbarWidth: "none" }} ref={(el) => {
-                                    if (el) { const active = el.querySelector("[data-tab-active]"); if (active) active.scrollIntoView({ inline: "nearest", block: "nearest" }); }
+                                {/* < toward today */}
+                                {tabDayOffset > 0 && (
+                                    <button type="button" onClick={() => navDay(-1)} className={`${btnCls} px-1.5`} style={{ height: H }} title="Newer">
+                                        <ChevronLeftIcon className="w-3 h-3" />
+                                    </button>
+                                )}
+                                {/* Tabs */}
+                                <div className="flex items-end gap-0 overflow-x-auto flex-1 min-w-0" style={{ scrollbarWidth: "none", height: H }} ref={(el) => {
+                                    if (el) { const a = el.querySelector("[data-tab-active]"); if (a) a.scrollIntoView({ inline: "nearest", block: "nearest" }); }
                                 }}>
-                                {dayNotes.map(n => {
-                                    const isActive = String(n.id) === activeId;
-                                    const c = n.folder_color || noteColor || "#888";
-                                    return (
-                                        <div key={n.id} {...(isActive ? { "data-tab-active": "" } : {})} className={`flex-shrink-0 flex items-center transition-all ${isActive ? "relative z-10" : "hover:brightness-110 opacity-75"}`}
-                                            style={{ background: isActive ? c : `${c}99`, color: "#1c1c1e", height: isActive ? "calc(100% + 4px)" : "100%" }}>
-                                            <button type="button"
-                                                onClick={() => {
-                                                    if (isActive) return;
-                                                    if (n.folder_name && n.folder_name !== activeFolder) {
-                                                        const fr = dbData.find(r => r.is_folder && r.folder_name === n.folder_name);
-                                                        if (fr) enterFolder({ id: String(fr.id), name: n.folder_name, color: fr.folder_color || c });
-                                                    }
-                                                    void openNote(n);
-                                                }}
-                                                className="flex items-center gap-1.5 pl-3 pr-1 py-1.5 text-[10px] font-bold truncate max-w-[150px]">
-                                                {(n.title || "Untitled").slice(0, 20)}{(n.title || "").length > 20 ? "…" : ""}
-                                            </button>
-                                            {isActive && (
+                                    {dayNotes.map(n => {
+                                        const isActive = String(n.id) === activeId;
+                                        const c = n.folder_color || noteColor || "#888";
+                                        return (
+                                            <div key={n.id} {...(isActive ? { "data-tab-active": "" } : {})}
+                                                className={`flex-shrink-0 flex items-center transition-all ${isActive ? "relative z-10" : "hover:brightness-110 opacity-75"}`}
+                                                style={{ background: isActive ? c : `${c}99`, color: "#1c1c1e", height: isActive ? H + 4 : H }}>
                                                 <button type="button"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        const nid = String(n.id);
-                                                        dismissTab(nid);
-                                                        const remaining = dayNotes.filter(t => String(t.id) !== nid);
-                                                        if (remaining.length > 0) void openNote(remaining[0]);
-                                                        else void backToRootFromEditor();
-                                                    }}
-                                                    className="px-1.5 flex items-center justify-center self-center hover:opacity-60 transition flex-shrink-0"
-                                                    style={{ color: isLightColor(c) ? "#1c1c1e" : "#fff" }}>
-                                                    <span className="text-[9px] leading-none">✕</span>
+                                                    onClick={() => { if (!isActive) { if (n.folder_name && n.folder_name !== activeFolder) { const fr = dbData.find(r => r.is_folder && r.folder_name === n.folder_name); if (fr) enterFolder({ id: String(fr.id), name: n.folder_name, color: fr.folder_color || c }); } void openNote(n); } }}
+                                                    className="flex items-center pl-3 pr-1 text-[10px] font-bold truncate max-w-[150px]" style={{ height: "100%" }}>
+                                                    {(n.title || "Untitled").slice(0, 20)}{(n.title || "").length > 20 ? "…" : ""}
                                                 </button>
-                                            )}
-                                        </div>
-                                    );
-                                })}
+                                                {isActive && (
+                                                    <button type="button"
+                                                        onClick={(e) => { e.stopPropagation(); const nid = String(n.id); dismissTab(nid); const remaining = dayNotes.filter(t => String(t.id) !== nid); if (remaining.length > 0) void openNote(remaining[0]); else void backToRootFromEditor(); }}
+                                                        className="pr-2 flex items-center justify-center hover:opacity-60 transition flex-shrink-0" style={{ height: "100%", color: isLightColor(c) ? "#1c1c1e" : "#fff" }}>
+                                                        <span className="text-[9px] leading-none">✕</span>
+                                                    </button>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
                                 </div>
-                                {/* Date label + right arrow — pinned right */}
-                                <div className="flex-shrink-0 flex items-center ml-auto sticky right-0 z-10" style={{ backdropFilter: "blur(8px)" }}>
-                                    <span className="flex items-center px-2 text-[9px] font-bold text-zinc-400 uppercase tracking-wide select-none">{dayLabel} <span className="ml-1 text-zinc-600">({dayNotes.length})</span></span>
-                                    <button type="button" disabled={tabDayOffset >= 6} onClick={() => {
-                                        const next = Math.min(tabDayOffset + 1, 6);
-                                        setTabDayOffset(next);
-                                        const ds = new Date(); ds.setHours(0, 0, 0, 0); ds.setDate(ds.getDate() - next);
-                                        const de = new Date(ds); de.setDate(de.getDate() + 1);
-                                        const notes = dbData.filter(n => !n.is_folder && !n.trashed_at && !dismissedTabs.has(String(n.id)) && (() => { const d = new Date(n.updated_at || n.created_at || 0); return d >= ds && d < de; })()).sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")));
-                                        if (notes.length > 0) void openNote(notes[0]);
-                                    }} className="flex-shrink-0 flex items-center justify-center px-1.5 bg-white/5 hover:bg-white/10 text-zinc-500 hover:text-white transition disabled:opacity-20" title="Older">
+                                {/* Date + > */}
+                                <div className="flex-shrink-0 flex items-center sticky right-0 z-10" style={{ height: H, backdropFilter: "blur(8px)" }}>
+                                    <span className="px-2 text-[9px] font-bold text-zinc-400 uppercase tracking-wide select-none">{dayLabel} ({dayNotes.length})</span>
+                                    <button type="button" disabled={tabDayOffset >= 6} onClick={() => navDay(1)} className={`${btnCls} px-1.5 disabled:opacity-20`} style={{ height: H }} title="Older">
                                         <ChevronRightIcon className="w-3 h-3" />
                                     </button>
                                 </div>
@@ -6661,20 +6628,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                             const stickyFontSize = "clamp(8px, 1.2vw, 12px)";
                             return (
                             <div className="flex-1 flex overflow-auto relative" style={{ background: stickyBg, display: aiPromptOpen ? "none" : "flex" }}>
-                                {/* Divider glow backdrop */}
-                                {/^[=\-_]{3,}\s*$/m.test(content || "") && (
-                                    <div aria-hidden="true" style={{
-                                        position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
-                                        pointerEvents: "none",
-                                        fontFamily: stickyFont,
-                                        fontSize: stickyFontSize, lineHeight: 1.6,
-                                        paddingTop: 8, paddingBottom: 24, paddingLeft: 24, paddingRight: 24,
-                                        whiteSpace: "pre", overflow: "hidden",
-                                        color: "transparent", zIndex: 0,
-                                    }}>
-                                        {renderDividerHighlights(content || "")}
-                                    </div>
-                                )}
                                 {/* Highlight backdrop for find-in-note */}
                                 {showFindBar && findMatches.length > 0 && (
                                     <div aria-hidden="true" style={{
