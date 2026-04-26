@@ -3181,17 +3181,6 @@ const fireIntegrations = (trigger: string, note: any) => {
     }, [saveNote, closeEditorTools, editingNote?.id, targetFolder, activeFolder, noteColor]);
 
     // Pick a random palette color, avoiding the last-used one if possible
-    const pickUniqueColor = useCallback(() => {
-        const recentColors = new Set(
-            dbData.filter((r: any) => !r.is_folder && r.folder_color)
-                  .slice(-3)
-                  .map((r: any) => String(r.folder_color).toUpperCase())
-        );
-        const available = palette12.filter(c => !recentColors.has(c.toUpperCase()));
-        const pool = available.length > 0 ? available : palette12;
-        return pool[Math.floor(Math.random() * pool.length)];
-    }, [dbData]);
-
     // Cmd+S → save + toast
     useEffect(() => {
         if (IS_PHONE) return;
@@ -3300,12 +3289,12 @@ const fireIntegrations = (trigger: string, note: any) => {
         setImages([]);
         setPendingNoteType(type ?? "text");
         setTargetFolder(target);
-        setNoteColor(pickUniqueColor());
+        setNoteColor(folders.find(f => f.name === (target || activeFolder))?.color || palette12[0]);
         shouldFocusTitleOnOpenRef.current = !isStandup;
         closeEditorTools();
         setEditorOpen(true);
         playSound("create");
-    }, [activeFolder, closeEditorTools, pickUniqueColor]);
+    }, [activeFolder, closeEditorTools, folders]);
 
     // AI magic — stream Claude response into note content
     const runAiPrompt = useCallback(async () => {
@@ -5985,6 +5974,13 @@ const fireIntegrations = (trigger: string, note: any) => {
                             aria-label={`Back to ${targetFolder || "folders"}`}>
                             <ArrowLeftIcon className="w-[38px] h-[38px]" />
                         </button>
+                        {/* View mode cycle — visible in editor header */}
+                        <button
+                            onClick={() => { setMainListMode(v => v === "thumb" ? "list" : v === "list" ? "tabs" : "thumb"); setKanbanMode(false); }}
+                            className="flex p-2 text-zinc-500 hover:text-white hover:bg-white/10 transition flex-shrink-0"
+                            title={mainListMode === "list" ? "List" : mainListMode === "tabs" ? "Tabs" : "Thumbnail"}>
+                            {mainListMode === "list" ? <Bars3Icon className="w-5 h-5" /> : mainListMode === "tabs" ? <RectangleStackIcon className="w-5 h-5" /> : <Squares2X2Icon className="w-5 h-5" />}
+                        </button>
 
                         {/* Title only — Apple Notes style */}
                         <input ref={titleInputRef} defaultValue={title} key={`title-${editingNote?.id || "new"}`} onChange={(e) => { titleRaw.current = e.target.value; }} onBlur={(e) => setTitle(e.target.value)} onFocus={() => { closeEditorTools(); setShowNoteActions(false); }} autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false} className="hidden sm:block bg-transparent border-0 appearance-none shadow-none ring-0 outline-none focus:outline-none focus:ring-0 px-1 min-w-0 flex-1 tracking-tight font-bold text-white placeholder:text-zinc-500" style={{ caretColor: activeAccentColor, fontSize: "clamp(18px, 2vw, 24px)" }} placeholder="Note Title" />
@@ -6121,7 +6117,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 }}>
                                     {dayNotes.map(n => {
                                         const isActive = String(n.id) === activeId;
-                                        const c = n.folder_color || noteColor || "#888";
+                                        const c = n.folder_color || (n.folder_name ? (folders.find(f => f.name === n.folder_name)?.color) : null) || "#888";
                                         return (
                                             <div key={n.id} {...(isActive ? { "data-tab-active": "" } : {})}
                                                 className={`flex-shrink-0 flex items-center transition-all ${isActive ? "relative z-10" : "hover:brightness-110 opacity-75"}`}
@@ -7033,7 +7029,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                     setContent(text);
                                     setPendingNoteType(noteType);
                                     setTargetFolder(activeFolder || "");
-                                    setNoteColor(pickUniqueColor());
+                                    setNoteColor(folders.find(f => f.name === activeFolder)?.color || palette12[0]);
                                     shouldFocusTitleOnOpenRef.current = false;
                                     setEditorOpen(true);
                                     playSound("create");
@@ -7052,7 +7048,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                 setTitle(name);
                                 setContent("");
                                 setTargetFolder(activeFolder || "");
-                                setNoteColor(pickUniqueColor());
+                                setNoteColor(folders.find(f => f.name === activeFolder)?.color || palette12[0]);
                                 shouldFocusTitleOnOpenRef.current = false;
                                 setEditorOpen(true);
                                 playSound("create");
@@ -7201,7 +7197,8 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                         const rect = e.currentTarget.getBoundingClientRect();
                                         const x = ((e.clientX - rect.left) / rect.width) * 100, y = ((e.clientY - rect.top) / rect.height) * 100;
                                         const glow = e.currentTarget.querySelector<HTMLElement>("[data-glow]");
-                                        if (glow) glow.style.background = `radial-gradient(circle at ${x}% ${y}%, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.03) 50%, transparent 100%)`;
+                                        const rc = getComputedStyle(e.currentTarget).getPropertyValue("--row-color").trim() || "#fff";
+                                        if (glow) glow.style.background = `radial-gradient(circle at ${x}% ${y}%, ${rc}22 0%, ${rc}0d 50%, transparent 100%)`;
                                     }}
                                     onMouseLeave={(e) => { const glow = e.currentTarget.querySelector<HTMLElement>("[data-glow]"); if (glow) glow.style.background = ""; }}
                                     onTouchStart={() => {
