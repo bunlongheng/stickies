@@ -3115,10 +3115,10 @@ const fireIntegrations = (trigger: string, note: any) => {
                 const newFolderId = folderId.startsWith("virtual-") ? null : folderId;
                 setDbData((prev) =>
                     prev.map((r) =>
-                        String(r.id) === noteId ? { ...r, folder_name: name, folder_id: newFolderId } : r,
+                        String(r.id) === noteId ? { ...r, folder_name: name, folder_id: newFolderId, folder_color: destColor } : r,
                     ),
                 );
-                setEditingNote((prev: any) => (prev ? { ...prev, folder_name: name, folder_id: newFolderId } : prev));
+                setEditingNote((prev: any) => (prev ? { ...prev, folder_name: name, folder_id: newFolderId, folder_color: destColor } : prev));
                 setShowNoteActions(false);
                 // In tab view, stay open and move to next tab
                 const isTabView = showTabs && typeof window !== "undefined" && window.innerWidth >= 640;
@@ -3137,7 +3137,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                 }
                 mergeIntoCachedNotes(name, [{ ...editingNote, id: noteId, folder_name: name }]);
                 try {
-                    await notesApi.update(noteId, { folder_name: name, ...(newFolderId ? { folder_id: newFolderId } : {}) });
+                    await notesApi.update(noteId, { folder_name: name, folder_color: destColor, ...(newFolderId ? { folder_id: newFolderId } : {}) });
                     // Refresh target folder notes so the moved note shows immediately
                     void loadFolderNotes(name, false);
                 } catch (err) {
@@ -6890,13 +6890,23 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                         <>
                                             <div className="fixed inset-0 z-[999]" onClick={() => setShowFooterFolderPicker(false)} />
                                             <div className="absolute bottom-6 right-0 z-[1000] w-48 max-h-[240px] overflow-y-auto rounded-xl bg-zinc-900 border border-white/15 shadow-2xl py-1" style={{ scrollbarWidth: "thin" }}>
-                                                {folders.filter(f => {
-                                                    if (f.name === "TRASH") return false;
+                                                {(() => {
                                                     const currentFolder = targetFolder || activeFolder || editingNote?.folder_name;
-                                                    if (f.name === currentFolder) return false;
-                                                    // Only show pinned folders in footer
-                                                    return pinnedFolders.has(f.name);
-                                                }).sort((a, b) => a.order - b.order).map(f => {
+                                                    const all = folders.filter(f => {
+                                                        if (f.name === "TRASH") return false;
+                                                        if (f.name === currentFolder) return false;
+                                                        return !f.parent_folder_name || pinnedFolders.has(f.name);
+                                                    });
+                                                    // Dedup by name (pinned sub might share name with root)
+                                                    const seen = new Set<string>();
+                                                    const deduped = all.filter(f => { if (seen.has(f.name)) return false; seen.add(f.name); return true; });
+                                                    // Pinned first, then root
+                                                    return deduped.sort((a, b) => {
+                                                        const ap = pinnedFolders.has(a.name) ? 0 : 1;
+                                                        const bp = pinnedFolders.has(b.name) ? 0 : 1;
+                                                        return ap - bp || a.order - b.order;
+                                                    });
+                                                })().map(f => {
                                                     return (
                                                         <button key={f.name} type="button"
                                                             onClick={() => {
