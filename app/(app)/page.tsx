@@ -1990,9 +1990,12 @@ export default function NotesMaster() {
         }
     }, [mainListMode]);
 
-    // Auto-open latest note on initial data load in tabs mode
+    // Auto-open latest note on initial data load in tabs mode (desktop only)
     const tabsAutoOpenedRef = useRef(false);
     useEffect(() => {
+        const isDesktop = typeof window !== "undefined" && window.innerWidth >= 640;
+        // Mobile fallback: tabs not allowed, revert to list
+        if (mainListMode === "tabs" && !isDesktop) { setMainListMode("list"); return; }
         if (mainListMode === "tabs" && !tabsAutoOpenedRef.current && dbData.some(n => !n.is_folder && !n.trashed_at)) {
             tabsAutoOpenedRef.current = true;
             const allNotes = dbData.filter(n => !n.is_folder && !n.trashed_at)
@@ -5955,7 +5958,14 @@ const fireIntegrations = (trigger: string, note: any) => {
 
             {/* ── View mode toggle — fixed position, always accessible ── */}
             <button
-                onClick={() => { setMainListMode(v => v === "thumb" ? "list" : v === "list" ? "tabs" : "thumb"); setKanbanMode(false); }}
+                onClick={() => {
+                    const isDesktop = typeof window !== "undefined" && window.innerWidth >= 640;
+                    setMainListMode(v => {
+                        if (isDesktop) return v === "thumb" ? "list" : v === "list" ? "tabs" : "thumb";
+                        return v === "thumb" ? "list" : "thumb";
+                    });
+                    setKanbanMode(false);
+                }}
                 className="flex fixed top-3 right-14 z-[200] items-center justify-center w-8 h-8 rounded-lg bg-zinc-800/80 hover:bg-zinc-700 text-zinc-400 hover:text-white transition backdrop-blur-sm border border-white/10"
                 title={mainListMode === "list" ? "List view" : mainListMode === "tabs" ? "Tabs view" : "Thumbnail view"}>
                 {mainListMode === "list" ? <Bars3Icon className="w-4 h-4" /> : mainListMode === "tabs" ? <RectangleStackIcon className="w-4 h-4" /> : <Squares2X2Icon className="w-4 h-4" />}
@@ -6100,7 +6110,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                         </div>
                     )}
                     {/* ── Tab bar — folder notes or today's notes (no folder) ── */}
-                    {(showTabs || mainListMode === "tabs") && typeof window !== "undefined" && (mainListMode === "tabs" || window.innerWidth >= 640) && (() => {
+                    {(showTabs || mainListMode === "tabs") && typeof window !== "undefined" && window.innerWidth >= 640 && (() => {
                         const inFolder = !!activeFolder;
                         const allNotes = (inFolder
                             ? dbData.filter(n => !n.is_folder && !n.trashed_at && !dismissedTabs.has(String(n.id)) && n.folder_name === activeFolder)
