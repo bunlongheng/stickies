@@ -6865,38 +6865,6 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                         style={{ fontSize: 8, background: `${noteColor}22`, color: noteColor, border: `1px solid ${noteColor}44` }}>
                                         {targetFolder || activeFolder || editingNote?.folder_name || "General"}
                                     </button>
-                                    {showFooterFolderPicker && (
-                                        <>
-                                            <div className="fixed inset-0 z-[999]" onClick={() => setShowFooterFolderPicker(false)} />
-                                            <div className="fixed z-[1000] w-48 max-h-[240px] overflow-y-auto rounded-xl bg-zinc-900 border border-white/15 shadow-2xl py-1" style={{ scrollbarWidth: "thin", bottom: 30, right: 16 }}>
-                                                {(() => {
-                                                    const currentFolder = targetFolder || activeFolder || editingNote?.folder_name;
-                                                    const seen = new Set<string>();
-                                                    return folders.filter(f => {
-                                                        if (!pinnedFolders.has(f.name)) return false;
-                                                        if (f.name === "TRASH" || f.name === currentFolder) return false;
-                                                        if (seen.has(f.name)) return false;
-                                                        seen.add(f.name);
-                                                        return true;
-                                                    }).sort((a, b) => a.order - b.order);
-                                                })().map(f => {
-                                                    return (
-                                                        <button key={f.name} type="button"
-                                                            onClick={() => {
-                                                                setShowFooterFolderPicker(false);
-                                                                void moveToFolder(f.name);
-                                                            }}
-                                                            className="w-full flex items-center gap-2 px-3 py-1.5 text-left text-[10px] font-bold uppercase tracking-wide transition text-zinc-400 hover:text-white hover:bg-white/5">
-                                                            <span className="w-4 h-4 flex-shrink-0 flex items-center justify-center rounded overflow-hidden" style={{ background: f.color, color: isLightColor(f.color) ? "#1c1c1e" : "#fff", fontSize: 8 }}>
-                                                                <FolderIconDisplay value={folderIcons[f.name] || ""} folderName={f.name} className="w-2.5 h-2.5" />
-                                                            </span>
-                                                            {f.name}
-                                                        </button>
-                                                    );
-                                                })}
-                                            </div>
-                                        </>
-                                    )}
                                 </div>
                                 {/* Type pill */}
                                 {(() => {
@@ -7672,6 +7640,38 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                         <div className="text-[10px] text-zinc-600 uppercase tracking-widest">or tap outside to cancel</div>
                     </div>
                 </div>
+            )}
+
+            {/* Footer folder picker — rendered at top level to escape overflow-hidden */}
+            {showFooterFolderPicker && (
+                <>
+                    <div className="fixed inset-0 z-[999]" onClick={() => setShowFooterFolderPicker(false)} />
+                    <div className="fixed z-[1000] w-48 max-h-[240px] overflow-y-auto rounded-xl bg-zinc-900 border border-white/15 shadow-2xl py-1" style={{ scrollbarWidth: "thin", bottom: 30, right: 16 }}>
+                        {(() => {
+                            const currentFolder = targetFolder || activeFolder || editingNote?.folder_name;
+                            const seen = new Set<string>();
+                            return folders.filter(f => {
+                                if (!pinnedFolders.has(f.name)) return false;
+                                if (f.name === "TRASH" || f.name === currentFolder) return false;
+                                if (seen.has(f.name)) return false;
+                                seen.add(f.name);
+                                return true;
+                            }).sort((a, b) => a.order - b.order);
+                        })().map(f => (
+                            <button key={f.name} type="button"
+                                onClick={() => {
+                                    setShowFooterFolderPicker(false);
+                                    void moveToFolder(f.name);
+                                }}
+                                className="w-full flex items-center gap-2 px-3 py-1.5 text-left text-[10px] font-bold uppercase tracking-wide transition text-zinc-400 hover:text-white hover:bg-white/5">
+                                <span className="w-4 h-4 flex-shrink-0 flex items-center justify-center rounded overflow-hidden" style={{ background: f.color, color: isLightColor(f.color) ? "#1c1c1e" : "#fff", fontSize: 8 }}>
+                                    <FolderIconDisplay value={folderIcons[f.name] || ""} folderName={f.name} className="w-2.5 h-2.5" />
+                                </span>
+                                {f.name}
+                            </button>
+                        ))}
+                    </div>
+                </>
             )}
 
             {showNoteActions && (
