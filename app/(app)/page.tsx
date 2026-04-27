@@ -1687,7 +1687,7 @@ export default function NotesMaster() {
                     setTitle("Diagram");
                     setContent(decoded);
                     setTargetFolder(activeFolder || "General");
-                    setNoteColor("#888");
+                    setNoteColor(palette12[Math.floor(Math.random() * palette12.length)]);
                     setShowColorPicker(false);
                     setShowSwitcher(false);
                     shouldFocusTitleOnOpenRef.current = true;
@@ -3306,7 +3306,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         setImages([]);
         setPendingNoteType(type ?? "text");
         setTargetFolder(target);
-        setNoteColor(folders.find(f => f.name === (target || activeFolder))?.color || "#888");
+        setNoteColor(palette12[Math.floor(Math.random() * palette12.length)]);
         shouldFocusTitleOnOpenRef.current = !isStandup;
         closeEditorTools();
         setEditorOpen(true);
@@ -7051,7 +7051,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                     setContent(text);
                                     setPendingNoteType(noteType);
                                     setTargetFolder(activeFolder || "");
-                                    setNoteColor(folders.find(f => f.name === activeFolder)?.color || "#888");
+                                    setNoteColor(palette12[Math.floor(Math.random() * palette12.length)]);
                                     shouldFocusTitleOnOpenRef.current = false;
                                     setEditorOpen(true);
                                     playSound("create");
@@ -7070,7 +7070,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                 setTitle(name);
                                 setContent("");
                                 setTargetFolder(activeFolder || "");
-                                setNoteColor(folders.find(f => f.name === activeFolder)?.color || "#888");
+                                setNoteColor(palette12[Math.floor(Math.random() * palette12.length)]);
                                 shouldFocusTitleOnOpenRef.current = false;
                                 setEditorOpen(true);
                                 playSound("create");
