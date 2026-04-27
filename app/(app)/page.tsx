@@ -7443,7 +7443,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                     <>
                                                         {(() => {
                                                             const fc = item.color || item.folder_color || "#888";
-                                                            const tc = item.name === "CLAUDE" ? "#1a1a1a" : isLightColor(fc) ? "#1c1c1e" : "#fff";
+                                                            const tc = appTheme === "light" || item.name === "CLAUDE" ? "#1a1a1a" : isLightColor(fc) ? "#1c1c1e" : "#fff";
                                                             return (<>
                                                                 {item.name === "CLAUDE"
                                                                     ? <img src="/claude-icon.png" alt="Claude" className="w-14 h-14 object-contain relative z-10" />
