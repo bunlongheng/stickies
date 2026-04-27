@@ -262,15 +262,8 @@ body {
 .folder-grid-tile:hover {
   filter: brightness(1.12);
 }
-.folder-grid-tile .folder-grid-name {
-  color: var(--tc, #fff) !important;
-}
 .folder-grid-tile .folder-icon-badge {
   background: rgba(0,0,0,0.08);
-  color: var(--ic, #fff);
-}
-.folder-grid-tile .folder-grid-initial {
-  color: var(--tc, #fff) !important;
 }
 /* CLAUDE grid tile stays white */
 .folder-grid-tile-claude {
