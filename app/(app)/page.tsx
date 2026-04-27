@@ -5961,8 +5961,15 @@ const fireIntegrations = (trigger: string, note: any) => {
                 onClick={() => {
                     const isDesktop = typeof window !== "undefined" && window.innerWidth >= 640;
                     setMainListMode(v => {
-                        if (isDesktop) return v === "thumb" ? "list" : v === "list" ? "tabs" : "thumb";
-                        return v === "thumb" ? "list" : "thumb";
+                        const next = isDesktop
+                            ? (v === "thumb" ? "list" : v === "list" ? "tabs" : "thumb")
+                            : (v === "thumb" ? "list" : "thumb");
+                        // Exiting tabs mode — close editor to show list
+                        if (v === "tabs" && next !== "tabs") {
+                            setEditorOpen(false);
+                            setEditingNote(null);
+                        }
+                        return next;
                     });
                     setKanbanMode(false);
                 }}
