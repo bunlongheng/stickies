@@ -5992,20 +5992,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                             aria-label={`Back to ${targetFolder || "folders"}`}>
                             <ArrowLeftIcon className="w-[38px] h-[38px]" />
                         </button>
-                        <button type="button"
-                            onClick={() => {
-                                const isDesktop = typeof window !== "undefined" && window.innerWidth >= 640;
-                                setMainListMode(v => {
-                                    const next = isDesktop ? (v === "thumb" ? "list" : v === "list" ? "tabs" : "thumb") : (v === "thumb" ? "list" : "thumb");
-                                    if (v === "tabs" && next !== "tabs") { setEditorOpen(false); setEditingNote(null); }
-                                    return next;
-                                });
-                                setKanbanMode(false);
-                            }}
-                            className="p-2 transition text-zinc-500 hover:text-white hover:bg-white/10 flex-shrink-0"
-                            title={mainListMode === "list" ? "List" : mainListMode === "tabs" ? "Tabs" : "Thumb"}>
-                            {mainListMode === "list" ? <Bars3Icon className="w-5 h-5" /> : mainListMode === "tabs" ? <RectangleStackIcon className="w-5 h-5" /> : <Squares2X2Icon className="w-5 h-5" />}
-                        </button>
                         {/* Title only — Apple Notes style */}
                         <input ref={titleInputRef} defaultValue={title} key={`title-${editingNote?.id || "new"}`} onChange={(e) => { titleRaw.current = e.target.value; }} onBlur={(e) => setTitle(e.target.value)} onFocus={() => { closeEditorTools(); setShowNoteActions(false); }} autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false} className="hidden sm:block bg-transparent border-0 appearance-none shadow-none ring-0 outline-none focus:outline-none focus:ring-0 px-1 min-w-0 flex-1 tracking-tight font-bold text-white placeholder:text-zinc-500" style={{ caretColor: activeAccentColor, fontSize: "clamp(18px, 2vw, 24px)" }} placeholder="Note Title" />
                         <input ref={titleInputMobileRef} defaultValue={title} key={`title-m-${editingNote?.id || "new"}`} onChange={(e) => { titleRaw.current = e.target.value; }} onBlur={(e) => setTitle(e.target.value)} onFocus={() => { closeEditorTools(); setShowNoteActions(false); }} autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false} className="sm:hidden bg-transparent border-0 appearance-none shadow-none ring-0 outline-none focus:outline-none focus:ring-0 px-2 flex-grow min-w-0 text-white placeholder:text-zinc-500" style={{ caretColor: activeAccentColor, border: "none", fontSize: "clamp(18px, 5vw, 24px)", fontWeight: 700 }} placeholder="Note Title" />
@@ -6073,6 +6059,21 @@ const fireIntegrations = (trigger: string, note: any) => {
                             <EyeIcon className="w-[24px] h-[24px] sm:w-[22px] sm:h-[22px]" />
                         </button>
                         )}
+                        {/* View mode toggle */}
+                        <button type="button"
+                            onClick={() => {
+                                const isDesktop = typeof window !== "undefined" && window.innerWidth >= 640;
+                                setMainListMode(v => {
+                                    const next = isDesktop ? (v === "thumb" ? "list" : v === "list" ? "tabs" : "thumb") : (v === "thumb" ? "list" : "thumb");
+                                    if (v === "tabs" && next !== "tabs") { setEditorOpen(false); setEditingNote(null); }
+                                    return next;
+                                });
+                                setKanbanMode(false);
+                            }}
+                            className="p-2 sm:p-3 transition text-zinc-500 hover:text-white flex-shrink-0"
+                            title={mainListMode === "list" ? "List" : mainListMode === "tabs" ? "Tabs" : "Thumb"}>
+                            {mainListMode === "list" ? <Bars3Icon className="w-[24px] h-[24px] sm:w-[22px] sm:h-[22px]" /> : mainListMode === "tabs" ? <RectangleStackIcon className="w-[24px] h-[24px] sm:w-[22px] sm:h-[22px]" /> : <Squares2X2Icon className="w-[24px] h-[24px] sm:w-[22px] sm:h-[22px]" />}
+                        </button>
                         {/* Delete — quick access */}
                         {editingNote?.id && (
                         <button type="button"
@@ -7291,7 +7292,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                             }
                                         }
                                         return item.is_folder
-                                            ? { isolation: "isolate", "--fc": c, "--tc": "#fff" } as React.CSSProperties
+                                            ? { isolation: "isolate", "--fc": c, "--tc": isLightColor(c) ? "#1c1c1e" : "#fff", "--ic": isLightColor(c) ? "#1c1c1e" : "#fff" } as React.CSSProperties
                                             : { isolation: "isolate", backgroundColor: c, borderRadius: "3px 3px 3px 14px" };
                                     })()}
                                     className={`${isListMode
