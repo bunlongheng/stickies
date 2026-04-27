@@ -1980,13 +1980,27 @@ export default function NotesMaster() {
 
     useEffect(() => {
         try { localStorage.setItem(MAIN_LIST_MODE_KEY, String(mainListMode)); } catch { /* ignore */ }
-        // Auto-open first note when entering tabs mode
-        if (mainListMode === "tabs" && !editorOpen) {
-            const allNotes = dbData.filter(n => !n.is_folder && !n.trashed_at && (activeFolder ? n.folder_name === activeFolder : true))
+        // Auto-open latest note when entering tabs mode
+        if (mainListMode === "tabs") {
+            const allNotes = dbData.filter(n => !n.is_folder && !n.trashed_at)
+                .sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")));
+            if (allNotes.length > 0 && String(editingNote?.id) !== String(allNotes[0].id)) {
+                void openNote(allNotes[0]);
+            }
+        }
+    }, [mainListMode]);
+
+    // Auto-open latest note on initial data load in tabs mode
+    const tabsAutoOpenedRef = useRef(false);
+    useEffect(() => {
+        if (mainListMode === "tabs" && !tabsAutoOpenedRef.current && dbData.some(n => !n.is_folder && !n.trashed_at)) {
+            tabsAutoOpenedRef.current = true;
+            const allNotes = dbData.filter(n => !n.is_folder && !n.trashed_at)
                 .sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")));
             if (allNotes.length > 0) void openNote(allNotes[0]);
         }
-    }, [mainListMode]);
+        if (mainListMode !== "tabs") tabsAutoOpenedRef.current = false;
+    }, [mainListMode, dbData]);
 
     useEffect(() => {
         try { localStorage.setItem(KANBAN_MODE_KEY, String(kanbanMode)); } catch { /* ignore */ }
@@ -5942,7 +5956,7 @@ const fireIntegrations = (trigger: string, note: any) => {
             {/* ── View mode toggle — fixed position, always accessible ── */}
             <button
                 onClick={() => { setMainListMode(v => v === "thumb" ? "list" : v === "list" ? "tabs" : "thumb"); setKanbanMode(false); }}
-                className="hidden sm:flex fixed top-3 right-14 z-[200] items-center justify-center w-8 h-8 rounded-lg bg-zinc-800/80 hover:bg-zinc-700 text-zinc-400 hover:text-white transition backdrop-blur-sm border border-white/10"
+                className="flex fixed top-3 right-14 z-[200] items-center justify-center w-8 h-8 rounded-lg bg-zinc-800/80 hover:bg-zinc-700 text-zinc-400 hover:text-white transition backdrop-blur-sm border border-white/10"
                 title={mainListMode === "list" ? "List view" : mainListMode === "tabs" ? "Tabs view" : "Thumbnail view"}>
                 {mainListMode === "list" ? <Bars3Icon className="w-4 h-4" /> : mainListMode === "tabs" ? <RectangleStackIcon className="w-4 h-4" /> : <Squares2X2Icon className="w-4 h-4" />}
             </button>
@@ -6086,7 +6100,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                         </div>
                     )}
                     {/* ── Tab bar — folder notes or today's notes (no folder) ── */}
-                    {(showTabs || mainListMode === "tabs") && typeof window !== "undefined" && window.innerWidth >= 640 && (() => {
+                    {(showTabs || mainListMode === "tabs") && typeof window !== "undefined" && (mainListMode === "tabs" || window.innerWidth >= 640) && (() => {
                         const inFolder = !!activeFolder;
                         const allNotes = (inFolder
                             ? dbData.filter(n => !n.is_folder && !n.trashed_at && !dismissedTabs.has(String(n.id)) && n.folder_name === activeFolder)
