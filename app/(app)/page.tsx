@@ -5956,27 +5956,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                 </div>
             )}
 
-            {/* ── View mode toggle — fixed position, always accessible ── */}
-            <button
-                onClick={() => {
-                    const isDesktop = typeof window !== "undefined" && window.innerWidth >= 640;
-                    setMainListMode(v => {
-                        const next = isDesktop
-                            ? (v === "thumb" ? "list" : v === "list" ? "tabs" : "thumb")
-                            : (v === "thumb" ? "list" : "thumb");
-                        // Exiting tabs mode — close editor to show list
-                        if (v === "tabs" && next !== "tabs") {
-                            setEditorOpen(false);
-                            setEditingNote(null);
-                        }
-                        return next;
-                    });
-                    setKanbanMode(false);
-                }}
-                className="flex fixed top-3 right-14 z-[200] items-center justify-center w-8 h-8 rounded-lg bg-zinc-800/80 hover:bg-zinc-700 text-zinc-400 hover:text-white transition backdrop-blur-sm border border-white/10"
-                title={mainListMode === "list" ? "List view" : mainListMode === "tabs" ? "Tabs view" : "Thumbnail view"}>
-                {mainListMode === "list" ? <Bars3Icon className="w-4 h-4" /> : mainListMode === "tabs" ? <RectangleStackIcon className="w-4 h-4" /> : <Squares2X2Icon className="w-4 h-4" />}
-            </button>
 
             {/* ── two-panel layout ── */}
             <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
@@ -6991,7 +6970,8 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                     <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-white/35 w-6 h-6 pointer-events-none" />
                                                     <span className="w-full pl-12 pr-3 py-3 text-sm font-black tracking-tight text-white/30">SEARCH</span>
                                                 </button>
-                                                <div className="ml-auto flex items-center gap-2">
+                                                <div className="ml-auto flex items-center">
+                                                    <HeaderIconBtn icon={mainListMode === "list" ? Bars3Icon : mainListMode === "tabs" ? RectangleStackIcon : Squares2X2Icon} label={mainListMode === "list" ? "List" : mainListMode === "tabs" ? "Tabs" : "Thumb"} onClick={() => { const isDesktop = typeof window !== "undefined" && window.innerWidth >= 640; setMainListMode(v => { const next = isDesktop ? (v === "thumb" ? "list" : v === "list" ? "tabs" : "thumb") : (v === "thumb" ? "list" : "thumb"); if (v === "tabs" && next !== "tabs") { setEditorOpen(false); setEditingNote(null); } return next; }); setKanbanMode(false); }} />
                                                     <HeaderIconBtn icon={Cog6ToothIcon} label="Settings" onClick={() => { const hueInt = integrationsRef.current.find(ig => ig.type === "hue"); setLightMode((hueInt?.config?.mode as any) ?? "flash"); setIsGlobalSettings(true); setShowFolderActions(true); }} />
                                                 </div>
                                             </>
@@ -7010,9 +6990,10 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                     <button type="button" onClick={() => setShowEmptyTrashModal(true)} className="px-3 py-1.5 text-xs font-black text-red-400 bg-red-500/10 hover:bg-red-500/20 rounded transition">
                                                         Empty Trash
                                                     </button>
-                                                ) : (
+                                                ) : (<>
+                                                    <HeaderIconBtn icon={mainListMode === "list" ? Bars3Icon : mainListMode === "tabs" ? RectangleStackIcon : Squares2X2Icon} label={mainListMode === "list" ? "List" : mainListMode === "tabs" ? "Tabs" : "Thumb"} onClick={() => { const isDesktop = typeof window !== "undefined" && window.innerWidth >= 640; setMainListMode(v => { const next = isDesktop ? (v === "thumb" ? "list" : v === "list" ? "tabs" : "thumb") : (v === "thumb" ? "list" : "thumb"); if (v === "tabs" && next !== "tabs") { setEditorOpen(false); setEditingNote(null); } return next; }); setKanbanMode(false); }} />
                                                     <HeaderIconBtn icon={Cog6ToothIcon} label="Settings" onClick={() => { const hueInt = integrationsRef.current.find(ig => ig.type === "hue"); setLightMode((hueInt?.config?.mode as any) ?? "flash"); setIsGlobalSettings(false); setShowFolderActions(true); }} />
-                                                )}
+                                                </>)}
                                             </div>
                                         )}
                                     </header>
