@@ -6766,12 +6766,12 @@ const fireIntegrations = (trigger: string, note: any) => {
                             {editingNote?.id && (
                                 <button type="button"
                                     onClick={() => { setShowNoteActions(false); closeEditorTools(); setConfirmDelete({ type: "note", noteId: String(editingNote.id), noteName: (title.trim() || editingNote.title || "Untitled").trim(), noteColor: noteColor || editingNote.folder_color || "#71717a" }); }}
-                                    className="absolute left-1/2 -translate-x-1/2 flex items-center gap-1 text-red-500/60 hover:text-red-400 transition"
+                                    className="absolute left-1/2 -translate-x-1/2 flex items-center gap-1 text-red-500/60 hover:text-red-400 transition z-[1]"
                                     title="Delete note">
                                     <TrashIcon className="w-3 h-3" />
                                 </button>
                             )}
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 z-[2]">
                                 {mdViewMode !== "text" && (<>
                                     <button type="button"
                                         onClick={() => { void secureCopy(content); showToast("Copied!", "#34C759"); }}
