@@ -6975,7 +6975,6 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                     <span className="w-full pl-12 pr-3 py-3 text-sm font-black tracking-tight text-white/30">SEARCH</span>
                                                 </button>
                                                 <div className="ml-auto flex items-center gap-2">
-                                                    <HeaderIconBtn icon={mainListMode === "list" ? Bars3Icon : mainListMode === "tabs" ? RectangleStackIcon : Squares2X2Icon} label={mainListMode === "list" ? "List" : mainListMode === "tabs" ? "Tabs" : "Thumb"} active={!kanbanMode} onClick={() => { setMainListMode(v => v === "thumb" ? "list" : v === "list" ? "tabs" : "thumb"); setKanbanMode(false); }} />
                                                     <HeaderIconBtn icon={Cog6ToothIcon} label="Settings" onClick={() => { const hueInt = integrationsRef.current.find(ig => ig.type === "hue"); setLightMode((hueInt?.config?.mode as any) ?? "flash"); setIsGlobalSettings(true); setShowFolderActions(true); }} />
                                                 </div>
                                             </>
@@ -6995,10 +6994,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                         Empty Trash
                                                     </button>
                                                 ) : (
-                                                    <>
-                                                        <HeaderIconBtn icon={mainListMode === "list" ? Bars3Icon : mainListMode === "tabs" ? RectangleStackIcon : Squares2X2Icon} label={mainListMode === "list" ? "List" : mainListMode === "tabs" ? "Tabs" : "Thumb"} active={!kanbanMode} onClick={() => { setMainListMode(v => v === "thumb" ? "list" : v === "list" ? "tabs" : "thumb"); setKanbanMode(false); }} />
-                                                        <HeaderIconBtn icon={Cog6ToothIcon} label="Settings" onClick={() => { const hueInt = integrationsRef.current.find(ig => ig.type === "hue"); setLightMode((hueInt?.config?.mode as any) ?? "flash"); setIsGlobalSettings(false); setShowFolderActions(true); }} />
-                                                    </>
+                                                    <HeaderIconBtn icon={Cog6ToothIcon} label="Settings" onClick={() => { const hueInt = integrationsRef.current.find(ig => ig.type === "hue"); setLightMode((hueInt?.config?.mode as any) ?? "flash"); setIsGlobalSettings(false); setShowFolderActions(true); }} />
                                                 )}
                                             </div>
                                         )}
