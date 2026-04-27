@@ -7441,18 +7441,24 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                             <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-1.5 overflow-hidden">
                                                 {item.is_folder ? (
                                                     <>
-                                                        {item.name === "CLAUDE"
-                                                            ? <img src="/claude-icon.png" alt="Claude" className="w-14 h-14 object-contain relative z-10" />
-                                                            : item.name === "TRASH"
-                                                            ? <div className="relative z-10 flex items-center justify-center"><TrashIcon className="w-12 h-12 text-white" /></div>
-                                                            : item.icon
-                                                                ? <div style={{ fontSize: item.icon.startsWith("__hero:") ? undefined : "2.8rem", lineHeight: 1 }} className="relative z-10 flex items-center justify-center">
-                                                                    <FolderIconDisplay value={item.icon} folderName={item.name || "F"} className="w-12 h-12" />
-                                                                  </div>
-                                                                : <div style={{ fontSize: "3rem", lineHeight: 1 }} className="folder-grid-initial font-black relative z-10">{meaningfulInitial(item.name, "F")}</div>
-                                                        }
-                                                        <div className="folder-grid-name mt-0.5 font-bold line-clamp-1 w-full text-center relative z-10 text-[11px] uppercase" style={{ color: "var(--tc, #fff)" }}>{item.name}</div>
-                                                        <div className="opacity-50 font-normal text-center relative z-10 text-[9px]" style={{ color: "var(--tc, #fff)" }}>{(item.subfolderCount || 0) + (item.count || 0)}</div>
+                                                        {(() => {
+                                                            const fc = item.color || item.folder_color || "#888";
+                                                            const tc = item.name === "CLAUDE" ? "#1a1a1a" : isLightColor(fc) ? "#1c1c1e" : "#fff";
+                                                            return (<>
+                                                                {item.name === "CLAUDE"
+                                                                    ? <img src="/claude-icon.png" alt="Claude" className="w-14 h-14 object-contain relative z-10" />
+                                                                    : item.name === "TRASH"
+                                                                    ? <div className="relative z-10 flex items-center justify-center"><TrashIcon className="w-12 h-12" style={{ color: tc }} /></div>
+                                                                    : item.icon
+                                                                        ? <div style={{ fontSize: item.icon.startsWith("__hero:") ? undefined : "2.8rem", lineHeight: 1, color: tc }} className="relative z-10 flex items-center justify-center">
+                                                                            <FolderIconDisplay value={item.icon} folderName={item.name || "F"} className="w-12 h-12" />
+                                                                          </div>
+                                                                        : <div style={{ fontSize: "3rem", lineHeight: 1, color: tc }} className="folder-grid-initial font-black relative z-10">{meaningfulInitial(item.name, "F")}</div>
+                                                                }
+                                                                <div className="folder-grid-name mt-0.5 font-bold line-clamp-1 w-full text-center relative z-10 text-[11px] uppercase" style={{ color: tc }}>{item.name}</div>
+                                                                <div className="opacity-50 font-normal text-center relative z-10 text-[9px]" style={{ color: tc }}>{(item.subfolderCount || 0) + (item.count || 0)}</div>
+                                                            </>);
+                                                        })()}
                                                     </>
                                                 ) : (
                                                     <>
