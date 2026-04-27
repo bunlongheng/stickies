@@ -6059,8 +6059,10 @@ const fireIntegrations = (trigger: string, note: any) => {
                             <EyeIcon className="w-[24px] h-[24px] sm:w-[22px] sm:h-[22px]" />
                         </button>
                         )}
-                        {/* View mode toggle */}
-                        <button type="button"
+                        {/* View mode toggle — matches HeaderIconBtn style */}
+                        <HeaderIconBtn
+                            icon={mainListMode === "list" ? Bars3Icon : mainListMode === "tabs" ? RectangleStackIcon : Squares2X2Icon}
+                            label={mainListMode === "list" ? "List" : mainListMode === "tabs" ? "Tabs" : "Thumb"}
                             onClick={() => {
                                 const isDesktop = typeof window !== "undefined" && window.innerWidth >= 640;
                                 setMainListMode(v => {
@@ -6070,10 +6072,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 });
                                 setKanbanMode(false);
                             }}
-                            className="p-2 sm:p-3 transition text-zinc-500 hover:text-white flex-shrink-0"
-                            title={mainListMode === "list" ? "List" : mainListMode === "tabs" ? "Tabs" : "Thumb"}>
-                            {mainListMode === "list" ? <Bars3Icon className="w-[24px] h-[24px] sm:w-[22px] sm:h-[22px]" /> : mainListMode === "tabs" ? <RectangleStackIcon className="w-[24px] h-[24px] sm:w-[22px] sm:h-[22px]" /> : <Squares2X2Icon className="w-[24px] h-[24px] sm:w-[22px] sm:h-[22px]" />}
-                        </button>
+                        />
                         <button type="button"
                             onClick={() => { setShowNoteActions(v => !v); closeEditorTools(); }}
                             className="p-2 sm:p-3 text-zinc-300 hover:text-white active:text-white transition flex-shrink-0"
