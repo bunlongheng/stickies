@@ -4,8 +4,11 @@ let pool: Pool | null = null;
 
 export function getPool(): Pool {
     if (!pool) {
+        const connStr = process.env.DATABASE_URL ?? "";
+        const isRemote = !connStr.includes("@localhost");
         pool = new Pool({
-            connectionString: process.env.DATABASE_URL,
+            connectionString: connStr,
+            ssl: isRemote ? { rejectUnauthorized: false } : false,
             max: 20,
             idleTimeoutMillis: 30000,
             connectionTimeoutMillis: 5000,
