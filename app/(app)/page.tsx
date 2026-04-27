@@ -7650,18 +7650,18 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                         {(() => {
                             const currentFolder = targetFolder || activeFolder || editingNote?.folder_name;
                             const seen = new Set<string>();
-                            return folders.filter(f => {
+                            const pinned = folders.filter(f => {
+                                if (!pinnedFolders.has(f.name)) return false;
                                 if (f.name === "TRASH" || f.name === currentFolder) return false;
                                 if (seen.has(f.name)) return false;
                                 seen.add(f.name);
                                 return true;
-                            }).sort((a, b) => {
-                                const ap = pinnedFolders.has(a.name) ? 0 : 1;
-                                const bp = pinnedFolders.has(b.name) ? 0 : 1;
-                                if (ap !== bp) return ap - bp;
-                                return a.order - b.order;
-                            });
-                        })().map(f => (
+                            }).sort((a, b) => a.order - b.order);
+                            if (pinned.length === 0) return [null];
+                            return pinned;
+                        })().map(f => !f ? (
+                            <div key="empty" className="px-3 py-2 text-[9px] text-zinc-600 text-center">No pinned folders. Long-press a folder to pin.</div>
+                        ) : (
                             <button key={f.name} type="button"
                                 onClick={() => {
                                     setShowFooterFolderPicker(false);
