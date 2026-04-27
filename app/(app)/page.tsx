@@ -7451,8 +7451,8 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                                   </div>
                                                                 : <div style={{ fontSize: "3rem", lineHeight: 1 }} className="folder-grid-initial font-black relative z-10">{meaningfulInitial(item.name, "F")}</div>
                                                         }
-                                                        <div className="folder-grid-name mt-0.5 font-bold line-clamp-1 w-full text-center relative z-10 text-[11px] uppercase">{item.name}</div>
-                                                        <div className="opacity-50 font-normal text-center relative z-10 text-[9px]">{(item.subfolderCount || 0) + (item.count || 0)}</div>
+                                                        <div className="folder-grid-name mt-0.5 font-bold line-clamp-1 w-full text-center relative z-10 text-[11px] uppercase" style={{ color: "var(--tc, #fff)" }}>{item.name}</div>
+                                                        <div className="opacity-50 font-normal text-center relative z-10 text-[9px]" style={{ color: "var(--tc, #fff)" }}>{(item.subfolderCount || 0) + (item.count || 0)}</div>
                                                     </>
                                                 ) : (
                                                     <>
