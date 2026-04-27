@@ -5939,6 +5939,14 @@ const fireIntegrations = (trigger: string, note: any) => {
                 </div>
             )}
 
+            {/* ── View mode toggle — fixed position, always accessible ── */}
+            <button
+                onClick={() => { setMainListMode(v => v === "thumb" ? "list" : v === "list" ? "tabs" : "thumb"); setKanbanMode(false); }}
+                className="hidden sm:flex fixed top-3 right-14 z-[200] items-center justify-center w-8 h-8 rounded-lg bg-zinc-800/80 hover:bg-zinc-700 text-zinc-400 hover:text-white transition backdrop-blur-sm border border-white/10"
+                title={mainListMode === "list" ? "List view" : mainListMode === "tabs" ? "Tabs view" : "Thumbnail view"}>
+                {mainListMode === "list" ? <Bars3Icon className="w-4 h-4" /> : mainListMode === "tabs" ? <RectangleStackIcon className="w-4 h-4" /> : <Squares2X2Icon className="w-4 h-4" />}
+            </button>
+
             {/* ── two-panel layout ── */}
             <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
 
@@ -5974,14 +5982,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                             aria-label={`Back to ${targetFolder || "folders"}`}>
                             <ArrowLeftIcon className="w-[38px] h-[38px]" />
                         </button>
-                        {/* View mode cycle — visible in editor header */}
-                        <button
-                            onClick={() => { setMainListMode(v => v === "thumb" ? "list" : v === "list" ? "tabs" : "thumb"); setKanbanMode(false); }}
-                            className="flex p-2 text-zinc-500 hover:text-white hover:bg-white/10 transition flex-shrink-0"
-                            title={mainListMode === "list" ? "List" : mainListMode === "tabs" ? "Tabs" : "Thumbnail"}>
-                            {mainListMode === "list" ? <Bars3Icon className="w-5 h-5" /> : mainListMode === "tabs" ? <RectangleStackIcon className="w-5 h-5" /> : <Squares2X2Icon className="w-5 h-5" />}
-                        </button>
-
                         {/* Title only — Apple Notes style */}
                         <input ref={titleInputRef} defaultValue={title} key={`title-${editingNote?.id || "new"}`} onChange={(e) => { titleRaw.current = e.target.value; }} onBlur={(e) => setTitle(e.target.value)} onFocus={() => { closeEditorTools(); setShowNoteActions(false); }} autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false} className="hidden sm:block bg-transparent border-0 appearance-none shadow-none ring-0 outline-none focus:outline-none focus:ring-0 px-1 min-w-0 flex-1 tracking-tight font-bold text-white placeholder:text-zinc-500" style={{ caretColor: activeAccentColor, fontSize: "clamp(18px, 2vw, 24px)" }} placeholder="Note Title" />
                         <input ref={titleInputMobileRef} defaultValue={title} key={`title-m-${editingNote?.id || "new"}`} onChange={(e) => { titleRaw.current = e.target.value; }} onBlur={(e) => setTitle(e.target.value)} onFocus={() => { closeEditorTools(); setShowNoteActions(false); }} autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false} className="sm:hidden bg-transparent border-0 appearance-none shadow-none ring-0 outline-none focus:outline-none focus:ring-0 px-2 flex-grow min-w-0 text-white placeholder:text-zinc-500" style={{ caretColor: activeAccentColor, border: "none", fontSize: "clamp(18px, 5vw, 24px)", fontWeight: 700 }} placeholder="Note Title" />
