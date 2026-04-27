@@ -6059,6 +6059,15 @@ const fireIntegrations = (trigger: string, note: any) => {
                             <EyeIcon className="w-[24px] h-[24px] sm:w-[22px] sm:h-[22px]" />
                         </button>
                         )}
+                        {/* Delete — before toggle in tabs mode */}
+                        {mainListMode === "tabs" && editingNote?.id && (
+                        <button type="button"
+                            onClick={() => { setShowNoteActions(false); closeEditorTools(); setConfirmDelete({ type: "note", noteId: String(editingNote.id), noteName: (title.trim() || editingNote.title || "Untitled").trim(), noteColor: noteColor || editingNote.folder_color || "#71717a" }); }}
+                            className="p-2 sm:p-3 text-red-500 hover:text-red-400 active:text-red-300 transition flex-shrink-0"
+                            title="Delete note">
+                            <TrashIcon className="w-[24px] h-[24px] sm:w-[22px] sm:h-[22px]" />
+                        </button>
+                        )}
                         {/* View mode toggle */}
                         <button type="button"
                             onClick={() => {
@@ -6074,8 +6083,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                             title={mainListMode === "list" ? "List" : mainListMode === "tabs" ? "Tabs" : "Thumb"}>
                             {mainListMode === "list" ? <Bars3Icon className="w-[24px] h-[24px] sm:w-[22px] sm:h-[22px]" /> : mainListMode === "tabs" ? <RectangleStackIcon className="w-[24px] h-[24px] sm:w-[22px] sm:h-[22px]" /> : <Squares2X2Icon className="w-[24px] h-[24px] sm:w-[22px] sm:h-[22px]" />}
                         </button>
-                        {/* Delete — quick access */}
-                        {editingNote?.id && (
+                        {/* Delete — after toggle in non-tabs mode */}
+                        {mainListMode !== "tabs" && editingNote?.id && (
                         <button type="button"
                             onClick={() => { setShowNoteActions(false); closeEditorTools(); setConfirmDelete({ type: "note", noteId: String(editingNote.id), noteName: (title.trim() || editingNote.title || "Untitled").trim(), noteColor: noteColor || editingNote.folder_color || "#71717a" }); }}
                             className="p-2 sm:p-3 text-red-500 hover:text-red-400 active:text-red-300 transition flex-shrink-0"
