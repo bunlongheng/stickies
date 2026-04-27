@@ -6858,7 +6858,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                     <GlobeAltIcon className="w-3 h-3 text-emerald-400 flex-shrink-0" title="Public note" />
                                 )}
                                 {/* Folder pill + dropdown */}
-                                <div className="relative">
+                                <div className="relative" ref={(el) => { if (el) el.dataset.folderPillRef = "1"; }}>
                                     <button type="button"
                                         onClick={() => setShowFooterFolderPicker(v => !v)}
                                         className="font-mono font-black uppercase tracking-wide whitespace-nowrap px-1.5 py-px rounded-full hover:brightness-125 transition"
@@ -6868,7 +6868,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                     {showFooterFolderPicker && (
                                         <>
                                             <div className="fixed inset-0 z-[999]" onClick={() => setShowFooterFolderPicker(false)} />
-                                            <div className="absolute bottom-6 right-0 z-[1000] w-48 max-h-[240px] overflow-y-auto rounded-xl bg-zinc-900 border border-white/15 shadow-2xl py-1" style={{ scrollbarWidth: "thin" }}>
+                                            <div className="fixed z-[1000] w-48 max-h-[240px] overflow-y-auto rounded-xl bg-zinc-900 border border-white/15 shadow-2xl py-1" style={{ scrollbarWidth: "thin", bottom: 30, right: 16 }}>
                                                 {(() => {
                                                     const currentFolder = targetFolder || activeFolder || editingNote?.folder_name;
                                                     const seen = new Set<string>();
