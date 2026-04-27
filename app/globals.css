@@ -266,7 +266,7 @@ body {
   color: var(--tc, #fff) !important;
 }
 .folder-grid-tile .folder-icon-badge {
-  background: rgba(255,255,255,0.2);
+  background: rgba(0,0,0,0.08);
   color: var(--ic, #fff);
 }
 .folder-grid-tile .folder-grid-initial {
@@ -275,6 +275,7 @@ body {
 /* CLAUDE grid tile stays white */
 .folder-grid-tile-claude {
   background: #fff !important;
+  border: 1px solid rgba(0,0,0,0.12);
 }
 .folder-grid-tile-claude .folder-grid-name,
 .folder-grid-tile-claude .folder-grid-initial {
