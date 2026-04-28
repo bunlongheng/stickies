@@ -6173,7 +6173,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                     onClick={() => { if (!isActive) { if (mainListMode !== "tabs" && n.folder_name && n.folder_name !== activeFolder) { const fr = dbData.find(r => r.is_folder && r.folder_name === n.folder_name); if (fr) enterFolder({ id: String(fr.id), name: n.folder_name, color: fr.folder_color || c }); } void openNote(n); } }}
                                                     className={`flex items-center text-[10px] font-bold ${isActive ? "pl-3 pr-1 truncate max-w-[150px]" : "px-2"}`} style={{ height: "100%" }}
                                                     title={n.title || "Untitled"}>
-                                                    {isActive ? <>{(n.title || "Untitled").slice(0, 20)}{(n.title || "").length > 20 ? "…" : ""}</> : (n.title || "U").charAt(0).toUpperCase()}
+                                                    {(() => { const t = n.title || "Untitled"; if (isActive) return <>{t.slice(0, 20)}{t.length > 20 ? "…" : ""}</>; const len = dayNotes.length; const chars = len < 5 ? t.length : len < 10 ? 5 : len < 15 ? 3 : 2; return t.slice(0, chars) + (t.length > chars ? "…" : ""); })()}
                                                 </button>
                                                 {isActive && (
                                                     <button type="button"
