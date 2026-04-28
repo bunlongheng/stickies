@@ -4097,7 +4097,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         setContent(note.content != null ? (note.type === "mermaid" || detectMermaid(note.content || "") ? cleanMermaidContent(note.content) : note.content) : "");
         setImages((note as any).images ?? []);
         setTargetFolder(note.folder_name || activeFolder || "General");
-        setNoteColor(note.folder_color || folders.find((f: any) => f.name === (note.folder_name || activeFolder))?.color || palette12[0]);
+        setNoteColor(note.folder_color || folders.find((f: any) => f.name === (note.folder_name || activeFolder))?.color || "#888");
         setShowColorPicker(false);
         setShowSwitcher(false);
         // On mobile, auto-show preview for markdown notes
@@ -6136,7 +6136,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 className={`flex-shrink-0 flex items-center transition-all ${isActive ? "relative z-10" : "hover:brightness-110 opacity-75"}`}
                                                 style={{ background: isActive ? c : `${c}99`, color: "#1c1c1e", height: isActive ? H + 6 : H, borderRadius: "8px 8px 0 0" }}>
                                                 <button type="button"
-                                                    onClick={() => { if (!isActive) { if (n.folder_name && n.folder_name !== activeFolder) { const fr = dbData.find(r => r.is_folder && r.folder_name === n.folder_name); if (fr) enterFolder({ id: String(fr.id), name: n.folder_name, color: fr.folder_color || c }); } void openNote(n); } }}
+                                                    onClick={() => { if (!isActive) { if (mainListMode !== "tabs" && n.folder_name && n.folder_name !== activeFolder) { const fr = dbData.find(r => r.is_folder && r.folder_name === n.folder_name); if (fr) enterFolder({ id: String(fr.id), name: n.folder_name, color: fr.folder_color || c }); } void openNote(n); } }}
                                                     className="flex items-center pl-3 pr-1 text-[10px] font-bold truncate max-w-[150px]" style={{ height: "100%" }}>
                                                     {(n.title || "Untitled").slice(0, 20)}{(n.title || "").length > 20 ? "…" : ""}
                                                 </button>
