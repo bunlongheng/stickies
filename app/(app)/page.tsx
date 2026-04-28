@@ -2510,7 +2510,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                 }
                 return;
             }
-            if (item.trashed_at) return;
+            if (item.trashed_at && folderName !== "TRASH") return;
             noteCountByFolder.set(folderName, (noteCountByFolder.get(folderName) || 0) + 1);
             if (!firstNoteColorByFolder.has(folderName) && item.folder_color) firstNoteColorByFolder.set(folderName, item.folder_color);
         });
