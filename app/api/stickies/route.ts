@@ -324,7 +324,7 @@ export async function GET(req: Request) {
     if (url.searchParams.get("recent") === "today") {
         const RECENT_COLS = `id, title, folder_name, folder_color, folder_id, parent_folder_name, "order", updated_at, created_at, type, is_folder, is_public, trashed_at, icon, list_mode`;
         const { sql, params } = withUser(
-            `SELECT ${RECENT_COLS} FROM "${table}" WHERE is_folder = false AND trashed_at IS NULL AND updated_at >= CURRENT_DATE`,
+            `SELECT ${RECENT_COLS} FROM "${table}" WHERE is_folder = false AND trashed_at IS NULL AND created_at >= NOW() - INTERVAL '24 hours'`,
             [],
             userId
         );
