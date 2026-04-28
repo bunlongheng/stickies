@@ -313,6 +313,17 @@ export async function GET(req: Request) {
         return NextResponse.json({ folders: rows });
     }
 
+    if (url.searchParams.get("recent") === "today") {
+        const RECENT_COLS = `id, title, folder_name, folder_color, folder_id, parent_folder_name, "order", updated_at, created_at, type, is_folder, is_public, trashed_at, icon, list_mode`;
+        const { sql, params } = withUser(
+            `SELECT ${RECENT_COLS} FROM "${table}" WHERE is_folder = false AND trashed_at IS NULL AND updated_at >= CURRENT_DATE`,
+            [],
+            userId
+        );
+        const rows = await query(`${sql} ORDER BY updated_at DESC LIMIT 100`, params);
+        return NextResponse.json({ notes: rows });
+    }
+
     if (url.searchParams.get("counts") === "1") {
         const rows = await query<{ folder_name: string; folder_id: string | null; cnt: string; latest: string }>(
             `SELECT folder_name, folder_id::text AS folder_id, COUNT(*) AS cnt, MAX(updated_at) AS latest FROM "stickies" WHERE is_folder = false AND user_id = $1 AND (trashed_at IS NULL OR folder_name = 'TRASH') GROUP BY folder_name, folder_id`,
