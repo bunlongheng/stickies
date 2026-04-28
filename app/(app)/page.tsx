@@ -8052,6 +8052,31 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                     <div className="divide-y divide-white/[0.06]">{actions.map(renderRow)}</div>
                                                 </div>
                                             )}
+                                            {/* Google Drive */}
+                                            <div className="mt-4 border-t border-white/[0.06]">
+                                                <div className="px-5 pt-4 pb-1.5 text-[9px] font-black uppercase tracking-[0.15em] text-zinc-600">Storage</div>
+                                                <button type="button"
+                                                    className="w-full px-5 py-3.5 flex items-center gap-4 text-left hover:bg-white/5 active:bg-white/10 transition"
+                                                    onClick={async () => {
+                                                        const token = await getAuthToken();
+                                                        const res = await fetch("/api/stickies/gdrive/status", { headers: { Authorization: `Bearer ${token}` } });
+                                                        const { connected } = await res.json().catch(() => ({ connected: false }));
+                                                        if (connected) {
+                                                            showToast("Google Drive connected", "#34C759");
+                                                        } else {
+                                                            window.location.href = "/api/stickies/gdrive/auth";
+                                                        }
+                                                    }}>
+                                                    <div className="w-9 h-9 flex-shrink-0 flex items-center justify-center">
+                                                        <svg viewBox="0 0 87.3 78" className="w-7 h-7"><path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8H0c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/><path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0-1.2 4.5h27.5z" fill="#00ac47"/><path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5H59.85z" fill="#ea4335"/><path d="M43.65 25 57.4 1.2C56.05.4 54.5 0 52.9 0H34.4c-1.6 0-3.15.45-4.5 1.2z" fill="#00832d"/><path d="M59.8 53H27.5L13.75 76.8c1.35.8 2.9 1.2 4.5 1.2h22.5c1.6 0 3.15-.45 4.5-1.2z" fill="#2684fc"/><path d="M73.4 26.5 60.65 4.5c-.8-1.4-1.95-2.5-3.3-3.3L43.6 25l16.2 28h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00"/></svg>
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="text-xs font-black text-white">Google Drive</div>
+                                                        <div className="text-[10px] text-zinc-500">Image &amp; file uploads</div>
+                                                    </div>
+                                                    <ChevronRightIcon className="w-4 h-4 text-zinc-600 flex-shrink-0" />
+                                                </button>
+                                            </div>
                                             {/* Automations entry */}
                                             <div className="mt-4 border-t border-white/[0.06]">
                                                 <div className="px-5 pt-4 pb-1.5 text-[9px] font-black uppercase tracking-[0.15em] text-zinc-600">Automations</div>
