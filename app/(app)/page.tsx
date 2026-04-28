@@ -6151,13 +6151,13 @@ const fireIntegrations = (trigger: string, note: any) => {
                         const H = 30;
                         const btnCls = "flex-shrink-0 flex items-center justify-center text-zinc-500 hover:text-white transition";
                         return (
-                            <div className="shrink-0 flex items-end overflow-hidden" style={{ height: H + 8, background: appTheme === "light" ? "#e8e8ed" : "#2a2a2a" }}>
+                            <div className="shrink-0 flex items-end flex-wrap" style={{ minHeight: H + 8, background: appTheme === "light" ? "#e8e8ed" : "#2a2a2a" }}>
                                 {/* + */}
                                 <button type="button" onClick={() => openNewNote(undefined, inFolder ? activeFolder : "Today")} className={`${btnCls} px-2`} style={{ height: H }} title="New note">
                                     <PlusIcon className="w-3.5 h-3.5" />
                                 </button>
                                 {/* Tabs */}
-                                <div className="flex items-end gap-0.5 overflow-x-auto flex-1 min-w-0" style={{ scrollbarWidth: "none", height: H + 8 }} ref={(el) => {
+                                <div className="flex items-end gap-0.5 flex-wrap flex-1 min-w-0" style={{ minHeight: H + 8 }} ref={(el) => {
                                     if (el) { const a = el.querySelector("[data-tab-active]"); if (a) a.scrollIntoView({ inline: "nearest", block: "nearest" }); }
                                 }}>
                                     {dayNotes.map(n => {
