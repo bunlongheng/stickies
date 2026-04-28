@@ -6171,8 +6171,9 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 style={{ background: isActive ? c : `${c}99`, color: "#1c1c1e", height: isActive ? H + 6 : H, borderRadius: "8px 8px 0 0" }}>
                                                 <button type="button"
                                                     onClick={() => { if (!isActive) { if (mainListMode !== "tabs" && n.folder_name && n.folder_name !== activeFolder) { const fr = dbData.find(r => r.is_folder && r.folder_name === n.folder_name); if (fr) enterFolder({ id: String(fr.id), name: n.folder_name, color: fr.folder_color || c }); } void openNote(n); } }}
-                                                    className="flex items-center pl-3 pr-1 text-[10px] font-bold truncate max-w-[150px]" style={{ height: "100%" }}>
-                                                    {(n.title || "Untitled").slice(0, 20)}{(n.title || "").length > 20 ? "…" : ""}
+                                                    className={`flex items-center text-[10px] font-bold ${isActive ? "pl-3 pr-1 truncate max-w-[150px]" : "px-2"}`} style={{ height: "100%" }}
+                                                    title={n.title || "Untitled"}>
+                                                    {isActive ? <>{(n.title || "Untitled").slice(0, 20)}{(n.title || "").length > 20 ? "…" : ""}</> : (n.title || "U").charAt(0).toUpperCase()}
                                                 </button>
                                                 {isActive && (
                                                     <button type="button"
