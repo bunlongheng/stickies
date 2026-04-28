@@ -315,7 +315,7 @@ export async function GET(req: Request) {
 
     if (url.searchParams.get("counts") === "1") {
         const rows = await query<{ folder_name: string; folder_id: string | null; cnt: string; latest: string }>(
-            `SELECT folder_name, folder_id::text AS folder_id, COUNT(*) AS cnt, MAX(updated_at) AS latest FROM "stickies" WHERE is_folder = false AND user_id = $1 GROUP BY folder_name, folder_id`,
+            `SELECT folder_name, folder_id::text AS folder_id, COUNT(*) AS cnt, MAX(updated_at) AS latest FROM "stickies" WHERE is_folder = false AND user_id = $1 AND (trashed_at IS NULL OR folder_name = 'TRASH') GROUP BY folder_name, folder_id`,
             [userId]
         );
         const byName: Record<string, number> = {};
