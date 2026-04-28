@@ -3160,7 +3160,9 @@ const fireIntegrations = (trigger: string, note: any) => {
                 setShowNoteActions(false);
                 // In tab view, stay open and move to next tab
                 const isTabView = (showTabs || mainListMode === "tabs") && typeof window !== "undefined" && window.innerWidth >= 640;
-                if (isTabView) {
+                if (mainListMode === "tabs") {
+                    // Tabs mode: stay on current note after move
+                } else if (isTabView) {
                     // Find next tab to switch to
                     const remaining = dbData.filter(n => !n.is_folder && !n.trashed_at && String(n.id) !== noteId && !dismissedTabs.has(String(n.id)) && (activeFolder ? n.folder_name === activeFolder : true))
                         .sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || ""))).slice(0, tabLimit);
