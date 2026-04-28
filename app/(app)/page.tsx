@@ -1990,20 +1990,32 @@ export default function NotesMaster() {
         }
     }, [mainListMode]);
 
-    // Auto-open latest note on initial data load in tabs mode (desktop only)
+    // Auto-load today's notes and open latest when entering tabs mode (desktop only)
     const tabsAutoOpenedRef = useRef(false);
     useEffect(() => {
         const isDesktop = typeof window !== "undefined" && window.innerWidth >= 640;
-        // Mobile fallback: tabs not allowed, revert to list
         if (mainListMode === "tabs" && !isDesktop) { setMainListMode("list"); return; }
-        if (mainListMode === "tabs" && !tabsAutoOpenedRef.current && dbData.some(n => !n.is_folder && !n.trashed_at)) {
+        if (mainListMode === "tabs" && !tabsAutoOpenedRef.current) {
             tabsAutoOpenedRef.current = true;
-            const allNotes = dbData.filter(n => !n.is_folder && !n.trashed_at)
-                .sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")));
-            if (allNotes.length > 0) void openNote(allNotes[0]);
+            (async () => {
+                try {
+                    const token = await getAuthToken();
+                    const res = await fetch("/api/stickies?recent=today", { headers: { Authorization: `Bearer ${token}` } });
+                    if (!res.ok) return;
+                    const { notes = [] } = await res.json();
+                    if (notes.length > 0) {
+                        setDbData(prev => {
+                            const freshIds = new Set(notes.map((n: any) => String(n.id)));
+                            const without = prev.filter((r: any) => r.is_folder || !freshIds.has(String(r.id)));
+                            return [...without, ...notes];
+                        });
+                        void openNote(notes[0]);
+                    }
+                } catch { /* ignore */ }
+            })();
         }
         if (mainListMode !== "tabs") tabsAutoOpenedRef.current = false;
-    }, [mainListMode, dbData]);
+    }, [mainListMode]);
 
     useEffect(() => {
         try { localStorage.setItem(KANBAN_MODE_KEY, String(kanbanMode)); } catch { /* ignore */ }
@@ -6101,13 +6113,16 @@ const fireIntegrations = (trigger: string, note: any) => {
                     {/* ── Tab bar — folder notes or today's notes (no folder) ── */}
                     {(showTabs || mainListMode === "tabs") && typeof window !== "undefined" && window.innerWidth >= 640 && (() => {
                         const inFolder = !!activeFolder;
+                        const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
                         const allNotes = (inFolder
                             ? dbData.filter(n => !n.is_folder && !n.trashed_at && !dismissedTabs.has(String(n.id)) && n.folder_name === activeFolder)
+                            : mainListMode === "tabs"
+                            ? dbData.filter(n => !n.is_folder && !n.trashed_at && !dismissedTabs.has(String(n.id)) && new Date(n.updated_at || n.created_at || 0) >= todayStart)
                             : dbData.filter(n => !n.is_folder && !n.trashed_at && !dismissedTabs.has(String(n.id)))
                         ).sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")));
                         const dayNotes = allNotes.slice(0, tabLimit);
                         const hasMore = allNotes.length > tabLimit;
-                        const dayLabel = inFolder ? activeFolder : "All";
+                        const dayLabel = inFolder ? activeFolder : "Today";
                         const activeId = String(editingNote?.id ?? "");
                         const dismissTab = (id: string) => {
                             setDismissedTabs(prev => {
