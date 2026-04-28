@@ -2958,14 +2958,8 @@ const fireIntegrations = (trigger: string, note: any) => {
     }, [deferredContent, editorOpen]);
 
 
-    // Debounced auto-save while typing — broadcasts to other devices via Pusher
-    useEffect(() => {
-        if (!editorOpen || !isDraftDirty) return;
-        if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
-        autoSaveTimerRef.current = setTimeout(() => { if (isDraftDirtyRef.current) void saveNote({ silent: true }); }, 2000);
-        return () => { if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current); };
+    // Auto-save disabled — save only on Cmd+S
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [content, title, editorOpen]);
 
     const saveNote = useCallback(
         async ({ silent = false, deriveTitle = false }: { silent?: boolean; deriveTitle?: boolean } = {}) => {
@@ -6565,7 +6559,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 searchIndex={findCursor}
                                 onSearchResults={() => {}}
                                 onChange={setContent}
-                                onBlur={() => { setCodeEditMode(false); void saveNote({ silent: true, deriveTitle: true }); }}
+                                onBlur={() => { setCodeEditMode(false); }}
                                 onClick={() => setCodeEditMode(true)}
                             />
                         ) : mdViewMode !== "text" ? (
@@ -6578,7 +6572,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     onChange={(e) => { latestContentRef.current = e.target.value; setContent(e.target.value); }}
                                     onClick={() => closeEditorTools()}
                                     onFocus={() => closeEditorTools()}
-                                    onBlur={() => void saveNote({ silent: true, deriveTitle: true })}
+                                    onBlur={() => {}}
                                     onPaste={handleEditorPaste}
                                     className="ios-editor-scroll overscroll-none touch-pan-y hidden sm:block"
                                     style={{
@@ -6669,7 +6663,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 searchIndex={findCursor}
                                 onSearchResults={() => {}}
                                 onChange={setContent}
-                                onBlur={() => { setCodeEditMode(false); void saveNote({ silent: true, deriveTitle: true }); }}
+                                onBlur={() => { setCodeEditMode(false); }}
                                 onClick={() => setCodeEditMode(true)}
                             />
                         ) : jsonMode ? (
@@ -6682,7 +6676,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 searchIndex={findCursor}
                                 onSearchResults={() => {}}
                                 onChange={setContent}
-                                onBlur={() => { setCodeEditMode(false); void saveNote({ silent: true, deriveTitle: true }); }}
+                                onBlur={() => { setCodeEditMode(false); }}
                                 onClick={() => setCodeEditMode(true)}
                             />
                         ) : (() => {
@@ -6713,7 +6707,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     onChange={(e) => { latestContentRef.current = e.target.value; setContent(e.target.value); }}
                                     onClick={() => closeEditorTools()}
                                     onFocus={() => closeEditorTools()}
-                                    onBlur={() => void saveNote({ silent: true, deriveTitle: true })}
+                                    onBlur={() => {}}
                                     onPaste={handleEditorPaste}
                                     className="ios-editor-scroll overscroll-none touch-pan-y"
                                     style={{
