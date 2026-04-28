@@ -6857,7 +6857,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                 {/* Folder pill + dropdown */}
                                 <div className="relative" ref={(el) => { if (el) el.dataset.folderPillRef = "1"; }}>
                                     <button type="button"
-                                        onClick={() => setShowFooterFolderPicker(v => !v)}
+                                        onClick={() => { if (pinnedFolders.size > 0) setShowFooterFolderPicker(v => !v); }}
                                         className="font-mono font-black uppercase tracking-wide whitespace-nowrap px-1.5 py-px rounded-full hover:brightness-125 transition"
                                         style={{ fontSize: 8, background: `${noteColor}22`, color: noteColor, border: `1px solid ${noteColor}44` }}>
                                         {targetFolder || activeFolder || editingNote?.folder_name || "General"}
@@ -7654,11 +7654,8 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                 seen.add(f.name);
                                 return true;
                             }).sort((a, b) => a.order - b.order);
-                            if (pinned.length === 0) return [null];
                             return pinned;
-                        })().map(f => !f ? (
-                            <div key="empty" className="px-3 py-2 text-[9px] text-zinc-600 text-center">No pinned folders. Long-press a folder to pin.</div>
-                        ) : (
+                        })().map(f => (
                             <button key={f.name} type="button"
                                 onClick={() => {
                                     setShowFooterFolderPicker(false);
