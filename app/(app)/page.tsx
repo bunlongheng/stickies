@@ -1292,14 +1292,21 @@ export default function NotesMaster() {
     const [colDragOver, setColDragOver] = useState<string | null>(null);
     const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set());
     const [pinnedFolders, setPinnedFolders] = useState<Set<string>>(() => { try { if (typeof window === "undefined") return new Set(); const raw = localStorage.getItem(PINNED_FOLDERS_KEY); return raw ? new Set(JSON.parse(raw)) : new Set(); } catch { return new Set(); } });
+    const savePinnedToDb = useCallback(async (folders: Set<string>) => {
+        try {
+            const token = await getAuthToken();
+            await fetch("/api/stickies", { method: "PATCH", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ pinned_folders: [...folders] }) });
+        } catch {}
+    }, []);
     const togglePinFolder = useCallback((name: string) => {
         setPinnedFolders(prev => {
             const next = new Set(prev);
             if (next.has(name)) next.delete(name); else next.add(name);
             try { localStorage.setItem(PINNED_FOLDERS_KEY, JSON.stringify([...next])); } catch {}
+            void savePinnedToDb(next);
             return next;
         });
-    }, []);
+    }, [savePinnedToDb]);
     // glowCard converted to DOM-only (no React state) to avoid re-renders on every mousemove
     const [imgPopover, setImgPopover] = useState<{ src: string; alt: string; x: number; y: number } | null>(null);
     const [now, setNow] = useState(() => new Date());
@@ -1531,7 +1538,7 @@ export default function NotesMaster() {
                 return;
             }
             const _t0 = performance.now();
-            const [foldersRes, integrationsResult, countsResult] = await Promise.all([
+            const [foldersRes, integrationsResult, countsResult, prefsResult] = await Promise.all([
                 fetch("/api/stickies?folders=1", {
                     headers: { Authorization: `Bearer ${token}` },
                 }).then((r) => {
@@ -1544,6 +1551,9 @@ export default function NotesMaster() {
                 fetch("/api/stickies?counts=1", {
                     headers: { Authorization: `Bearer ${token}` },
                 }).then((r) => r.ok ? r.json() : { counts: {} }).catch(() => ({ counts: {} })),
+                fetch("/api/stickies?prefs=1", {
+                    headers: { Authorization: `Bearer ${token}` },
+                }).then((r) => r.ok ? r.json() : { pinned_folders: [] }).catch(() => ({ pinned_folders: [] })),
             ]);
             const folderItems = (foldersRes.folders ?? []).map((f: any) => ({ ...f, is_folder: true }));
             // Preserve any already-loaded notes in dbData (from prior folder navigations)
@@ -1556,6 +1566,13 @@ export default function NotesMaster() {
             setFolderCounts(freshCounts);
             setFolderCountsById(freshCountsById);
             if (countsResult.latestByFolderId) setFolderLatestById(countsResult.latestByFolderId);
+            // Sync pinned folders from DB
+            const dbPinned = prefsResult.pinned_folders ?? [];
+            if (dbPinned.length > 0) {
+                const pinSet = new Set<string>(dbPinned);
+                setPinnedFolders(pinSet);
+                try { localStorage.setItem(PINNED_FOLDERS_KEY, JSON.stringify(dbPinned)); } catch {}
+            }
             // Persist folders + counts cache for instant next load
             try {
                 localStorage.setItem(DB_CACHE_KEY, JSON.stringify(folderItems));

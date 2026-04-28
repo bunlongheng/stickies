@@ -282,6 +282,14 @@ export async function GET(req: Request) {
     } catch { /* column may not exist yet — migration pending */ }
     const url = new URL(req.url);
 
+    // User preferences (pinned folders)
+    if (url.searchParams.get("prefs") === "1") {
+        // Auto-create table if missing
+        try { await execute(`CREATE TABLE IF NOT EXISTS user_preferences (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), user_id UUID NOT NULL UNIQUE, pinned_folders TEXT[] NOT NULL DEFAULT '{}', created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now())`); } catch {}
+        const row = await queryOne<{ pinned_folders: string[] }>(`SELECT pinned_folders FROM user_preferences WHERE user_id = $1`, [userId]);
+        return NextResponse.json({ pinned_folders: row?.pinned_folders ?? [] });
+    }
+
     // Return API key for import guide (owner-only, never cached)
     if (url.searchParams.get("apikey") === "1") {
         return NextResponse.json({ key: process.env.STICKIES_API_KEY || "" }, { headers: { "Cache-Control": "no-store" } });
@@ -888,6 +896,16 @@ export async function PATCH(req: Request) {
     broadcastRequest(req, auth, { summary: (body as any)?.rename_note?.title ?? (body as any)?.rename_folder?.from ?? (body as any)?.id ?? undefined });
 
     const now = new Date().toISOString();
+
+    if (body.pinned_folders !== undefined) {
+        const folders = Array.isArray(body.pinned_folders) ? body.pinned_folders.map(String) : [];
+        try { await execute(`CREATE TABLE IF NOT EXISTS user_preferences (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), user_id UUID NOT NULL UNIQUE, pinned_folders TEXT[] NOT NULL DEFAULT '{}', created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now())`); } catch {}
+        await execute(
+            `INSERT INTO user_preferences (user_id, pinned_folders, updated_at) VALUES ($1, $2, $3) ON CONFLICT (user_id) DO UPDATE SET pinned_folders = $2, updated_at = $3`,
+            [userId, folders, now]
+        );
+        return NextResponse.json({ ok: true, pinned_folders: folders });
+    }
 
     if (body.rename_note) {
         const { id, title } = body.rename_note as { id: string; title: string };
