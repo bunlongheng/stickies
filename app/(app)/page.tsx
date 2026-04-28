@@ -3229,11 +3229,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         const handler = (e: KeyboardEvent) => {
             if ((e.metaKey || e.ctrlKey) && e.key === "s") {
                 e.preventDefault();
-                void saveNote({ silent: true, deriveTitle: true }).then(() => {
-                    const rawT = titleRaw.current || title;
-                    const t = rawT.trim() ? rawT.slice(0, 12) + (rawT.length > 12 ? "…" : "") : "Saved";
-                    showToast(`"${t}" saved`, noteColor || "#34C759");
-                });
+                void saveNote({ silent: true, deriveTitle: true });
             }
         };
         window.addEventListener("keydown", handler);
