@@ -6724,8 +6724,33 @@ const fireIntegrations = (trigger: string, note: any) => {
                         })()}
                     </div>
 
-                    {/* Image attachment strip */}
-                    {(images.length > 0 || uploadingImages) && (
+                    {/* Image attachments */}
+                    {(images.length > 0 || uploadingImages) && (() => {
+                        const allImages = images.every(img => img.type?.startsWith("image/") || (!img.type?.includes("pdf")));
+                        const isPageView = allImages && images.length > 2;
+                        return isPageView ? (
+                        // Full-width stacked view (PDF pages, many images)
+                        <div className="flex-1 overflow-y-auto bg-zinc-950 border-t border-white/[0.06]">
+                            <div className="flex flex-col items-center gap-4 py-4 px-2">
+                                {images.map((img, i) => (
+                                    <div key={i} className="relative group w-full max-w-[800px]">
+                                        <img src={img.url} alt={img.name} className="w-full rounded shadow-lg cursor-pointer" onClick={() => setLightboxUrl(img.url)} />
+                                        <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
+                                            <span className="text-[9px] text-white/50 bg-black/60 px-1.5 py-0.5 rounded">{i + 1}/{images.length}</span>
+                                            <button onClick={(ev) => { ev.stopPropagation(); removeImage(i); }}
+                                                className="w-5 h-5 rounded-full bg-black/70 text-white text-[10px] flex items-center justify-center hover:bg-red-600 transition">✕</button>
+                                        </div>
+                                    </div>
+                                ))}
+                                {uploadingImages && (
+                                    <div className="w-full max-w-[800px] h-32 rounded border border-white/10 flex items-center justify-center">
+                                        <span className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                        ) : (
+                        // Thumbnail strip (few images)
                         <div className="flex items-center gap-2 px-3 py-2 flex-wrap border-t border-white/[0.06] shrink-0 bg-black">
                             {images.map((img, i) => (
                                 <div key={i} className="relative group w-16 h-16 rounded-lg overflow-hidden shrink-0 cursor-pointer"
@@ -6749,7 +6774,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 </div>
                             )}
                         </div>
-                    )}
+                        );
+                    })()}
                 {/* ── Bottom status bar ── */}
                 {editingNote && (() => {
                     const bytes = content.length;
@@ -7029,7 +7055,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                     const vp = page.getViewport({ scale });
                                     const canvas = document.createElement("canvas");
                                     canvas.width = vp.width; canvas.height = vp.height;
-                                    await page.render({ canvasContext: canvas.getContext("2d")!, viewport: vp }).promise;
+                                    await page.render({ canvasContext: canvas.getContext("2d")!, viewport: vp, canvas } as any).promise;
                                     const blob = await new Promise<Blob>((res) => canvas.toBlob(b => res(b!), "image/png"));
                                     imageFiles.push(new File([blob], `${file.name.replace(/\.pdf$/i, "")}_p${i}.png`, { type: "image/png" }));
                                 }
