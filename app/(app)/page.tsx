@@ -7107,32 +7107,6 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                 return;
                             }
 
-                            // Single PDF drop (not in folder, not in editor) → convert pages to images
-                            const pdfFile = files.find(f => f.type === "application/pdf");
-                            if (pdfFile && !editorOpen) {
-                                void (async () => {
-                                    const title = pdfFile.name.replace(/\.pdf$/i, "");
-                                    showToast(`Converting "${title}" pages...`, "#a78bfa");
-                                    try {
-                                        const pageImages = await pdfToImages(pdfFile);
-                                        setEditingNote(null);
-                                        setTitle(title);
-                                        setContent(`PDF: ${pageImages.length} pages`);
-                                        setPendingNoteType("text");
-                                        setTargetFolder(activeFolder || "");
-                                        setNoteColor(palette12[Math.floor(Math.random() * palette12.length)]);
-                                        setEditorOpen(true);
-                                        playSound("create");
-                                        setTimeout(async () => {
-                                            noteEverDirtyRef.current = true;
-                                            await saveNoteRef.current?.({ silent: true });
-                                            await addImages(pageImages);
-                                        }, 500);
-                                    } catch { showError("PDF conversion failed"); }
-                                })();
-                                return;
-                            }
-
                             // Images/PDFs → if editor open, attach to current note
                             if (files.length && editorOpen && files.every(f => f.type.startsWith("image/") || f.type === "application/pdf")) {
                                 addImages(Array.from(files));
