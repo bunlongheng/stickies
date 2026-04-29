@@ -7016,6 +7016,26 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                             if (!items.length && !files.length) return;
                             e.preventDefault();
 
+                            // PDF to images helper
+                            const pdfToImages = async (file: File): Promise<File[]> => {
+                                const pdfjsLib = await import("pdfjs-dist");
+                                pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+                                const data = new Uint8Array(await file.arrayBuffer());
+                                const pdf = await pdfjsLib.getDocument({ data }).promise;
+                                const imageFiles: File[] = [];
+                                for (let i = 1; i <= pdf.numPages; i++) {
+                                    const page = await pdf.getPage(i);
+                                    const scale = 2;
+                                    const vp = page.getViewport({ scale });
+                                    const canvas = document.createElement("canvas");
+                                    canvas.width = vp.width; canvas.height = vp.height;
+                                    await page.render({ canvasContext: canvas.getContext("2d")!, viewport: vp }).promise;
+                                    const blob = await new Promise<Blob>((res) => canvas.toBlob(b => res(b!), "image/png"));
+                                    imageFiles.push(new File([blob], `${file.name.replace(/\.pdf$/i, "")}_p${i}.png`, { type: "image/png" }));
+                                }
+                                return imageFiles;
+                            };
+
                             // Check for folder drop via webkitGetAsEntry
                             const entries = items.map(i => (i as any).webkitGetAsEntry?.() as FileSystemEntry | null).filter(Boolean);
                             const dirEntry = entries.find(e => e?.isDirectory) as FileSystemDirectoryEntry | undefined;
@@ -7027,7 +7047,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                     const read = () => reader.readEntries(async (ents) => {
                                         if (!ents.length) { resolve(results); return; }
                                         for (const ent of ents) {
-                                            if (ent.isFile && /\.(md|txt)$/i.test(ent.name)) {
+                                            if (ent.isFile && /\.(md|txt|pdf)$/i.test(ent.name)) {
                                                 const file = await new Promise<File>((res) => (ent as FileSystemFileEntry).file(res));
                                                 results.push(file);
                                             }
@@ -7037,29 +7057,78 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                     read();
                                 });
                                 void (async () => {
-                                    const mdTxtFiles = await readDir(dirEntry);
-                                    if (!mdTxtFiles.length) { showToast(`No .md or .txt files in "${folderName}"`, "#ef4444"); return; }
-                                    showToast(`Importing ${mdTxtFiles.length} files into "${folderName}"...`, "#a78bfa");
+                                    const allFiles = await readDir(dirEntry);
+                                    if (!allFiles.length) { showToast(`No .md, .txt, or .pdf files in "${folderName}"`, "#ef4444"); return; }
+                                    showToast(`Importing ${allFiles.length} files into "${folderName}"...`, "#a78bfa");
                                     const token = await getAuthToken();
                                     let created = 0;
-                                    for (const file of mdTxtFiles) {
-                                        const text = await file.text();
+                                    for (const file of allFiles) {
                                         const ext = file.name.includes(".") ? "." + file.name.split(".").pop()!.toLowerCase() : "";
-                                        const type = ext === ".md" ? "markdown" : "text";
                                         const title = file.name.replace(/\.[^.]+$/, "");
                                         const color = palette12[Math.floor(Math.random() * palette12.length)];
-                                        try {
-                                            await fetch("/api/stickies", {
-                                                method: "POST",
-                                                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-                                                body: JSON.stringify({ title, content: text, folder_name: folderName, folder_color: color, type }),
-                                            });
-                                            created++;
-                                        } catch {}
+                                        if (ext === ".pdf") {
+                                            try {
+                                                showToast(`Converting "${title}" pages...`, "#a78bfa");
+                                                const pageImages = await pdfToImages(file);
+                                                // Create note then upload images
+                                                const res = await fetch("/api/stickies", {
+                                                    method: "POST",
+                                                    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                                                    body: JSON.stringify({ title, content: `PDF: ${pageImages.length} pages`, folder_name: folderName, folder_color: color, type: "text" }),
+                                                });
+                                                if (res.ok) {
+                                                    const { id } = await res.json();
+                                                    const uploads = await Promise.all(pageImages.map(img => uploadImage(img)));
+                                                    await fetch("/api/stickies", {
+                                                        method: "PATCH",
+                                                        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                                                        body: JSON.stringify({ id, images: uploads.map(({ extractedText: _, ...rest }) => rest) }),
+                                                    });
+                                                    created++;
+                                                }
+                                            } catch { /* skip failed PDFs */ }
+                                        } else {
+                                            const text = await file.text();
+                                            const type = ext === ".md" ? "markdown" : "text";
+                                            try {
+                                                await fetch("/api/stickies", {
+                                                    method: "POST",
+                                                    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                                                    body: JSON.stringify({ title, content: text, folder_name: folderName, folder_color: color, type }),
+                                                });
+                                                created++;
+                                            } catch {}
+                                        }
                                     }
                                     void sync();
                                     showToast(`Imported ${created} notes into "${folderName}"`, "#34C759");
                                     playSound("create");
+                                })();
+                                return;
+                            }
+
+                            // Single PDF drop (not in folder, not in editor) → convert pages to images
+                            const pdfFile = files.find(f => f.type === "application/pdf");
+                            if (pdfFile && !editorOpen) {
+                                void (async () => {
+                                    const title = pdfFile.name.replace(/\.pdf$/i, "");
+                                    showToast(`Converting "${title}" pages...`, "#a78bfa");
+                                    try {
+                                        const pageImages = await pdfToImages(pdfFile);
+                                        setEditingNote(null);
+                                        setTitle(title);
+                                        setContent(`PDF: ${pageImages.length} pages`);
+                                        setPendingNoteType("text");
+                                        setTargetFolder(activeFolder || "");
+                                        setNoteColor(palette12[Math.floor(Math.random() * palette12.length)]);
+                                        setEditorOpen(true);
+                                        playSound("create");
+                                        setTimeout(async () => {
+                                            noteEverDirtyRef.current = true;
+                                            await saveNoteRef.current?.({ silent: true });
+                                            await addImages(pageImages);
+                                        }, 500);
+                                    } catch { showError("PDF conversion failed"); }
                                 })();
                                 return;
                             }
