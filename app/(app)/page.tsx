@@ -6083,7 +6083,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                         )}
                         {/* Share removed — available in note actions menu */}
                         {/* Preview — cycles: text → split → preview → text (markdown + html only) */}
-                        {content.trim() && (noteType === "markdown" || noteType === "html" || mdViewMode !== "text") && (
+                        {(noteType === "markdown" || noteType === "html" || mdViewMode !== "text") && (
                         <button type="button"
                             onClick={() => setMdViewMode(v => v === "text" ? "split" : v === "split" ? "preview" : "text")}
                             className={`p-2 sm:p-3 transition flex-shrink-0 ${mdViewMode !== "text" ? "text-purple-400" : "text-zinc-500 hover:text-purple-400"}`}
