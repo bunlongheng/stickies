@@ -6120,7 +6120,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                         </div>
                     )}
                     {/* ── Tab bar — folder notes or today's notes (no folder) ── */}
-                    {(showTabs || mainListMode === "tabs") && typeof window !== "undefined" && window.innerWidth >= 640 && (() => {
+                    {(showTabs || mainListMode === "tabs") && typeof window !== "undefined" && (mainListMode === "tabs" || window.innerWidth >= 640) && (() => {
                         const inFolder = !!activeFolder;
                         const last24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
                         const allNotes = (inFolder
