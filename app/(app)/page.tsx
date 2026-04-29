@@ -6143,13 +6143,13 @@ const fireIntegrations = (trigger: string, note: any) => {
                         const H = 30;
                         const btnCls = "flex-shrink-0 flex items-center justify-center text-zinc-500 hover:text-white transition";
                         return (
-                            <div className="shrink-0 flex items-end flex-wrap" style={{ minHeight: H + 8, background: appTheme === "light" ? "#e8e8ed" : "#2a2a2a" }}>
+                            <div className="shrink-0 flex items-end" style={{ height: H + 8, background: appTheme === "light" ? "#e8e8ed" : "#2a2a2a" }}>
                                 {/* + */}
                                 <button type="button" onClick={() => openNewNote(undefined, inFolder ? activeFolder : "Today")} className={`${btnCls} px-2`} style={{ height: H }} title="New note">
                                     <PlusIcon className="w-3.5 h-3.5" />
                                 </button>
                                 {/* Tabs */}
-                                <div className="flex items-end gap-0.5 flex-wrap flex-1 min-w-0" style={{ minHeight: H + 8 }} ref={(el) => {
+                                <div className="flex items-end gap-0.5 flex-1 min-w-0 overflow-hidden" style={{ height: H + 8 }} ref={(el) => {
                                     if (el) { const a = el.querySelector("[data-tab-active]"); if (a) a.scrollIntoView({ inline: "nearest", block: "nearest" }); }
                                 }}>
                                     {dayNotes.map(n => {
@@ -6157,13 +6157,13 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         const c = n.folder_color || (n.folder_name ? (folders.find(f => f.name === n.folder_name)?.color) : null) || "#888";
                                         return (
                                             <div key={n.id} {...(isActive ? { "data-tab-active": "" } : {})}
-                                                className={`flex-shrink-0 flex items-center transition-all ${isActive ? "relative z-10" : "hover:brightness-110 opacity-75"}`}
+                                                className={`flex items-center transition-all min-w-0 ${isActive ? "relative z-10 flex-shrink-0" : "hover:brightness-110 opacity-75 flex-shrink"}`}
                                                 style={{ background: isActive ? c : `${c}99`, color: "#1c1c1e", height: isActive ? H + 6 : H, borderRadius: "8px 8px 0 0" }}>
                                                 <button type="button"
                                                     onClick={() => { if (!isActive) { if (mainListMode !== "tabs" && n.folder_name && n.folder_name !== activeFolder) { const fr = dbData.find(r => r.is_folder && r.folder_name === n.folder_name); if (fr) enterFolder({ id: String(fr.id), name: n.folder_name, color: fr.folder_color || c }); } void openNote(n); } }}
-                                                    className={`flex items-center text-[10px] font-bold ${isActive ? "pl-3 pr-1 truncate max-w-[150px]" : "px-2"}`} style={{ height: "100%" }}
+                                                    className={`flex items-center text-[10px] font-bold truncate ${isActive ? "pl-3 pr-1 max-w-[150px]" : "px-1.5"}`} style={{ height: "100%" }}
                                                     title={n.title || "Untitled"}>
-                                                    {(() => { const t = n.title || "Untitled"; if (isActive) return <>{t.slice(0, 20)}{t.length > 20 ? "…" : ""}</>; const len = dayNotes.length; const chars = len < 5 ? t.length : len < 10 ? 5 : len < 15 ? 3 : 2; return t.slice(0, chars) + (t.length > chars ? "…" : ""); })()}
+                                                    {(() => { const t = n.title || "Untitled"; if (isActive) return <>{t.slice(0, 20)}{t.length > 20 ? "…" : ""}</>; const len = dayNotes.length; const chars = len < 5 ? t.length : len < 10 ? 5 : len < 15 ? 3 : len < 20 ? 2 : 1; return t.slice(0, chars); })()}
                                                 </button>
                                                 {isActive && (
                                                     <button type="button"
