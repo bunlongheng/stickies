@@ -22,6 +22,28 @@ textarea, input { -webkit-text-size-adjust: 100% !important; text-size-adjust: 1
   --background-end-rgb: 255, 255, 255;
 }
 
+/* Light mode: all icons, text, strokes → black */
+[data-theme="light"] {
+  color: #1a1a1a;
+}
+[data-theme="light"] svg {
+  color: inherit;
+  stroke: currentColor;
+}
+[data-theme="light"] .text-white { color: #1a1a1a !important; }
+[data-theme="light"] .text-zinc-300 { color: #555 !important; }
+[data-theme="light"] .text-zinc-400 { color: #666 !important; }
+[data-theme="light"] .text-zinc-500 { color: #777 !important; }
+[data-theme="light"] .text-zinc-600 { color: #888 !important; }
+[data-theme="light"] .border-white\/5,
+[data-theme="light"] .border-white\/10,
+[data-theme="light"] .border-white\/\[0\.06\] { border-color: rgba(0,0,0,0.08) !important; }
+
+/* Dark mode: ensure white text/icons (default) */
+[data-theme="dark"] {
+  color: #fff;
+}
+
 * {
   box-sizing: border-box;
   padding: 0;
