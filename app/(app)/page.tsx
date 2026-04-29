@@ -3518,17 +3518,13 @@ const fireIntegrations = (trigger: string, note: any) => {
         fd.append("file", file);
         fd.append("folder", targetFolder || activeFolder || "unsorted");
         const token = await getAuthToken();
-        // Try Google Drive first
         const res = await fetch("/api/stickies/gdrive", {
             method: "POST",
             headers: { Authorization: `Bearer ${token}` },
             body: fd,
-        }).catch(() => null);
-        if (res?.ok) return res.json();
-        // Fallback: base64 data URL (works locally without external storage)
-        const buf = await file.arrayBuffer();
-        const base64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
-        return { url: `data:${file.type};base64,${base64}`, name: file.name, type: file.type };
+        });
+        if (!res.ok) throw new Error("Upload failed");
+        return res.json();
     }
 
     async function pdfToImages(file: File): Promise<File[]> {

@@ -91,6 +91,22 @@ export async function POST(req: Request) {
 
     if (!file) return NextResponse.json({ error: "No file" }, { status: 400 });
 
+    // If Google Drive not connected locally, proxy to prod
+    const gdRow = await queryOne<{ refresh_token: string | null }>(`SELECT refresh_token FROM integrations WHERE type = 'gdrive' LIMIT 1`, []);
+    if (!gdRow?.refresh_token) {
+        const prodUrl = "https://stickies-bheng.vercel.app/api/stickies/gdrive";
+        const proxyFd = new FormData();
+        proxyFd.append("file", file);
+        proxyFd.append("folder", folder);
+        const proxyRes = await fetch(prodUrl, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${process.env.STICKIES_API_KEY}` },
+            body: proxyFd,
+        });
+        if (!proxyRes.ok) return NextResponse.json({ error: "Prod upload failed" }, { status: 502 });
+        return NextResponse.json(await proxyRes.json());
+    }
+
     try {
         const accessToken = await getAccessToken();
 
