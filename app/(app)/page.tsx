@@ -3526,11 +3526,41 @@ const fireIntegrations = (trigger: string, note: any) => {
         return res.json();
     }
 
+    async function pdfToImages(file: File): Promise<File[]> {
+        const pdfjsLib = await import("pdfjs-dist");
+        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+        const data = new Uint8Array(await file.arrayBuffer());
+        const pdf = await pdfjsLib.getDocument({ data }).promise;
+        const imageFiles: File[] = [];
+        for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i);
+            const scale = 2;
+            const vp = page.getViewport({ scale });
+            const canvas = document.createElement("canvas");
+            canvas.width = vp.width; canvas.height = vp.height;
+            await page.render({ canvasContext: canvas.getContext("2d")!, viewport: vp, canvas } as any).promise;
+            const blob = await new Promise<Blob>((res) => canvas.toBlob(b => res(b!), "image/png"));
+            imageFiles.push(new File([blob], `${file.name.replace(/\.pdf$/i, "")}_p${i}.png`, { type: "image/png" }));
+        }
+        return imageFiles;
+    }
+
     async function addImages(files: FileList | File[]) {
         setUploadingImages(true);
-        showToast(`Uploading ${files.length} file${files.length !== 1 ? "s" : ""}...`, "#a78bfa");
+        // Convert PDFs to page images first
+        const expanded: File[] = [];
+        for (const f of Array.from(files)) {
+            if (f.type === "application/pdf") {
+                showToast(`Converting "${f.name}" pages...`, "#a78bfa");
+                const pages = await pdfToImages(f);
+                expanded.push(...pages);
+            } else {
+                expanded.push(f);
+            }
+        }
+        showToast(`Uploading ${expanded.length} file${expanded.length !== 1 ? "s" : ""}...`, "#a78bfa");
         try {
-            const uploads = await Promise.all(Array.from(files).map(uploadImage));
+            const uploads = await Promise.all(expanded.map(uploadImage));
             // If any PDF had extracted text and the note body is empty, populate it
             const pdfText = uploads.filter(u => u.extractedText).map(u => u.extractedText!).join("\n\n");
             if (pdfText && !content.trim()) {
@@ -7041,26 +7071,6 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                             const files = Array.from(e.dataTransfer.files);
                             if (!items.length && !files.length) return;
                             e.preventDefault();
-
-                            // PDF to images helper
-                            const pdfToImages = async (file: File): Promise<File[]> => {
-                                const pdfjsLib = await import("pdfjs-dist");
-                                pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
-                                const data = new Uint8Array(await file.arrayBuffer());
-                                const pdf = await pdfjsLib.getDocument({ data }).promise;
-                                const imageFiles: File[] = [];
-                                for (let i = 1; i <= pdf.numPages; i++) {
-                                    const page = await pdf.getPage(i);
-                                    const scale = 2;
-                                    const vp = page.getViewport({ scale });
-                                    const canvas = document.createElement("canvas");
-                                    canvas.width = vp.width; canvas.height = vp.height;
-                                    await page.render({ canvasContext: canvas.getContext("2d")!, viewport: vp, canvas } as any).promise;
-                                    const blob = await new Promise<Blob>((res) => canvas.toBlob(b => res(b!), "image/png"));
-                                    imageFiles.push(new File([blob], `${file.name.replace(/\.pdf$/i, "")}_p${i}.png`, { type: "image/png" }));
-                                }
-                                return imageFiles;
-                            };
 
                             // Check for folder drop via webkitGetAsEntry
                             const entries = items.map(i => (i as any).webkitGetAsEntry?.() as FileSystemEntry | null).filter(Boolean);
