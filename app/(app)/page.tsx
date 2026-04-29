@@ -7133,61 +7133,78 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                 return;
                             }
 
-                            const isAttachment = (f: File) => f.type.startsWith("image/") || f.type === "application/pdf";
-                            const attachmentFiles = files.filter(isAttachment);
-                            const textFiles = files.filter(f => !isAttachment(f));
-
-                            // Attachments (images/PDFs) → if editor open, attach to current note
-                            if (attachmentFiles.length && editorOpen) {
-                                addImages(attachmentFiles);
+                            // Images/PDFs → if editor open, attach to current note
+                            if (files.length && editorOpen && files.every(f => f.type.startsWith("image/") || f.type === "application/pdf")) {
+                                addImages(Array.from(files));
                                 return;
                             }
 
-                            // Text/code files → open as note content
+                            // Multiple files or single file drop → batch create notes
                             const extToType: Record<string, string> = {
                                 ".js": "javascript", ".jsx": "javascript", ".ts": "typescript", ".tsx": "typescript",
                                 ".py": "python", ".css": "css", ".sql": "sql", ".sh": "bash", ".bash": "bash",
-                                ".html": "html", ".htm": "html", ".json": "json", ".md": "markdown", ".mdx": "markdown",
+                                ".html": "html", ".htm": "html", ".json": "json", ".md": "markdown", ".mdx": "markdown", ".txt": "text",
                             };
-                            if (textFiles.length) {
-                                const file = textFiles[0];
-                                const reader = new FileReader();
-                                reader.onload = (ev) => {
-                                    const text = (ev.target?.result as string) ?? "";
+                            void (async () => {
+                                const folderName = activeFolder || "Today";
+                                const token = await getAuthToken();
+                                showToast(`Importing ${files.length} file${files.length !== 1 ? "s" : ""}...`, "#a78bfa");
+                                let created = 0;
+                                for (const file of files) {
                                     const ext = file.name.includes(".") ? "." + file.name.split(".").pop()!.toLowerCase() : "";
-                                    const noteType = extToType[ext] || "text";
-                                    setEditingNote(null);
-                                    setTitle(file.name.replace(/\.[^.]+$/, ""));
-                                    setContent(text);
-                                    setPendingNoteType(noteType);
-                                    setTargetFolder(activeFolder || "");
-                                    setNoteColor(palette12[Math.floor(Math.random() * palette12.length)]);
-                                    shouldFocusTitleOnOpenRef.current = false;
-                                    setEditorOpen(true);
-                                    playSound("create");
-                                    // Auto-save the dropped note immediately
-                                    setTimeout(() => { noteEverDirtyRef.current = true; saveNoteRef.current?.({ silent: true }); }, 500);
-                                    // Also attach any images/PDFs dropped alongside
-                                    if (attachmentFiles.length) setTimeout(() => addImages(attachmentFiles), 800);
-                                };
-                                reader.readAsText(file);
-                            } else if (attachmentFiles.length) {
-                                // Only attachments, no editor open — create new note and attach
-                                const name = attachmentFiles.length === 1
-                                    ? attachmentFiles[0].name.replace(/\.[^.]+$/, "")
-                                    : `Dropped ${attachmentFiles.length} files`;
-                                setEditingNote(null);
-                                setTitle(name);
-                                setContent("");
-                                setTargetFolder(activeFolder || "");
-                                setNoteColor(palette12[Math.floor(Math.random() * palette12.length)]);
-                                shouldFocusTitleOnOpenRef.current = false;
-                                setEditorOpen(true);
+                                    const title = file.name.replace(/\.[^.]+$/, "");
+                                    const color = palette12[Math.floor(Math.random() * palette12.length)];
+                                    try {
+                                        if (file.type === "application/pdf") {
+                                            showToast(`Converting "${title}"...`, "#a78bfa");
+                                            const pageImages = await pdfToImages(file);
+                                            const res = await fetch("/api/stickies", {
+                                                method: "POST",
+                                                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                                                body: JSON.stringify({ title, content: `PDF: ${pageImages.length} pages`, folder_name: folderName, folder_color: color, type: "text" }),
+                                            });
+                                            if (res.ok) {
+                                                const { id } = await res.json();
+                                                const uploads = await Promise.all(pageImages.map(img => uploadImage(img)));
+                                                await fetch("/api/stickies", {
+                                                    method: "PATCH",
+                                                    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                                                    body: JSON.stringify({ id, images: uploads.map(({ extractedText: _, ...rest }) => rest) }),
+                                                });
+                                                created++;
+                                            }
+                                        } else if (file.type.startsWith("image/")) {
+                                            const res = await fetch("/api/stickies", {
+                                                method: "POST",
+                                                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                                                body: JSON.stringify({ title, content: "", folder_name: folderName, folder_color: color, type: "text" }),
+                                            });
+                                            if (res.ok) {
+                                                const { id } = await res.json();
+                                                const upload = await uploadImage(file);
+                                                await fetch("/api/stickies", {
+                                                    method: "PATCH",
+                                                    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                                                    body: JSON.stringify({ id, images: [{ url: upload.url, name: upload.name, type: upload.type }] }),
+                                                });
+                                                created++;
+                                            }
+                                        } else {
+                                            const text = await file.text();
+                                            const type = extToType[ext] || "text";
+                                            await fetch("/api/stickies", {
+                                                method: "POST",
+                                                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                                                body: JSON.stringify({ title, content: text, folder_name: folderName, folder_color: color, type }),
+                                            });
+                                            created++;
+                                        }
+                                    } catch {}
+                                }
+                                void sync();
+                                showToast(`Imported ${created} note${created !== 1 ? "s" : ""}`, "#34C759");
                                 playSound("create");
-                                // Auto-save then attach
-                                setTimeout(() => { noteEverDirtyRef.current = true; saveNoteRef.current?.({ silent: true }); }, 500);
-                                setTimeout(() => addImages(attachmentFiles), 800);
-                            }
+                            })();
                         }}
                         className={`ios-mobile-main relative flex-1 ${kanbanMode && isFolderGridView ? "overflow-x-auto overflow-y-hidden touch-pan-x" : "overflow-x-hidden overflow-y-auto touch-pan-y"} overscroll-none bg-black ${!(kanbanMode && isFolderGridView) ? "pb-24 sm:pb-32" : ""} ${!isListMode && !(kanbanMode && isFolderGridView) ? "p-1.5 sm:p-2" : ""}`}
                         style={kanbanMode && isFolderGridView
