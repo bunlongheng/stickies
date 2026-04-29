@@ -7009,9 +7009,58 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                     <main ref={mainScrollRef}
                         onDragOver={(e) => { if (Array.from(e.dataTransfer.items).some(i => i.kind === "file")) e.preventDefault(); }}
                         onDrop={(e) => {
+                            const items = Array.from(e.dataTransfer.items);
                             const files = Array.from(e.dataTransfer.files);
-                            if (!files.length) return;
+                            if (!items.length && !files.length) return;
                             e.preventDefault();
+
+                            // Check for folder drop via webkitGetAsEntry
+                            const entries = items.map(i => (i as any).webkitGetAsEntry?.() as FileSystemEntry | null).filter(Boolean);
+                            const dirEntry = entries.find(e => e?.isDirectory) as FileSystemDirectoryEntry | undefined;
+                            if (dirEntry) {
+                                const folderName = dirEntry.name;
+                                const readDir = (dir: FileSystemDirectoryEntry): Promise<File[]> => new Promise((resolve) => {
+                                    const reader = dir.createReader();
+                                    const results: File[] = [];
+                                    const read = () => reader.readEntries(async (ents) => {
+                                        if (!ents.length) { resolve(results); return; }
+                                        for (const ent of ents) {
+                                            if (ent.isFile && /\.(md|txt)$/i.test(ent.name)) {
+                                                const file = await new Promise<File>((res) => (ent as FileSystemFileEntry).file(res));
+                                                results.push(file);
+                                            }
+                                        }
+                                        read();
+                                    });
+                                    read();
+                                });
+                                void (async () => {
+                                    const mdTxtFiles = await readDir(dirEntry);
+                                    if (!mdTxtFiles.length) { showToast(`No .md or .txt files in "${folderName}"`, "#ef4444"); return; }
+                                    showToast(`Importing ${mdTxtFiles.length} files into "${folderName}"...`, "#a78bfa");
+                                    const token = await getAuthToken();
+                                    let created = 0;
+                                    for (const file of mdTxtFiles) {
+                                        const text = await file.text();
+                                        const ext = file.name.includes(".") ? "." + file.name.split(".").pop()!.toLowerCase() : "";
+                                        const type = ext === ".md" ? "markdown" : "text";
+                                        const title = file.name.replace(/\.[^.]+$/, "");
+                                        const color = palette12[Math.floor(Math.random() * palette12.length)];
+                                        try {
+                                            await fetch("/api/stickies", {
+                                                method: "POST",
+                                                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                                                body: JSON.stringify({ title, content: text, folder_name: folderName, folder_color: color, type }),
+                                            });
+                                            created++;
+                                        } catch {}
+                                    }
+                                    void sync();
+                                    showToast(`Imported ${created} notes into "${folderName}"`, "#34C759");
+                                    playSound("create");
+                                })();
+                                return;
+                            }
 
                             const isAttachment = (f: File) => f.type.startsWith("image/") || f.type === "application/pdf";
                             const attachmentFiles = files.filter(isAttachment);
