@@ -3528,6 +3528,7 @@ const fireIntegrations = (trigger: string, note: any) => {
 
     async function addImages(files: FileList | File[]) {
         setUploadingImages(true);
+        showToast(`Uploading ${files.length} file${files.length !== 1 ? "s" : ""}...`, "#a78bfa");
         try {
             const uploads = await Promise.all(Array.from(files).map(uploadImage));
             // If any PDF had extracted text and the note body is empty, populate it
@@ -3541,6 +3542,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                 if (noteId) notesApi.update(String(noteId), { images: updated }).catch(console.error);
                 return updated;
             });
+            showToast(`${uploads.length} file${uploads.length !== 1 ? "s" : ""} uploaded`, "#34C759");
         } catch {
             showError("Upload failed");
         } finally {
