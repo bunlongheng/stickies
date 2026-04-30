@@ -39,6 +39,7 @@ import ChevronDownIcon from "@heroicons/react/24/outline/ChevronDownIcon";
 import ChevronUpIcon from "@heroicons/react/24/outline/ChevronUpIcon";
 import ClipboardDocumentListIcon from "@heroicons/react/24/outline/ClipboardDocumentListIcon";
 import EyeIcon from "@heroicons/react/24/outline/EyeIcon";
+import ViewColumnsIcon from "@heroicons/react/24/outline/ViewColumnsIcon";
 import CodeBracketIcon from "@heroicons/react/24/outline/CodeBracketIcon";
 import FaceSmileIcon from "@heroicons/react/24/outline/FaceSmileIcon";
 import CubeTransparentIcon from "@heroicons/react/24/outline/CubeTransparentIcon";
@@ -6117,10 +6118,10 @@ const fireIntegrations = (trigger: string, note: any) => {
                         {/* Share removed — available in note actions menu */}
                         {/* Preview — cycles: text → split → preview → text (markdown + html only) */}
                         <button type="button"
-                            onClick={() => setMdViewMode(v => v === "text" ? "split" : v === "split" ? "preview" : "text")}
-                            className={`p-2 sm:p-3 transition flex-shrink-0 ${mdViewMode !== "text" ? "text-purple-400" : "text-zinc-500 hover:text-purple-400"}`}
-                            title={mdViewMode === "text" ? "Split view" : mdViewMode === "split" ? "Preview only" : "Text only"}>
-                            <EyeIcon className="w-[24px] h-[24px] sm:w-[22px] sm:h-[22px]" />
+                            onClick={() => setMdViewMode(v => v === "text" ? "preview" : v === "preview" ? "split" : "text")}
+                            className={`p-2 sm:p-3 transition flex-shrink-0 ${mdViewMode === "text" ? "text-zinc-500 hover:text-purple-400" : "text-purple-400"}`}
+                            title={mdViewMode === "text" ? "Code" : mdViewMode === "preview" ? "Preview" : "Split"}>
+                            {mdViewMode === "text" ? <CodeBracketIcon className="w-[24px] h-[24px] sm:w-[22px] sm:h-[22px]" /> : mdViewMode === "preview" ? <EyeIcon className="w-[24px] h-[24px] sm:w-[22px] sm:h-[22px]" /> : <ViewColumnsIcon className="w-[24px] h-[24px] sm:w-[22px] sm:h-[22px]" />}
                         </button>
                         <HeaderIconBtn icon={viewModeIcon} label={viewModeLabel} onClick={cycleViewMode} />
                         <button type="button"
