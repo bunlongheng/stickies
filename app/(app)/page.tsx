@@ -6118,10 +6118,10 @@ const fireIntegrations = (trigger: string, note: any) => {
                         {/* Share removed — available in note actions menu */}
                         {/* Preview — cycles: text → split → preview → text (markdown + html only) */}
                         <button type="button"
-                            onClick={() => setMdViewMode(v => v === "text" ? "preview" : v === "preview" ? "split" : "text")}
+                            onClick={() => setMdViewMode(v => v === "text" ? "preview" : "text")}
                             className={`p-2 sm:p-3 transition flex-shrink-0 ${mdViewMode === "text" ? "text-zinc-500" : "text-white drop-shadow-[0_0_6px_rgba(255,255,255,0.5)]"}`}
-                            title={mdViewMode === "text" ? "Code" : mdViewMode === "preview" ? "Preview" : "Split"}>
-                            {mdViewMode === "text" ? <CodeBracketIcon className="w-[24px] h-[24px] sm:w-[22px] sm:h-[22px]" /> : mdViewMode === "preview" ? <EyeIcon className="w-[24px] h-[24px] sm:w-[22px] sm:h-[22px]" /> : <ViewColumnsIcon className="w-[24px] h-[24px] sm:w-[22px] sm:h-[22px]" />}
+                            title={mdViewMode === "text" ? "Preview" : "Code"}>
+                            {mdViewMode === "text" ? <EyeIcon className="w-[24px] h-[24px] sm:w-[22px] sm:h-[22px]" /> : <CodeBracketIcon className="w-[24px] h-[24px] sm:w-[22px] sm:h-[22px]" />}
                         </button>
                         <HeaderIconBtn icon={viewModeIcon} label={viewModeLabel} onClick={cycleViewMode} />
                         <button type="button"
