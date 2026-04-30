@@ -6609,7 +6609,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         fontSize: "clamp(12px, 1.4vw, 17px)", lineHeight: 1.6,
                                         paddingTop: 8, paddingBottom: 24, paddingLeft: 24, paddingRight: 24,
                                         outline: "none", resize: "none", caretColor: "#f8f8f2",
-                                        whiteSpace: "pre", overflowX: "auto",
+                                        whiteSpace: "pre-wrap", wordBreak: "break-word", overflowX: "hidden",
                                         borderRight: "1px solid rgba(255,255,255,0.1)",
                                     }}
                                     spellCheck={false}
@@ -6745,7 +6745,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         fontSize: stickyFontSize, lineHeight: 1.6,
                                         paddingTop: 8, paddingBottom: 24, paddingLeft: 24, paddingRight: 24,
                                         outline: "none", resize: "none", caretColor: stickyText,
-                                        whiteSpace: "pre", overflowX: "auto", overflowY: "auto",
+                                        whiteSpace: "pre-wrap", wordBreak: "break-word", overflowX: "hidden", overflowY: "auto",
                                         position: "relative", zIndex: 1,
                                     }}
                                     placeholder="START TYPING..."
