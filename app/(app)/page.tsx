@@ -6761,7 +6761,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                         const isPageView = allImages && images.length > 2;
                         return isPageView ? (
                         // Full-width stacked view (PDF pages, many images)
-                        <div className="flex-1 overflow-y-auto bg-zinc-950 border-t border-white/[0.06]">
+                        <div className="overflow-y-auto bg-zinc-950 border-t border-white/[0.06]" style={{ maxHeight: "50vh" }}>
                             <div className="flex flex-col items-center gap-4 py-4 px-2">
                                 {images.map((img, i) => (
                                     <div key={i} className="relative group w-full max-w-[800px]">
