@@ -22,7 +22,7 @@ textarea, input { -webkit-text-size-adjust: 100% !important; text-size-adjust: 1
   --background-end-rgb: 255, 255, 255;
 }
 
-/* Light mode: all icons, text, strokes → black */
+/* Light mode: all icons, text, strokes, borders → black */
 [data-theme="light"] {
   color: #1a1a1a;
 }
@@ -31,13 +31,27 @@ textarea, input { -webkit-text-size-adjust: 100% !important; text-size-adjust: 1
   stroke: currentColor;
 }
 [data-theme="light"] .text-white { color: #1a1a1a !important; }
-[data-theme="light"] .text-zinc-300 { color: #555 !important; }
-[data-theme="light"] .text-zinc-400 { color: #666 !important; }
-[data-theme="light"] .text-zinc-500 { color: #777 !important; }
-[data-theme="light"] .text-zinc-600 { color: #888 !important; }
+[data-theme="light"] .text-white\/30 { color: rgba(0,0,0,0.3) !important; }
+[data-theme="light"] .text-white\/35 { color: rgba(0,0,0,0.35) !important; }
+[data-theme="light"] .text-white\/40 { color: rgba(0,0,0,0.4) !important; }
+[data-theme="light"] .text-white\/50 { color: rgba(0,0,0,0.5) !important; }
+[data-theme="light"] .text-white\/60 { color: rgba(0,0,0,0.6) !important; }
+[data-theme="light"] .text-white\/70 { color: rgba(0,0,0,0.7) !important; }
+[data-theme="light"] .text-zinc-300 { color: #444 !important; }
+[data-theme="light"] .text-zinc-400 { color: #555 !important; }
+[data-theme="light"] .text-zinc-500 { color: #666 !important; }
+[data-theme="light"] .text-zinc-600 { color: #777 !important; }
+[data-theme="light"] .text-zinc-700 { color: #888 !important; }
 [data-theme="light"] .border-white\/5,
 [data-theme="light"] .border-white\/10,
 [data-theme="light"] .border-white\/\[0\.06\] { border-color: rgba(0,0,0,0.08) !important; }
+[data-theme="light"] .border-r-transparent { border-right-color: transparent !important; }
+[data-theme="light"] .hover\:bg-white\/5:hover { background: rgba(0,0,0,0.04) !important; }
+[data-theme="light"] .hover\:bg-white\/10:hover { background: rgba(0,0,0,0.06) !important; }
+[data-theme="light"] .active\:bg-white\/10:active { background: rgba(0,0,0,0.08) !important; }
+[data-theme="light"] .bg-white\/10 { background: rgba(0,0,0,0.06) !important; }
+[data-theme="light"] .bg-white\/15 { background: rgba(0,0,0,0.08) !important; }
+[data-theme="light"] .hover\:text-white:hover { color: #000 !important; }
 
 /* Dark mode: ensure white text/icons (default) */
 [data-theme="dark"] {
