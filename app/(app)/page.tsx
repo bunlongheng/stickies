@@ -6745,7 +6745,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         fontSize: stickyFontSize, lineHeight: 1.6,
                                         paddingTop: 8, paddingBottom: 24, paddingLeft: 24, paddingRight: 24,
                                         outline: "none", resize: "none", caretColor: stickyText,
-                                        whiteSpace: "pre-wrap", wordBreak: "break-word", overflowX: "hidden", overflowY: "auto",
+                                        overflowY: "auto",
                                         position: "relative", zIndex: 1,
                                     }}
                                     placeholder="START TYPING..."
