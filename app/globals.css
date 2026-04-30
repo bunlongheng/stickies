@@ -16,6 +16,10 @@ html { -webkit-text-size-adjust: none !important; text-size-adjust: none !import
     transform-origin: top left;
     width: 200% !important;
     height: 200% !important;
+    word-break: normal !important;
+    overflow-wrap: normal !important;
+    white-space: pre !important;
+    overflow-x: auto !important;
   }
 }
 
