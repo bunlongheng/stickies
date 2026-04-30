@@ -6119,7 +6119,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                         {/* Preview — cycles: text → split → preview → text (markdown + html only) */}
                         <button type="button"
                             onClick={() => setMdViewMode(v => v === "text" ? "preview" : v === "preview" ? "split" : "text")}
-                            className={`p-2 sm:p-3 transition flex-shrink-0 ${mdViewMode === "text" ? "text-zinc-500 hover:text-purple-400" : "text-purple-400"}`}
+                            className={`p-2 sm:p-3 transition flex-shrink-0 ${mdViewMode === "text" ? "text-zinc-500" : "text-white drop-shadow-[0_0_6px_rgba(255,255,255,0.5)]"}`}
                             title={mdViewMode === "text" ? "Code" : mdViewMode === "preview" ? "Preview" : "Split"}>
                             {mdViewMode === "text" ? <CodeBracketIcon className="w-[24px] h-[24px] sm:w-[22px] sm:h-[22px]" /> : mdViewMode === "preview" ? <EyeIcon className="w-[24px] h-[24px] sm:w-[22px] sm:h-[22px]" /> : <ViewColumnsIcon className="w-[24px] h-[24px] sm:w-[22px] sm:h-[22px]" />}
                         </button>
