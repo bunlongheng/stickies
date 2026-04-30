@@ -12,10 +12,10 @@ html { -webkit-text-size-adjust: none !important; text-size-adjust: none !import
 @media (max-width: 640px) {
   textarea.ios-editor-scroll {
     font-size: 16px !important;
-    transform: scale(0.7);
+    transform: scale(0.5);
     transform-origin: top left;
-    width: 142.8% !important;
-    height: 142.8% !important;
+    width: 200% !important;
+    height: 200% !important;
   }
 }
 
