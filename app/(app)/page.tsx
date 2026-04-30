@@ -6628,6 +6628,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     />
                                 ) : (
                                 <div className="flex-1 overflow-auto px-6 py-2 md-preview select-text" style={{ background: "#fff" }}
+                                    spellCheck={false}
                                     onClick={(e) => {
                                         const btn = (e.target as HTMLElement).closest(".copy-code-btn") as HTMLElement | null;
                                         if (!btn) return;
@@ -7095,8 +7096,8 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                 });
                                 void (async () => {
                                     const allFiles = await readDir(dirEntry);
-                                    if (!allFiles.length) { showToast(`No .md, .txt, or .pdf files in "${folderName}"`, "#ef4444"); return; }
-                                    showToast(`Importing ${allFiles.length} files into "${folderName}"...`, "#a78bfa");
+                                    if (!allFiles.length) { showToast(`No .md, .txt, or .pdf in "${folderName}"`, "#ef4444"); return; }
+                                    showToast(`Importing ${allFiles.length} file${allFiles.length !== 1 ? "s" : ""} into "${folderName}"...`, "#a78bfa");
                                     const token = await getAuthToken();
                                     let created = 0;
                                     for (const file of allFiles) {
@@ -7123,7 +7124,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                     });
                                                     created++;
                                                 }
-                                            } catch { /* skip failed PDFs */ }
+                                            } catch (err) { console.error("PDF import failed:", err); }
                                         } else {
                                             const text = await file.text();
                                             const type = ext === ".md" ? "markdown" : "text";
@@ -7134,11 +7135,11 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                     body: JSON.stringify({ title, content: text, folder_name: folderName, folder_color: color, type }),
                                                 });
                                                 created++;
-                                            } catch {}
+                                            } catch (err) { console.error("File import failed:", err); }
                                         }
                                     }
                                     void sync();
-                                    showToast(`Imported ${created} notes into "${folderName}"`, "#34C759");
+                                    showToast(`Imported ${created} note${created !== 1 ? "s" : ""} into "${folderName}"`, "#34C759");
                                     playSound("create");
                                 })();
                                 return;
