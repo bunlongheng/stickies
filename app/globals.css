@@ -11,17 +11,15 @@ textarea { white-space: pre-wrap; word-break: normal; overflow-wrap: break-word;
 /* iOS: prevent text-size-adjust from inflating ANY fonts */
 html { -webkit-text-size-adjust: none !important; text-size-adjust: none !important; }
 * { -webkit-text-size-adjust: none !important; text-size-adjust: none !important; }
-/* iOS textarea font hack: set 16px (no zoom) then scale down to look 11px */
+/* iOS textarea: small font, full width */
 @media (max-width: 640px) {
   textarea.ios-editor-scroll {
-    font-size: 16px !important;
-    transform: scale(0.5);
-    transform-origin: top left;
-    width: 200% !important;
-    height: 200% !important;
+    font-size: 10px !important;
+    -webkit-text-size-adjust: none !important;
+    text-size-adjust: none !important;
+    white-space: pre-wrap !important;
     word-break: normal !important;
     overflow-wrap: break-word !important;
-    white-space: pre-wrap !important;
   }
 }
 
