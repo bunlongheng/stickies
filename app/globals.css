@@ -14,7 +14,7 @@ html { -webkit-text-size-adjust: none !important; text-size-adjust: none !import
 /* iOS textarea: small font, full width */
 @media (max-width: 640px) {
   textarea.ios-editor-scroll {
-    font-size: 10px !important;
+    font-size: 8px !important;
     -webkit-text-size-adjust: none !important;
     text-size-adjust: none !important;
     white-space: pre-wrap !important;
