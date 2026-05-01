@@ -85,10 +85,16 @@ html { -webkit-text-size-adjust: none !important; text-size-adjust: none !import
 .folder-grid-tile-claude { background: #fff !important; border: 1px solid rgba(0,0,0,0.12) !important; }
 [style*="--fc"] img[src*="claude-icon"] { background: #fff !important; }
 
-/* Dark mode: ensure white text/icons (default) */
+/* Dark mode: ensure white text/icons/strokes everywhere */
 [data-theme="dark"] {
   color: #fff;
 }
+[data-theme="dark"] svg { color: inherit; stroke: currentColor; }
+[data-theme="dark"] .folder-icon-badge svg,
+[data-theme="dark"] [data-icon-sq] svg { color: #fff !important; stroke: #fff !important; }
+[data-theme="dark"] .folder-icon-badge,
+[data-theme="dark"] [data-icon-sq] { color: #fff !important; }
+[data-theme="dark"] [data-icon-sq]:hover { box-shadow: 0 0 0 2px rgba(255,255,255,0.4) !important; }
 
 * {
   box-sizing: border-box;
