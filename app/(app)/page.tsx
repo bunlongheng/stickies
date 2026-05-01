@@ -1091,6 +1091,20 @@ export default function NotesMaster() {
     const goToIndex = useCallback((i: number) => {
         setFolderStack((prev) => prev.slice(0, i + 1));
     }, []);
+    // Sync activeFolder to URL so refresh stays on current folder
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+        const url = new URL(window.location.href);
+        if (activeFolder) {
+            url.searchParams.set("folder", activeFolder);
+        } else {
+            url.searchParams.delete("folder");
+        }
+        const next = `${url.pathname}${url.search}`;
+        if (next !== `${window.location.pathname}${window.location.search}`) {
+            window.history.replaceState({}, "", next);
+        }
+    }, [activeFolder]);
     const [search, setSearch] = useState("");
     const [toast, setToast] = useState("");
     const [toastColor, setToastColor] = useState("#34C759");
@@ -1769,7 +1783,8 @@ export default function NotesMaster() {
             const isNewSession = !sessionStorage.getItem("stickies:session-started");
             if (isNewSession) {
                 sessionStorage.setItem("stickies:session-started", "1");
-                setActiveFolder(null); // Always start at All Notes on login
+                const urlFolder = new URLSearchParams(window.location.search).get("folder");
+                if (urlFolder) { setActiveFolder(urlFolder); } else { setActiveFolder(null); }
                 setMainListMode("list"); // list as default
                 localStorage.setItem(LAST_FOLDER_KEY, "__all__"); // persist so sync() honors it
             } else {
