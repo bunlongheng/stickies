@@ -80,6 +80,10 @@ html { -webkit-text-size-adjust: none !important; text-size-adjust: none !import
 [data-theme="light"] [data-icon-sq]:hover { box-shadow: 0 0 0 2px #1a1a1a !important; }
 [data-theme="light"] .list-row-hover:hover { background: rgba(0,0,0,0.04) !important; }
 [data-theme="light"] .list-row-hover:active { background: rgba(0,0,0,0.08) !important; }
+/* CLAUDE folder icon — ALWAYS white bg, both themes, everywhere */
+.folder-icon-badge-claude,
+.folder-grid-tile-claude { background: #fff !important; }
+[style*="--fc"] img[src*="claude-icon"] { background: #fff !important; }
 
 /* Dark mode: ensure white text/icons (default) */
 [data-theme="dark"] {

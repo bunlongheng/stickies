@@ -8789,7 +8789,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                 className="w-full flex items-center gap-2.5 px-3 py-2 text-left transition rounded"
                                                 style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}>
                                                 {dfColor ? (
-                                                    <span className="w-5 h-5 flex-shrink-0 flex items-center justify-center text-[11px] font-black leading-none overflow-hidden rounded" style={{ backgroundColor: dfColor, color: isLightColor(dfColor) ? "#1c1c1e" : "#fff", fontSize: 13 }}>
+                                                    <span className="w-5 h-5 flex-shrink-0 flex items-center justify-center text-[11px] font-black leading-none overflow-hidden rounded" style={{ backgroundColor: defaultFolder === "CLAUDE" ? "#fff" : dfColor, color: isLightColor(dfColor) ? "#1c1c1e" : "#fff", fontSize: 13 }}>
                                                         {defaultFolder === "CLAUDE"
                                                             ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-0.5" />
                                                             : <FolderIconDisplay value={folderIcons[defaultFolder] || ""} folderName={defaultFolder || "F"} className="w-3.5 h-3.5" />}
@@ -8804,7 +8804,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                         <button key={f.name} type="button"
                                                             onClick={(e) => { e.stopPropagation(); setDefaultFolder(f.name); localStorage.setItem(DEFAULT_FOLDER_KEY, f.name); setShowDefaultFolderPicker(false); setShowFolderActions(false); }}
                                                             className="flex items-center gap-2.5 px-3 py-1.5 text-left transition hover:bg-white/5 rounded">
-                                                            <span className="w-5 h-5 flex-shrink-0 flex items-center justify-center text-[11px] font-black leading-none overflow-hidden rounded" style={{ backgroundColor: f.color, color: isLightColor(f.color) ? "#1c1c1e" : "#fff", fontSize: 13, border: isLightColor(f.color) ? "1px solid rgba(0,0,0,0.15)" : "none" }}>
+                                                            <span className="w-5 h-5 flex-shrink-0 flex items-center justify-center text-[11px] font-black leading-none overflow-hidden rounded" style={{ backgroundColor: f.name === "CLAUDE" ? "#fff" : f.color, color: isLightColor(f.color) ? "#1c1c1e" : "#fff", fontSize: 13, border: f.name === "CLAUDE" || isLightColor(f.color) ? "1px solid rgba(0,0,0,0.15)" : "none" }}>
                                                                 {f.name === "CLAUDE"
                                                                     ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-0.5" />
                                                                     : <FolderIconDisplay value={folderIcons[f.name] || ""} folderName={f.name || "F"} className="w-3.5 h-3.5" />}
