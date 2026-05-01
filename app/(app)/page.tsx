@@ -4914,7 +4914,7 @@ const fireIntegrations = (trigger: string, note: any) => {
     const cycleViewMode = useCallback(() => {
         const isDesktop = typeof window !== "undefined" && window.innerWidth >= 640;
         setMainListMode(v => {
-            const next = isDesktop ? (v === "thumb" ? "list" : v === "list" ? "tabs" : v === "tabs" ? "graph" : "thumb") : (v === "thumb" ? "list" : "thumb");
+            const next = isDesktop ? (v === "thumb" ? "list" : v === "list" ? "tabs" : v === "tabs" ? "graph" : "thumb") : (v === "thumb" ? "list" : v === "list" ? "graph" : "thumb");
             if (v === "tabs" && next !== "tabs") { setEditorOpen(false); setEditingNote(null); }
             return next;
         });
