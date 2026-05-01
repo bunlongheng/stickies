@@ -73,8 +73,13 @@ html { -webkit-text-size-adjust: none !important; text-size-adjust: none !import
 [data-theme="light"] .bg-white\/10 { background: rgba(0,0,0,0.06) !important; }
 [data-theme="light"] .bg-white\/15 { background: rgba(0,0,0,0.08) !important; }
 [data-theme="light"] .hover\:text-white:hover { color: #000 !important; }
-[data-theme="light"] .folder-icon-badge svg { color: #1a1a1a !important; stroke: #1a1a1a !important; }
-[data-theme="light"] .folder-icon-badge { color: #1a1a1a !important; }
+[data-theme="light"] .folder-icon-badge svg,
+[data-theme="light"] [data-icon-sq] svg { color: #1a1a1a !important; stroke: #1a1a1a !important; }
+[data-theme="light"] .folder-icon-badge,
+[data-theme="light"] [data-icon-sq] { color: #1a1a1a !important; }
+[data-theme="light"] [data-icon-sq]:hover { box-shadow: 0 0 0 2px #1a1a1a !important; }
+[data-theme="light"] .list-row-hover:hover { background: rgba(0,0,0,0.04) !important; }
+[data-theme="light"] .list-row-hover:active { background: rgba(0,0,0,0.08) !important; }
 
 /* Dark mode: ensure white text/icons (default) */
 [data-theme="dark"] {
