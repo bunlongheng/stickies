@@ -8,6 +8,7 @@ import { usePageMeta } from "@/lib/usePageMeta";
 import dynamic from "next/dynamic";
 import LZString from "lz-string";
 const MermaidRenderer = dynamic(() => import("@/components/MermaidRenderer").then(m => m.MermaidRenderer), { ssr: false });
+const GraphView = dynamic(() => import("@/components/GraphView").then(m => m.GraphView), { ssr: false });
 const MarkdownPreview = dynamic(() => import("@/components/MarkdownPreview").then(m => m.MarkdownPreview), { ssr: false });
 const CodeViewer = dynamic(() => import("@/components/CodeViewer").then(m => m.CodeViewer), { ssr: false });
 
@@ -1283,7 +1284,7 @@ export default function NotesMaster() {
     const [botColor, setBotColor] = useState({ primary: "#7c3aed", secondary: "#a78bfa", light: "#c4b5fd" });
     const [userEmail, setUserEmail] = useState<string | null>(null);
     const isAdmin = userEmail === "bheng.code@gmail.com";
-    const [mainListMode, setMainListMode] = useState<"thumb" | "list" | "tabs">("thumb");
+    const [mainListMode, setMainListMode] = useState<"thumb" | "list" | "tabs" | "graph">("thumb");
     const [defaultFolder, setDefaultFolder] = useState<string>("CLAUDE");
     const [showDefaultFolderPicker, setShowDefaultFolderPicker] = useState(false);
     const [showNotebookPicker, setShowNotebookPicker] = useState(false);
@@ -1863,7 +1864,7 @@ export default function NotesMaster() {
             const rawMainList = localStorage.getItem(MAIN_LIST_MODE_KEY);
             if (rawMainList) {
                 const v = rawMainList === "true" ? "list" : rawMainList === "false" ? "thumb" : rawMainList;
-                if (v === "list" || v === "thumb" || v === "tabs") setMainListMode(v as any);
+                if (v === "list" || v === "thumb" || v === "tabs" || v === "graph") setMainListMode(v as any);
             }
         } catch { /* ignore */ }
         try {
@@ -1892,6 +1893,7 @@ export default function NotesMaster() {
             if (viewParam === "list") { setMainListMode("list"); setKanbanMode(false); }
             else if (viewParam === "thumb") { setMainListMode("thumb"); setKanbanMode(false); }
             else if (viewParam === "tabs") { setMainListMode("tabs"); setKanbanMode(false); }
+            else if (viewParam === "graph") { setMainListMode("graph"); setKanbanMode(false); }
             else if (viewParam === "kanban") { setMainListMode("thumb"); setKanbanMode(true); }
             const navParam = urlParams.get("nav");
             const gdriveParam = urlParams.get("gdrive");
@@ -4907,12 +4909,12 @@ const fireIntegrations = (trigger: string, note: any) => {
 
     const isFolderGridView = !search.trim() && ((!activeFolder) || (kanbanMode && dbData.some(r => r.is_folder && r.parent_folder_name === activeFolder)));
     const isListMode = mainListMode === "list";
-    const viewModeIcon = mainListMode === "list" ? Bars3Icon : mainListMode === "tabs" ? RectangleStackIcon : Squares2X2Icon;
-    const viewModeLabel = mainListMode === "list" ? "List" : mainListMode === "tabs" ? "Tabs" : "Thumb";
+    const viewModeIcon = mainListMode === "list" ? Bars3Icon : mainListMode === "tabs" ? RectangleStackIcon : mainListMode === "graph" ? ShareIcon : Squares2X2Icon;
+    const viewModeLabel = mainListMode === "list" ? "List" : mainListMode === "tabs" ? "Tabs" : mainListMode === "graph" ? "Graph" : "Thumb";
     const cycleViewMode = useCallback(() => {
         const isDesktop = typeof window !== "undefined" && window.innerWidth >= 640;
         setMainListMode(v => {
-            const next = isDesktop ? (v === "thumb" ? "list" : v === "list" ? "tabs" : "thumb") : (v === "thumb" ? "list" : "thumb");
+            const next = isDesktop ? (v === "thumb" ? "list" : v === "list" ? "tabs" : v === "tabs" ? "graph" : "thumb") : (v === "thumb" ? "list" : "thumb");
             if (v === "tabs" && next !== "tabs") { setEditorOpen(false); setEditingNote(null); }
             return next;
         });
@@ -6042,7 +6044,7 @@ const fireIntegrations = (trigger: string, note: any) => {
             <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
 
                 {/* RIGHT PANEL: editor — only shown in edit mode or when a note is open (mobile nav) */}
-                <div className={`flex-1 flex flex-col overflow-hidden ${editorOpen || mainListMode === "tabs" ? "flex" : "hidden"} `} style={{ background: appTheme === "light" ? "#ffffff" : "#222222" }}>
+                <div className={`flex-1 flex flex-col overflow-hidden ${editorOpen || mainListMode === "tabs" ? "flex" : "hidden"} `} style={{ background: appTheme === "light" ? "#ffffff" : "#222222", display: mainListMode === "graph" ? "none" : undefined }}>
                 {editorOpen ? (
                 <section className="flex-1 min-h-0 flex flex-col overflow-hidden overscroll-none" onClick={(e) => e.stopPropagation()}>
                     {pendingShare && (
@@ -6998,7 +7000,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                 {/* LEFT NOTE LIST PANEL */}
                 {(() => {
                     return (
-                        <div className={`flex flex-col flex-1 min-h-0 overflow-hidden relative ${editorOpen || mainListMode === "tabs" ? "hidden" : ""}`}
+                        <div className={`flex flex-col flex-1 min-h-0 overflow-hidden relative ${editorOpen || mainListMode === "tabs" || mainListMode === "graph" ? "hidden" : ""}`}
                              style={{ background: "black" }}>
 
                             {/* TOP HEADER — breadcrumbs + buttons */}
@@ -7796,6 +7798,23 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                         </div>
                     );
                 })()}
+
+                {/* Graph view */}
+                {mainListMode === "graph" && (
+                    <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+                        <div className="shrink-0 flex items-center h-[4rem] px-4 border-b border-white/[0.06]" style={{ background: appTheme === "light" ? "#f8f8f8" : "black" }}>
+                            <div className="ml-auto flex items-center">
+                                <HeaderIconBtn icon={viewModeIcon} label={viewModeLabel} onClick={cycleViewMode} />
+                            </div>
+                        </div>
+                        <GraphView
+                            notes={dbData.filter(n => !n.is_folder && !n.trashed_at) as any}
+                            folders={folders as any}
+                            onOpenNote={(n: any) => { setMainListMode("list"); void openNote(n); }}
+                            theme={appTheme as "light" | "dark"}
+                        />
+                    </div>
+                )}
 
             </div>{/* ── end two-panel wrapper ── */}
 
