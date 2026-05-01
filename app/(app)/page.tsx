@@ -2029,7 +2029,6 @@ export default function NotesMaster() {
     const tabsAutoOpenedRef = useRef(false);
     useEffect(() => {
         const isDesktop = typeof window !== "undefined" && window.innerWidth >= 640;
-        if (mainListMode === "tabs" && !isDesktop) { setMainListMode("list"); return; }
         if (mainListMode === "tabs" && !tabsAutoOpenedRef.current) {
             tabsAutoOpenedRef.current = true;
             (async () => {
@@ -4912,9 +4911,8 @@ const fireIntegrations = (trigger: string, note: any) => {
     const viewModeIcon = mainListMode === "list" ? Bars3Icon : mainListMode === "tabs" ? RectangleStackIcon : mainListMode === "graph" ? ShareIcon : Squares2X2Icon;
     const viewModeLabel = mainListMode === "list" ? "List" : mainListMode === "tabs" ? "Tabs" : mainListMode === "graph" ? "Graph" : "Thumb";
     const cycleViewMode = useCallback(() => {
-        const isDesktop = typeof window !== "undefined" && window.innerWidth >= 640;
         setMainListMode(v => {
-            const next = isDesktop ? (v === "thumb" ? "list" : v === "list" ? "tabs" : v === "tabs" ? "graph" : "thumb") : (v === "thumb" ? "list" : v === "list" ? "graph" : "thumb");
+            const next = v === "thumb" ? "list" : v === "list" ? "tabs" : v === "tabs" ? "graph" : "thumb";
             if (v === "tabs" && next !== "tabs") { setEditorOpen(false); setEditingNote(null); }
             return next;
         });
