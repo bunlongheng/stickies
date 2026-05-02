@@ -184,11 +184,41 @@ export function GraphView({ notes, folders, onOpenNote, onClickFolder, theme }: 
         ctx.fillStyle = grd;
         ctx.fill();
 
-        // Circle
-        ctx.beginPath();
-        ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2);
+        // Shape — different per layer
         ctx.fillStyle = n.type === "note" ? n.color + "cc" : n.color;
-        ctx.fill();
+        if (n.type === "center") {
+          // Hexagon — biggest
+          ctx.beginPath();
+          for (let s = 0; s < 6; s++) {
+            const a = (s / 6) * Math.PI * 2 - Math.PI / 2;
+            const px = pos.x + Math.cos(a) * r, py = pos.y + Math.sin(a) * r;
+            s === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+          }
+          ctx.closePath();
+          ctx.fill();
+        } else if (n.type === "folder") {
+          // Rounded square — bigger
+          const s = r * 1.6;
+          const cr = s * 0.25;
+          const x = pos.x - s / 2, y = pos.y - s / 2;
+          ctx.beginPath();
+          ctx.moveTo(x + cr, y);
+          ctx.lineTo(x + s - cr, y);
+          ctx.quadraticCurveTo(x + s, y, x + s, y + cr);
+          ctx.lineTo(x + s, y + s - cr);
+          ctx.quadraticCurveTo(x + s, y + s, x + s - cr, y + s);
+          ctx.lineTo(x + cr, y + s);
+          ctx.quadraticCurveTo(x, y + s, x, y + s - cr);
+          ctx.lineTo(x, y + cr);
+          ctx.quadraticCurveTo(x, y, x + cr, y);
+          ctx.closePath();
+          ctx.fill();
+        } else {
+          // Small circle — notes
+          ctx.beginPath();
+          ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2);
+          ctx.fill();
+        }
 
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
