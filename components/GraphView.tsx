@@ -60,7 +60,7 @@ export function GraphView({ notes, folders, onOpenNote, onClickFolder, theme }: 
     const folderNames = Array.from(folderMap.keys());
 
     // Center node
-    nodes.push({ id: "__root__", baseX: cx, baseY: cy, r: 14, color: fg, label: "STICKIES", type: "center", initial: "S",
+    nodes.push({ id: "__root__", baseX: cx, baseY: cy, r: 22, color: fg, label: "STICKIES", type: "center", initial: "S",
       phX: 0, phY: 1.2, spX: 0.28, spY: 0.22, amp: 4 });
 
     // Folder nodes
@@ -71,7 +71,7 @@ export function GraphView({ notes, folders, onOpenNote, onClickFolder, theme }: 
       const fc = folders.find(f => f.name === fname)?.color || "#888";
       const count = folderMap.get(fname)!.length;
       const sIdx = nodes.length;
-      nodes.push({ id: `folder:${fname}`, baseX: fx, baseY: fy, r: 10 + Math.min(count, 15) * 0.5, color: fc,
+      nodes.push({ id: `folder:${fname}`, baseX: fx, baseY: fy, r: 14 + Math.min(count, 15) * 0.3, color: fc,
         label: fname, type: "folder", folderName: fname, initial: fname.charAt(0).toUpperCase(),
         phX: Math.random() * 6.28, phY: Math.random() * 6.28,
         spX: 0.32 + Math.random() * 0.12, spY: 0.26 + Math.random() * 0.12, amp: 8 });
@@ -85,7 +85,7 @@ export function GraphView({ notes, folders, onOpenNote, onClickFolder, theme }: 
         const rAngle = angle - spread / 2 + (ri / Math.max(fnotes.length - 1, 1)) * spread;
         const rIdx = nodes.length;
         nodes.push({ id: n.id, baseX: fx + Math.cos(rAngle) * rR, baseY: fy + Math.sin(rAngle) * rR,
-          r: 4.5, color: fc, label: (n.title || "Untitled").slice(0, 20), type: "note", folderName: fname,
+          r: 3.5, color: fc, label: (n.title || "Untitled").slice(0, 20), type: "note", folderName: fname,
           initial: (n.title || "N").charAt(0).toUpperCase(),
           phX: Math.random() * 6.28, phY: Math.random() * 6.28,
           spX: 0.48 + Math.random() * 0.28, spY: 0.42 + Math.random() * 0.22, amp: 6 });
@@ -184,41 +184,11 @@ export function GraphView({ notes, folders, onOpenNote, onClickFolder, theme }: 
         ctx.fillStyle = grd;
         ctx.fill();
 
-        // Shape — different per layer
+        // All circles — size differs by layer
+        ctx.beginPath();
+        ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2);
         ctx.fillStyle = n.type === "note" ? n.color + "cc" : n.color;
-        if (n.type === "center") {
-          // Hexagon — biggest
-          ctx.beginPath();
-          for (let s = 0; s < 6; s++) {
-            const a = (s / 6) * Math.PI * 2 - Math.PI / 2;
-            const px = pos.x + Math.cos(a) * r, py = pos.y + Math.sin(a) * r;
-            s === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
-          }
-          ctx.closePath();
-          ctx.fill();
-        } else if (n.type === "folder") {
-          // Rounded square — bigger
-          const s = r * 1.6;
-          const cr = s * 0.25;
-          const x = pos.x - s / 2, y = pos.y - s / 2;
-          ctx.beginPath();
-          ctx.moveTo(x + cr, y);
-          ctx.lineTo(x + s - cr, y);
-          ctx.quadraticCurveTo(x + s, y, x + s, y + cr);
-          ctx.lineTo(x + s, y + s - cr);
-          ctx.quadraticCurveTo(x + s, y + s, x + s - cr, y + s);
-          ctx.lineTo(x + cr, y + s);
-          ctx.quadraticCurveTo(x, y + s, x, y + s - cr);
-          ctx.lineTo(x, y + cr);
-          ctx.quadraticCurveTo(x, y, x + cr, y);
-          ctx.closePath();
-          ctx.fill();
-        } else {
-          // Small circle — notes
-          ctx.beginPath();
-          ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2);
-          ctx.fill();
-        }
+        ctx.fill();
 
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
