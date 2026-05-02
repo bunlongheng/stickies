@@ -1147,6 +1147,9 @@ export default function NotesMaster() {
         if (titleInputMobileRef.current) titleInputMobileRef.current.value = title;
     }, [title]);
     const [content, setContent] = useState("");
+    const undoStackRef = useRef<string[]>([]);
+    const redoStackRef = useRef<string[]>([]);
+    const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     // Always-current content ref — used in saveNote on blur where React state may lag debounce
     const latestContentRef = useRef("");
     const [pendingRestoreNoteId, setPendingRestoreNoteId] = useState<string | null>(null);
@@ -1335,6 +1338,9 @@ export default function NotesMaster() {
     const findQueryRef = useRef("");
     const findMatchCountRef = useRef(0);
     const [images, setImages] = useState<Array<{ url: string; name: string; type: string }>>([]);
+    const [noteTags, setNoteTags] = useState<string[]>([]);
+    const [showTagInput, setShowTagInput] = useState(false);
+    const [tagInputValue, setTagInputValue] = useState("");
     const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
     const [uploadingImages, setUploadingImages] = useState(false);
 
@@ -1859,7 +1865,8 @@ export default function NotesMaster() {
             const rawMainList = localStorage.getItem(MAIN_LIST_MODE_KEY);
             if (rawMainList) {
                 const v = rawMainList === "true" ? "list" : rawMainList === "false" ? "thumb" : rawMainList;
-                if (v === "list" || v === "thumb" || v === "tabs" || v === "graph") setMainListMode(v as any);
+                if (v === "list" || v === "thumb" || v === "tabs") setMainListMode(v as any);
+                else localStorage.removeItem(MAIN_LIST_MODE_KEY); // clear invalid values like "graph"
             }
         } catch { /* ignore */ }
         try {
@@ -2009,7 +2016,7 @@ export default function NotesMaster() {
     }, [stackModeNotes]);
 
     useEffect(() => {
-        try { localStorage.setItem(MAIN_LIST_MODE_KEY, String(mainListMode)); } catch { /* ignore */ }
+        try { localStorage.setItem(MAIN_LIST_MODE_KEY, mainListMode === "graph" ? "thumb" : String(mainListMode)); } catch { /* ignore */ }
         // Auto-open latest note when entering tabs mode
         if (mainListMode === "tabs") {
             const allNotes = dbData.filter(n => !n.is_folder && !n.trashed_at)
@@ -3030,7 +3037,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                     // Auto-detect for new notes or notes without a saved type
                     return detectNoteType(saveContent) || saved || "text";
                 })(),
-                ...(extractedTags.length > 0 ? { tags: extractedTags } : {}),
+                ...(() => { const merged = Array.from(new Set([...noteTags, ...extractedTags])); return merged.length > 0 ? { tags: merged } : {}; })(),
                 updated_at: new Date().toISOString(),
                 ...(folderId ? { folder_id: folderId } : {}),
             };
@@ -3179,8 +3186,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                 mergeIntoCachedNotes(name, [{ ...editingNote, id: noteId, folder_name: name }]);
                 try {
                     await notesApi.update(noteId, { folder_name: name, folder_color: destColor, ...(newFolderId ? { folder_id: newFolderId } : {}) });
-                    // Refresh target folder notes so the moved note shows immediately
-                    void loadFolderNotes(name, false);
+                    // Refresh target folder notes — but NOT in tabs mode (would wipe other folders' notes)
+                    if (mainListMode !== "tabs") void loadFolderNotes(name, false);
                 } catch (err) {
                     console.error("Move failed:", err);
                     showToast("Move Failed");
@@ -3243,6 +3250,26 @@ const fireIntegrations = (trigger: string, note: any) => {
         window.addEventListener("keydown", handler);
         return () => window.removeEventListener("keydown", handler);
     }, [saveNote, noteColor]);
+
+    // Cmd+Z undo / Cmd+Shift+Z redo
+    useEffect(() => {
+        if (!editorOpen) return;
+        const handler = (e: KeyboardEvent) => {
+            if (!(e.metaKey || e.ctrlKey) || e.key !== "z") return;
+            e.preventDefault();
+            if (e.shiftKey) {
+                // Redo
+                const val = redoStackRef.current.pop();
+                if (val !== undefined) { undoStackRef.current.push(content); latestContentRef.current = val; setContent(val); }
+            } else {
+                // Undo
+                const val = undoStackRef.current.pop();
+                if (val !== undefined) { redoStackRef.current.push(content); latestContentRef.current = val; setContent(val); }
+            }
+        };
+        window.addEventListener("keydown", handler);
+        return () => window.removeEventListener("keydown", handler);
+    }, [editorOpen, content]);
 
 
     // Cmd+R → refresh notes (prevents browser reload)
@@ -3333,6 +3360,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         setTitle(isStandup ? dateStr : "");
         setContent("");
         setImages([]);
+        setNoteTags([]);
         setPendingNoteType(type ?? "text");
         setTargetFolder(target);
         setNoteColor(palette12[Math.floor(Math.random() * palette12.length)]);
@@ -4158,6 +4186,10 @@ const fireIntegrations = (trigger: string, note: any) => {
         setTitle(note.title || "");
         setContent(note.content != null ? (note.type === "mermaid" || detectMermaid(note.content || "") ? cleanMermaidContent(note.content) : note.content) : "");
         setImages((note as any).images ?? []);
+        setNoteTags((note as any).tags ?? []);
+        setShowTagInput(false);
+        undoStackRef.current = [];
+        redoStackRef.current = [];
         setTargetFolder(note.folder_name || activeFolder || "General");
         setNoteColor(note.folder_color || folders.find((f: any) => f.name === (note.folder_name || activeFolder))?.color || "#888");
         setShowColorPicker(false);
@@ -4904,11 +4936,16 @@ const fireIntegrations = (trigger: string, note: any) => {
     const cycleViewMode = useCallback(() => {
         setMainListMode(v => {
             const next = v === "thumb" ? "list" : v === "list" ? "tabs" : v === "tabs" ? "graph" : "thumb";
-            if (v === "tabs" && next !== "tabs") { setEditorOpen(false); setEditingNote(null); }
+            if ((v === "tabs" || next === "graph") && next !== "tabs") { setEditorOpen(false); setEditingNote(null); }
             return next;
         });
         setKanbanMode(false);
     }, []);
+
+    // Load all notes when entering graph mode
+    useEffect(() => {
+        if (mainListMode === "graph") void loadAllNotes();
+    }, [mainListMode]);
 
     // Compute exact square cell size via ResizeObserver → set as CSS var on grid container
     useEffect(() => {
@@ -6033,7 +6070,7 @@ const fireIntegrations = (trigger: string, note: any) => {
             <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
 
                 {/* RIGHT PANEL: editor — only shown in edit mode or when a note is open (mobile nav) */}
-                <div className={`flex-1 flex flex-col overflow-hidden ${editorOpen || mainListMode === "tabs" ? "flex" : "hidden"} `} style={{ background: appTheme === "light" ? "#ffffff" : "#222222", display: mainListMode === "graph" ? "none" : undefined }}>
+                <div className={`flex-1 flex flex-col overflow-hidden ${editorOpen || mainListMode === "tabs" ? "flex" : "hidden"} `} style={{ background: appTheme === "light" ? "#ffffff" : "#222222" }}>
                 {editorOpen ? (
                 <section className="flex-1 min-h-0 flex flex-col overflow-hidden overscroll-none" onClick={(e) => e.stopPropagation()}>
                     {pendingShare && (
@@ -6122,7 +6159,14 @@ const fireIntegrations = (trigger: string, note: any) => {
                         </button>
                         )}
                         {/* Share removed — available in note actions menu */}
-                        {/* Preview — cycles: text → split → preview → text (markdown + html only) */}
+                        {/* Search — triggers Cmd+K */}
+                        <button type="button"
+                            onClick={() => { setShowCmdK(true); setCmdKQuery(""); setCmdKCursor(0); }}
+                            className="p-2 sm:p-3 transition flex-shrink-0 text-zinc-500 hover:text-white"
+                            title="Search (⌘K)">
+                            <MagnifyingGlassIcon className="w-[24px] h-[24px] sm:w-[22px] sm:h-[22px]" />
+                        </button>
+                        {/* Preview toggle */}
                         <button type="button"
                             onClick={() => setMdViewMode(v => v === "text" ? "preview" : "text")}
                             className={`p-2 sm:p-3 transition flex-shrink-0 ${mdViewMode === "text" ? "text-zinc-500" : "text-white drop-shadow-[0_0_6px_rgba(255,255,255,0.5)]"}`}
@@ -6603,7 +6647,15 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 <textarea
                                     ref={editorTextRef}
                                     value={content}
-                                    onChange={(e) => { latestContentRef.current = e.target.value; setContent(e.target.value); }}
+                                    onChange={(e) => {
+                                        const val = e.target.value;
+                                        // Debounced undo snapshot — push previous content after 500ms pause
+                                        if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+                                        undoTimerRef.current = setTimeout(() => {
+                                            if (content !== val) { undoStackRef.current.push(content); if (undoStackRef.current.length > 100) undoStackRef.current.shift(); redoStackRef.current = []; }
+                                        }, 500);
+                                        latestContentRef.current = val; setContent(val);
+                                    }}
                                     onClick={() => closeEditorTools()}
                                     onFocus={() => closeEditorTools()}
                                     onBlur={() => {}}
@@ -6739,7 +6791,15 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 <textarea
                                     ref={editorTextRef}
                                     value={content}
-                                    onChange={(e) => { latestContentRef.current = e.target.value; setContent(e.target.value); }}
+                                    onChange={(e) => {
+                                        const val = e.target.value;
+                                        // Debounced undo snapshot — push previous content after 500ms pause
+                                        if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+                                        undoTimerRef.current = setTimeout(() => {
+                                            if (content !== val) { undoStackRef.current.push(content); if (undoStackRef.current.length > 100) undoStackRef.current.shift(); redoStackRef.current = []; }
+                                        }, 500);
+                                        latestContentRef.current = val; setContent(val);
+                                    }}
                                     onClick={() => closeEditorTools()}
                                     onFocus={() => closeEditorTools()}
                                     onBlur={() => {}}
@@ -6972,6 +7032,46 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                         >{label}</span>
                                     );
                                 })()}
+                                {/* Tags */}
+                                {noteTags.map((tag, i) => (
+                                    <span key={i} className="font-mono font-bold whitespace-nowrap px-1.5 py-px rounded-full cursor-pointer hover:line-through"
+                                        style={{ fontSize: 8, background: "rgba(56,189,248,0.15)", color: "#38bdf8", border: "1px solid rgba(56,189,248,0.3)" }}
+                                        onClick={() => {
+                                            const next = noteTags.filter((_, j) => j !== i);
+                                            setNoteTags(next);
+                                            if (editingNote?.id) notesApi.update(String(editingNote.id), { tags: next });
+                                        }}
+                                        title="Click to remove">{tag}</span>
+                                ))}
+                                <button type="button"
+                                    onClick={() => { setShowTagInput(true); setTagInputValue(""); }}
+                                    className="font-mono font-bold whitespace-nowrap px-1 py-px rounded-full hover:brightness-125 transition"
+                                    style={{ fontSize: 8, color: "#888", border: "1px dashed #555" }}
+                                    title="Add tag">+</button>
+                                {showTagInput && (
+                                    <input
+                                        autoFocus
+                                        value={tagInputValue}
+                                        onChange={e => setTagInputValue(e.target.value)}
+                                        onKeyDown={e => {
+                                            if (e.key === "Enter" && tagInputValue.trim()) {
+                                                const tag = tagInputValue.trim().startsWith("#") ? tagInputValue.trim() : `#${tagInputValue.trim()}`;
+                                                if (!noteTags.includes(tag)) {
+                                                    const next = [...noteTags, tag];
+                                                    setNoteTags(next);
+                                                    if (editingNote?.id) notesApi.update(String(editingNote.id), { tags: next });
+                                                }
+                                                setTagInputValue("");
+                                                setShowTagInput(false);
+                                            }
+                                            if (e.key === "Escape") setShowTagInput(false);
+                                        }}
+                                        onBlur={() => setShowTagInput(false)}
+                                        className="bg-transparent outline-none font-mono font-bold text-white"
+                                        style={{ fontSize: 8, width: 60, border: "1px solid #555", borderRadius: 8, padding: "1px 4px" }}
+                                        placeholder="#tag"
+                                    />
+                                )}
                             </div>
                         </div>
                     );
@@ -7586,7 +7686,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                     <>
                                                         {(() => {
                                                             const fc = item.color || item.folder_color || "#888";
-                                                            const tc = appTheme === "light" || item.name === "CLAUDE" ? "#1a1a1a" : isLightColor(fc) ? "#1c1c1e" : "#fff";
+                                                            const tc = item.name === "CLAUDE" ? "#1a1a1a" : appTheme === "light" ? "#1a1a1a" : "#fff";
                                                             return (<>
                                                                 {item.name === "CLAUDE"
                                                                     ? <img src="/claude-icon.png" alt="Claude" className="w-14 h-14 object-contain relative z-10" />
@@ -7704,15 +7804,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                         </div>
                     )}
 
-                    {/* Graph view — renders inside list panel, shares header */}
-                    {mainListMode === "graph" && (
-                        <GraphView
-                            notes={dbData.filter(n => !n.is_folder && !n.trashed_at) as any}
-                            folders={folders as any}
-                            onOpenNote={(n: any) => { setMainListMode("list"); void openNote(n); }}
-                            theme={appTheme as "light" | "dark"}
-                        />
-                    )}
+
 
                     {/* STATS BOTTOM BAR — mobile: all folder levels */}
                     <div className={`fixed bottom-4 left-0 right-0 z-[120] ${!editorOpen ? "flex sm:hidden" : "hidden"} justify-center items-center select-none pointer-events-none tabular-nums`} style={{ fontSize: 9, opacity: 0.7 }}>
@@ -7799,7 +7891,25 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                 })()}
 
 
+                {/* Graph view — top level, outside both panels */}
             </div>{/* ── end two-panel wrapper ── */}
+
+            {/* Graph view — fullscreen overlay */}
+            {mainListMode === "graph" && (
+                <div className="fixed inset-0 z-[100] flex flex-col" style={{ background: appTheme === "dark" ? "#0a0a0a" : "#f5f5f5" }}>
+                    <div className="shrink-0 flex items-center justify-end px-4 safe-top-bar" style={{ height: 56 }}>
+                        <HeaderIconBtn icon={viewModeIcon} label={viewModeLabel} onClick={cycleViewMode} />
+                    </div>
+                    <GraphView
+                        notes={dbData.filter(n => !n.is_folder && !n.trashed_at) as any}
+                        folders={folders as any}
+                        folderIcons={folderIcons}
+                        onOpenNote={(n: any) => { setMainListMode("list"); void openNote(n); }}
+                        onClickFolder={(name: string) => { setMainListMode("list"); const fr = dbData.find(r => r.is_folder && r.folder_name === name); if (fr) enterFolder({ id: String(fr.id), name, color: fr.folder_color || "#888" }); }}
+                        theme={appTheme as "light" | "dark"}
+                    />
+                </div>
+            )}
 
 
             {/* NOTE TYPE PICKER */}
