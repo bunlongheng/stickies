@@ -6173,7 +6173,11 @@ const fireIntegrations = (trigger: string, note: any) => {
                             title={mdViewMode === "text" ? "Preview" : "Code"}>
                             {mdViewMode === "text" ? <EyeIcon className="w-[24px] h-[24px] sm:w-[22px] sm:h-[22px]" /> : <CodeBracketIcon className="w-[24px] h-[24px] sm:w-[22px] sm:h-[22px]" />}
                         </button>
-                        <HeaderIconBtn icon={viewModeIcon} label={viewModeLabel} onClick={cycleViewMode} />
+                        <button type="button" onClick={cycleViewMode}
+                            className="p-2 sm:p-3 transition flex-shrink-0 text-zinc-500 hover:text-white"
+                            title={viewModeLabel}>
+                            {React.createElement(viewModeIcon, { className: "w-[24px] h-[24px] sm:w-[22px] sm:h-[22px]" })}
+                        </button>
                         <button type="button"
                             onClick={() => { setShowNoteActions(v => !v); closeEditorTools(); }}
                             className="p-2 sm:p-3 text-zinc-300 hover:text-white active:text-white transition flex-shrink-0"
