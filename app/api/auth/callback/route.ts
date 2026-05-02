@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
   const error      = searchParams.get('error')
   const next       = searchParams.get('next') ?? '/'
 
-  console.log('[auth/callback] origin:', origin, '| code:', !!code, '| token_hash:', !!token_hash, '| type:', type, '| error:', error)
+
 
   if (error) {
     return NextResponse.redirect(`${origin}/sign-in?error=${encodeURIComponent(error)}`)
@@ -43,7 +43,6 @@ export async function GET(request: NextRequest) {
   if (token_hash && type) {
     const supabase = makeSupabase(redirectOk)
     const { error: otpError } = await supabase.auth.verifyOtp({ token_hash, type: type as any })
-    console.log('[auth/callback] verifyOtp error:', otpError?.message ?? 'none')
     if (!otpError) {
       try {
         const { data: { user } } = await supabase.auth.getUser()
@@ -61,7 +60,6 @@ export async function GET(request: NextRequest) {
   if (code) {
     const supabase = makeSupabase(redirectOk)
     const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
-    console.log('[auth/callback] exchangeCodeForSession error:', exchangeError?.message ?? 'none')
     if (!exchangeError) {
       try {
         const { data: { user } } = await supabase.auth.getUser()

@@ -33,14 +33,11 @@ import Cog6ToothIcon from "@heroicons/react/24/outline/Cog6ToothIcon";
 import EllipsisVerticalIcon from "@heroicons/react/24/outline/EllipsisVerticalIcon";
 import ArrowUturnLeftIcon from "@heroicons/react/24/outline/ArrowUturnLeftIcon";
 import ArrowUturnRightIcon from "@heroicons/react/24/outline/ArrowUturnRightIcon";
-import ArrowsPointingOutIcon from "@heroicons/react/24/outline/ArrowsPointingOutIcon";
-import ArrowsPointingInIcon from "@heroicons/react/24/outline/ArrowsPointingInIcon";
 import CheckIcon from "@heroicons/react/24/outline/CheckIcon";
 import ChevronDownIcon from "@heroicons/react/24/outline/ChevronDownIcon";
 import ChevronUpIcon from "@heroicons/react/24/outline/ChevronUpIcon";
 import ClipboardDocumentListIcon from "@heroicons/react/24/outline/ClipboardDocumentListIcon";
 import EyeIcon from "@heroicons/react/24/outline/EyeIcon";
-import ViewColumnsIcon from "@heroicons/react/24/outline/ViewColumnsIcon";
 import CodeBracketIcon from "@heroicons/react/24/outline/CodeBracketIcon";
 import FaceSmileIcon from "@heroicons/react/24/outline/FaceSmileIcon";
 import CubeTransparentIcon from "@heroicons/react/24/outline/CubeTransparentIcon";
@@ -93,7 +90,6 @@ import BanknotesIcon from "@heroicons/react/24/outline/BanknotesIcon";
 import UserIcon from "@heroicons/react/24/outline/UserIcon";
 import GlobeAmericasIcon from "@heroicons/react/24/outline/GlobeAmericasIcon";
 import ArchiveBoxIcon from "@heroicons/react/24/outline/ArchiveBoxIcon";
-import ChartPieIcon from "@heroicons/react/24/outline/ChartPieIcon";
 import TableCellsIcon from "@heroicons/react/24/outline/TableCellsIcon";
 import PhotoIcon from "@heroicons/react/24/outline/PhotoIcon";
 import LinkIcon from "@heroicons/react/24/outline/LinkIcon";
@@ -1142,7 +1138,6 @@ export default function NotesMaster() {
     }, [folderStack, editorOpen]);
     const [noteContentLoading, setNoteContentLoading] = useState(false);
     const [editingNote, setEditingNote] = useState<any | null>(null);
-    const [showFloatCopy, setShowFloatCopy] = useState(true);
     const [title, setTitle] = useState("");
     // Sync uncontrolled title inputs when title state changes (note load / external setTitle)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2081,13 +2076,9 @@ export default function NotesMaster() {
         setCodeEditMode(false);
     }, [editorOpen, editingNote?.id]);
 
-    // Float copy: show on note open, hide after 10s of editing
+    // Hide find bar on note open
     useEffect(() => {
-        if (!editorOpen || !editingNote?.id) return;
-        setShowFloatCopy(true);
-        setShowFindBar(false);
-        const t = setTimeout(() => setShowFloatCopy(false), 10000);
-        return () => clearTimeout(t);
+        if (editorOpen) setShowFindBar(false);
     }, [editorOpen, editingNote?.id]);
 
     // Load pinned note IDs from localStorage
@@ -6998,7 +6989,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                 {/* LEFT NOTE LIST PANEL */}
                 {(() => {
                     return (
-                        <div className={`flex flex-col flex-1 min-h-0 overflow-hidden relative ${editorOpen || mainListMode === "tabs" || mainListMode === "graph" ? "hidden" : ""}`}
+                        <div className={`flex flex-col flex-1 min-h-0 overflow-hidden relative ${editorOpen || mainListMode === "tabs" ? "hidden" : ""}`}
                              style={{ background: "black" }}>
 
                             {/* TOP HEADER — breadcrumbs + buttons */}
@@ -7078,7 +7069,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                 </>
 
                             {/* NOTE LIST CONTENT */}
-                            <div className="flex flex-col flex-1 min-h-0 overflow-hidden relative" style={{ background: "black" }}>
+                            <div className={`flex flex-col flex-1 min-h-0 overflow-hidden relative ${mainListMode === "graph" ? "hidden" : ""}`} style={{ background: "black" }}>
 
                     <main ref={mainScrollRef}
                         onDragOver={(e) => { if (Array.from(e.dataTransfer.items).some(i => i.kind === "file")) e.preventDefault(); }}
@@ -7713,6 +7704,16 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                         </div>
                     )}
 
+                    {/* Graph view — renders inside list panel, shares header */}
+                    {mainListMode === "graph" && (
+                        <GraphView
+                            notes={dbData.filter(n => !n.is_folder && !n.trashed_at) as any}
+                            folders={folders as any}
+                            onOpenNote={(n: any) => { setMainListMode("list"); void openNote(n); }}
+                            theme={appTheme as "light" | "dark"}
+                        />
+                    )}
+
                     {/* STATS BOTTOM BAR — mobile: all folder levels */}
                     <div className={`fixed bottom-4 left-0 right-0 z-[120] ${!editorOpen ? "flex sm:hidden" : "hidden"} justify-center items-center select-none pointer-events-none tabular-nums`} style={{ fontSize: 9, opacity: 0.7 }}>
                         <span className="flex items-center gap-1.5 px-3 py-1 rounded-full" style={{ border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.04)", backdropFilter: "blur(8px)" }}>
@@ -7797,22 +7798,6 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                     );
                 })()}
 
-                {/* Graph view */}
-                {mainListMode === "graph" && (
-                    <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-                        <div className="shrink-0 flex items-center h-[4rem] px-4 border-b border-white/[0.06]" style={{ background: appTheme === "light" ? "#f8f8f8" : "black" }}>
-                            <div className="ml-auto flex items-center">
-                                <HeaderIconBtn icon={viewModeIcon} label={viewModeLabel} onClick={cycleViewMode} />
-                            </div>
-                        </div>
-                        <GraphView
-                            notes={dbData.filter(n => !n.is_folder && !n.trashed_at) as any}
-                            folders={folders as any}
-                            onOpenNote={(n: any) => { setMainListMode("list"); void openNote(n); }}
-                            theme={appTheme as "light" | "dark"}
-                        />
-                    </div>
-                )}
 
             </div>{/* ── end two-panel wrapper ── */}
 
