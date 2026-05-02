@@ -355,10 +355,10 @@ body {
 }
 @keyframes noteIncoming {
   0%   { background-color: transparent; }
-  20%  { background-color: rgba(52, 199, 89, 0.18); }
-  40%  { background-color: transparent; }
-  65%  { background-color: rgba(52, 199, 89, 0.12); }
-  100% { background-color: transparent; }
+  20%  { background-color: var(--row-color, rgba(52, 199, 89, 0.18)); opacity: 0.25; }
+  40%  { background-color: transparent; opacity: 1; }
+  65%  { background-color: var(--row-color, rgba(52, 199, 89, 0.12)); opacity: 0.18; }
+  100% { background-color: transparent; opacity: 1; }
 }
 .note-incoming {
   animation: noteIncoming 1.2s ease forwards;
