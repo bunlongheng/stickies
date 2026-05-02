@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 
 interface Note { id: string; title: string; folder_name: string; folder_color: string; updated_at: string; }
-interface Folder { name: string; color: string; }
+interface Folder { name: string; color: string; parent?: string | null; }
 
 interface GraphViewProps {
   notes: Note[];
@@ -50,6 +50,9 @@ export function GraphView({ notes, folders, onOpenNote, onClickFolder, theme }: 
     const nodes: GNode[] = [];
     const edges: [number, number][] = [];
 
+    // Only root-level folders (no parent)
+    const rootFolders = folders.filter(f => !f.parent);
+
     // Group notes by folder
     const folderMap = new Map<string, Note[]>();
     notes.forEach(n => {
@@ -57,19 +60,19 @@ export function GraphView({ notes, folders, onOpenNote, onClickFolder, theme }: 
       if (!folderMap.has(f)) folderMap.set(f, []);
       folderMap.get(f)!.push(n);
     });
-    const folderNames = Array.from(folderMap.keys());
 
     // Center node
     nodes.push({ id: "__root__", baseX: cx, baseY: cy, r: 22, color: fg, label: "STICKIES", type: "center", initial: "S",
       phX: 0, phY: 1.2, spX: 0.28, spY: 0.22, amp: 4 });
 
-    // Folder nodes
-    folderNames.forEach((fname, fi) => {
-      const angle = (fi / folderNames.length) * Math.PI * 2 - Math.PI / 2;
+    // Root folder nodes only
+    rootFolders.forEach((folder, fi) => {
+      const fname = folder.name;
+      const angle = (fi / rootFolders.length) * Math.PI * 2 - Math.PI / 2;
       const fx = cx + Math.cos(angle) * sR;
       const fy = cy + Math.sin(angle) * sR;
-      const fc = folders.find(f => f.name === fname)?.color || "#888";
-      const count = folderMap.get(fname)!.length;
+      const fc = folder.color || "#888";
+      const count = folderMap.get(fname)?.length || 0;
       const sIdx = nodes.length;
       nodes.push({ id: `folder:${fname}`, baseX: fx, baseY: fy, r: 14 + Math.min(count, 15) * 0.3, color: fc,
         label: fname, type: "folder", folderName: fname, initial: fname.charAt(0).toUpperCase(),
@@ -78,7 +81,7 @@ export function GraphView({ notes, folders, onOpenNote, onClickFolder, theme }: 
       edges.push([0, sIdx]);
 
       // Note nodes — max 7 per folder to keep clean
-      const fnotes = folderMap.get(fname)!.slice(0, 7);
+      const fnotes = (folderMap.get(fname) || []).slice(0, 7);
       const rR = sR * 0.38;
       fnotes.forEach((n, ri) => {
         const spread = Math.PI * 0.6;

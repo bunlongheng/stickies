@@ -7897,12 +7897,21 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
             {/* Graph view — fullscreen overlay */}
             {mainListMode === "graph" && (
                 <div className="fixed inset-0 z-[100] flex flex-col" style={{ background: appTheme === "dark" ? "#0a0a0a" : "#f5f5f5" }}>
-                    <div className="shrink-0 flex items-center justify-end px-4 safe-top-bar" style={{ height: 56 }}>
-                        <HeaderIconBtn icon={viewModeIcon} label={viewModeLabel} onClick={cycleViewMode} />
-                    </div>
+                    <div className="safe-top-bar shrink-0" style={{ background: appTheme === "dark" ? "#0a0a0a" : "#f5f5f5" }} />
+                    <header className="shrink-0 flex items-center h-[4rem] px-4">
+                        <button type="button" onClick={() => { setShowCmdK(true); setCmdKQuery(""); setCmdKCursor(0); }}
+                            className="relative flex items-center w-[220px] bg-transparent">
+                            <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-white/35 w-6 h-6 pointer-events-none" />
+                            <span className="w-full pl-12 pr-3 py-3 text-sm font-black tracking-tight text-white/30">SEARCH</span>
+                        </button>
+                        <div className="ml-auto flex items-center">
+                            <HeaderIconBtn icon={viewModeIcon} label={viewModeLabel} onClick={cycleViewMode} />
+                            <HeaderIconBtn icon={Cog6ToothIcon} label="Settings" onClick={() => { setIsGlobalSettings(true); setShowFolderActions(true); }} />
+                        </div>
+                    </header>
                     <GraphView
                         notes={dbData.filter(n => !n.is_folder && !n.trashed_at) as any}
-                        folders={folders as any}
+                        folders={folders.map(f => ({ name: f.name, color: f.color, parent: (f as any).parent_folder_name || null }))}
                         folderIcons={folderIcons}
                         onOpenNote={(n: any) => { setMainListMode("list"); void openNote(n); }}
                         onClickFolder={(name: string) => { setMainListMode("list"); const fr = dbData.find(r => r.is_folder && r.folder_name === name); if (fr) enterFolder({ id: String(fr.id), name, color: fr.folder_color || "#888" }); }}
