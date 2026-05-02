@@ -158,21 +158,6 @@ body {
   }
 }
 
-.animate-fadeInUp {
-  animation: fadeInUp 0.6s ease-out;
-}
-
-/* Prevent layout shift for async content */
-[data-skeleton],
-.skeleton {
-  min-height: 1rem;
-}
-
-/* Improve LCP by skipping offscreen rendering */
-.content-visibility-auto {
-  content-visibility: auto;
-  contain-intrinsic-size: 800px;
-}
 
 /* Dark scrollbars globally */
 * { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.12) transparent; }
