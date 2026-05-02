@@ -192,6 +192,9 @@ export function GraphView({ notes, folders, onOpenNote, onClickFolder, theme }: 
         ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2);
         ctx.fillStyle = n.type === "note" ? n.color + "cc" : n.color;
         ctx.fill();
+        ctx.strokeStyle = isDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.12)";
+        ctx.lineWidth = 1;
+        ctx.stroke();
 
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
