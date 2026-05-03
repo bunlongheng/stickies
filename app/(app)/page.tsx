@@ -6159,32 +6159,11 @@ const fireIntegrations = (trigger: string, note: any) => {
                         </button>
                         )}
                         {/* Share removed — available in note actions menu */}
-                        {/* Editor header icons — tight group */}
-                        <div className="flex items-center gap-0">
-                        <button type="button"
-                            onClick={() => { setShowCmdK(true); setCmdKQuery(""); setCmdKCursor(0); }}
-                            className="p-2 transition flex-shrink-0 text-zinc-500 hover:text-white"
-                            title="Search (⌘K)">
-                            <MagnifyingGlassIcon className="w-5 h-5" />
-                        </button>
-                        <button type="button"
-                            onClick={() => setMdViewMode(v => v === "text" ? "preview" : "text")}
-                            className={`p-2 transition flex-shrink-0 ${mdViewMode === "text" ? "text-zinc-500" : "text-white drop-shadow-[0_0_6px_rgba(255,255,255,0.5)]"}`}
-                            title={mdViewMode === "text" ? "Preview" : "Code"}>
-                            {mdViewMode === "text" ? <EyeIcon className="w-5 h-5" /> : <CodeBracketIcon className="w-5 h-5" />}
-                        </button>
-                        <button type="button" onClick={cycleViewMode}
-                            className="p-2 transition flex-shrink-0 text-zinc-500 hover:text-white"
-                            title={viewModeLabel}>
-                            {React.createElement(viewModeIcon, { className: "w-5 h-5" })}
-                        </button>
-                        <button type="button"
-                            onClick={() => { setShowNoteActions(v => !v); closeEditorTools(); }}
-                            className="p-2 text-zinc-500 hover:text-white active:text-white transition flex-shrink-0"
-                            title="Note options">
-                            <Cog6ToothIcon className="w-5 h-5" />
-                        </button>
-                        </div>
+                        {/* Editor header icons — same HeaderIconBtn as all modes */}
+                        <HeaderIconBtn icon={MagnifyingGlassIcon} label="Search" onClick={() => { setShowCmdK(true); setCmdKQuery(""); setCmdKCursor(0); }} />
+                        <HeaderIconBtn icon={mdViewMode === "text" ? EyeIcon : CodeBracketIcon} label={mdViewMode === "text" ? "Preview" : "Code"} active={mdViewMode !== "text"} onClick={() => setMdViewMode(v => v === "text" ? "preview" : "text")} />
+                        <HeaderIconBtn icon={viewModeIcon} label={viewModeLabel} onClick={cycleViewMode} />
+                        <HeaderIconBtn icon={Cog6ToothIcon} label="Settings" onClick={() => { setShowNoteActions(v => !v); closeEditorTools(); }} />
                     </div>
                     {/* AI PROMPT BAR — fills entire editor when active */}
                     {aiPromptOpen && (
@@ -9789,9 +9768,9 @@ const EditorIconBtn = ({ icon: Icon, label, onClick, active = false }: any) => (
     </button>
 );
 
-const MobileEditorIconBtn = ({ icon: Icon, label, onClick, active = false }: any) => (
-    <button type="button" onClick={onClick} className={`p-5 transition ${active ? "text-white bg-white/15 ring-1 ring-inset ring-white/30" : "text-zinc-300 active:text-white active:bg-white/10"}`} title={label} aria-label={label}>
-        <Icon className="w-10 h-10" />
+const MobileEditorIconBtn = ({ icon: Icon, label, onClick, active = false, style }: any) => (
+    <button type="button" onClick={onClick} className={`p-2.5 transition ${active ? "text-white bg-white/15" : "text-zinc-500 hover:text-white active:text-white"}`} title={label} aria-label={label} style={style}>
+        <Icon className="w-6 h-6" />
     </button>
 );
 
