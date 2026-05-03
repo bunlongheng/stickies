@@ -1821,7 +1821,13 @@ export default function NotesMaster() {
                 } catch (err) {
                     console.error("Failed to restore local view state:", err);
                 }
+                // Always ensure a valid view mode and editor closed if no note pending
+                if (!shouldWaitForInitialTarget) {
+                    setEditorOpen(false);
+                }
             }
+            // Force thumb if mainListMode ended up as graph (not persisted)
+            setMainListMode(prev => prev === "graph" ? "thumb" : prev);
         }
         try {
             const rawColors = localStorage.getItem(FOLDER_COLOR_KEY);
