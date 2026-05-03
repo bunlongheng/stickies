@@ -4952,7 +4952,15 @@ const fireIntegrations = (trigger: string, note: any) => {
     const isListMode = mainListMode === "list";
     const viewModeIcon = mainListMode === "list" ? Bars3Icon : mainListMode === "tabs" ? RectangleStackIcon : mainListMode === "graph" ? ShareIcon : Squares2X2Icon;
     const viewModeLabel = mainListMode === "list" ? "List" : mainListMode === "tabs" ? "Tabs" : mainListMode === "graph" ? "Graph" : "Thumb";
+    const viewPanelRef = useRef<HTMLDivElement>(null);
     const cycleViewMode = useCallback(() => {
+        // Trigger flip animation via DOM - no remount
+        const el = viewPanelRef.current;
+        if (el) {
+            el.classList.remove("view-flip-in");
+            void el.offsetWidth; // force reflow
+            el.classList.add("view-flip-in");
+        }
         setMainListMode(v => {
             const next = v === "thumb" ? "list" : v === "list" ? "tabs" : v === "tabs" ? "graph" : "thumb";
             if ((v === "tabs" || next === "graph") && next !== "tabs") { setEditorOpen(false); setEditingNote(null); }
@@ -6086,7 +6094,7 @@ const fireIntegrations = (trigger: string, note: any) => {
 
 
             {/* ── two-panel layout ── */}
-            <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+            <div ref={viewPanelRef} className="flex-1 min-h-0 overflow-hidden flex flex-col">
 
                 {/* RIGHT PANEL: editor — only shown in edit mode or when a note is open (mobile nav) */}
                 <div className={`flex-1 flex flex-col overflow-hidden ${editorOpen || mainListMode === "tabs" ? "flex" : "hidden"} `} style={{ background: appTheme === "light" ? "#ffffff" : "#222222" }}>
