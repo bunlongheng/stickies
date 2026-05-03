@@ -11,6 +11,8 @@ function SignInContent() {
     setLoading(true)
     setError(null)
     const supabase = createClient()
+    // Clear stale session to prevent first-attempt PKCE failure
+    await supabase.auth.signOut().catch(() => {})
     const { error: err } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
