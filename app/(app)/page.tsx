@@ -4969,9 +4969,9 @@ const fireIntegrations = (trigger: string, note: any) => {
         });
     }, []);
 
-    // Load all notes when entering graph mode
+    // Load all notes when entering graph mode - force past loading guard
     useEffect(() => {
-        if (mainListMode === "graph") void loadAllNotes();
+        if (mainListMode === "graph") { folderNotesLoadingRef.current = false; void loadAllNotes(); }
     }, [mainListMode]);
 
     // Compute exact square cell size via ResizeObserver → set as CSS var on grid container
@@ -6219,7 +6219,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                         const allNotes = (inFolder
                             ? dbData.filter(n => !n.is_folder && !n.trashed_at && !dismissedTabs.has(String(n.id)) && n.folder_name === activeFolder)
                             : mainListMode === "tabs"
-                            ? dbData.filter(n => !n.is_folder && !n.trashed_at && !dismissedTabs.has(String(n.id)) && new Date(n.created_at || 0) >= last24h)
+                            ? dbData.filter(n => !n.is_folder && !n.trashed_at && !dismissedTabs.has(String(n.id)) && (new Date(n.updated_at || n.created_at || 0) >= last24h || n.folder_name === "Today"))
                             : dbData.filter(n => !n.is_folder && !n.trashed_at && !dismissedTabs.has(String(n.id)))
                         ).sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")));
                         const dayNotes = allNotes.slice(0, tabLimit);
