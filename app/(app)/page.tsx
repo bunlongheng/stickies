@@ -1798,7 +1798,7 @@ export default function NotesMaster() {
                 sessionStorage.setItem("stickies:session-started", "1");
                 const urlFolder = new URLSearchParams(window.location.search).get("folder");
                 if (urlFolder) { setActiveFolder(urlFolder); } else { setActiveFolder(null); }
-                setMainListMode("list"); // list as default
+                setMainListMode("thumb"); // thumb as default
                 localStorage.setItem(LAST_FOLDER_KEY, "__all__"); // persist so sync() honors it
             } else {
                 try {
@@ -1813,6 +1813,9 @@ export default function NotesMaster() {
                         if ((parsed?.editorOpen || parsed?.noteModalOpen) && parsed?.editingNoteId) {
                             shouldWaitForInitialTarget = true;
                             setPendingRestoreNoteId(String(parsed.editingNoteId));
+                        } else {
+                            // No note to restore — ensure editor is closed
+                            setEditorOpen(false);
                         }
                     }
                 } catch (err) {
