@@ -15,20 +15,20 @@ html { -webkit-text-size-adjust: none !important; text-size-adjust: none !import
 /* iOS textarea: small font, full width, no zoom */
 @media (max-width: 1024px) and (pointer: coarse) {
   textarea.ios-editor-scroll {
-    font-size: 5px !important;
+    font-size: 8px !important;
     -webkit-text-size-adjust: none !important;
     text-size-adjust: none !important;
     white-space: pre-wrap !important;
     word-break: normal !important;
     overflow-wrap: break-word !important;
   }
-  /* Prevent iOS zoom: 16px scaled to 5px visual */
+  /* Prevent iOS zoom: 16px scaled to 8px visual */
   textarea.ios-editor-scroll:focus {
     font-size: 16px !important;
-    transform: scale(0.3125);
+    transform: scale(0.5);
     transform-origin: top left;
-    width: 320% !important;
-    height: 320% !important;
+    width: 200% !important;
+    height: 200% !important;
   }
 }
 
