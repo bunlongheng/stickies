@@ -4956,9 +4956,9 @@ const fireIntegrations = (trigger: string, note: any) => {
         setMainListMode(v => {
             const next = v === "thumb" ? "list" : v === "list" ? "tabs" : v === "tabs" ? "graph" : "thumb";
             if ((v === "tabs" || next === "graph") && next !== "tabs") { setEditorOpen(false); setEditingNote(null); }
+            setKanbanMode(false);
             return next;
         });
-        setKanbanMode(false);
     }, []);
 
     // Load all notes when entering graph mode
@@ -7883,7 +7883,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
 
             {/* Graph view — fullscreen overlay */}
             {mainListMode === "graph" && (
-                <div className="fixed inset-0 z-[100] flex flex-col" style={{ background: appTheme === "dark" ? "black" : "#f5f5f5" }}>
+                <div className="fixed inset-0 z-[500] flex flex-col" style={{ background: appTheme === "dark" ? "black" : "#f5f5f5" }}>
                     <div className="safe-top-bar shrink-0" style={{ background: appTheme === "dark" ? "black" : "#f5f5f5" }} />
                     <header className="shrink-0 flex items-center h-[4rem] px-4">
                         <button type="button" onClick={() => { setShowCmdK(true); setCmdKQuery(""); setCmdKCursor(0); }}
