@@ -43,6 +43,14 @@ export function GraphView({ notes, folders, onOpenNote, onClickFolder, theme }: 
   const isDark = theme === "dark";
   const fg = isDark ? "#fff" : "#1a1a1a";
   const bgColor = isDark ? "#0a0a0a" : "#f5f5f5";
+  const claudeImgRef = useRef<HTMLImageElement | null>(null);
+
+  // Load Claude icon
+  useEffect(() => {
+    const img = new Image();
+    img.src = "/claude-icon.png";
+    img.onload = () => { claudeImgRef.current = img; };
+  }, []);
 
   const buildLayout = useCallback((W: number, H: number) => {
     const cx = W / 2, cy = H / 2;
@@ -187,12 +195,13 @@ export function GraphView({ notes, folders, onOpenNote, onClickFolder, theme }: 
         ctx.fillStyle = grd;
         ctx.fill();
 
-        // All circles — size differs by layer
+        // Circle — CLAUDE gets white bg + border
+        const isClaude = n.folderName === "CLAUDE" || n.label === "CLAUDE";
         ctx.beginPath();
         ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2);
-        ctx.fillStyle = n.type === "note" ? n.color + "cc" : n.color;
+        ctx.fillStyle = isClaude ? "#fff" : (n.type === "note" ? n.color + "cc" : n.color);
         ctx.fill();
-        ctx.strokeStyle = isDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.12)";
+        ctx.strokeStyle = isClaude ? "rgba(0,0,0,0.15)" : (isDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.12)");
         ctx.lineWidth = 1;
         ctx.stroke();
 
@@ -212,10 +221,16 @@ export function GraphView({ notes, folders, onOpenNote, onClickFolder, theme }: 
           ctx.fillText(n.label, pos.x, pos.y + r + 13);
           ctx.shadowBlur = 0;
         } else if (n.type === "folder") {
-          ctx.font = `700 ${Math.max(r * 0.8, 8)}px -apple-system, sans-serif`;
-          ctx.fillStyle = isDark ? "rgba(0,0,0,0.85)" : "rgba(255,255,255,0.85)";
-          ctx.shadowBlur = 0;
-          ctx.fillText(n.initial, pos.x, pos.y);
+          // CLAUDE folder — draw icon image
+          if (isClaude && claudeImgRef.current) {
+            const imgSize = r * 1.4;
+            ctx.drawImage(claudeImgRef.current, pos.x - imgSize / 2, pos.y - imgSize / 2, imgSize, imgSize);
+          } else {
+            ctx.font = `700 ${Math.max(r * 0.8, 8)}px -apple-system, sans-serif`;
+            ctx.fillStyle = isClaude ? "#1a1a1a" : (isDark ? "rgba(0,0,0,0.85)" : "rgba(255,255,255,0.85)");
+            ctx.shadowBlur = 0;
+            ctx.fillText(n.initial, pos.x, pos.y);
+          }
           ctx.textBaseline = "alphabetic";
           ctx.font = "700 10px -apple-system, sans-serif";
           ctx.fillStyle = fg;
