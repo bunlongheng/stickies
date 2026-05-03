@@ -6159,31 +6159,32 @@ const fireIntegrations = (trigger: string, note: any) => {
                         </button>
                         )}
                         {/* Share removed — available in note actions menu */}
-                        {/* Search — triggers Cmd+K */}
+                        {/* Editor header icons — tight group */}
+                        <div className="flex items-center gap-0">
                         <button type="button"
                             onClick={() => { setShowCmdK(true); setCmdKQuery(""); setCmdKCursor(0); }}
-                            className="p-2 sm:p-3 transition flex-shrink-0 text-zinc-500 hover:text-white"
+                            className="p-2 transition flex-shrink-0 text-zinc-500 hover:text-white"
                             title="Search (⌘K)">
-                            <MagnifyingGlassIcon className="w-[24px] h-[24px] sm:w-[22px] sm:h-[22px]" />
+                            <MagnifyingGlassIcon className="w-5 h-5" />
                         </button>
-                        {/* Preview toggle */}
                         <button type="button"
                             onClick={() => setMdViewMode(v => v === "text" ? "preview" : "text")}
-                            className={`p-2 sm:p-3 transition flex-shrink-0 ${mdViewMode === "text" ? "text-zinc-500" : "text-white drop-shadow-[0_0_6px_rgba(255,255,255,0.5)]"}`}
+                            className={`p-2 transition flex-shrink-0 ${mdViewMode === "text" ? "text-zinc-500" : "text-white drop-shadow-[0_0_6px_rgba(255,255,255,0.5)]"}`}
                             title={mdViewMode === "text" ? "Preview" : "Code"}>
-                            {mdViewMode === "text" ? <EyeIcon className="w-[24px] h-[24px] sm:w-[22px] sm:h-[22px]" /> : <CodeBracketIcon className="w-[24px] h-[24px] sm:w-[22px] sm:h-[22px]" />}
+                            {mdViewMode === "text" ? <EyeIcon className="w-5 h-5" /> : <CodeBracketIcon className="w-5 h-5" />}
                         </button>
                         <button type="button" onClick={cycleViewMode}
-                            className="p-2 sm:p-3 transition flex-shrink-0 text-zinc-500 hover:text-white"
+                            className="p-2 transition flex-shrink-0 text-zinc-500 hover:text-white"
                             title={viewModeLabel}>
-                            {React.createElement(viewModeIcon, { className: "w-[24px] h-[24px] sm:w-[22px] sm:h-[22px]" })}
+                            {React.createElement(viewModeIcon, { className: "w-5 h-5" })}
                         </button>
                         <button type="button"
                             onClick={() => { setShowNoteActions(v => !v); closeEditorTools(); }}
-                            className="p-2 sm:p-3 text-zinc-500 hover:text-white active:text-white transition flex-shrink-0"
+                            className="p-2 text-zinc-500 hover:text-white active:text-white transition flex-shrink-0"
                             title="Note options">
-                            <Cog6ToothIcon className="w-[24px] h-[24px] sm:w-[22px] sm:h-[22px]" />
+                            <Cog6ToothIcon className="w-5 h-5" />
                         </button>
+                        </div>
                     </div>
                     {/* AI PROMPT BAR — fills entire editor when active */}
                     {aiPromptOpen && (
