@@ -6180,9 +6180,9 @@ const fireIntegrations = (trigger: string, note: any) => {
                         </button>
                         <button type="button"
                             onClick={() => { setShowNoteActions(v => !v); closeEditorTools(); }}
-                            className="p-2 sm:p-3 text-zinc-500 hover:text-white active:text-white transition flex-shrink-0"
+                            className="p-3 text-zinc-500 hover:text-white active:text-white transition flex-shrink-0"
                             title="Note options">
-                            <Cog6ToothIcon className="w-[24px] h-[24px] sm:w-[22px] sm:h-[22px]" />
+                            <Cog6ToothIcon className="w-[26px] h-[26px]" />
                         </button>
                     </div>
                     {/* AI PROMPT BAR — fills entire editor when active */}
