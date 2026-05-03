@@ -6091,8 +6091,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                             </div>
                         </div>
                     )}
-                    <div className="safe-top-bar shrink-0" style={{ background: appTheme === "light" ? "#e8e8ed" : "#2a2a2a" }} />
-                    <div className="relative h-auto min-h-[3.5rem] sm:min-h-[4rem] px-2 sm:px-4 flex items-center gap-1 sm:gap-2 shrink-0" style={{ background: appTheme === "light" ? "#e8e8ed" : "#2a2a2a" }}>
+                    <div className="safe-top-bar shrink-0" style={{ background: appTheme === "light" ? "#f5f5f5" : "black" }} />
+                    <div className="relative h-auto min-h-[3.5rem] sm:min-h-[4rem] px-2 sm:px-4 flex items-center gap-1 sm:gap-2 shrink-0" style={{ background: appTheme === "light" ? "#f5f5f5" : "black" }}>
                         {/* Back button — hidden on desktop or in edit mode (left panel always visible) */}
                         <button
                             onClick={(e) => { e.stopPropagation(); if (mainListMode === "tabs") { setMainListMode("list"); } void backToRootFromEditor(); }}
@@ -7880,8 +7880,8 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
 
             {/* Graph view — fullscreen overlay */}
             {mainListMode === "graph" && (
-                <div className="fixed inset-0 z-[100] flex flex-col" style={{ background: appTheme === "dark" ? "#0a0a0a" : "#f5f5f5" }}>
-                    <div className="safe-top-bar shrink-0" style={{ background: appTheme === "dark" ? "#0a0a0a" : "#f5f5f5" }} />
+                <div className="fixed inset-0 z-[100] flex flex-col" style={{ background: appTheme === "dark" ? "black" : "#f5f5f5" }}>
+                    <div className="safe-top-bar shrink-0" style={{ background: appTheme === "dark" ? "black" : "#f5f5f5" }} />
                     <header className="shrink-0 flex items-center h-[4rem] px-4">
                         <button type="button" onClick={() => { setShowCmdK(true); setCmdKQuery(""); setCmdKCursor(0); }}
                             className="relative flex items-center w-[220px] bg-transparent">
