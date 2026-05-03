@@ -1152,6 +1152,17 @@ export default function NotesMaster() {
     const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     // Always-current content ref — used in saveNote on blur where React state may lag debounce
     const latestContentRef = useRef("");
+    // Shared onChange for all editor textareas — handles undo snapshots correctly
+    const handleEditorChange = useCallback((val: string) => {
+        // Snapshot previous content for undo using ref (never stale)
+        const prev = latestContentRef.current;
+        if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+        undoTimerRef.current = setTimeout(() => {
+            if (prev !== val) { undoStackRef.current.push(prev); if (undoStackRef.current.length > 100) undoStackRef.current.shift(); redoStackRef.current = []; }
+        }, 500);
+        latestContentRef.current = val;
+        setContent(val);
+    }, []);
     const [pendingRestoreNoteId, setPendingRestoreNoteId] = useState<string | null>(null);
     const [pendingFolderQuery, setPendingFolderQuery] = useState<string | null>(null);
     const [pendingNoteQuery, setPendingNoteQuery] = useState<string | null>(null);
@@ -3251,25 +3262,24 @@ const fireIntegrations = (trigger: string, note: any) => {
         return () => window.removeEventListener("keydown", handler);
     }, [saveNote, noteColor]);
 
-    // Cmd+Z undo / Cmd+Shift+Z redo
+    // Cmd+Z undo / Cmd+Shift+Z redo — uses refs to avoid stale closures
     useEffect(() => {
         if (!editorOpen) return;
         const handler = (e: KeyboardEvent) => {
             if (!(e.metaKey || e.ctrlKey) || e.key !== "z") return;
             e.preventDefault();
+            const current = latestContentRef.current;
             if (e.shiftKey) {
-                // Redo
                 const val = redoStackRef.current.pop();
-                if (val !== undefined) { undoStackRef.current.push(content); latestContentRef.current = val; setContent(val); }
+                if (val !== undefined) { undoStackRef.current.push(current); latestContentRef.current = val; setContent(val); }
             } else {
-                // Undo
                 const val = undoStackRef.current.pop();
-                if (val !== undefined) { redoStackRef.current.push(content); latestContentRef.current = val; setContent(val); }
+                if (val !== undefined) { redoStackRef.current.push(current); latestContentRef.current = val; setContent(val); }
             }
         };
         window.addEventListener("keydown", handler);
         return () => window.removeEventListener("keydown", handler);
-    }, [editorOpen, content]);
+    }, [editorOpen]);
 
 
     // Cmd+R → refresh notes (prevents browser reload)
@@ -6631,15 +6641,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 <textarea
                                     ref={editorTextRef}
                                     value={content}
-                                    onChange={(e) => {
-                                        const val = e.target.value;
-                                        // Debounced undo snapshot — push previous content after 500ms pause
-                                        if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
-                                        undoTimerRef.current = setTimeout(() => {
-                                            if (content !== val) { undoStackRef.current.push(content); if (undoStackRef.current.length > 100) undoStackRef.current.shift(); redoStackRef.current = []; }
-                                        }, 500);
-                                        latestContentRef.current = val; setContent(val);
-                                    }}
+                                    onChange={(e) => handleEditorChange(e.target.value)}
                                     onClick={() => closeEditorTools()}
                                     onFocus={() => closeEditorTools()}
                                     onBlur={() => {}}
@@ -6775,15 +6777,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 <textarea
                                     ref={editorTextRef}
                                     value={content}
-                                    onChange={(e) => {
-                                        const val = e.target.value;
-                                        // Debounced undo snapshot — push previous content after 500ms pause
-                                        if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
-                                        undoTimerRef.current = setTimeout(() => {
-                                            if (content !== val) { undoStackRef.current.push(content); if (undoStackRef.current.length > 100) undoStackRef.current.shift(); redoStackRef.current = []; }
-                                        }, 500);
-                                        latestContentRef.current = val; setContent(val);
-                                    }}
+                                    onChange={(e) => handleEditorChange(e.target.value)}
                                     onClick={() => closeEditorTools()}
                                     onFocus={() => closeEditorTools()}
                                     onBlur={() => {}}
