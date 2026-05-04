@@ -215,11 +215,14 @@ export function GraphView({ notes, folders, folderIcons = {}, onOpenNote, onClic
         const pulse = 1 + Math.sin(t * 1.6 + n.phX) * 0.06;
         const r = n.r * pulse;
 
+        // Normalize short hex (#fff -> #ffffff)
+        const c6 = n.color.length === 4 ? `#${n.color[1]}${n.color[1]}${n.color[2]}${n.color[2]}${n.color[3]}${n.color[3]}` : n.color;
+
         // Glow
         const glowR = r * (n.type === "center" ? 5 : n.type === "folder" ? 4 : 3);
         const grd = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, glowR);
-        grd.addColorStop(0, n.color + (n.type === "note" ? "30" : "44"));
-        grd.addColorStop(0.45, n.color + "12");
+        grd.addColorStop(0, c6 + (n.type === "note" ? "30" : "44"));
+        grd.addColorStop(0.45, c6 + "12");
         grd.addColorStop(1, "transparent");
         ctx.beginPath();
         ctx.arc(pos.x, pos.y, glowR, 0, Math.PI * 2);
@@ -230,7 +233,7 @@ export function GraphView({ notes, folders, folderIcons = {}, onOpenNote, onClic
         const isClaude = n.folderName === "CLAUDE" || n.label === "CLAUDE";
         ctx.beginPath();
         ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2);
-        ctx.fillStyle = isClaude ? "#fff" : (n.type === "note" ? n.color + "cc" : n.color);
+        ctx.fillStyle = isClaude ? "#ffffff" : (n.type === "note" ? c6 + "cc" : c6);
         ctx.fill();
         ctx.strokeStyle = isClaude ? "rgba(0,0,0,0.15)" : (isDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.12)");
         ctx.lineWidth = 1;
