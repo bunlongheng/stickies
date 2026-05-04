@@ -47,6 +47,10 @@ function getIconImage(iconName: string, color: string): HTMLImageElement | null 
     RobotIcon: "M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456z",
     ShareIcon: "M7.217 10.907a2.25 2.25 0 100 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186l9.566-5.314m-9.566 7.5l9.566 5.314m0 0a2.25 2.25 0 103.935 2.186 2.25 2.25 0 00-3.935-2.186zm0-12.814a2.25 2.25 0 103.933-2.185 2.25 2.25 0 00-3.933 2.185z",
     CheckCircleIcon: "M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z",
+    ChartBarSquareIcon: "M7.5 14.25v2.25m3-4.5v4.5m3-6.75v6.75m3-9v9M6 20.25h12A2.25 2.25 0 0020.25 18V6A2.25 2.25 0 0018 3.75H6A2.25 2.25 0 003.75 6v12A2.25 2.25 0 006 20.25z",
+    FolderIcon: "M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z",
+    SparklesIcon: "M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z",
+    CodeBracketIcon: "M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5",
   };
   const heroName = iconName.replace("__hero:", "");
   const d = paths[heroName];
@@ -89,8 +93,8 @@ export function GraphView({ notes, folders, folderIcons = {}, onOpenNote, onClic
     const nodes: GNode[] = [];
     const edges: [number, number][] = [];
 
-    // Only root-level folders (no parent)
-    const rootFolders = folders.filter(f => !f.parent);
+    // Only root-level folders (no parent, no TRASH)
+    const rootFolders = folders.filter(f => !f.parent && f.name !== "TRASH");
 
     // Group notes by folder
     const folderMap = new Map<string, Note[]>();
@@ -260,20 +264,20 @@ export function GraphView({ notes, folders, folderIcons = {}, onOpenNote, onClic
             const imgSize = r * 1.4;
             ctx.drawImage(claudeImgRef.current, pos.x - imgSize / 2, pos.y - imgSize / 2, imgSize, imgSize);
           } else if (n.iconKey) {
-            const iconColor = isDark ? "rgba(0,0,0,0.85)" : "rgba(255,255,255,0.9)";
+            const iconColor = isDark ? "rgba(255,255,255,0.9)" : "rgba(0,0,0,0.85)";
             const iconImg = getIconImage(n.iconKey, iconColor);
             if (iconImg) {
               const imgSize = r * 1.3;
               ctx.drawImage(iconImg, pos.x - imgSize / 2, pos.y - imgSize / 2, imgSize, imgSize);
             } else {
               ctx.font = `700 ${Math.max(r * 0.8, 8)}px -apple-system, sans-serif`;
-              ctx.fillStyle = isDark ? "rgba(0,0,0,0.85)" : "rgba(255,255,255,0.85)";
+              ctx.fillStyle = isDark ? "#fff" : "#1a1a1a";
               ctx.shadowBlur = 0;
               ctx.fillText(n.initial, pos.x, pos.y);
             }
           } else {
             ctx.font = `700 ${Math.max(r * 0.8, 8)}px -apple-system, sans-serif`;
-            ctx.fillStyle = isDark ? "rgba(0,0,0,0.85)" : "rgba(255,255,255,0.85)";
+            ctx.fillStyle = isDark ? "#fff" : "#1a1a1a";
             ctx.shadowBlur = 0;
             ctx.fillText(n.initial, pos.x, pos.y);
           }
