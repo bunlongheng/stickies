@@ -7441,7 +7441,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                     onDrop={(e) => { void handleTileDrop(e, item); }}
                                     onDragEnd={handleTileDragEnd}
                                     onMouseEnter={(e) => {
-                                        playSound("hover");
+                                        if (!IS_PHONE) playSound("hover");
                                         if (!isListMode) return;
                                         const rect = e.currentTarget.getBoundingClientRect();
                                         const x = ((e.clientX - rect.left) / rect.width) * 100, y = ((e.clientY - rect.top) / rect.height) * 100;
@@ -7502,11 +7502,8 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                             e.stopPropagation();
                                             playSound("navigate");
                                             navTimestampRef.current = Date.now();
-                                            // Block ALL touch/click on the entire app during folder transition
-                                            const shield = document.createElement("div");
-                                            shield.style.cssText = "position:fixed;inset:0;z-index:99999;background:transparent;";
-                                            document.body.appendChild(shield);
-                                            setTimeout(() => shield.remove(), 800);
+                                            suppressOpenRef.current = true;
+                                            setTimeout(() => { suppressOpenRef.current = false; }, 1000);
                                             enterFolder({ id: String(item.id), name: item.name, color: item.color || palette12[0] });
                                         } else {
                                             void openNote(item);
@@ -7560,7 +7557,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                 const c = item.color || item.folder_color || palette12[0];
                                                 return (
                                                     <button type="button" data-icon-sq
-                                                        onClick={(e) => { e.stopPropagation(); navTimestampRef.current = Date.now(); const shield = document.createElement("div"); shield.style.cssText = "position:fixed;inset:0;z-index:99999;background:transparent;"; document.body.appendChild(shield); setTimeout(() => shield.remove(), 800); enterFolder({ id: String(item.id), name: item.name, color: item.color || palette12[0] }); }}
+                                                        onClick={(e) => { e.stopPropagation(); navTimestampRef.current = Date.now(); suppressOpenRef.current = true; setTimeout(() => { suppressOpenRef.current = false; }, 1000); enterFolder({ id: String(item.id), name: item.name, color: item.color || palette12[0] }); }}
                                                         className={`folder-icon-badge${item.name === "CLAUDE" ? " folder-icon-badge-claude" : ""} flex-shrink-0 w-[54px] h-[54px] sm:w-[46px] sm:h-[46px] m-2 sm:m-0 flex items-center justify-center font-black overflow-hidden`}
                                                         style={{ fontSize: 22, "--fc": c, "--ic": "#fff", boxShadow: `2px 3px 8px ${c}55` } as React.CSSProperties}>
                                                         {item.name === "CLAUDE"
