@@ -6242,7 +6242,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     <PlusIcon className="w-3.5 h-3.5" />
                                 </button>
                                 {/* Tabs */}
-                                <div className="flex items-end gap-0.5 flex-1 min-w-0 overflow-hidden" style={{ height: H + 8 }} ref={(el) => {
+                                <div className="flex items-end gap-0.5 sm:gap-0.5 flex-1 min-w-0 overflow-x-auto overflow-y-hidden" style={{ height: H + 8, scrollbarWidth: "none" }} ref={(el) => {
                                     if (el) { const a = el.querySelector("[data-tab-active]"); if (a) a.scrollIntoView({ inline: "nearest", block: "nearest" }); }
                                 }}>
                                     {dayNotes.map(n => {
@@ -6250,11 +6250,11 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         const c = n.folder_color || (n.folder_name ? (folders.find(f => f.name === n.folder_name)?.color) : null) || "#888";
                                         return (
                                             <div key={n.id} {...(isActive ? { "data-tab-active": "" } : {})}
-                                                className={`flex items-center transition-all min-w-0 ${isActive ? "relative z-10 flex-shrink-0" : "hover:brightness-110 opacity-75 flex-shrink"}`}
-                                                style={{ background: isActive ? c : `${c}99`, color: "#1c1c1e", height: isActive ? H + 6 : H, borderRadius: isActive ? "8px 8px 0 0" : 0 }}>
+                                                className={`flex items-center transition-all ${isActive ? "relative z-10 flex-shrink-0" : "hover:brightness-110 opacity-75 flex-shrink-0 sm:flex-shrink"}`}
+                                                style={{ background: isActive ? c : `${c}99`, color: "#1c1c1e", height: isActive ? H + 6 : H, borderRadius: isActive ? "8px 8px 0 0" : 0, minWidth: IS_PHONE ? 44 : undefined }}>
                                                 <button type="button"
                                                     onClick={() => { if (!isActive) { if (mainListMode !== "tabs" && n.folder_name && n.folder_name !== activeFolder) { const fr = dbData.find(r => r.is_folder && r.folder_name === n.folder_name); if (fr) enterFolder({ id: String(fr.id), name: n.folder_name, color: fr.folder_color || c }); } void openNote(n); } }}
-                                                    className={`flex items-center text-[10px] font-bold truncate ${isActive ? "pl-3 pr-1 max-w-[150px]" : "px-1.5"}`} style={{ height: "100%" }}
+                                                    className={`flex items-center text-[10px] sm:text-[10px] font-bold truncate ${isActive ? "pl-3 pr-1 max-w-[150px]" : "px-2 sm:px-1.5"}`} style={{ height: "100%" }}
                                                     title={n.title || "Untitled"}>
                                                     {(() => { const t = n.title || "Untitled"; if (isActive) return <>{t.slice(0, 20)}{t.length > 20 ? "…" : ""}</>; const len = dayNotes.length; const chars = len < 5 ? t.length : len < 15 ? 6 : len < 20 ? 4 : len < 30 ? 3 : 2; return t.slice(0, chars); })()}
                                                 </button>
@@ -7891,7 +7891,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
 
             {/* Graph view — fullscreen overlay */}
             {mainListMode === "graph" && (
-                <div className="fixed inset-0 z-[500] flex flex-col" style={{ background: appTheme === "dark" ? "black" : "#f5f5f5" }}>
+                <div className="fixed inset-0 z-[500] flex flex-col view-flip-in" style={{ background: appTheme === "dark" ? "black" : "#f5f5f5" }}>
                     <div className="safe-top-bar shrink-0" style={{ background: appTheme === "dark" ? "black" : "#f5f5f5" }} />
                     <header className="shrink-0 flex items-center h-[4rem] px-4">
                         <button type="button" onClick={() => { setShowCmdK(true); setCmdKQuery(""); setCmdKCursor(0); }}
