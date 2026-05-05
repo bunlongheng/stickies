@@ -25,7 +25,7 @@ html { -webkit-text-size-adjust: none !important; text-size-adjust: none !import
 /* iOS textarea: small font, full width, no zoom */
 @media (max-width: 1024px) and (pointer: coarse) {
   textarea.ios-editor-scroll {
-    font-size: 8px !important;
+    font-size: 9px !important;
     -webkit-text-size-adjust: none !important;
     text-size-adjust: none !important;
     white-space: pre-wrap !important;
@@ -35,10 +35,10 @@ html { -webkit-text-size-adjust: none !important; text-size-adjust: none !import
   /* Prevent iOS zoom: 16px scaled to 8px visual */
   textarea.ios-editor-scroll:focus {
     font-size: 16px !important;
-    transform: scale(0.5);
+    transform: scale(0.5625);
     transform-origin: top left;
-    width: 200% !important;
-    height: 200% !important;
+    width: 177.8% !important;
+    height: 177.8% !important;
   }
 }
 
