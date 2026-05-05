@@ -7495,15 +7495,16 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                             setSelectedIds((prev) => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
                                             return;
                                         }
-                                        // Guard: ignore ALL clicks within 600ms of folder navigation (prevents bleed-through)
-                                        if (!item.is_folder && Date.now() - navTimestampRef.current < 600) return;
+                                        // Guard: ignore ALL clicks within 900ms of folder navigation (prevents bleed-through on mobile)
+                                        if (!item.is_folder && Date.now() - navTimestampRef.current < 900) return;
                                         if (item.is_folder) {
                                             e.preventDefault();
+                                            e.stopPropagation();
                                             playSound("navigate");
                                             navTimestampRef.current = Date.now();
                                             // Block pointer events on the list to prevent bleed-through on re-render
                                             const main = (e.currentTarget as HTMLElement).closest("main");
-                                            if (main) { (main as HTMLElement).style.pointerEvents = "none"; setTimeout(() => { (main as HTMLElement).style.pointerEvents = ""; }, 800); }
+                                            if (main) { (main as HTMLElement).style.pointerEvents = "none"; setTimeout(() => { (main as HTMLElement).style.pointerEvents = ""; }, 1200); }
                                             enterFolder({ id: String(item.id), name: item.name, color: item.color || palette12[0] });
                                         } else {
                                             void openNote(item);
