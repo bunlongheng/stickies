@@ -32,13 +32,14 @@ html { -webkit-text-size-adjust: none !important; text-size-adjust: none !import
     word-break: normal !important;
     overflow-wrap: break-word !important;
   }
-  /* Prevent iOS zoom: 16px scaled to 8px visual */
+  /* Prevent iOS zoom: 16px scaled to 9px visual */
   textarea.ios-editor-scroll:focus {
     font-size: 16px !important;
     transform: scale(0.5625);
     transform-origin: top left;
     width: 177.8% !important;
     height: 177.8% !important;
+    padding: 21px !important;
   }
 }
 
