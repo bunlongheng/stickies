@@ -3258,23 +3258,24 @@ const fireIntegrations = (trigger: string, note: any) => {
     }, [saveNote, closeEditorTools, editingNote?.id, targetFolder, activeFolder, noteColor]);
 
     // Pick a random palette color, avoiding the last-used one if possible
-    // Cmd+S → save + toast
+    // Cmd+S → save
     useEffect(() => {
-        if (IS_PHONE) return;
         const handler = (e: KeyboardEvent) => {
             if ((e.metaKey || e.ctrlKey) && e.key === "s") {
                 e.preventDefault();
-                void saveNote({ silent: true, deriveTitle: true });
+                if (editorOpen) void saveNote({ silent: true, deriveTitle: true });
             }
         };
         window.addEventListener("keydown", handler);
         return () => window.removeEventListener("keydown", handler);
-    }, [saveNote, noteColor]);
+    }, [saveNote, editorOpen]);
 
-    // Cmd+Z undo / Cmd+Shift+Z redo — uses refs to avoid stale closures
+    // Cmd+Z undo / Cmd+Shift+Z redo
+    const editorOpenRef2 = useRef(editorOpen);
+    editorOpenRef2.current = editorOpen;
     useEffect(() => {
-        if (!editorOpen) return;
         const handler = (e: KeyboardEvent) => {
+            if (!editorOpenRef2.current) return;
             if (!(e.metaKey || e.ctrlKey) || e.key !== "z") return;
             e.preventDefault();
             const current = latestContentRef.current;
@@ -3288,7 +3289,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         };
         window.addEventListener("keydown", handler);
         return () => window.removeEventListener("keydown", handler);
-    }, [editorOpen]);
+    }, []);
 
 
     // Cmd+R → refresh notes (prevents browser reload)
