@@ -6224,14 +6224,12 @@ const fireIntegrations = (trigger: string, note: any) => {
                     )}
                     {/* ── Tab bar — folder notes or today's notes (no folder) ── */}
                     {(showTabs || mainListMode === "tabs") && typeof window !== "undefined" && (mainListMode === "tabs" || window.innerWidth >= 640) && (() => {
-                        const inFolder = !!activeFolder;
+                        const inFolder = !!activeFolder && activeFolder !== "Today";
                         const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0); dayStart.setDate(dayStart.getDate() - tabDayOffset);
                         const dayEnd = new Date(dayStart); dayEnd.setDate(dayEnd.getDate() + 1);
                         const allNotes = (inFolder
                             ? dbData.filter(n => !n.is_folder && !n.trashed_at && !dismissedTabs.has(String(n.id)) && n.folder_name === activeFolder)
-                            : mainListMode === "tabs"
-                            ? dbData.filter(n => !n.is_folder && !n.trashed_at && !dismissedTabs.has(String(n.id)) && (() => { const d = new Date(n.created_at || 0); return d >= dayStart && d < dayEnd; })())
-                            : dbData.filter(n => !n.is_folder && !n.trashed_at && !dismissedTabs.has(String(n.id)))
+                            : dbData.filter(n => !n.is_folder && !n.trashed_at && !dismissedTabs.has(String(n.id)) && (() => { const d = new Date(n.created_at || 0); return d >= dayStart && d < dayEnd; })())
                         ).sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")));
                         const dayNotes = allNotes.slice(0, tabLimit);
                         const hasMore = allNotes.length > tabLimit;
