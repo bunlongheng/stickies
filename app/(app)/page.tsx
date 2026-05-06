@@ -7018,7 +7018,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                     <button type="button"
                                         onClick={() => { if (pinnedFolders.size > 0) setShowFooterFolderPicker(v => !v); }}
                                         className="font-mono font-black uppercase tracking-wide whitespace-nowrap px-1.5 py-px rounded-full hover:brightness-125 transition"
-                                        style={{ fontSize: 8, background: `${noteColor}22`, color: noteColor, border: `1px solid ${noteColor}44` }}>
+                                        style={{ fontSize: 8, ...(() => { const fn = targetFolder || activeFolder || editingNote?.folder_name || "General"; const fc = folders.find(f => f.name === fn)?.color || noteColor; return { background: `${fc}22`, color: fc, border: `1px solid ${fc}44` }; })() }}>
                                         {targetFolder || activeFolder || editingNote?.folder_name || "General"}
                                     </button>
                                 </div>
