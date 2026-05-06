@@ -7273,18 +7273,6 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                 return;
                             }
 
-                            // HTML files → open in new tab
-                            const htmlFiles = Array.from(files).filter(f => f.name.endsWith(".html") || f.name.endsWith(".htm"));
-                            if (htmlFiles.length > 0) {
-                                for (const f of htmlFiles) {
-                                    const url = URL.createObjectURL(f);
-                                    window.open(url, "_blank");
-                                }
-                                showToast(`Opened ${htmlFiles.length} HTML file${htmlFiles.length !== 1 ? "s" : ""}`, "#34C759");
-                                const remaining = Array.from(files).filter(f => !f.name.endsWith(".html") && !f.name.endsWith(".htm"));
-                                if (remaining.length === 0) return;
-                            }
-
                             // Multiple files or single file drop → batch create notes
                             const extToType: Record<string, string> = {
                                 ".js": "javascript", ".jsx": "javascript", ".ts": "typescript", ".tsx": "typescript",
