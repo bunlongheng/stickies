@@ -6233,7 +6233,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                         ).sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")));
                         const dayNotes = allNotes.slice(0, tabLimit);
                         const hasMore = allNotes.length > tabLimit;
-                        const dayLabel = inFolder ? activeFolder : tabDayOffset === 0 ? "Today" : tabDayOffset === 1 ? "Yesterday" : dayStart.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+                        const dayLabel = mainListMode === "tabs" || !inFolder ? (tabDayOffset === 0 ? "Today" : tabDayOffset === 1 ? "Yesterday" : dayStart.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })) : activeFolder;
                         const activeId = String(editingNote?.id ?? "");
                         const dismissTab = (id: string) => {
                             setDismissedTabs(prev => {
