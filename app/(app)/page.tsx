@@ -7013,15 +7013,24 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                 {editingNote?.is_public && (
                                     <GlobeAltIcon className="w-3 h-3 text-emerald-400 flex-shrink-0" title="Public note" />
                                 )}
-                                {/* Folder pill + dropdown */}
-                                <div className="relative" ref={(el) => { if (el) el.dataset.folderPillRef = "1"; }}>
-                                    <button type="button"
-                                        onClick={() => { if (pinnedFolders.size > 0) setShowFooterFolderPicker(v => !v); }}
-                                        className="font-mono font-black uppercase tracking-wide whitespace-nowrap px-1.5 py-px rounded-full hover:brightness-125 transition"
-                                        style={{ fontSize: 8, ...(() => { const fn = targetFolder || activeFolder || editingNote?.folder_name || "General"; const fc = folders.find(f => f.name === fn)?.color || noteColor; return { background: `${fc}22`, color: fc, border: `1px solid ${fc}44` }; })() }}>
-                                        {targetFolder || activeFolder || editingNote?.folder_name || "General"}
-                                    </button>
-                                </div>
+                                {/* Tags — first */}
+                                {/* Folder pill with icon */}
+                                {(() => {
+                                    const fn = targetFolder || activeFolder || editingNote?.folder_name || "General";
+                                    const fc = folders.find(f => f.name === fn)?.color || noteColor;
+                                    const fi = folderIcons[fn] || "";
+                                    return (
+                                        <div className="relative" ref={(el) => { if (el) el.dataset.folderPillRef = "1"; }}>
+                                            <button type="button"
+                                                onClick={() => { if (pinnedFolders.size > 0) setShowFooterFolderPicker(v => !v); }}
+                                                className="font-mono font-black uppercase tracking-wide whitespace-nowrap px-1.5 py-px rounded-full hover:brightness-125 transition flex items-center gap-1"
+                                                style={{ fontSize: 8, background: `${fc}22`, color: fc, border: `1px solid ${fc}44` }}>
+                                                {fi ? <FolderIconDisplay value={fi} folderName={fn} className="w-2.5 h-2.5" /> : <FolderIcon className="w-2.5 h-2.5" />}
+                                                {fn}
+                                            </button>
+                                        </div>
+                                    );
+                                })()}
                                 {/* Type pill */}
                                 {(() => {
                                     const badge = TYPE_BADGE[noteType] ?? TYPE_BADGE["text"];
@@ -7041,10 +7050,9 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                         >{label}</span>
                                     );
                                 })()}
-                                {/* Tags */}
                                 {noteTags.map((tag, i) => (
-                                    <span key={i} className="font-mono font-bold whitespace-nowrap px-1.5 py-px rounded-full cursor-pointer hover:line-through"
-                                        style={{ fontSize: 8, background: "rgba(56,189,248,0.15)", color: "#38bdf8", border: "1px solid rgba(56,189,248,0.3)" }}
+                                    <span key={i} className="font-mono font-bold whitespace-nowrap px-1.5 py-px rounded-full cursor-pointer hover:line-through text-sky-400"
+                                        style={{ fontSize: 8, background: "rgba(56,189,248,0.15)", border: "1px solid rgba(56,189,248,0.3)" }}
                                         onClick={() => {
                                             const next = noteTags.filter((_, j) => j !== i);
                                             setNoteTags(next);
