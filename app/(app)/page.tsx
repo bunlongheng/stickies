@@ -1239,6 +1239,7 @@ export default function NotesMaster() {
     const [showTabs, setShowTabs] = useState(() => { try { if (typeof window === "undefined") return true; return localStorage.getItem("stickies:show-tabs:v1") !== "false"; } catch { return true; } });
     const [dismissedTabs, setDismissedTabs] = useState<Set<string>>(() => { try { if (typeof window === "undefined") return new Set(); const raw = localStorage.getItem("stickies:dismissed-tabs:v1"); return raw ? new Set(JSON.parse(raw)) : new Set(); } catch { return new Set(); } });
     const [tabLimit, setTabLimit] = useState(10);
+    const [tabDayOffset, setTabDayOffset] = useState(0); // 0=today, 1=yesterday, etc.
     const [activeTaskIdx, setActiveTaskIdx] = useState<number | null>(null);
     const [editingTaskIdx, setEditingTaskIdx] = useState<number | null>(null);
     const [swipedTaskIdx, setSwipedTaskIdx] = useState<number | null>(null);
@@ -6224,16 +6225,17 @@ const fireIntegrations = (trigger: string, note: any) => {
                     {/* ── Tab bar — folder notes or today's notes (no folder) ── */}
                     {(showTabs || mainListMode === "tabs") && typeof window !== "undefined" && (mainListMode === "tabs" || window.innerWidth >= 640) && (() => {
                         const inFolder = !!activeFolder;
-                        const last24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+                        const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0); dayStart.setDate(dayStart.getDate() - tabDayOffset);
+                        const dayEnd = new Date(dayStart); dayEnd.setDate(dayEnd.getDate() + 1);
                         const allNotes = (inFolder
                             ? dbData.filter(n => !n.is_folder && !n.trashed_at && !dismissedTabs.has(String(n.id)) && n.folder_name === activeFolder)
                             : mainListMode === "tabs"
-                            ? dbData.filter(n => !n.is_folder && !n.trashed_at && !dismissedTabs.has(String(n.id)) && new Date(n.created_at || 0) >= last24h)
+                            ? dbData.filter(n => !n.is_folder && !n.trashed_at && !dismissedTabs.has(String(n.id)) && (() => { const d = new Date(n.created_at || 0); return d >= dayStart && d < dayEnd; })())
                             : dbData.filter(n => !n.is_folder && !n.trashed_at && !dismissedTabs.has(String(n.id)))
                         ).sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")));
                         const dayNotes = allNotes.slice(0, tabLimit);
                         const hasMore = allNotes.length > tabLimit;
-                        const dayLabel = inFolder ? activeFolder : "Today";
+                        const dayLabel = inFolder ? activeFolder : tabDayOffset === 0 ? "Today" : tabDayOffset === 1 ? "Yesterday" : dayStart.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
                         const activeId = String(editingNote?.id ?? "");
                         const dismissTab = (id: string) => {
                             setDismissedTabs(prev => {
@@ -6278,11 +6280,16 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         );
                                     })}
                                 </div>
-                                {/* Label + > */}
+                                {/* Day nav + label */}
                                 <div className="flex-shrink-0 flex items-center sticky right-0 z-10" style={{ height: H, backdropFilter: "blur(8px)" }}>
-                                    <span className="px-2 text-[9px] font-bold text-zinc-400 uppercase tracking-wide select-none">{dayLabel} ({allNotes.length})</span>
-                                    {hasMore && (
-                                        <button type="button" onClick={() => setTabLimit(prev => prev + 10)} className={`${btnCls} px-1.5`} style={{ height: H }} title="Show 10 more">
+                                    {!inFolder && tabDayOffset > 0 && (
+                                        <button type="button" onClick={() => setTabDayOffset(d => Math.max(0, d - 1))} className={`${btnCls} px-1`} style={{ height: H }} title="Newer">
+                                            <ChevronLeftIcon className="w-3 h-3" />
+                                        </button>
+                                    )}
+                                    <span className="px-1 text-[9px] font-bold text-zinc-400 uppercase tracking-wide select-none">{dayLabel} ({allNotes.length})</span>
+                                    {!inFolder && (
+                                        <button type="button" onClick={() => setTabDayOffset(d => d + 1)} className={`${btnCls} px-1`} style={{ height: H }} title="Older">
                                             <ChevronRightIcon className="w-3 h-3" />
                                         </button>
                                     )}
