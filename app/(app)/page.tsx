@@ -2732,6 +2732,14 @@ const fireIntegrations = (trigger: string, note: any) => {
                 .sort((a, b) => { const sd = score(a) - score(b); return sd !== 0 ? sd : byUpdated(a, b); });
         }
         if (activeFolder) {
+            // Today folder: virtual — show all notes updated in last 24h OR with folder_name "Today"
+            if (activeFolder === "Today") {
+                const last24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+                const notes = dbData.filter((n) => !n.is_folder && !n.trashed_at && (
+                    new Date(n.updated_at || n.created_at || 0) >= last24h || n.folder_name === "Today"
+                )).sort(byUpdated);
+                return showFileIcons ? [...currentLevelFolders, ...notes] : [...notes, ...currentLevelFolders];
+            }
             // Inside a folder: icons on = subfolders first; icons off = notes first, folders at bottom
             const activeFolderId = folderStack.at(-1)?.id ?? null;
             const useUuid = activeFolderId && !activeFolderId.startsWith("virtual-");
@@ -4970,10 +4978,10 @@ const fireIntegrations = (trigger: string, note: any) => {
         });
     }, []);
 
-    // Load all notes when entering graph mode - force past loading guard
+    // Load all notes when entering graph mode or Today folder
     useEffect(() => {
-        if (mainListMode === "graph") { folderNotesLoadingRef.current = false; void loadAllNotes(); }
-    }, [mainListMode]);
+        if (mainListMode === "graph" || activeFolder === "Today") { folderNotesLoadingRef.current = false; void loadAllNotes(); }
+    }, [mainListMode, activeFolder]);
 
     // Compute exact square cell size via ResizeObserver → set as CSS var on grid container
     useEffect(() => {
