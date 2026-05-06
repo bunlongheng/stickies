@@ -87,6 +87,10 @@ html { -webkit-text-size-adjust: none !important; text-size-adjust: none !import
 [data-theme="light"] .bg-white\/10 { background: rgba(0,0,0,0.06) !important; }
 [data-theme="light"] .bg-white\/15 { background: rgba(0,0,0,0.08) !important; }
 [data-theme="light"] .hover\:text-white:hover { color: #000 !important; }
+[data-theme="light"] .text-sky-400 { color: #38bdf8 !important; }
+[data-theme="light"] .text-emerald-400 { color: #34d399 !important; }
+[data-theme="light"] .text-red-400 { color: #f87171 !important; }
+[data-theme="light"] .text-red-500 { color: #ef4444 !important; }
 [data-theme="light"] .folder-icon-badge svg,
 [data-theme="light"] [data-icon-sq] svg { color: #1a1a1a !important; stroke: #1a1a1a !important; }
 [data-theme="light"] .folder-icon-badge,
