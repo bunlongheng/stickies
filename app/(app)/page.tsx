@@ -2736,7 +2736,7 @@ const fireIntegrations = (trigger: string, note: any) => {
             if (activeFolder === "Today") {
                 const last24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
                 const notes = dbData.filter((n) => !n.is_folder && !n.trashed_at && (
-                    new Date(n.updated_at || n.created_at || 0) >= last24h || n.folder_name === "Today"
+                    new Date(n.created_at || 0) >= last24h
                 )).sort(byUpdated);
                 return showFileIcons ? [...currentLevelFolders, ...notes] : [...notes, ...currentLevelFolders];
             }
@@ -6228,7 +6228,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                         const allNotes = (inFolder
                             ? dbData.filter(n => !n.is_folder && !n.trashed_at && !dismissedTabs.has(String(n.id)) && n.folder_name === activeFolder)
                             : mainListMode === "tabs"
-                            ? dbData.filter(n => !n.is_folder && !n.trashed_at && !dismissedTabs.has(String(n.id)) && (new Date(n.updated_at || n.created_at || 0) >= last24h || n.folder_name === "Today"))
+                            ? dbData.filter(n => !n.is_folder && !n.trashed_at && !dismissedTabs.has(String(n.id)) && new Date(n.created_at || 0) >= last24h)
                             : dbData.filter(n => !n.is_folder && !n.trashed_at && !dismissedTabs.has(String(n.id)))
                         ).sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")));
                         const dayNotes = allNotes.slice(0, tabLimit);
