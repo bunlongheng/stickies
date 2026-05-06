@@ -7273,6 +7273,27 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                 return;
                             }
 
+                            // Text/HTML file dropped into editor → open as new note
+                            if (files.length === 1 && editorOpen) {
+                                const file = files[0];
+                                const ext = file.name.includes(".") ? "." + file.name.split(".").pop()!.toLowerCase() : "";
+                                if ([".html",".htm",".md",".txt",".js",".ts",".py",".css",".sql",".sh",".json"].includes(ext)) {
+                                    void file.text().then(text => {
+                                        const typeMap: Record<string, string> = { ".html": "html", ".htm": "html", ".md": "markdown", ".txt": "text", ".js": "javascript", ".ts": "typescript", ".py": "python", ".css": "css", ".sql": "sql", ".sh": "bash", ".json": "json" };
+                                        setEditingNote(null);
+                                        setTitle(file.name.replace(/\.[^.]+$/, ""));
+                                        setContent(text);
+                                        latestContentRef.current = text;
+                                        setPendingNoteType(typeMap[ext] || "text");
+                                        setTargetFolder(activeFolder || "CLAUDE");
+                                        setNoteColor(palette12[Math.floor(Math.random() * palette12.length)]);
+                                        noteEverDirtyRef.current = true;
+                                        playSound("create");
+                                    });
+                                    return;
+                                }
+                            }
+
                             // Multiple files or single file drop → batch create notes
                             const extToType: Record<string, string> = {
                                 ".js": "javascript", ".jsx": "javascript", ".ts": "typescript", ".tsx": "typescript",
@@ -7335,6 +7356,8 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                         }
                                     } catch {}
                                 }
+                                // Reload notes so list refreshes
+                                if (activeFolder) void loadFolderNotes(activeFolder, false);
                                 void sync();
                                 showToast(`Imported ${created} note${created !== 1 ? "s" : ""}`, "#34C759");
                                 playSound("create");
