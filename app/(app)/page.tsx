@@ -7546,7 +7546,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                 return { position: "relative", isolation: "isolate", "--row-color": parentColor, "--fc": parentColor, background: isRootFolder ? `${parentColor}${isLight ? "18" : "12"}` : shadedRowBg(parentColor, idx, filteredDisplayItems.length, false, isLight) } as unknown as React.CSSProperties;
                                             }
                                             {
-                                                const rowColor = activeFolder ? (folderStack.at(-1)?.color || c) : c;
+                                                const rowColor = item.is_folder ? (item.color || item.folder_color || c) : c;
                                                 return { position: "relative", isolation: "isolate", "--row-color": rowColor, "--fc": rowColor, ...(isActive && !item.is_folder ? { borderRightColor: rowColor, background: `${rowColor}35` } : isActive ? { borderRightColor: rowColor } : {}), ...(item.is_folder ? { background: `${rowColor}18` } : {}) } as unknown as React.CSSProperties;
                                             }
                                         }
