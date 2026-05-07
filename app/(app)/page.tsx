@@ -3257,12 +3257,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         closeEditorTools();
         setEditorOpen(false);
         setImages([]);
-        // Only navigate to the note's folder if we're not already there (preserves parent folder stack)
-        if (targetFolder && targetFolder !== activeFolder) {
-            setActiveFolder(targetFolder);
-        } else if (!targetFolder) {
-            setActiveFolder(null);
-        }
+        // Stay on current folder — don't navigate away (preserves Today view, etc.)
         setSearch("");
     }, [saveNote, closeEditorTools, editingNote?.id, targetFolder, activeFolder, noteColor]);
 
