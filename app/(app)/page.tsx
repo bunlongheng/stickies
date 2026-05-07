@@ -6284,7 +6284,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 {/* Day nav + label */}
                                 <div className="flex-shrink-0 flex items-center sticky right-0 z-10" style={{ height: H, backdropFilter: "blur(8px)" }}>
                                     {!inFolder && tabDayOffset > 0 && (
-                                        <button type="button" onClick={() => setTabDayOffset(d => Math.max(0, d - 1))} className={`${btnCls} px-1`} style={{ height: H }} title="Newer">
+                                        <button type="button" onClick={() => { setTabDayOffset(d => { const next = Math.max(0, d - 1); if (next === 0) setActiveFolder("Today"); return next; }); }} className={`${btnCls} px-1`} style={{ height: H }} title="Newer">
                                             <ChevronLeftIcon className="w-3 h-3" />
                                         </button>
                                     )}
