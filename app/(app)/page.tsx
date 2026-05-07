@@ -6225,10 +6225,13 @@ const fireIntegrations = (trigger: string, note: any) => {
                     {/* ── Tab bar — folder notes or today's notes (no folder) ── */}
                     {(showTabs || mainListMode === "tabs") && typeof window !== "undefined" && (mainListMode === "tabs" || window.innerWidth >= 640) && (() => {
                         const inFolder = !!activeFolder && activeFolder !== "Today";
+                        const last24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
                         const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0); dayStart.setDate(dayStart.getDate() - tabDayOffset);
                         const dayEnd = new Date(dayStart); dayEnd.setDate(dayEnd.getDate() + 1);
                         const allNotes = (inFolder
                             ? dbData.filter(n => !n.is_folder && !n.trashed_at && !dismissedTabs.has(String(n.id)) && n.folder_name === activeFolder)
+                            : tabDayOffset === 0
+                            ? dbData.filter(n => !n.is_folder && !n.trashed_at && !dismissedTabs.has(String(n.id)) && new Date(n.created_at || 0) >= last24h)
                             : dbData.filter(n => !n.is_folder && !n.trashed_at && !dismissedTabs.has(String(n.id)) && (() => { const d = new Date(n.created_at || 0); return d >= dayStart && d < dayEnd; })())
                         ).sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")));
                         const dayNotes = allNotes.slice(0, tabLimit);
