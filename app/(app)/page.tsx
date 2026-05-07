@@ -6124,7 +6124,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                         </div>
                     )}
                     <div className="safe-top-bar shrink-0" style={{ background: appTheme === "light" ? "#f5f5f5" : "black" }} />
-                    <div className="relative h-auto min-h-[3.5rem] sm:min-h-[4rem] px-2 sm:px-4 flex items-center gap-1 sm:gap-2 shrink-0" style={{ background: appTheme === "light" ? "#f5f5f5" : "black" }}>
+                    <div className="relative shrink-0 flex items-center h-[4rem] px-4" style={{ background: appTheme === "light" ? "#f5f5f5" : "black" }}>
                         {/* Back button — hidden on desktop or in edit mode (left panel always visible) */}
                         <button
                             onClick={(e) => { e.stopPropagation(); if (mainListMode === "tabs") { setMainListMode("list"); } void backToRootFromEditor(); }}
@@ -6191,11 +6191,13 @@ const fireIntegrations = (trigger: string, note: any) => {
                         </button>
                         )}
                         {/* Share removed — available in note actions menu */}
-                        {/* Editor header icons — same HeaderIconBtn as all modes */}
-                        <HeaderIconBtn icon={MagnifyingGlassIcon} label="Search" onClick={() => { setShowCmdK(true); setCmdKQuery(""); setCmdKCursor(0); }} />
-                        <HeaderIconBtn icon={mdViewMode === "text" ? EyeIcon : CodeBracketIcon} label={mdViewMode === "text" ? "Preview" : "Code"} active={mdViewMode !== "text"} onClick={() => setMdViewMode(v => v === "text" ? "preview" : "text")} />
-                        <HeaderIconBtn icon={viewModeIcon} label={viewModeLabel} onClick={cycleViewMode} />
-                        <HeaderIconBtn icon={Cog6ToothIcon} label="Settings" onClick={() => { setShowNoteActions(v => !v); closeEditorTools(); }} />
+                        {/* Editor header icons — absolute right, same position as all modes */}
+                        <div className="absolute right-2 flex items-center">
+                            <HeaderIconBtn icon={MagnifyingGlassIcon} label="Search" onClick={() => { setShowCmdK(true); setCmdKQuery(""); setCmdKCursor(0); }} />
+                            <HeaderIconBtn icon={mdViewMode === "text" ? EyeIcon : CodeBracketIcon} label={mdViewMode === "text" ? "Preview" : "Code"} active={mdViewMode !== "text"} onClick={() => setMdViewMode(v => v === "text" ? "preview" : "text")} />
+                            <HeaderIconBtn icon={viewModeIcon} label={viewModeLabel} onClick={cycleViewMode} />
+                            <HeaderIconBtn icon={Cog6ToothIcon} label="Settings" onClick={() => { setShowNoteActions(v => !v); closeEditorTools(); }} />
+                        </div>
                     </div>
                     {/* AI PROMPT BAR — fills entire editor when active */}
                     {aiPromptOpen && (
@@ -7110,7 +7112,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                             {/* TOP HEADER — breadcrumbs + buttons */}
                                 <>
                                     <div className="safe-top-bar shrink-0" style={{ background: "black" }} />
-                                    <header className="shrink-0 flex items-center h-[4rem] px-4 border-b border-white/[0.06]">
+                                    <header className="shrink-0 flex items-center h-[4rem] px-4 border-b border-white/[0.06] relative">
                                         {folderStack.length > 0 && (
                                             <>
                                                 <button
@@ -7154,15 +7156,15 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                     <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-white/35 w-6 h-6 pointer-events-none" />
                                                     <span className="w-full pl-12 pr-3 py-3 text-sm font-black tracking-tight text-white/30">SEARCH</span>
                                                 </button>
-                                                <div className="ml-auto flex items-center">
+                                                <div className="absolute right-2 flex items-center">
                                                     <HeaderIconBtn icon={viewModeIcon} label={viewModeLabel} onClick={cycleViewMode} />
                                                     <HeaderIconBtn icon={Cog6ToothIcon} label="Settings" onClick={() => { const hueInt = integrationsRef.current.find(ig => ig.type === "hue"); setLightMode((hueInt?.config?.mode as any) ?? "flash"); setIsGlobalSettings(true); setShowFolderActions(true); }} />
                                                 </div>
                                             </>
                                         ) : (
-                                            <div className="ml-auto flex items-center gap-2 px-3">
+                                            <div className="absolute right-2 flex items-center">
                                                 {isSelectMode ? (
-                                                    <div className="flex items-center gap-2">
+                                                    <div className="flex items-center gap-2 pr-2">
                                                         <span className="text-xs font-bold text-blue-400 select-none">{selectedIds.size} selected</span>
                                                         <button
                                                             onClick={() => { setIsSelectMode(false); setSelectedIds(new Set()); }}
