@@ -5671,7 +5671,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                 @keyframes spin { to { transform: rotate(360deg); } }
                 .md-preview { color: #1a1a1a; line-height: 1.7; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; font-size: 17px; text-align: left; word-wrap: break-word; overflow-wrap: break-word; min-width: 0; }
                 @media (max-width: 1024px) { .md-preview { font-size: 14px; } }
-                @media (max-width: 640px) { .md-preview { font-size: 12px; } }
+                @media (max-width: 640px) { .md-preview { font-size: 9px; } }
                 .md-preview p { color: #1a1a1a; }
                 .md-preview h1,.md-preview h2,.md-preview h3,.md-preview h4,.md-preview h5,.md-preview h6 { font-weight: 400; letter-spacing: -0.01em; color: #111; margin: 0.8em 0 0.4em; line-height: 1.3; text-align: left; }
                 .md-preview h1:first-child,.md-preview h2:first-child,.md-preview h3:first-child { margin-top: 0; }
@@ -5726,6 +5726,24 @@ const fireIntegrations = (trigger: string, note: any) => {
                 .hljs-deletion { color: #f92672; }
                 .hljs-meta { color: #75715e; }
                 .md-preview input[type="checkbox"] { accent-color: #22d3ee; margin-right: 0.4em; }
+                /* Dark mode markdown preview */
+                [data-theme="dark"] .md-preview { color: #e0e0e0; }
+                [data-theme="dark"] .md-preview p { color: #e0e0e0; }
+                [data-theme="dark"] .md-preview h1,[data-theme="dark"] .md-preview h2,[data-theme="dark"] .md-preview h3,[data-theme="dark"] .md-preview h4,[data-theme="dark"] .md-preview h5,[data-theme="dark"] .md-preview h6 { color: #f0f0f0; }
+                [data-theme="dark"] .md-preview strong { color: #fff; }
+                [data-theme="dark"] .md-preview em { color: #d0d0d0; }
+                [data-theme="dark"] .md-preview li { color: #e0e0e0; }
+                [data-theme="dark"] .md-preview li::marker { color: #888; }
+                [data-theme="dark"] .md-preview code { background: rgba(255,255,255,0.1); color: #f97583; }
+                [data-theme="dark"] .md-preview blockquote { border-left-color: #555; color: #aaa; background: rgba(255,255,255,0.05); }
+                [data-theme="dark"] .md-preview a { color: #58a6ff; }
+                [data-theme="dark"] .md-preview img { border-color: #333; }
+                [data-theme="dark"] .md-preview hr { border-top-color: #333; }
+                [data-theme="dark"] .md-preview table { border-color: #333; }
+                [data-theme="dark"] .md-preview th,[data-theme="dark"] .md-preview td { border-color: #333; color: #e0e0e0; }
+                [data-theme="dark"] .md-preview th { background: #252525; color: #f0f0f0; }
+                [data-theme="dark"] .md-preview tr:nth-child(2n) td { background: #1e1e1e; }
+                [data-theme="dark"] .md-preview del,[data-theme="dark"] .md-preview s { color: #666; }
                 @keyframes noteActionsIn {
                     from { opacity: 0; transform: translateY(8px) scale(0.98); }
                     to   { opacity: 1; transform: translateY(0)   scale(1);    }
@@ -6701,7 +6719,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         sandbox="allow-same-origin"
                                     />
                                 ) : (
-                                <div className="flex-1 overflow-auto px-6 py-2 md-preview select-text" style={{ background: "#fff" }}
+                                <div className="flex-1 overflow-auto px-6 py-2 md-preview select-text" style={{ background: appTheme === "dark" ? "#1a1a1a" : "#fff" }}
                                     spellCheck={false}
                                     onClick={(e) => {
                                         const btn = (e.target as HTMLElement).closest(".copy-code-btn") as HTMLElement | null;
