@@ -7,7 +7,6 @@ import { createClient as createBrowserClient } from "@/lib/supabase/client";
 import { usePageMeta } from "@/lib/usePageMeta";
 import dynamic from "next/dynamic";
 import LZString from "lz-string";
-const MermaidRenderer = dynamic(() => import("@/components/MermaidRenderer").then(m => m.MermaidRenderer), { ssr: false });
 const GraphView = dynamic(() => import("@/components/GraphView").then(m => m.GraphView), { ssr: false });
 const MarkdownPreview = dynamic(() => import("@/components/MarkdownPreview").then(m => m.MarkdownPreview), { ssr: false });
 const CodeViewer = dynamic(() => import("@/components/CodeViewer").then(m => m.CodeViewer), { ssr: false });
@@ -329,8 +328,6 @@ function syntaxHighlightJson(obj: any): string {
     );
 }
 
-const MERMAID_KEYWORDS = /^(flowchart|graph|sequenceDiagram|classDiagram|stateDiagram(-v2)?|erDiagram|gantt|pie|gitGraph|mindmap|timeline|xychart(-beta)?|quadrantChart|requirementDiagram|zenuml|sankey(-beta)?|block(-beta)?|packet(-beta)?|kanban|architecture(-beta)?|c4container|c4component|c4dynamic|c4deployment)\b/im;
-
 const TYPE_BADGE: Record<string, { label: string; color: string }> = {
     text:       { label: "TXT",         color: "#71717a" },
     javascript: { label: "Javascript",  color: "#f97316" },
@@ -342,7 +339,6 @@ const TYPE_BADGE: Record<string, { label: string; color: string }> = {
     markdown:   { label: "Markdown",    color: "#a78bfa" },
     html:       { label: "HTML",        color: "#f43f5e" },
     json:       { label: "JSON",        color: "#fbbf24" },
-    mermaid:    { label: "Diagram",     color: "#06b6d4" },
     checklist:  { label: "Checklist",   color: "#22c55e" },
 };
 
@@ -369,68 +365,10 @@ function deriveTitleFromContent(content: string): string {
 function detectNoteType(content: string): string {
     const t = content.trim();
     if (!t) return "text";
-    if (MERMAID_KEYWORDS.test(extractMermaid(t))) return "mermaid";
     if ((t.startsWith("{") || t.startsWith("[")) && detectJson(t).ok) return "json";
     if (/^\s*<!DOCTYPE\s+html/i.test(t) || /^\s*<html[\s>]/i.test(t)) return "html";
     if (/^#{1,6}\s|^\*\*|^>\s|^\|.+\|/m.test(t) && !/<[a-z][^>]*>/i.test(t)) return "markdown";
     return "text";
-}
-
-/** Extract raw mermaid code — strips ```mermaid fences, YAML frontmatter, and leading/trailing whitespace */
-function extractMermaid(text: string): string {
-    let t = text.trim();
-    // Strip ```mermaid ... ``` or plain ``` ... ``` fences
-    const fenced = t.match(/^```(?:mermaid)?\s*\n?([\s\S]*?)```\s*$/im);
-    if (fenced) t = fenced[1].trim();
-    // Strip YAML frontmatter (---\ntitle: ...\n---) and inject title as %% comment
-    const frontmatter = t.match(/^---\s*\n([\s\S]*?)\n---\s*\n([\s\S]*)$/m);
-    if (frontmatter) {
-        const titleMatch = frontmatter[1].match(/^title:\s*(.+)$/m);
-        const body = frontmatter[2].trim();
-        if (titleMatch) {
-            // Insert %% title after the first diagram-type line
-            const lines = body.split("\n");
-            lines.splice(1, 0, `%% ${titleMatch[1].trim()}`);
-            return lines.join("\n");
-        }
-        return body;
-    }
-    return t;
-}
-
-function detectMermaid(text: string): boolean {
-    return MERMAID_KEYWORDS.test(extractMermaid(text));
-}
-
-/** Strip ```mermaid or plain ``` fences + YAML frontmatter */
-function cleanMermaidContent(text: string): string {
-    let t = text.trim();
-    // Strip ```mermaid ... ``` or plain ``` ... ``` fences
-    const fenced = t.match(/^```(?:mermaid)?\s*\n?([\s\S]*?)```\s*$/im);
-    if (fenced) t = fenced[1].trim();
-    return t;
-}
-
-function mermaidSubType(text: string): string {
-    const t = extractMermaid(text);
-    const m = t.match(/^(flowchart|graph|sequenceDiagram|classDiagram|stateDiagram(-v2)?|erDiagram|gantt|pie|gitGraph|mindmap|timeline|xychart(-beta)?|quadrantChart|requirementDiagram|zenuml|sankey(-beta)?|block(-beta)?|packet(-beta)?|kanban|architecture(-beta)?|c4container|c4component|c4dynamic|c4deployment)\b/im);
-    if (!m) return "Diagram";
-    const map: Record<string, string> = {
-        flowchart: "Flow", graph: "Flow", sequencediagram: "Sequence",
-        classdiagram: "Class", statediagram: "State", "statediagram-v2": "State",
-        erdiagram: "ER", gantt: "Gantt", pie: "Pie", gitgraph: "Git",
-        mindmap: "Mindmap", timeline: "Timeline", xychart: "XY Chart",
-        "xychart-beta": "XY Chart", quadrantchart: "Quadrant",
-        requirementdiagram: "Requirement", zenuml: "ZenUML",
-        sankey: "Sankey", "sankey-beta": "Sankey",
-        block: "Block", "block-beta": "Block",
-        packet: "Packet", "packet-beta": "Packet",
-        kanban: "Kanban",
-        architecture: "Architecture", "architecture-beta": "Architecture",
-        c4container: "C4 Container", c4component: "C4 Component",
-        c4dynamic: "C4 Dynamic", c4deployment: "C4 Deployment",
-    };
-    return map[m[1].toLowerCase()] ?? m[1];
 }
 
 /** Auto-detect Markdown — strong signals only; plain `-` lists or `*` bullets do NOT qualify */
@@ -1341,7 +1279,6 @@ export default function NotesMaster() {
     const appTheme = appThemeMode === "auto"
         ? ((() => { const h = new Date().getHours(); return h >= 6 && h < 18 ? "light" : "dark"; })())
         : appThemeMode;
-    const [mermaidShowCode, setMermaidShowCode] = useState(false);
     const [codeEditMode, setCodeEditMode] = useState(false);
     const [typeFilter, setTypeFilter] = useState<string | null>(null);
     const [pendingNoteType, setPendingNoteType] = useState<string | null>(null);
@@ -2150,9 +2087,8 @@ export default function NotesMaster() {
     }, [activeFolder]);
 
 
-    // Always open mermaid notes in code view first; reset code edit mode on note switch
+    // Reset code edit mode on note switch
     useEffect(() => {
-        if (editorOpen && mermaidMode) setMermaidShowCode(true);
         setCodeEditMode(false);
     }, [editorOpen, editingNote?.id]);
 
@@ -4262,7 +4198,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         setPendingNoteType(null); // reset so noteType comes from note.type, not prior mode
         setEditingNote(note);
         setTitle(note.title || "");
-        setContent(note.content != null ? (note.type === "mermaid" || detectMermaid(note.content || "") ? cleanMermaidContent(note.content) : note.content) : "");
+        setContent(note.content ?? "");
         setImages((note as any).images ?? []);
         setNoteTags((note as any).tags ?? []);
         setShowTagInput(false);
@@ -4293,7 +4229,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                         if (openingNoteIdRef.current !== noteId) return;
                         setDbData((prev: any[]) => prev.map((r) => String(r.id) === noteId ? { ...r, ...fetched } : r));
                         setEditingNote(fetched);
-                        const body = (fetched.type === "mermaid" || detectMermaid(fetched.content || "")) ? cleanMermaidContent(fetched.content || "") : (fetched.content || "");
+                        const body = fetched.content || "";
                         setContent(body);
                         // Always use the DB title — no auto-derive
                         if (fetched.title) setTitle(fetched.title);
@@ -4379,10 +4315,9 @@ const fireIntegrations = (trigger: string, note: any) => {
 
     // Derived booleans — clean, no detection chains
     const baseMode = !listMode && !graphMode && !mindmapMode && !stackMode;
-    const mermaidMode  = baseMode && noteType === "mermaid";
     const markdownMode = baseMode && noteType === "markdown";
     const htmlMode     = baseMode && (noteType === "html" || (!!currentNoteId && htmlModeNotes.has(currentNoteId)));
-    const jsonMode     = baseMode && noteType === "json" && !mermaidMode;
+    const jsonMode     = baseMode && noteType === "json";
     const codeMode     = baseMode && ["javascript","typescript","python","css","sql","bash"].includes(noteType);
     // jsonDetect kept for JSON syntax highlight fallback
     const jsonDetect = useMemo(() => jsonMode ? detectJson(content) : { ok: false, parsed: null }, [jsonMode, content]);
@@ -4399,7 +4334,7 @@ const fireIntegrations = (trigger: string, note: any) => {
     }, [noteType, listMode, content]);
 
     // Unified active mode label
-    const noteViewMode = stackMode ? "Stack" : mindmapMode ? "Mindmap" : graphMode ? "Graph" : listMode ? "Checklist" : mermaidMode ? "Diagram" : codeMode ? noteType : markdownMode ? "Markdown" : htmlMode ? "HTML" : "Text";
+    const noteViewMode = stackMode ? "Stack" : mindmapMode ? "Mindmap" : graphMode ? "Graph" : listMode ? "Checklist" : codeMode ? noteType : markdownMode ? "Markdown" : htmlMode ? "HTML" : "Text";
 
     // Folder stats for bottom status bar (active folder view, no note open)
     const folderStats = useMemo(() => {
@@ -6221,33 +6156,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                         <input ref={titleInputRef} defaultValue={title} key={`title-${editingNote?.id || "new"}`} onChange={(e) => { titleRaw.current = e.target.value; }} onBlur={(e) => setTitle(e.target.value)} onFocus={() => { closeEditorTools(); setShowNoteActions(false); }} autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false} className="hidden sm:block bg-transparent border-0 appearance-none shadow-none ring-0 outline-none focus:outline-none focus:ring-0 px-1 min-w-0 flex-1 tracking-tight font-bold text-white placeholder:text-zinc-500" style={{ caretColor: activeAccentColor, fontSize: "clamp(18px, 2vw, 24px)" }} placeholder="Note Title" />
                         <input ref={titleInputMobileRef} defaultValue={title} key={`title-m-${editingNote?.id || "new"}`} onChange={(e) => { titleRaw.current = e.target.value; }} onBlur={(e) => setTitle(e.target.value)} onFocus={() => { closeEditorTools(); setShowNoteActions(false); }} autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false} className="sm:hidden bg-transparent border-0 appearance-none shadow-none ring-0 outline-none focus:outline-none focus:ring-0 px-2 flex-grow min-w-0 text-white placeholder:text-zinc-500" style={{ caretColor: activeAccentColor, border: "none", fontSize: "clamp(18px, 5vw, 24px)", fontWeight: 700 }} placeholder="Note Title" />
 
-                        {mermaidMode && (
-                            <div className="flex items-center gap-1 flex-shrink-0">
-                                <button type="button"
-                                    onClick={async () => {
-                                        const mapUrl = (editingNote as any)?._mapUrl;
-                                        if (mapUrl) {
-                                            // External note — open its source app link (local or prod)
-                                            window.open(mapUrl, "_blank");
-                                        } else {
-                                            const h = window.location.hostname;
-                                            const isLocal = h === "localhost" || h === "127.0.0.1";
-                                            const apiBase = isLocal ? "http://localhost:3002" : "https://diagram-bheng.vercel.app";
-                                            const res = await fetch(`${apiBase}/api/share`, {
-                                                method: "POST",
-                                                headers: { "Content-Type": "application/json" },
-                                                body: JSON.stringify({ code: extractMermaid(content) }),
-                                            });
-                                            const { url } = await res.json();
-                                            window.open(url, "_blank");
-                                        }
-                                    }}
-                                    className="p-2 sm:p-3 text-zinc-400 hover:text-purple-400 active:text-purple-400 transition flex-shrink-0"
-                                    title={(editingNote as any)?._source === "stickies:diagrams" ? "Open in Sequence Diagram" : (editingNote as any)?._external ? "Open in Mind Map" : "Open in Diagram editor"}>
-                                    <SparklesIcon className="w-[29px] h-[29px] sm:w-7 sm:h-7" />
-                                </button>
-                            </div>
-                        )}
                         {/* Type badge removed — already shown in footer */}
                         {/* AI Grammar Fix */}
                         {!content.trim() && (
@@ -6737,18 +6645,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     </button>
                                 )}
                             </div>
-                        ) : mermaidMode ? (
-                            <CodeViewer
-                                code={content}
-                                language="mermaid"
-                                editing={codeEditMode}
-                                searchTerm={showFindBar ? findQuery : ""}
-                                searchIndex={findCursor}
-                                onSearchResults={() => {}}
-                                onChange={setContent}
-                                onBlur={() => { setCodeEditMode(false); }}
-                                onClick={() => setCodeEditMode(true)}
-                            />
                         ) : mdViewMode !== "text" ? (
                             <div className="flex-1 flex overflow-hidden relative" style={{ background: "#000" }}>
                                 {/* Editor pane — hidden on preview-only, hidden on mobile for split */}
@@ -7172,7 +7068,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                 {(() => {
                                     const badge = TYPE_BADGE[noteType] ?? TYPE_BADGE["text"];
                                     if (!badge) return null;
-                                    const label = noteType === "mermaid" ? mermaidSubType(content) : badge.label;
+                                    const label = badge.label;
                                     return (
                                         <span
                                             className="font-mono font-black uppercase tracking-wide whitespace-nowrap px-1.5 py-px rounded-full"
