@@ -6288,7 +6288,33 @@ const fireIntegrations = (trigger: string, note: any) => {
                         );
                     })()}
 
-                    <div className={`relative flex-1 flex overflow-hidden font-mono ${appTheme === "light" ? "bg-white" : "bg-black"}`} style={{ display: aiPromptOpen ? "none" : "flex", border: `2px solid ${noteColor || "#888"}`, transition: "border-color 0.3s ease" }}>
+                    <div className={`relative flex-1 flex overflow-hidden font-mono ${appTheme === "light" ? "bg-white" : "bg-black"}`} style={{ display: aiPromptOpen ? "none" : "flex", border: `2px solid ${noteColor || "#888"}`, transition: "border-color 0.3s ease" }}
+                        onDragOver={(e) => { if (Array.from(e.dataTransfer.items).some(i => i.kind === "file")) e.preventDefault(); }}
+                        onDrop={(e) => {
+                            const files = Array.from(e.dataTransfer.files);
+                            if (!files.length) return;
+                            e.preventDefault();
+                            const images = files.filter(f => f.type.startsWith("image/"));
+                            const textFiles = files.filter(f => !f.type.startsWith("image/") && f.type !== "application/pdf");
+                            if (images.length > 0) {
+                                void (async () => {
+                                    showToast(`Uploading ${images.length} image${images.length !== 1 ? "s" : ""}...`, "#a78bfa");
+                                    const ta = editorTextRef.current;
+                                    const pos = ta?.selectionStart ?? content.length;
+                                    const urls: string[] = [];
+                                    for (const file of images) { try { const u = await uploadImage(file); urls.push(`![${file.name}](${u.url})`); } catch {} }
+                                    if (urls.length > 0) { handleEditorChange(content.slice(0, pos) + urls.join("\n") + "\n" + content.slice(pos)); showToast(`${urls.length} image${urls.length !== 1 ? "s" : ""} added`, "#34C759"); }
+                                })();
+                            } else if (textFiles.length === 1) {
+                                void textFiles[0].text().then(text => {
+                                    const ext = textFiles[0].name.includes(".") ? "." + textFiles[0].name.split(".").pop()!.toLowerCase() : "";
+                                    const typeMap: Record<string, string> = { ".html": "html", ".htm": "html", ".md": "markdown", ".txt": "text", ".js": "javascript", ".ts": "typescript", ".py": "python", ".css": "css", ".sql": "sql", ".sh": "bash", ".json": "json" };
+                                    setEditingNote(null); setTitle(textFiles[0].name.replace(/\.[^.]+$/, "")); setContent(text); latestContentRef.current = text;
+                                    setPendingNoteType(typeMap[ext] || "text"); setTargetFolder(activeFolder || "CLAUDE");
+                                    setNoteColor(palette12[Math.floor(Math.random() * palette12.length)]); noteEverDirtyRef.current = true; playSound("create");
+                                });
+                            }
+                        }}>
                         {/* ── Note loading spinner — scoped to editor panel only ── */}
                         {noteContentLoading && (
                             <div className="absolute inset-0 z-[50] flex items-center justify-center bg-black/60 pointer-events-none">
