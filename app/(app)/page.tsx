@@ -7395,8 +7395,29 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                 return;
                             }
 
-                            // Images/PDFs → if editor open, attach to current note
-                            if (files.length && editorOpen && files.every(f => f.type.startsWith("image/") || f.type === "application/pdf")) {
+                            // Images → if editor open, upload and insert ![](url) inline
+                            if (files.length && editorOpen && files.every(f => f.type.startsWith("image/"))) {
+                                void (async () => {
+                                    showToast(`Uploading ${files.length} image${files.length !== 1 ? "s" : ""}...`, "#a78bfa");
+                                    const ta = editorTextRef.current;
+                                    const pos = ta?.selectionStart ?? content.length;
+                                    const urls: string[] = [];
+                                    for (const file of files) {
+                                        try {
+                                            const upload = await uploadImage(file);
+                                            urls.push(`![${file.name}](${upload.url})`);
+                                        } catch {}
+                                    }
+                                    if (urls.length > 0) {
+                                        const md = urls.join("\n") + "\n";
+                                        handleEditorChange(content.slice(0, pos) + md + content.slice(pos));
+                                        showToast(`${urls.length} image${urls.length !== 1 ? "s" : ""} added`, "#34C759");
+                                    }
+                                })();
+                                return;
+                            }
+                            // PDFs → if editor open, convert to images and insert
+                            if (files.length && editorOpen && files.every(f => f.type === "application/pdf")) {
                                 addImages(Array.from(files));
                                 return;
                             }
