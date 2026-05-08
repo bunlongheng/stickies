@@ -1405,12 +1405,21 @@ export default function NotesMaster() {
     const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const mainScrollRef = useRef<HTMLElement | null>(null);
     const editorTextRef = useRef<HTMLTextAreaElement | null>(null);
+    const editorScrollYRef = useRef(0);
     const [editorScrollY, setEditorScrollY] = useState(0);
+    const scrollRafRef = useRef(0);
     const computedLineH = useRef(19.2);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const handleEditorScroll = useCallback(() => {
         const el = editorTextRef.current;
-        if (el) setEditorScrollY(el.scrollTop);
+        if (!el) return;
+        editorScrollYRef.current = el.scrollTop;
+        if (!scrollRafRef.current) {
+            scrollRafRef.current = requestAnimationFrame(() => {
+                setEditorScrollY(editorScrollYRef.current);
+                scrollRafRef.current = 0;
+            });
+        }
     }, []);
     const tower3dRef = useRef<HTMLDivElement | null>(null);
     const tower3dDrag = useRef({ active: false, startX: 0, startY: 0, rotX: 12, rotY: -28 });
@@ -4355,7 +4364,7 @@ const fireIntegrations = (trigger: string, note: any) => {
     const CODE_TYPES = _CODE_TYPES;
     const effectiveDbType = dbType ?? (CODE_TYPES.has(detectedType) ? detectedType : null);
     const noteType: string = pendingNoteType ?? effectiveDbType ?? detectedType;
-    const inlineImages = useMemo(() => parseInlineImages(content || ""), [content]);
+    const inlineImages = useMemo(() => (content || "").includes("![") ? parseInlineImages(content) : [], [content]);
 
     // Measure line height from textarea
     useEffect(() => {
