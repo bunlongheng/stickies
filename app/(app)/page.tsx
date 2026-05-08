@@ -246,6 +246,42 @@ function taskColor(i: number, total: number): string {
 }
 
 /** Returns the first letter/digit/emoji from text — skips punctuation like "?" */
+/** Parse ![alt](url) patterns from text, return line positions */
+function parseInlineImages(text: string): { index: number; alt: string; url: string; line: number }[] {
+    const re = /!\[([^\]]*)\]\(([^)]+)\)/g;
+    const results: { index: number; alt: string; url: string; line: number }[] = [];
+    let m;
+    while ((m = re.exec(text)) !== null) {
+        results.push({ index: m.index, alt: m[1], url: m[2], line: text.slice(0, m.index).split("\n").length - 1 });
+    }
+    return results;
+}
+
+/** Convert image to WebP for smaller size, preserve quality */
+async function convertToWebP(file: File): Promise<File> {
+    if (file.type === "image/webp" || file.type === "image/gif" || file.type === "image/svg+xml") return file;
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+            const canvas = document.createElement("canvas");
+            // Limit max dimension to 1920px to save space
+            const maxDim = 1920;
+            let w = img.width, h = img.height;
+            if (w > maxDim || h > maxDim) {
+                const scale = maxDim / Math.max(w, h);
+                w = Math.round(w * scale); h = Math.round(h * scale);
+            }
+            canvas.width = w; canvas.height = h;
+            canvas.getContext("2d")!.drawImage(img, 0, 0, w, h);
+            canvas.toBlob((blob) => {
+                resolve(blob ? new File([blob], file.name.replace(/\.[^.]+$/, ".webp"), { type: "image/webp" }) : file);
+            }, "image/webp", 0.85);
+        };
+        img.onerror = () => resolve(file);
+        img.src = URL.createObjectURL(file);
+    });
+}
+
 function meaningfulInitial(text: string, fallback = "N"): string {
     const first = [...(text || "")].find(c => /[\p{L}\p{N}\p{Emoji_Presentation}]/u.test(c));
     return (first ?? fallback).toUpperCase();
@@ -1369,6 +1405,13 @@ export default function NotesMaster() {
     const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const mainScrollRef = useRef<HTMLElement | null>(null);
     const editorTextRef = useRef<HTMLTextAreaElement | null>(null);
+    const [editorScrollY, setEditorScrollY] = useState(0);
+    const computedLineH = useRef(19.2);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const handleEditorScroll = useCallback(() => {
+        const el = editorTextRef.current;
+        if (el) setEditorScrollY(el.scrollTop);
+    }, []);
     const tower3dRef = useRef<HTMLDivElement | null>(null);
     const tower3dDrag = useRef({ active: false, startX: 0, startY: 0, rotX: 12, rotY: -28 });
     const titleInputRef = useRef<HTMLInputElement | null>(null);
@@ -3574,8 +3617,10 @@ const fireIntegrations = (trigger: string, note: any) => {
     }, []);
 
     async function uploadImage(file: File): Promise<{ url: string; name: string; type: string; extractedText?: string }> {
+        // Convert to WebP for smaller size
+        const optimized = file.type.startsWith("image/") ? await convertToWebP(file) : file;
         const fd = new FormData();
-        fd.append("file", file);
+        fd.append("file", optimized);
         fd.append("folder", targetFolder || activeFolder || "unsorted");
         const token = await getAuthToken();
         const res = await fetch("/api/stickies/gdrive", {
@@ -4310,6 +4355,18 @@ const fireIntegrations = (trigger: string, note: any) => {
     const CODE_TYPES = _CODE_TYPES;
     const effectiveDbType = dbType ?? (CODE_TYPES.has(detectedType) ? detectedType : null);
     const noteType: string = pendingNoteType ?? effectiveDbType ?? detectedType;
+    const inlineImages = useMemo(() => parseInlineImages(content || ""), [content]);
+
+    // Measure line height from textarea
+    useEffect(() => {
+        const el = editorTextRef.current;
+        if (!el) return;
+        const measure = () => { const fs = parseFloat(getComputedStyle(el).fontSize); if (fs > 0) computedLineH.current = fs * 1.6; };
+        measure();
+        const ro = new ResizeObserver(measure);
+        ro.observe(el);
+        return () => ro.disconnect();
+    }, [editingNote?.id]);
 
     // Derived booleans — clean, no detection chains
     const baseMode = !listMode && !graphMode && !mindmapMode && !stackMode;
@@ -6695,6 +6752,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     onFocus={() => closeEditorTools()}
                                     onBlur={() => {}}
                                     onPaste={handleEditorPaste}
+                                    onScroll={handleEditorScroll}
                                     className="ios-editor-scroll overscroll-none touch-pan-y hidden sm:block"
                                     style={{
                                         flex: 1, background: "transparent", color: "#f8f8f2",
@@ -6822,6 +6880,33 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         {renderFindHighlights(content || "", findMatches, findCursor)}
                                     </div>
                                 )}
+                                {/* Inline image overlays */}
+                                {inlineImages.length > 0 && (
+                                    <div aria-hidden="true" style={{
+                                        position: "absolute", top: 12, left: 12, right: 12, bottom: 0,
+                                        pointerEvents: "none", zIndex: 2, overflow: "hidden",
+                                    }}>
+                                        <div style={{ transform: `translateY(${-editorScrollY}px)` }}>
+                                            {inlineImages.map((img, i) => {
+                                                const lh = computedLineH.current;
+                                                const top = img.line * lh + lh;
+                                                return (
+                                                    <div key={i} style={{ position: "absolute", top, left: 0, right: 0, pointerEvents: "auto" }}>
+                                                        <img
+                                                            src={img.url} alt={img.alt}
+                                                            onClick={() => setLightboxUrl(img.url)}
+                                                            onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                                                            style={{
+                                                                maxWidth: "80%", maxHeight: 200, borderRadius: 6, cursor: "pointer",
+                                                                border: appTheme === "dark" ? "1px solid rgba(255,255,255,0.1)" : "1px solid rgba(0,0,0,0.12)",
+                                                            }}
+                                                        />
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
                                 {/* Native textarea — no cursor jump */}
                                 <textarea
                                     ref={editorTextRef}
@@ -6831,6 +6916,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     onFocus={() => closeEditorTools()}
                                     onBlur={() => {}}
                                     onPaste={handleEditorPaste}
+                                    onScroll={handleEditorScroll}
                                     className="ios-editor-scroll overscroll-none touch-pan-y"
                                     style={{
                                         flex: 1, background: "transparent", color: stickyText,
@@ -6945,6 +7031,30 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     <TrashIcon className="w-3 h-3" />
                                 </button>
                             )}
+                            {/* Photo upload button */}
+                            <button type="button"
+                                onClick={() => fileInputRef.current?.click()}
+                                className="absolute left-1/2 translate-x-4 flex items-center text-zinc-600 hover:text-zinc-400 transition z-[1]"
+                                title="Add image">
+                                <PhotoIcon className="w-3 h-3" />
+                            </button>
+                            <input ref={fileInputRef} type="file" accept="image/*" className="hidden"
+                                onChange={async (e) => {
+                                    const file = e.target.files?.[0];
+                                    if (!file) return;
+                                    e.target.value = "";
+                                    showToast("Uploading...", "#a78bfa");
+                                    try {
+                                        const upload = await uploadImage(file);
+                                        const ta = editorTextRef.current;
+                                        const pos = ta?.selectionStart ?? content.length;
+                                        const md = `![${file.name}](${upload.url})`;
+                                        const newContent = content.slice(0, pos) + md + "\n" + content.slice(pos);
+                                        handleEditorChange(newContent);
+                                        showToast("Image added", "#34C759");
+                                    } catch { showError("Upload failed"); }
+                                }}
+                            />
                             <div className="flex items-center gap-2 z-[2]">
                                 {mdViewMode !== "text" && (<>
                                     <button type="button"
