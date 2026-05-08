@@ -6811,33 +6811,6 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         {renderFindHighlights(content || "", findMatches, findCursor)}
                                     </div>
                                 )}
-                                {/* Inline image overlays */}
-                                {inlineImages.length > 0 && (
-                                    <div aria-hidden="true" style={{
-                                        position: "absolute", top: 12, left: 12, right: 12, bottom: 0,
-                                        pointerEvents: "none", zIndex: 2, overflow: "hidden",
-                                    }}>
-                                        <div style={{ transform: `translateY(${-editorScrollY}px)` }}>
-                                            {inlineImages.map((img, i) => {
-                                                const lh = computedLineH.current;
-                                                const top = img.line * lh + lh;
-                                                return (
-                                                    <div key={i} style={{ position: "absolute", top, left: 0, right: 0, pointerEvents: "auto" }}>
-                                                        <img
-                                                            src={img.url} alt={img.alt}
-                                                            onClick={() => setLightboxUrl(img.url)}
-                                                            onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-                                                            style={{
-                                                                maxWidth: "80%", maxHeight: 200, borderRadius: 6, cursor: "pointer",
-                                                                border: appTheme === "dark" ? "1px solid rgba(255,255,255,0.1)" : "1px solid rgba(0,0,0,0.12)",
-                                                            }}
-                                                        />
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
-                                )}
                                 {/* Native textarea — no cursor jump */}
                                 <textarea
                                     ref={editorTextRef}
@@ -6860,6 +6833,34 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     }}
                                     placeholder="START TYPING..."
                                 />
+                                {/* Inline image overlays — after textarea so z-index wins */}
+                                {inlineImages.length > 0 && (
+                                    <div style={{
+                                        position: "absolute", top: 12, left: 12, right: 12, bottom: 0,
+                                        pointerEvents: "none", zIndex: 10, overflow: "hidden",
+                                    }}>
+                                        <div style={{ transform: `translateY(${-editorScrollY}px)` }}>
+                                            {inlineImages.map((img, i) => {
+                                                const lh = computedLineH.current;
+                                                const top = img.line * lh + lh;
+                                                return (
+                                                    <div key={i} style={{ position: "absolute", top, left: 0, right: 0, pointerEvents: "auto" }}>
+                                                        <img
+                                                            src={img.url} alt={img.alt}
+                                                            onClick={() => setLightboxUrl(img.url)}
+                                                            onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                                                            style={{
+                                                                maxWidth: "80%", maxHeight: 200, borderRadius: 6, cursor: "pointer",
+                                                                border: appTheme === "dark" ? "1px solid rgba(255,255,255,0.1)" : "1px solid rgba(0,0,0,0.12)",
+                                                                background: appTheme === "dark" ? "#1a1a1a" : "#f5f5f5",
+                                                            }}
+                                                        />
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                             );
                         })()}
