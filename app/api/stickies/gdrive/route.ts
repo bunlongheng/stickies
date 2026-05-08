@@ -179,6 +179,18 @@ export async function POST(req: Request) {
         return NextResponse.json({ url, name: file.name, type: file.type, extractedText });
     } catch (err: any) {
         console.error("[gdrive upload]", err?.message || err);
+        // Fallback: proxy to prod on any failure (token expired, etc.)
+        try {
+            const proxyFd = new FormData();
+            proxyFd.append("file", file);
+            proxyFd.append("folder", folder);
+            const proxyRes = await fetch("https://stickies-bheng.vercel.app/api/stickies/gdrive", {
+                method: "POST",
+                headers: { Authorization: `Bearer ${process.env.STICKIES_API_KEY}` },
+                body: proxyFd,
+            });
+            if (proxyRes.ok) return NextResponse.json(await proxyRes.json());
+        } catch {}
         return NextResponse.json({ error: err?.message || "Upload failed" }, { status: 500 });
     }
 }
