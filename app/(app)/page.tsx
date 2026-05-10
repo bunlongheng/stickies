@@ -101,7 +101,7 @@ mdRenderer.code = function ({ text, lang }: { text: string; lang?: string }) {
     const langBadge = lang ? `<span class="code-lang-badge">${lang}</span>` : "";
     return `<div class="code-block-wrapper">${langBadge}<button class="copy-code-btn" aria-label="Copy code">Copy</button><pre><code>${escaped}</code></pre></div>`;
 };
-import { QRCodeSVG } from "qrcode.react";
+import { QRCodeSVG, QRCodeCanvas } from "qrcode.react";
 import PusherClient from "pusher-js";
 
 // Lazy to avoid build-time errors when env vars are not set
@@ -1128,6 +1128,19 @@ export default function NotesMaster() {
     const latestContentRef = useRef("");
     // Shared onChange for all editor textareas — handles undo snapshots correctly
     const handleEditorChange = useCallback((val: string) => {
+        // Triple-space shortcut: replace "   " with a ruler line
+        const ta = editorTextRef.current;
+        if (ta) {
+            const pos = ta.selectionStart;
+            if (pos >= 3 && val.slice(pos - 3, pos) === "   ") {
+                const ruler = "====================";
+                const replaced = val.slice(0, pos - 3) + ruler + val.slice(pos);
+                latestContentRef.current = replaced;
+                setContent(replaced);
+                requestAnimationFrame(() => { const np = pos - 3 + ruler.length; ta.setSelectionRange(np, np); });
+                return;
+            }
+        }
         // Snapshot previous content for undo using ref (never stale)
         const prev = latestContentRef.current;
         if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
@@ -1901,7 +1914,7 @@ export default function NotesMaster() {
             const urlParams = new URLSearchParams(window.location.search);
             const themeParam = urlParams.get("theme");
             if (themeParam === "light" || themeParam === "dark" || themeParam === "auto") setAppThemeMode(themeParam);
-            const viewParam = urlParams.get("view");
+            const viewParam = urlParams.get("view") || urlParams.get("mode");
             if (viewParam === "list") { setMainListMode("list"); setKanbanMode(false); }
             else if (viewParam === "thumb") { setMainListMode("thumb"); setKanbanMode(false); }
             else if (viewParam === "tabs") { setMainListMode("tabs"); setKanbanMode(false); }
@@ -2036,6 +2049,21 @@ export default function NotesMaster() {
             }
         }
     }, [mainListMode]);
+
+    // Sync view mode to URL params so refresh preserves the mode
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+        const url = new URL(window.location.href);
+        const modeVal = kanbanMode ? "kanban" : mainListMode;
+        if (modeVal && modeVal !== "thumb") {
+            url.searchParams.set("mode", modeVal);
+        } else {
+            url.searchParams.delete("mode");
+        }
+        if (url.toString() !== window.location.href) {
+            window.history.replaceState({}, "", url.toString());
+        }
+    }, [mainListMode, kanbanMode]);
 
     // Auto-load today's notes and open latest when entering tabs mode (desktop only)
     const tabsAutoOpenedRef = useRef(false);
@@ -3790,7 +3818,8 @@ const fireIntegrations = (trigger: string, note: any) => {
     const copyCurrentNoteLink = async () => {
         const noteTitle = title.trim() || editingNote?.title || "untitled";
         const folderName = targetFolder || activeFolder || editingNote?.folder_name || "general";
-        const url = new URL(window.location.href);
+        const base = process.env.NEXT_PUBLIC_APP_BASE_URL || "https://stickies-bheng.vercel.app";
+        const url = new URL(base);
         // Use full stack path for correct nested folder URL
         const stackPath = folderStack.length > 0
             ? folderStack.map((f) => toUrlToken(f.name)).filter(Boolean).join("/")
@@ -3804,7 +3833,7 @@ const fireIntegrations = (trigger: string, note: any) => {
     };
 
     const openNoteQrShare = useCallback(() => {
-        const base = typeof window !== "undefined" ? window.location.origin : "https://bheng.vercel.app";
+        const base = process.env.NEXT_PUBLIC_APP_BASE_URL || "https://stickies-bheng.vercel.app";
         const payload = {
             title: title.trim() || editingNote?.title || "Untitled",
             content: content || editingNote?.content || "",
@@ -3819,9 +3848,9 @@ const fireIntegrations = (trigger: string, note: any) => {
     }, [editingNote, title, content, targetFolder, activeFolder, noteColor]);
 
     const openNoteLinkQr = useCallback(() => {
-        const base = typeof window !== "undefined" ? window.location.origin : "";
+        const base = process.env.NEXT_PUBLIC_APP_BASE_URL || "https://stickies-bheng.vercel.app";
         const noteId = editingNote?.id ? String(editingNote.id) : "";
-        const url = noteId ? `${base}/?noteId=${noteId}` : base;
+        const url = noteId ? `${base}/api/stickies/public/raw?noteId=${noteId}` : base;
         setQrData(url);
         setQrIsBurn(false);
         setQrType("link");
@@ -3834,7 +3863,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         const noteContent = content || editingNote?.content || "";
         const text = [noteTitle, noteContent].filter(Boolean).join("\n\n").slice(0, 1500);
         const base64 = btoa(unescape(encodeURIComponent(text)));
-        const base = typeof window !== "undefined" ? window.location.origin : "https://bheng.vercel.app";
+        const base = process.env.NEXT_PUBLIC_APP_BASE_URL || "https://stickies-bheng.vercel.app";
         setQrData(`${base}/share?clip=${base64}`);
         setQrIsBurn(false);
         setQrType("data");
@@ -3994,7 +4023,7 @@ const fireIntegrations = (trigger: string, note: any) => {
             });
             if (!res.ok) { showToast("Failed to create link"); return; }
             const { token } = await res.json();
-            const base = typeof window !== "undefined" ? window.location.origin : "https://bheng.vercel.app";
+            const base = process.env.NEXT_PUBLIC_APP_BASE_URL || "https://stickies-bheng.vercel.app";
             const burnUrl = `${base}/share?token=${token}`;
             setQrData(burnUrl);
             setQrIsBurn(true);
@@ -6302,7 +6331,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     const ta = editorTextRef.current;
                                     const pos = ta?.selectionStart ?? content.length;
                                     const urls: string[] = [];
-                                    for (const file of images) { try { const u = await uploadImage(file); urls.push(`![${file.name}](${u.url})`); } catch {} }
+                                    for (const file of images) { try { const u = await uploadImage(file); urls.push(`![${file.name}](${u.url})`); } catch (err) { console.error("[drop] image upload failed:", err); showError(`Upload failed: ${file.name}`); } }
                                     if (urls.length > 0) { handleEditorChange(content.slice(0, pos) + urls.join("\n") + "\n" + content.slice(pos)); showToast(`${urls.length} image${urls.length !== 1 ? "s" : ""} added`, "#34C759"); }
                                 })();
                             } else if (textFiles.length === 1) {
@@ -6821,6 +6850,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     onBlur={() => {}}
                                     onPaste={handleEditorPaste}
                                     onScroll={handleEditorScroll}
+                                    onDragOver={(e) => { if (Array.from(e.dataTransfer.items).some(i => i.kind === "file")) e.preventDefault(); }}
+                                    onDrop={(e) => { if (Array.from(e.dataTransfer.files).some(f => f.type.startsWith("image/") || f.type === "application/pdf")) e.preventDefault(); }}
                                     className="ios-editor-scroll overscroll-none touch-pan-y"
                                     style={{
                                         flex: 1, background: "transparent", color: stickyText,
@@ -7338,7 +7369,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                         try {
                                             const upload = await uploadImage(file);
                                             urls.push(`![${file.name}](${upload.url})`);
-                                        } catch {}
+                                        } catch (err) { console.error("[drop] image upload failed:", err); showError(`Upload failed: ${file.name}`); }
                                     }
                                     if (urls.length > 0) {
                                         const md = urls.join("\n") + "\n";
@@ -7435,7 +7466,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                             });
                                             created++;
                                         }
-                                    } catch {}
+                                    } catch (err) { console.error("[drop] file import failed:", err); showError(`Import failed: ${file.name}`); }
                                 }
                                 // Reload notes so list refreshes
                                 if (activeFolder) void loadFolderNotes(activeFolder, false);
@@ -7648,11 +7679,11 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                     : c;
                                                 const isRootFolder = !activeFolder && !!item.is_folder;
                                                 const isLight = appTheme === "light";
-                                                return { position: "relative", isolation: "isolate", "--row-color": parentColor, "--fc": parentColor, background: isRootFolder ? `${parentColor}${isLight ? "18" : "12"}` : shadedRowBg(parentColor, idx, filteredDisplayItems.length, false, isLight) } as unknown as React.CSSProperties;
+                                                return { position: "relative", isolation: "isolate", "--row-color": parentColor, "--fc": parentColor, borderBottom: `1px solid ${parentColor}30`, background: isRootFolder ? `${parentColor}${isLight ? "18" : "12"}` : shadedRowBg(parentColor, idx, filteredDisplayItems.length, false, isLight) } as unknown as React.CSSProperties;
                                             }
                                             {
                                                 const rowColor = item.is_folder ? (item.color || item.folder_color || c) : c;
-                                                return { position: "relative", isolation: "isolate", "--row-color": rowColor, "--fc": rowColor, ...(isActive && !item.is_folder ? { borderRightColor: rowColor, background: `${rowColor}35` } : isActive ? { borderRightColor: rowColor } : {}), ...(item.is_folder ? { background: `${rowColor}18` } : {}) } as unknown as React.CSSProperties;
+                                                return { position: "relative", isolation: "isolate", "--row-color": rowColor, "--fc": rowColor, borderBottom: `1px solid ${rowColor}30`, ...(isActive && !item.is_folder ? { borderRightColor: rowColor, background: `${rowColor}35` } : isActive ? { borderRightColor: rowColor } : {}), ...(item.is_folder ? { background: `${rowColor}18` } : {}) } as unknown as React.CSSProperties;
                                             }
                                         }
                                         return item.is_folder
@@ -7660,7 +7691,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                             : { isolation: "isolate", backgroundColor: c, borderRadius: "3px 3px 3px 14px" };
                                     })()}
                                     className={`${isListMode
-                                        ? `group list-row-hover flex items-center gap-3 pl-3 pr-3 min-h-[64px] sm:min-h-[54px] border-b border-white/5 cursor-pointer select-none transition-colors active:bg-white/10 overflow-hidden ${!item.is_folder && incomingNoteIds.has(String(item.id)) ? "note-incoming" : ""} ${!item.is_folder && removingNoteIds.has(String(item.id)) ? "note-removing" : ""} ${isDragging ? "opacity-30" : dt?.mode === "into" ? "bg-cyan-950/60 ring-1 ring-inset ring-cyan-400" : ""} ${isSelectMode && !item.is_folder && selectedIds.has(String(item.id)) ? "bg-blue-950/50" : ""} border-r-[3px] border-r-transparent`
+                                        ? `group list-row-hover flex items-center gap-3 pl-3 pr-3 min-h-[64px] sm:min-h-[54px] cursor-pointer select-none transition-colors active:bg-white/10 overflow-hidden ${!item.is_folder && incomingNoteIds.has(String(item.id)) ? "note-incoming" : ""} ${!item.is_folder && removingNoteIds.has(String(item.id)) ? "note-removing" : ""} ${isDragging ? "opacity-30" : dt?.mode === "into" ? "bg-cyan-950/60 ring-1 ring-inset ring-cyan-400" : ""} ${isSelectMode && !item.is_folder && selectedIds.has(String(item.id)) ? "bg-blue-950/50" : ""} border-r-[3px] border-r-transparent`
                                         : `grid-square-tile min-w-0 cursor-pointer transition-all group ${item.is_folder ? `folder-grid-tile${item.name === "CLAUDE" ? " folder-grid-tile-claude" : ""}` : ""} ${isDragging ? "opacity-30 scale-95" : dt?.mode === "into" ? "ring-4 ring-cyan-400 ring-inset z-10" : ""}`}`}>
                                     {/* Cursor spotlight glow — DOM-only, no React state */}
                                     {isListMode && <div data-glow className="absolute inset-0 pointer-events-none z-[-1]" style={{ transition: "background 0.4s ease" }} />}
@@ -7721,7 +7752,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                             <div className="flex-1 min-w-0">
                                                 <div className={`text-[14px] tracking-tight text-white truncate ${item.is_folder && !showFileIcons ? "font-bold" : "font-normal"}`}>
                                                     <span className="inline relative">
-                                                        <span className="absolute bottom-0 left-0 h-px bg-white/50 w-0 group-hover:w-full transition-all duration-300 ease-out" />
+                                                        <span className="absolute bottom-0 left-0 h-px w-0 group-hover:w-full transition-all duration-300 ease-out" style={{ backgroundColor: "var(--row-color, rgba(255,255,255,0.5))" }} />
                                                         {item.is_folder ? <><span className="uppercase">{item.name}</span>{showFileIcons && activeFolder && <span className="text-white/30 ml-0.5">/</span>}</> : ((item.title?.trim() || "Untitled").length > 50 ? (item.title?.trim() || "Untitled").slice(0, 50) + "…" : (item.title?.trim() || "Untitled"))}
                                                     </span>
                                                 </div>
@@ -8466,8 +8497,19 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                         const token = await getAuthToken();
                                                         const res = await fetch("/api/stickies/gdrive/status", { headers: { Authorization: `Bearer ${token}` } });
                                                         const { connected } = await res.json().catch(() => ({ connected: false }));
+                                                        setGdriveConnected(connected);
                                                         if (connected) {
-                                                            showToast("Google Drive connected", "#34C759");
+                                                            // Test actual upload ability
+                                                            showToast("Testing upload...", "#a78bfa");
+                                                            try {
+                                                                const blob = new Blob(["test"], { type: "text/plain" });
+                                                                const fd = new FormData();
+                                                                fd.append("file", new File([blob], ".stickies-test.txt", { type: "text/plain" }));
+                                                                fd.append("folder", "test");
+                                                                const testRes = await fetch("/api/stickies/gdrive", { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd });
+                                                                if (testRes.ok) { showToast("Google Drive working", "#34C759"); }
+                                                                else { showError("Token expired - reconnecting..."); setGdriveConnected(false); window.location.href = "/api/stickies/gdrive/auth"; }
+                                                            } catch { showError("Upload test failed"); setGdriveConnected(false); }
                                                         } else {
                                                             window.location.href = "/api/stickies/gdrive/auth";
                                                         }
@@ -8476,8 +8518,8 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                         <svg viewBox="0 0 87.3 78" className="w-7 h-7"><path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8H0c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/><path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0-1.2 4.5h27.5z" fill="#00ac47"/><path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5H59.85z" fill="#ea4335"/><path d="M43.65 25 57.4 1.2C56.05.4 54.5 0 52.9 0H34.4c-1.6 0-3.15.45-4.5 1.2z" fill="#00832d"/><path d="M59.8 53H27.5L13.75 76.8c1.35.8 2.9 1.2 4.5 1.2h22.5c1.6 0 3.15-.45 4.5-1.2z" fill="#2684fc"/><path d="M73.4 26.5 60.65 4.5c-.8-1.4-1.95-2.5-3.3-3.3L43.6 25l16.2 28h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00"/></svg>
                                                     </div>
                                                     <div className="flex-1 min-w-0">
-                                                        <div className="text-xs font-black text-white">Google Drive</div>
-                                                        <div className="text-[10px] text-zinc-500">Image &amp; file uploads</div>
+                                                        <div className="text-xs font-black text-white flex items-center gap-1.5">Google Drive <span className={`inline-block w-1.5 h-1.5 rounded-full ${gdriveConnected ? "bg-green-400" : "bg-red-400"}`} /></div>
+                                                        <div className="text-[10px] text-zinc-500">{gdriveConnected ? "Connected" : "Not connected"}</div>
                                                     </div>
                                                     <ChevronRightIcon className="w-4 h-4 text-zinc-600 flex-shrink-0" />
                                                 </button>
@@ -9323,7 +9365,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
 
                         {/* QR code */}
                         <div className="p-3 bg-white" style={{ border: `4px solid ${qrIsBurn ? "#FF6B00" : activeAccentColor}` }}>
-                            <QRCodeSVG value={qrData || " "} size={220} level={qrType === "data" ? "L" : "M"} />
+                            <QRCodeCanvas value={qrData || " "} size={280} level={qrType === "data" ? "L" : "M"} marginSize={2} />
                         </div>
 
 
@@ -9459,7 +9501,8 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                         setEditingNote((prev: any) => prev ? { ...prev, is_public: newPublic } : prev);
                                         setDbData((prev: any[]) => prev.map((r: any) => String(r.id) === noteId ? { ...r, is_public: newPublic } : r));
                                         if (newPublic) {
-                                            const url = `${window.location.origin}/?noteId=${noteId}`;
+                                            const prodBase = process.env.NEXT_PUBLIC_APP_BASE_URL || "https://stickies-bheng.vercel.app";
+                                            const url = `${prodBase}/api/stickies/public/raw?noteId=${noteId}`;
                                             secureCopy(url).then(() => {
                                                 setPublicLinkCopied(true);
                                                 setTimeout(() => setPublicLinkCopied(false), 3000);
