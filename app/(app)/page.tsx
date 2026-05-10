@@ -3850,7 +3850,7 @@ const fireIntegrations = (trigger: string, note: any) => {
     const openNoteLinkQr = useCallback(() => {
         const base = process.env.NEXT_PUBLIC_APP_BASE_URL || "https://stickies-bheng.vercel.app";
         const noteId = editingNote?.id ? String(editingNote.id) : "";
-        const url = noteId ? `${base}/api/stickies/public/raw?noteId=${noteId}` : base;
+        const url = noteId ? `${base}/raw?noteId=${noteId}` : base;
         setQrData(url);
         setQrIsBurn(false);
         setQrType("link");
@@ -9502,7 +9502,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                         setDbData((prev: any[]) => prev.map((r: any) => String(r.id) === noteId ? { ...r, is_public: newPublic } : r));
                                         if (newPublic) {
                                             const prodBase = process.env.NEXT_PUBLIC_APP_BASE_URL || "https://stickies-bheng.vercel.app";
-                                            const url = `${prodBase}/api/stickies/public/raw?noteId=${noteId}`;
+                                            const url = `${prodBase}/raw?noteId=${noteId}`;
                                             secureCopy(url).then(() => {
                                                 setPublicLinkCopied(true);
                                                 setTimeout(() => setPublicLinkCopied(false), 3000);
