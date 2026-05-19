@@ -298,9 +298,13 @@ export default function RichEditor({
             {editor && <Toolbar editor={editor} onUploadImage={onUploadImage} />}
             <div
                 className="rich-editor-root flex-1 min-h-0 overflow-y-auto px-3 py-2.5"
-                style={accentColor
-                    ? { caretColor: accentColor, ["--rich-accent" as any]: accentColor }
-                    : undefined}
+                style={{
+                    // Caret stays dark on the white editor surface (accent color caret
+                    // would blend on yellow / light notes). Accent goes to the click-
+                    // highlight + handle via the CSS variable below.
+                    caretColor: "#1a1a1a",
+                    ...(accentColor ? { ["--rich-accent" as any]: accentColor } : {}),
+                }}
             >
                 <EditorContent editor={editor} />
             </div>
