@@ -4,17 +4,18 @@
  * Priority: high
  */
 import { describe, it, expect, vi } from "vitest";
-import { createMockSupabase, createChainMock } from "./mock-supabase";
 
 Object.assign(process.env, {
     STICKIES_API_KEY: "test-api-key",
-    NEXT_PUBLIC_SUPABASE_URL: "https://test.supabase.co",
-    SUPABASE_SERVICE_ROLE_KEY: "test-key",
     OWNER_USER_ID: "owner-uuid-1234",
 });
 
-const mockSb = createMockSupabase();
-vi.mock("@supabase/supabase-js", () => ({ createClient: vi.fn(() => mockSb) }));
+// ── Mock DB driver — both PATCH+DELETE use execute ────────────────────────────
+vi.mock("@/lib/db-driver", () => ({
+    query:    vi.fn(),
+    queryOne: vi.fn(),
+    execute:  vi.fn().mockResolvedValue(1),
+}));
 vi.mock("@/app/api/stickies/_auth", () => ({ authorizeOwner: vi.fn().mockResolvedValue(true) }));
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -22,8 +23,6 @@ vi.mock("@/app/api/stickies/_auth", () => ({ authorizeOwner: vi.fn().mockResolve
 // ═══════════════════════════════════════════════════════════════════════════════
 describe("PATCH /api/stickies/automations/[id]", () => {
     it("updates automation by id", async () => {
-        const chain = createChainMock(null);
-        mockSb.from.mockReturnValue(chain);
         const { PATCH } = await import("@/app/api/stickies/automations/[id]/route");
         const req = new Request("http://localhost:4444/api/stickies/automations/auto-1", {
             method: "PATCH",
@@ -63,8 +62,6 @@ describe("PATCH /api/stickies/automations/[id]", () => {
 
 describe("DELETE /api/stickies/automations/[id]", () => {
     it("deletes automation by id", async () => {
-        const chain = createChainMock(null);
-        mockSb.from.mockReturnValue(chain);
         const { DELETE } = await import("@/app/api/stickies/automations/[id]/route");
         const req = new Request("http://localhost:4444/api/stickies/automations/auto-1", {
             method: "DELETE",
@@ -93,8 +90,6 @@ describe("DELETE /api/stickies/automations/[id]", () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 describe("PATCH /api/stickies/integrations/[id]", () => {
     it("updates integration by id", async () => {
-        const chain = createChainMock(null);
-        mockSb.from.mockReturnValue(chain);
         const { PATCH } = await import("@/app/api/stickies/integrations/[id]/route");
         const req = new Request("http://localhost:4444/api/stickies/integrations/int-1", {
             method: "PATCH",
@@ -121,8 +116,6 @@ describe("PATCH /api/stickies/integrations/[id]", () => {
 
 describe("DELETE /api/stickies/integrations/[id]", () => {
     it("deletes integration by id", async () => {
-        const chain = createChainMock(null);
-        mockSb.from.mockReturnValue(chain);
         const { DELETE } = await import("@/app/api/stickies/integrations/[id]/route");
         const req = new Request("http://localhost:4444/api/stickies/integrations/int-1", {
             method: "DELETE",

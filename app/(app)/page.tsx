@@ -1260,8 +1260,6 @@ export default function NotesMaster() {
     const [folderFabOffset, setFolderFabOffset] = useState({ x: 0, y: 0 });
     const [isFolderFabDragging, setIsFolderFabDragging] = useState(false);
     const [pusherFlash, setPusherFlash] = useState(false);
-    const [aiMode, setAiMode] = useState<{ active: boolean; message: string }>({ active: false, message: "" });
-    const [botColor, setBotColor] = useState({ primary: "#7c3aed", secondary: "#a78bfa", light: "#c4b5fd" });
     const [userEmail, setUserEmail] = useState<string | null>(null);
     const isAdmin = userEmail === "bheng.code@gmail.com";
     const [mainListMode, setMainListMode] = useState<"thumb" | "list" | "tabs" | "graph">("thumb");
@@ -2189,7 +2187,7 @@ export default function NotesMaster() {
         return () => clearTimeout(t);
     }, []);
 
-    // Pusher — real-time note events + ai-mode signals
+    // Pusher — real-time note events
     useEffect(() => {
         if (!mounted) return;
         const pusherKey = process.env.NEXT_PUBLIC_PUSHER_KEY;
@@ -2290,16 +2288,6 @@ const fireIntegrations = (trigger: string, note: any) => {
             });
         });
 
-        channel.bind("ai-mode-start", (data: any) => {
-            setAiMode({ active: true, message: data?.message ?? "AI is organizing your stickies…" });
-            const pick = palette12[Math.floor(Math.random() * palette12.length)];
-            const r = parseInt(pick.slice(1, 3), 16), g = parseInt(pick.slice(3, 5), 16), b = parseInt(pick.slice(5, 7), 16);
-            setBotColor({ primary: pick, secondary: `rgba(${r},${g},${b},0.72)`, light: `rgba(${r},${g},${b},0.45)` });
-        });
-        channel.bind("ai-mode-end", () => {
-            setAiMode({ active: false, message: "" });
-            sync();
-        });
 
         channel.bind("note-deleted", (data: any) => {
             if (!data?.id && !data?.folder_name) return;
@@ -5639,83 +5627,6 @@ const fireIntegrations = (trigger: string, note: any) => {
     return (
         <div className="safe-shell box-border h-[100dvh] bg-black text-white font-sans select-none overflow-hidden overscroll-none flex flex-col">
 
-            {/* ── AI Cleanup Mode Overlay ── */}
-            {aiMode.active && (
-                <div style={{ position: "fixed", inset: 0, zIndex: 99999, background: "transparent", backdropFilter: "blur(2px)", pointerEvents: "none" }}>
-                    <style>{`
-                        @keyframes botBounceX {
-                            from { left: 20px; }
-                            to   { left: calc(100vw - 92px); }
-                        }
-                        @keyframes botBounceY {
-                            from { top: 20px; }
-                            to   { top: calc(100vh - 110px); }
-                        }
-                        @keyframes botArm {
-                            0%, 100% { transform: rotate(-20deg); }
-                            50%       { transform: rotate(20deg); }
-                        }
-                        @keyframes botEye {
-                            0%, 90%, 100% { transform: scaleY(1); }
-                            95%           { transform: scaleY(0.1); }
-                        }
-                        @keyframes sweep {
-                            0%, 100% { transform: rotate(-30deg); }
-                            50%       { transform: rotate(30deg); }
-                        }
-                        @keyframes dustPop {
-                            0%   { opacity: 0; transform: scale(0); }
-                            30%  { opacity: 1; transform: scale(1.2); }
-                            100% { opacity: 0; transform: scale(0) translateY(-20px); }
-                        }
-                    `}</style>
-
-                    {/* Pong-bouncing bot */}
-                    <div style={{
-                        position: "absolute",
-                        pointerEvents: "none",
-                        animation: "botBounceX 1.4s linear infinite alternate, botBounceY 1.1s linear infinite alternate",
-                    }}>
-                        <svg width="72" height="80" viewBox="0 0 72 80" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            {/* Broom */}
-                            <g style={{ transformOrigin: "36px 60px", animation: "sweep 0.6s ease-in-out infinite" }}>
-                                <line x1="36" y1="58" x2="14" y2="74" stroke={botColor.secondary} strokeWidth="2.5" strokeLinecap="round"/>
-                                <rect x="6" y="72" width="16" height="5" rx="2" fill={botColor.primary}/>
-                            </g>
-                            {/* Body */}
-                            <rect x="18" y="28" width="36" height="30" rx="8" fill="#1e1e2e" stroke={botColor.primary} strokeWidth="2"/>
-                            {/* Head */}
-                            <rect x="20" y="8" width="32" height="24" rx="7" fill="#1e1e2e" stroke={botColor.secondary} strokeWidth="2"/>
-                            {/* Antenna */}
-                            <line x1="36" y1="8" x2="36" y2="2" stroke={botColor.secondary} strokeWidth="2" strokeLinecap="round"/>
-                            <circle cx="36" cy="2" r="2.5" fill={botColor.light}/>
-                            {/* Eyes */}
-                            <g style={{ animation: "botEye 3s ease-in-out infinite" }}>
-                                <rect x="24" y="16" width="8" height="8" rx="2" fill={botColor.primary}/>
-                                <rect x="40" y="16" width="8" height="8" rx="2" fill={botColor.primary}/>
-                                <circle cx="27" cy="19" r="2" fill={botColor.light}/>
-                                <circle cx="43" cy="19" r="2" fill={botColor.light}/>
-                            </g>
-                            {/* Mouth */}
-                            <path d="M28 30 Q36 35 44 30" stroke={botColor.secondary} strokeWidth="1.5" fill="none" strokeLinecap="round"/>
-                            {/* Arms */}
-                            <g style={{ transformOrigin: "18px 36px", animation: "botArm 0.6s ease-in-out infinite" }}>
-                                <rect x="8" y="32" width="12" height="7" rx="3.5" fill="#1e1e2e" stroke={botColor.primary} strokeWidth="1.5"/>
-                            </g>
-                            <rect x="52" y="32" width="12" height="7" rx="3.5" fill="#1e1e2e" stroke={botColor.primary} strokeWidth="1.5"/>
-                            {/* Legs */}
-                            <rect x="23" y="56" width="10" height="12" rx="4" fill="#1e1e2e" stroke={botColor.primary} strokeWidth="1.5"/>
-                            <rect x="39" y="56" width="10" height="12" rx="4" fill="#1e1e2e" stroke={botColor.primary} strokeWidth="1.5"/>
-                            {/* Dust particles */}
-                            <circle cx="10" cy="76" r="3" fill={botColor.light} style={{ animation: "dustPop 0.6s ease-out infinite" }}/>
-                            <circle cx="4"  cy="72" r="2" fill={botColor.primary} style={{ animation: "dustPop 0.6s ease-out 0.2s infinite" }}/>
-                        </svg>
-                        {/* Label under bot */}
-                        <p style={{ color: botColor.light, fontSize: 11, fontWeight: 600, textAlign: "center", marginTop: 6, letterSpacing: "0.03em", whiteSpace: "nowrap" }}>{aiMode.message}</p>
-                    </div>
-                </div>
-            )}
-
             {/* Live API request log */}
             {showApiLog && apiLog.length > 0 && (
                 <div style={{
@@ -6537,8 +6448,13 @@ const fireIntegrations = (trigger: string, note: any) => {
                         </div>
                         )}
                         {isRichMode ? (
-                            <div className="flex-1 flex flex-col overflow-hidden" style={{ background: noteColor || (appTheme === "light" ? "#fff" : "#222") }}>
+                            // Rich editor stays black-on-white regardless of note color — the note color
+                            // shows up only via the surrounding frame border (Apple-Notes pattern).
+                            <div className="flex-1 flex flex-col overflow-hidden" style={{ background: "#ffffff" }}>
                                 <RichEditor
+                                    // Force fresh mount per note so opening "New Note" doesn't carry
+                                    // the previous note's content in the TipTap editor instance.
+                                    key={currentNoteId ?? "new-note"}
                                     initialDoc={richDoc}
                                     placeholder="Start writing…"
                                     accentColor={activeAccentColor}

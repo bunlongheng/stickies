@@ -47,7 +47,7 @@ describe("GET /api/stickies/public", () => {
     });
 
     it("returns public note by noteId", async () => {
-        mockQueryOne.mockResolvedValueOnce({ title: "Public", content: "Hi", type: "text", folder_color: "#fff" });
+        mockQueryOne.mockResolvedValueOnce({ title: "Public", content: "Hi", type: "text", folder_color: "#fff", is_public: true });
         const { GET } = await import("@/app/api/stickies/public/route");
         const req = new Request("http://localhost:4444/api/stickies/public?noteId=n1");
         const res = await GET(req);
@@ -57,15 +57,7 @@ describe("GET /api/stickies/public", () => {
 
 // logout uses @supabase/ssr createServerClient — tested via e2e instead
 
-// ── /api/stickies/img-proxy ──
-describe("GET /api/stickies/img-proxy", () => {
-    it("returns 400 when no url provided", async () => {
-        const { GET } = await import("@/app/api/stickies/img-proxy/route");
-        const req = new Request("http://localhost:4444/api/stickies/img-proxy");
-        const res = await GET(req);
-        expect(res.status).toBe(400);
-    });
-});
+// /api/stickies/img-proxy was removed 2026-05-19 — no callers, dead route.
 
 // ── /api/stickies/folder-icon ──
 describe("/api/stickies/folder-icon", () => {

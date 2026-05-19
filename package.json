@@ -58,8 +58,6 @@
     "react-dom": "19.2.3",
     "react-simple-code-editor": "^0.14.1",
     "resend": "^6.9.3",
-    "turndown": "^7.2.4",
-    "turndown-plugin-gfm": "^1.0.2",
     "web-push": "^3.6.7"
   },
   "devDependencies": {
@@ -68,7 +66,6 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "@types/turndown": "^5.0.6",
     "@types/web-push": "^3.6.4",
     "@vitest/coverage-v8": "^4.1.2",
     "@vitest/ui": "^4.1.0",

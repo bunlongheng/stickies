@@ -4,12 +4,9 @@
  * Priority: medium
  */
 import { describe, it, expect, vi } from "vitest";
-import { createMockSupabase, createChainMock } from "./mock-supabase";
 
 Object.assign(process.env, {
     STICKIES_API_KEY: "test-api-key",
-    NEXT_PUBLIC_SUPABASE_URL: "https://test.supabase.co",
-    SUPABASE_SERVICE_ROLE_KEY: "test-key",
     OWNER_USER_ID: "owner-uuid-1234",
     PUSHER_APP_ID: "app-id",
     PUSHER_KEY: "key",
@@ -20,8 +17,12 @@ Object.assign(process.env, {
     VAPID_PRIVATE_KEY: "test-vapid-private",
 });
 
-const mockSb = createMockSupabase([]);
-vi.mock("@supabase/supabase-js", () => ({ createClient: vi.fn(() => mockSb) }));
+// ── Mock DB driver (push-nav reads push_subscriptions) ─────────────────────
+vi.mock("@/lib/db-driver", () => ({
+    query:    vi.fn().mockResolvedValue([]),
+    queryOne: vi.fn(),
+    execute:  vi.fn(),
+}));
 vi.mock("@/app/api/stickies/_auth", () => ({ authorizeOwner: vi.fn().mockResolvedValue(true) }));
 vi.mock("pusher", () => ({
     default: vi.fn().mockImplementation(() => ({ trigger: vi.fn().mockResolvedValue(undefined) })),
@@ -60,8 +61,6 @@ describe("POST /api/stickies/push-nav", () => {
     });
 
     it("broadcasts navigate event with valid url", async () => {
-        const chain = createChainMock([]);
-        mockSb.from.mockReturnValue(chain);
         const req = new Request("http://localhost:4444/api/stickies/push-nav", {
             method: "POST",
             headers: { Authorization: "Bearer test-api-key", "Content-Type": "application/json" },

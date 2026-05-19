@@ -2,23 +2,27 @@
  * Integration tests: /api/stickies/automations + /api/stickies/automation-logs
  */
 import { describe, it, expect, vi } from "vitest";
-import { createMockSupabase, createChainMock } from "./mock-supabase";
 
 Object.assign(process.env, {
     STICKIES_API_KEY: "test-api-key",
-    NEXT_PUBLIC_SUPABASE_URL: "https://test.supabase.co",
-    SUPABASE_SERVICE_ROLE_KEY: "test-key",
     OWNER_USER_ID: "owner-uuid-1234",
 });
 
-const mockSb = createMockSupabase();
-vi.mock("@supabase/supabase-js", () => ({ createClient: vi.fn(() => mockSb) }));
+// ── Mock DB driver — routes use query/queryOne ────────────────────────────────
+vi.mock("@/lib/db-driver", () => ({
+    query:    vi.fn().mockResolvedValue([]),
+    queryOne: vi.fn(),
+    execute:  vi.fn(),
+}));
 vi.mock("@/app/api/stickies/_auth", () => ({ authorizeOwner: vi.fn().mockResolvedValue(true) }));
+
+import { query, queryOne } from "@/lib/db-driver";
+const mockQuery    = vi.mocked(query);
+const mockQueryOne = vi.mocked(queryOne);
 
 describe("GET /api/stickies/automations", () => {
     it("returns automations list", async () => {
-        const chain = createChainMock([{ id: "a1", name: "Backup", active: true }]);
-        mockSb.from.mockReturnValue(chain);
+        mockQuery.mockResolvedValueOnce([{ id: "a1", name: "Backup", active: true }]);
 
         const { GET } = await import("@/app/api/stickies/automations/route");
         const req = new Request("http://localhost:4444/api/stickies/automations", {
@@ -31,8 +35,7 @@ describe("GET /api/stickies/automations", () => {
 
 describe("POST /api/stickies/automations", () => {
     it("creates an automation", async () => {
-        const chain = createChainMock({ id: "a-new", name: "Test" });
-        mockSb.from.mockReturnValue(chain);
+        mockQueryOne.mockResolvedValueOnce({ id: "a-new", name: "Test" });
 
         const { POST } = await import("@/app/api/stickies/automations/route");
         const req = new Request("http://localhost:4444/api/stickies/automations", {
@@ -47,8 +50,7 @@ describe("POST /api/stickies/automations", () => {
 
 describe("GET /api/stickies/automation-logs", () => {
     it("returns logs list", async () => {
-        const chain = createChainMock([{ id: "l1", status: "success" }]);
-        mockSb.from.mockReturnValue(chain);
+        mockQuery.mockResolvedValueOnce([{ id: "l1", status: "success" }]);
 
         const { GET } = await import("@/app/api/stickies/automation-logs/route");
         const req = new Request("http://localhost:4444/api/stickies/automation-logs", {

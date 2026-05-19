@@ -16,21 +16,16 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // ── Set env vars ──
 Object.assign(process.env, {
     STICKIES_API_KEY: "test-api-key",
-    NEXT_PUBLIC_SUPABASE_URL: "https://test.supabase.co",
-    SUPABASE_SERVICE_ROLE_KEY: "test-key",
     GOOGLE_CLIENT_ID: "test-client-id",
     GOOGLE_CLIENT_SECRET: "test-client-secret",
     OWNER_USER_ID: "owner-uuid-1234",
 });
 
-// ── Mock Supabase ──
-const mockFrom = vi.fn();
-const mockGetUser = vi.fn();
-vi.mock("@supabase/supabase-js", () => ({
-    createClient: vi.fn(() => ({
-        auth: { getUser: mockGetUser },
-        from: mockFrom,
-    })),
+// ── Mock DB driver — route uses queryOne + execute ──
+vi.mock("@/lib/db-driver", () => ({
+    query:    vi.fn(),
+    queryOne: vi.fn(),
+    execute:  vi.fn().mockResolvedValue(1),
 }));
 
 // ── Mock googleapis ──
@@ -67,6 +62,9 @@ vi.mock("@/app/api/stickies/_auth", () => ({
 }));
 
 import { POST } from "@/app/api/stickies/gdrive/route";
+import { queryOne, execute } from "@/lib/db-driver";
+const mockQueryOne = vi.mocked(queryOne);
+const mockExecute  = vi.mocked(execute);
 
 function makeUploadReq(fileName: string, fileType: string, folder = "Work"): Request {
     const blob = new Blob(["test file content"], { type: fileType });
@@ -82,28 +80,21 @@ function makeUploadReq(fileName: string, fileType: string, folder = "Work"): Req
 }
 
 beforeEach(() => {
-    mockFrom.mockReset();
-    mockGetUser.mockReset();
+    mockQueryOne.mockReset();
+    mockExecute.mockReset().mockResolvedValue(1);
     mockDriveFilesList.mockReset();
     mockDriveFilesCreate.mockReset();
     mockDriveFilesGet.mockReset();
     mockDrivePermissionsCreate.mockReset();
 
-    // Default: gdrive integration with valid tokens
-    const mockSelect = vi.fn().mockReturnThis();
-    const mockEq = vi.fn().mockReturnThis();
-    const mockSingle = vi.fn().mockResolvedValue({
-        data: {
-            id: "int-1",
-            access_token: "valid-token",
-            refresh_token: "valid-refresh",
-            token_expires_at: new Date(Date.now() + 3600_000).toISOString(),
-        },
-        error: null,
-    });
-    mockFrom.mockReturnValue({ select: mockSelect, update: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({}) }) });
-    mockSelect.mockReturnValue({ eq: mockEq });
-    mockEq.mockReturnValue({ eq: mockEq, single: mockSingle });
+    // Default DB row for both gdRow check + getAccessToken (valid tokens)
+    const validRow = {
+        id: "int-1",
+        access_token: "valid-token",
+        refresh_token: "valid-refresh",
+        token_expires_at: new Date(Date.now() + 3600_000).toISOString(),
+    };
+    mockQueryOne.mockResolvedValue(validRow);
 
     // Default: Drive operations succeed
     mockDriveFilesList.mockResolvedValue({ data: { files: [{ id: "stickies-folder-id" }] } });

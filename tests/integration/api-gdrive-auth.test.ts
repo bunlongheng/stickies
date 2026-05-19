@@ -16,25 +16,24 @@ Object.assign(process.env, {
     GOOGLE_CLIENT_ID: "test-client-id.apps.googleusercontent.com",
     GOOGLE_CLIENT_SECRET: "test-client-secret",
     NEXT_PUBLIC_APP_BASE_URL: "http://localhost:4444",
-    NEXT_PUBLIC_SUPABASE_URL: "https://test.supabase.co",
-    SUPABASE_SERVICE_ROLE_KEY: "test-key",
     OWNER_USER_ID: "owner-uuid-1234",
     STICKIES_API_KEY: "test-api-key",
 });
 
-// ── Mock Supabase ──
-const mockFrom = vi.fn();
-vi.mock("@supabase/supabase-js", () => ({
-    createClient: vi.fn(() => ({
-        auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: "owner-uuid-1234" } } }) },
-        from: mockFrom,
-    })),
+// ── Mock DB driver — gdrive/status uses queryOne ─────────────────────────────
+vi.mock("@/lib/db-driver", () => ({
+    query:    vi.fn(),
+    queryOne: vi.fn(),
+    execute:  vi.fn(),
 }));
 
 // ── Mock _auth for status route ──
 vi.mock("@/app/api/stickies/_auth", () => ({
     authorizeOwner: vi.fn().mockResolvedValue(true),
 }));
+
+import { queryOne } from "@/lib/db-driver";
+const mockQueryOne = vi.mocked(queryOne);
 
 describe("GET /api/stickies/gdrive/auth", () => {
     it("redirects to Google OAuth with correct params", async () => {
@@ -76,16 +75,15 @@ describe("GET /api/stickies/gdrive/callback", () => {
 });
 
 describe("GET /api/stickies/gdrive/status", () => {
+    beforeEach(() => {
+        mockQueryOne.mockReset();
+        // Disable VERCEL/proxy path so connected flag only reflects DB row
+        delete process.env.VERCEL;
+        delete process.env.STICKIES_API_KEY;
+    });
+
     it("returns connected=true when refresh token exists", async () => {
-        const mockSelect = vi.fn().mockReturnThis();
-        const mockEq = vi.fn().mockReturnThis();
-        const mockSingle = vi.fn().mockResolvedValue({
-            data: { refresh_token: "valid-token", active: true },
-            error: null,
-        });
-        mockFrom.mockReturnValue({ select: mockSelect });
-        mockSelect.mockReturnValue({ eq: mockEq });
-        mockEq.mockReturnValue({ single: mockSingle });
+        mockQueryOne.mockResolvedValueOnce({ refresh_token: "valid-token", active: true });
 
         const { GET } = await import("@/app/api/stickies/gdrive/status/route");
         const req = new Request("http://localhost:4444/api/stickies/gdrive/status", {
@@ -98,12 +96,7 @@ describe("GET /api/stickies/gdrive/status", () => {
     });
 
     it("returns connected=false when no integration found", async () => {
-        const mockSelect = vi.fn().mockReturnThis();
-        const mockEq = vi.fn().mockReturnThis();
-        const mockSingle = vi.fn().mockResolvedValue({ data: null, error: null });
-        mockFrom.mockReturnValue({ select: mockSelect });
-        mockSelect.mockReturnValue({ eq: mockEq });
-        mockEq.mockReturnValue({ single: mockSingle });
+        mockQueryOne.mockResolvedValueOnce(null);
 
         const { GET } = await import("@/app/api/stickies/gdrive/status/route");
         const req = new Request("http://localhost:4444/api/stickies/gdrive/status", {
@@ -115,15 +108,7 @@ describe("GET /api/stickies/gdrive/status", () => {
     });
 
     it("returns connected=false when integration is inactive", async () => {
-        const mockSelect = vi.fn().mockReturnThis();
-        const mockEq = vi.fn().mockReturnThis();
-        const mockSingle = vi.fn().mockResolvedValue({
-            data: { refresh_token: "token", active: false },
-            error: null,
-        });
-        mockFrom.mockReturnValue({ select: mockSelect });
-        mockSelect.mockReturnValue({ eq: mockEq });
-        mockEq.mockReturnValue({ single: mockSingle });
+        mockQueryOne.mockResolvedValueOnce({ refresh_token: "token", active: false });
 
         const { GET } = await import("@/app/api/stickies/gdrive/status/route");
         const req = new Request("http://localhost:4444/api/stickies/gdrive/status", {

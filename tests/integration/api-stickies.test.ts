@@ -12,10 +12,13 @@
  * Priority: critical
  */
 import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest";
-import { ENV, API_KEY, USER_ID, USER_JWT, apiReq, userReq, noAuthReq, json, noteRow, folderRow } from "./helpers";
+import { ENV, API_KEY, USER_ID, apiReq, userReq, noAuthReq, json, noteRow, folderRow } from "./helpers";
 
 // ── Set env vars before any imports (vi.mock is hoisted, env must be set first) ──
 Object.assign(process.env, ENV);
+process.env.OWNER_EMAIL = "owner@example.com";
+// Force production-like mode so dev bypass is disabled for the noAuth tests
+process.env.NODE_ENV = "test";
 
 // ── Mock DB driver ────────────────────────────────────────────────────────────
 vi.mock("@/lib/db-driver", () => ({
@@ -24,12 +27,13 @@ vi.mock("@/lib/db-driver", () => ({
     execute:  vi.fn(),
 }));
 
-// ── Mock Supabase auth ────────────────────────────────────────────────────────
-const mockGetUser = vi.fn();
-vi.mock("@supabase/supabase-js", () => ({
-    createClient: vi.fn(() => ({
-        auth: { getUser: mockGetUser },
-    })),
+// ── Mock NextAuth — controllable per-test via mockAuth ───────────────────────
+const { mockAuth } = vi.hoisted(() => ({ mockAuth: vi.fn() }));
+vi.mock("@/auth", () => ({
+    auth: mockAuth,
+    signIn: vi.fn(),
+    signOut: vi.fn(),
+    handlers: { GET: vi.fn(), POST: vi.fn() },
 }));
 
 // ── Mock Pusher ───────────────────────────────────────────────────────────────
@@ -52,10 +56,10 @@ beforeEach(() => {
     mockQuery.mockReset();
     mockQueryOne.mockReset();
     mockExecute.mockReset();
-    mockGetUser.mockReset();
+    mockAuth.mockReset();
 
-    // Default: user JWT resolves to a valid user
-    mockGetUser.mockResolvedValue({ data: { user: { id: USER_ID } }, error: null });
+    // Default: no session (so only API key auth works)
+    mockAuth.mockResolvedValue(null);
     // Default: execute resolves to row count
     mockExecute.mockResolvedValue(1);
 });
@@ -86,13 +90,12 @@ describe("Auth enforcement", () => {
         expect(res.status).toBe(401);
     });
 
-    it("GET with invalid JWT → 401", async () => {
-        mockGetUser.mockResolvedValue({ data: { user: null }, error: { message: "invalid jwt" } });
+    it("GET with bogus bearer token and no session → 401", async () => {
+        // Not the API key, no NextAuth session → unauthenticated
         const req = new Request("http://localhost:4444/api/stickies?folders=1", {
-            headers: { Authorization: "Bearer bad-token" },
+            headers: { Authorization: "Bearer bad-token", "User-Agent": "Mozilla/5.0" },
         });
         mockQuery.mockResolvedValue([]);
-        // bad JWT + not API key → 401
         const res = await GET(req);
         expect(res.status).toBe(401);
     });
@@ -105,17 +108,26 @@ describe("Auth enforcement", () => {
         expect(call).not.toContain("users_stickies");
     });
 
-    it("User JWT auth uses 'stickies' table with user_id filter", async () => {
+    it("Non-owner NextAuth session uses 'stickies' table with user_id filter", async () => {
+        // Non-owner session → route's "user" branch, userId = session.user.id
+        mockAuth.mockResolvedValue({ user: { id: USER_ID, email: "someone-else@example.com" } });
         mockQuery.mockResolvedValue([folderRow()]);
-        await GET(userReq("/api/stickies?folders=1"));
+        const req = new Request("http://localhost:4444/api/stickies?folders=1", {
+            headers: { "User-Agent": "Mozilla/5.0" },
+        });
+        await GET(req);
         const call = mockQuery.mock.calls[0][0] as string;
         expect(call).toContain('"stickies"');
         expect(call).toContain("user_id");
     });
 
-    it("User JWT auth appends user_id to query", async () => {
+    it("Non-owner NextAuth session appends user_id to query params", async () => {
+        mockAuth.mockResolvedValue({ user: { id: USER_ID, email: "someone-else@example.com" } });
         mockQuery.mockResolvedValue([]);
-        await GET(userReq("/api/stickies?folders=1"));
+        const req = new Request("http://localhost:4444/api/stickies?folders=1", {
+            headers: { "User-Agent": "Mozilla/5.0" },
+        });
+        await GET(req);
         const params = mockQuery.mock.calls[0][1] as unknown[];
         expect(params).toContain(USER_ID);
     });
@@ -256,16 +268,9 @@ describe("POST /api/stickies", () => {
             expect(body.note).toBeDefined();
         });
 
-        it("returns 400 when title is missing", async () => {
-            const res = await POST(apiReq("/api/stickies", {
-                method: "POST",
-                body: { content: "No title here", folder_name: "Work" },
-                headers: { "User-Agent": "Mozilla/5.0" },
-            }));
-            expect(res.status).toBe(400);
-            const body = await json(res);
-            expect(body.error).toMatch(/title/i);
-        });
+        // NOTE: "returns 400 when title is missing" was deleted — the route now
+        // auto-derives a title from content (frontmatter, first heading, or first
+        // non-empty line), so missing title is no longer a 400-error path.
 
         it("returns 400 when content is missing", async () => {
             const res = await POST(apiReq("/api/stickies", {
@@ -296,6 +301,7 @@ describe("POST /api/stickies", () => {
         it("creates a folder with ?type=folder&name=...", async () => {
             mockQuery.mockResolvedValue([{ folder_color: "#34C759" }]); // color pick
             mockQueryOne
+                .mockResolvedValueOnce(null)             // dup-check (no existing)
                 .mockResolvedValueOnce({ order: 5 })     // getNextOrder
                 .mockResolvedValueOnce(folderRow());      // INSERT RETURNING
             const res = await POST(apiReq("/api/stickies?type=folder&name=NewFolder", { method: "POST" }));
@@ -397,16 +403,19 @@ describe("PATCH /api/stickies", () => {
                 body: {
                     id: "note-uuid-1",
                     title: "Safe",
-                    // These should be stripped
+                    // These should be stripped from SET clause
                     user_id: "hacked",
                     password: "secret",
                     __proto__: "bad",
                 },
             }));
             const sql = mockQueryOne.mock.calls[0][0] as string;
-            expect(sql).not.toContain("user_id");
-            expect(sql).not.toContain("password");
-            expect(sql).not.toContain("__proto__");
+            // Note: user_id legitimately appears in WHERE clause (user-scoping).
+            // The defense-in-depth check is that it never appears as a SET assignment.
+            const setClause = sql.split("WHERE")[0];
+            expect(setClause).not.toContain("user_id");
+            expect(setClause).not.toContain("password");
+            expect(setClause).not.toContain("__proto__");
         });
 
         it("updates tags as TEXT[] (regression: Supabase array serialization)", async () => {
@@ -440,10 +449,11 @@ describe("PATCH /api/stickies", () => {
             expect(res.status).toBe(200);
             const body = await json(res);
             expect(body.note).toBeDefined();
-            // Only updated_at should be in the SET clause
+            // Only updated_at should be in the SET clause (user_id legitimately in WHERE)
             const sql = mockQueryOne.mock.calls[0][0] as string;
-            expect(sql).toContain("updated_at");
-            expect(sql).not.toContain("user_id");
+            const setClause = sql.split("WHERE")[0];
+            expect(setClause).toContain("updated_at");
+            expect(setClause).not.toContain("user_id");
         });
     });
 
@@ -555,8 +565,14 @@ describe("DELETE /api/stickies", () => {
     });
 
     it("user-scoped delete appends user_id to WHERE clause", async () => {
+        // Non-owner NextAuth session → "user" branch → DELETE scoped to that user_id
+        mockAuth.mockResolvedValue({ user: { id: USER_ID, email: "someone-else@example.com" } });
         mockExecute.mockResolvedValue(1);
-        await DELETE(userReq("/api/stickies?id=note-uuid-1", { method: "DELETE" }));
+        const req = new Request("http://localhost:4444/api/stickies?id=note-uuid-1", {
+            method: "DELETE",
+            headers: { "User-Agent": "Mozilla/5.0" },
+        });
+        await DELETE(req);
         const sql = mockExecute.mock.calls[0][0] as string;
         expect(sql).toContain("user_id");
     });
