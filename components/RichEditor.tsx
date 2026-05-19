@@ -358,14 +358,17 @@ function Toolbar({ editor, onUploadImage }: { editor: Editor; onUploadImage?: (f
         `px-2 py-1.5 text-[11px] font-bold transition rounded ${active ? "bg-black/10 text-black" : "text-zinc-600 hover:text-black hover:bg-black/5"}`;
 
     return (
-        <div className="flex items-center gap-0.5 flex-wrap px-3 py-1.5 border-b border-black/[0.08] bg-white flex-shrink-0">
+        <div
+            className="flex items-center gap-0.5 flex-nowrap overflow-x-auto px-3 py-1.5 border-b border-black/[0.08] bg-white flex-shrink-0"
+            style={{ scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}
+        >
             <button type="button" title="Bold (⌘B)" className={btn(editor.isActive("bold"))} onClick={() => editor.chain().focus().toggleBold().run()}><span style={{ fontWeight: 900 }}>B</span></button>
             <button type="button" title="Italic (⌘I)" className={btn(editor.isActive("italic"))} onClick={() => editor.chain().focus().toggleItalic().run()}><span style={{ fontStyle: "italic" }}>I</span></button>
             <button type="button" title="Inline code" className={btn(editor.isActive("code"))} onClick={() => editor.chain().focus().toggleCode().run()}>{"<>"}</button>
-            <span className="w-px h-4 bg-black/10 mx-1" />
-            <button type="button" title="Heading 1" className={btn(editor.isActive("heading", { level: 1 }))} onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}>H1</button>
-            <button type="button" title="Heading 2" className={btn(editor.isActive("heading", { level: 2 }))} onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}>H2</button>
-            <button type="button" title="Heading 3" className={btn(editor.isActive("heading", { level: 3 }))} onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}>H3</button>
+            <span className="hidden sm:inline-block w-px h-4 bg-black/10 mx-1" />
+            <button type="button" title="Heading 1" className={`hidden sm:inline-flex ${btn(editor.isActive("heading", { level: 1 }))}`} onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}>H1</button>
+            <button type="button" title="Heading 2" className={`hidden sm:inline-flex ${btn(editor.isActive("heading", { level: 2 }))}`} onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}>H2</button>
+            <button type="button" title="Heading 3" className={`hidden sm:inline-flex ${btn(editor.isActive("heading", { level: 3 }))}`} onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}>H3</button>
             <span className="w-px h-4 bg-black/10 mx-1" />
             <button type="button" title="Bulleted list" className={btn(editor.isActive("bulletList"))} onClick={() => editor.chain().focus().toggleBulletList().run()}>•</button>
             <button type="button" title="Numbered list" className={btn(editor.isActive("orderedList"))} onClick={() => editor.chain().focus().toggleOrderedList().run()}>1.</button>
