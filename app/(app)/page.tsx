@@ -1227,10 +1227,6 @@ export default function NotesMaster() {
     const editTaskInputRef = useRef<HTMLInputElement | null>(null);
     const addTaskInputRef = useRef<HTMLInputElement | null>(null);
     const noteEverDirtyRef = useRef(false);
-    const prevContentForHashRef = useRef("");
-    const lastCelebratedTagRef = useRef<string | null>(null);
-    const celebrateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const [hashSymbolFlash, setHashSymbolFlash] = useState(false);
     const graphContainerRef = useRef<HTMLDivElement | null>(null);
     const graphNodesRef = useRef<{ x: number; y: number; vx: number; vy: number }[]>([]);
     const graphAnimRef = useRef<number | null>(null);
@@ -2955,46 +2951,7 @@ const fireIntegrations = (trigger: string, note: any) => {
     // Track if the current note was ever dirty (survives auto-save clearing isDraftDirty)
     useEffect(() => { if (isDraftDirty) noteEverDirtyRef.current = true; }, [isDraftDirty]);
     // Reset dirty tracker whenever we switch to a different note (or open a new one)
-    useEffect(() => { noteEverDirtyRef.current = false; prevContentForHashRef.current = content; }, [editingNote?.id]);
-
-    // Hashtag easter egg — deferred so regex never blocks typing
-    useEffect(() => {
-        if (!editorOpen) { prevContentForHashRef.current = deferredContent; return; }
-        const prev = prevContentForHashRef.current;
-        prevContentForHashRef.current = deferredContent;
-        const content = deferredContent;
-        if (!prev && !content) return;
-        // Note just opened — content jumped from empty/old to full note body, not a user keystroke
-        if (content.length > prev.length + 10) return;
-
-        // Detect newly typed `#`
-        if (content.length === prev.length + 1) {
-            let idx = -1;
-            for (let i = 0; i < content.length; i++) {
-                if (content[i] !== prev[i]) { idx = i; break; }
-            }
-            if (idx === -1) idx = content.length - 1;
-            if (content[idx] === "#") {
-                setHashSymbolFlash(true);
-                setTimeout(() => setHashSymbolFlash(false), 1200);
-            }
-        }
-
-        // Detect completed hashtag: only fires when tag is followed by a space (truly finished)
-        const completedMatch = content.match(/(#[a-zA-Z0-9_-]+)(?=\s)/g);
-        const prevCompleted = prev.match(/(#[a-zA-Z0-9_-]+)(?=\s)/g);
-        const prevSet = new Set(prevCompleted ?? []);
-        const newTag = completedMatch?.find(t => !prevSet.has(t) && t !== lastCelebratedTagRef.current);
-        if (newTag) {
-            lastCelebratedTagRef.current = newTag;
-            if (celebrateTimerRef.current) clearTimeout(celebrateTimerRef.current);
-            showRainbowToast(newTag);
-            celebrateTimerRef.current = setTimeout(() => {
-                lastCelebratedTagRef.current = null;
-            }, 3000);
-        }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [deferredContent, editorOpen]);
+    useEffect(() => { noteEverDirtyRef.current = false; }, [editingNote?.id]);
 
 
     // Auto-save disabled — save only on Cmd+S
@@ -6262,12 +6219,18 @@ const fireIntegrations = (trigger: string, note: any) => {
                         </div>
                     )}
                     {(() => {
-                        const headerBg = noteColor || (appTheme === "light" ? "#f5f5f5" : "black");
-                        const headerText = noteColor ? (isLightColor(noteColor) ? "#1c1c1e" : "#fff") : "#fff";
+                        // Header picks up the note's color identity as a 13% tint (matches footer aesthetic)
+                        const headerBg = noteColor
+                            ? `${noteColor}22`
+                            : (appTheme === "light" ? "#f5f5f5" : "#1e1e1e");
+                        const headerBorder = noteColor
+                            ? `${noteColor}55`
+                            : (appTheme === "light" ? "rgba(0,0,0,0.06)" : "rgba(255,255,255,0.06)");
+                        const headerText = appTheme === "light" ? "#1a1a1a" : "#fff";
                         return (
                     <>
                     <div className="safe-top-bar shrink-0" style={{ background: headerBg }} />
-                    <div className="relative shrink-0 flex items-center h-[4rem] px-4" style={{ background: headerBg }}>
+                    <div className="relative shrink-0 flex items-center h-[4rem] px-4" style={{ background: headerBg, borderBottom: `1px solid ${headerBorder}` }}>
                         {/* Back button — hidden on desktop or in edit mode (left panel always visible) */}
                         <button
                             onClick={(e) => { e.stopPropagation(); if (mainListMode === "tabs") { setMainListMode("list"); } void backToRootFromEditor(); }}
