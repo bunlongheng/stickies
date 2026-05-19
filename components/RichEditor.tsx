@@ -290,7 +290,14 @@ export default function RichEditor({
              current.content[0].type === "paragraph" &&
              !current.content[0].content?.length);
         if (editor.isFocused && !isEditorEmpty) return;
-        editor.commands.setContent(initialDoc, false);
+        // Defer to a task: TipTap's setContent triggers flushSync internally,
+        // which React forbids during another component's render commit phase.
+        let cancelled = false;
+        const id = setTimeout(() => {
+            if (cancelled || editor.isDestroyed) return;
+            editor.commands.setContent(initialDoc, false);
+        }, 0);
+        return () => { cancelled = true; clearTimeout(id); };
     }, [editor, initialDoc]);
 
     return (
