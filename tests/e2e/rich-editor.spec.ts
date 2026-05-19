@@ -100,6 +100,41 @@ test.describe("Rich editor (Phase 1)", () => {
     });
 });
 
+test.describe("Open an existing rich note", () => {
+    test("regression: existing rich note loads its doc content (not just empty toolbar)", async ({ page }) => {
+        // Bug 2026-05-19: opening any saved rich note showed only the toolbar +
+        // "Start writing…" placeholder because the autoFocus + late-arriving
+        // initialDoc tripped the editor.isFocused guard inside RichEditor.
+
+        await page.goto("/");
+
+        // 1. Create + save a new rich note with distinctive text
+        const distinctive = `__test__rich-reload-${Date.now()}`;
+        const newNoteBtn = page.locator('[aria-label="New note"], [aria-label*="new"]').first();
+        await newNoteBtn.click({ timeout: 10_000 });
+        const editor = page.locator(".rich-editor-prose");
+        await expect(editor).toBeVisible({ timeout: 10_000 });
+        await editor.click();
+        await page.keyboard.type(distinctive);
+        // Wait past the 2s autosave debounce
+        await page.waitForTimeout(2500);
+
+        // 2. Navigate away (back to folder)
+        const backBtn = page.locator('[aria-label*="Back"]').first();
+        if (await backBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+            await backBtn.click();
+        }
+
+        // 3. Reopen the note — find it by title
+        const noteTile = page.locator(`text=${distinctive}`).first();
+        await noteTile.click({ timeout: 10_000 });
+
+        // 4. The text must be visible — not just the empty placeholder.
+        const reopenedEditor = page.locator(".rich-editor-prose");
+        await expect(reopenedEditor).toContainText(distinctive, { timeout: 5_000 });
+    });
+});
+
 test.describe("Embed route", () => {
     test("/embed/note/[id] without ?key returns 'Unauthorized'", async ({ page }) => {
         await page.goto("/embed/note/00000000-0000-0000-0000-000000000000");

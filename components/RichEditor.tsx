@@ -144,12 +144,19 @@ export default function RichEditor({
         },
     });
 
-    // Apply external doc changes (e.g. Pusher sync) without losing focus when local
+    // Apply external doc changes (e.g. Pusher sync, async note fetch) without
+    // clobbering in-progress edits. The "focused" guard is only honoured when the
+    // editor already has user content — otherwise an autoFocus'd new mount with an
+    // empty doc would refuse to load the late-arriving initialDoc.
     useEffect(() => {
         if (!editor || !initialDoc) return;
         const current = editor.getJSON();
         if (JSON.stringify(current) === JSON.stringify(initialDoc)) return;
-        if (editor.isFocused) return;
+        const isEditorEmpty = !current.content?.length ||
+            (current.content.length === 1 &&
+             current.content[0].type === "paragraph" &&
+             !current.content[0].content?.length);
+        if (editor.isFocused && !isEditorEmpty) return;
         editor.commands.setContent(initialDoc, false);
     }, [editor, initialDoc]);
 
