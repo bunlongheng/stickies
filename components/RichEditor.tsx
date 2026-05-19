@@ -45,6 +45,7 @@ function ResizableImageNode(props: ReactNodeViewProps) {
     const { node, updateAttributes, selected } = props;
     const attrs = node.attrs as { src: string; alt?: string; width?: string | null };
     const imgRef = useRef<HTMLImageElement | null>(null);
+    const draftRef = useRef<number | null>(null);
     const [draftWidth, setDraftWidth] = useState<number | null>(null);
 
     const onMouseDown = (e: React.MouseEvent) => {
@@ -56,15 +57,18 @@ function ResizableImageNode(props: ReactNodeViewProps) {
         const startWidth = img.clientWidth;
         const onMove = (ev: MouseEvent) => {
             const w = Math.max(80, Math.min(2000, Math.round(startWidth + (ev.clientX - startX))));
+            draftRef.current = w;
             setDraftWidth(w);
         };
         const onUp = () => {
             window.removeEventListener("mousemove", onMove);
             window.removeEventListener("mouseup", onUp);
-            setDraftWidth((finalW) => {
-                if (finalW !== null) updateAttributes({ width: `${finalW}` });
-                return null;
-            });
+            const finalW = draftRef.current;
+            draftRef.current = null;
+            setDraftWidth(null);
+            // Commit happens outside any setState callback to avoid the React
+            // "Cannot update a component while rendering" warning.
+            if (finalW !== null) updateAttributes({ width: `${finalW}` });
         };
         window.addEventListener("mousemove", onMove);
         window.addEventListener("mouseup", onUp);
