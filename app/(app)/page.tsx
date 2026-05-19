@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback, useTransition
 import { createPortal } from "react-dom";
 // Supabase removed — auth now via NextAuth (see auth.ts at project root).
 import { usePageMeta } from "@/lib/usePageMeta";
+import { extractSmartTags, mergeSmartTags, DRAFT_BACKUP_KEY, serializeDraft, parseDraftBackup, backupHasWork } from "@/lib/editor-ui";
 import dynamic from "next/dynamic";
 import LZString from "lz-string";
 const GraphView = dynamic(() => import("@/components/GraphView").then(m => m.GraphView), { ssr: false });
@@ -3002,21 +3003,14 @@ const fireIntegrations = (trigger: string, note: any) => {
             // Resolve folderId from folderName — don't blindly use folderStack (tab+ may target a different folder)
             const matchedFolderRow = dbData.find(r => r.is_folder && r.folder_name === folderName);
             let folderId = matchedFolderRow && !String(matchedFolderRow.id).startsWith("virtual-") ? String(matchedFolderRow.id) : null;
-            // Smart tags: keyword-driven auto-tagging. Replaces the old #hashtag
-            // extraction (too many false positives — hex colors, anchor links,
-            // code samples). Smart tags fire only when a configured keyword
-            // appears as a standalone token in the title OR content.
-            const SMART_TAGS: { tag: string; pattern: RegExp }[] = [
-                { tag: "ai",   pattern: /\bAI\b/i },
-                { tag: "zeta", pattern: /\bzeta\b/i },
-            ];
+            // Smart tags: keyword-driven auto-tagging (see lib/editor-ui.ts for the table).
+            // Replaces the old #hashtag scan that produced too many false positives
+            // (hex colors, anchor links, code samples, Slack channel mentions).
             const haystack = `${titleRaw.current ?? ""}\n${saveContent}`;
-            const extractedTags = SMART_TAGS
-                .filter(({ pattern }) => pattern.test(haystack))
-                .map(({ tag }) => tag);
+            const extractedTags = extractSmartTags(haystack);
             const newSmartTags = extractedTags.filter(t => !noteTags.includes(t));
             if (newSmartTags.length > 0) {
-                setNoteTags(prev => Array.from(new Set([...prev, ...newSmartTags])));
+                setNoteTags(prev => mergeSmartTags(prev, newSmartTags));
             }
             const currentFormat = ((editingNote as any)?.format ?? pendingFormat ?? "text") as "text" | "markdown" | "rich";
             const payload: any = {
@@ -3039,7 +3033,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                     // Auto-detect for new notes or notes without a saved type
                     return detectNoteType(saveContent) || saved || "text";
                 })(),
-                ...(() => { const merged = Array.from(new Set([...noteTags, ...extractedTags])); return merged.length > 0 ? { tags: merged } : {}; })(),
+                ...(() => { const merged = mergeSmartTags(noteTags, extractedTags); return merged.length > 0 ? { tags: merged } : {}; })(),
                 updated_at: new Date().toISOString(),
                 ...(folderId ? { folder_id: folderId } : {}),
             };
@@ -5550,21 +5544,15 @@ const fireIntegrations = (trigger: string, note: any) => {
     useEffect(() => {
         if (!editorOpen) return;
         if (editingNote?.id) return; // already persisted with an id
-        const hasWork = (title?.trim() || content?.trim() || (richDoc && richDoc.content?.length));
+        const backup = serializeDraft({
+            title, content, doc: richDoc, color: noteColor, folder: targetFolder,
+            format: pendingFormat, type: pendingNoteType,
+        });
         try {
-            if (hasWork) {
-                localStorage.setItem("stickies:draft-backup:v1", JSON.stringify({
-                    title: title || "",
-                    content: content || "",
-                    doc: richDoc || null,
-                    color: noteColor || null,
-                    folder: targetFolder || null,
-                    format: pendingFormat || null,
-                    type: pendingNoteType || null,
-                    savedAt: new Date().toISOString(),
-                }));
+            if (backupHasWork(backup)) {
+                localStorage.setItem(DRAFT_BACKUP_KEY, JSON.stringify(backup));
             } else {
-                localStorage.removeItem("stickies:draft-backup:v1");
+                localStorage.removeItem(DRAFT_BACKUP_KEY);
             }
         } catch {}
     }, [editorOpen, editingNote?.id, title, content, richDoc, noteColor, targetFolder, pendingFormat, pendingNoteType]);
@@ -5572,7 +5560,7 @@ const fireIntegrations = (trigger: string, note: any) => {
     // Clear backup as soon as the draft transitions to a real saved note (id appears)
     useEffect(() => {
         if (editingNote?.id) {
-            try { localStorage.removeItem("stickies:draft-backup:v1"); } catch {}
+            try { localStorage.removeItem(DRAFT_BACKUP_KEY); } catch {}
         }
     }, [editingNote?.id]);
 
@@ -5581,26 +5569,24 @@ const fireIntegrations = (trigger: string, note: any) => {
     useEffect(() => {
         if (draftRestoredRef.current) return;
         draftRestoredRef.current = true;
-        try {
-            const raw = localStorage.getItem("stickies:draft-backup:v1");
-            if (!raw) return;
-            const b = JSON.parse(raw);
-            const hasWork = b?.title?.trim() || b?.content?.trim() || b?.doc?.content?.length;
-            if (!hasWork) { localStorage.removeItem("stickies:draft-backup:v1"); return; }
-            // Restore after the initial render so openNewNote's resets don't clobber us
+        const b = parseDraftBackup(typeof window !== "undefined" ? localStorage.getItem(DRAFT_BACKUP_KEY) : null);
+        if (!b) {
+            try { localStorage.removeItem(DRAFT_BACKUP_KEY); } catch {}
+            return;
+        }
+        // Restore after the initial render so openNewNote's resets don't clobber us
+        setTimeout(() => {
+            openNewNote(b.type || undefined, b.folder || undefined);
             setTimeout(() => {
-                openNewNote(b.type || undefined, b.folder || undefined);
-                setTimeout(() => {
-                    setTitle(b.title || "");
-                    setContent(b.content || "");
-                    latestContentRef.current = b.content || "";
-                    if (b.doc) { setRichDoc(b.doc); latestRichDocRef.current = b.doc; }
-                    if (b.color) setNoteColor(b.color);
-                    if (b.format) setPendingFormat(b.format);
-                    showToast("Restored unsaved draft", "#22c55e");
-                }, 120);
-            }, 400);
-        } catch {}
+                setTitle(b.title || "");
+                setContent(b.content || "");
+                latestContentRef.current = b.content || "";
+                if (b.doc) { setRichDoc(b.doc as any); latestRichDocRef.current = b.doc as any; }
+                if (b.color) setNoteColor(b.color);
+                if (b.format) setPendingFormat(b.format);
+                showToast("Restored unsaved draft", "#22c55e");
+            }, 120);
+        }, 400);
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
@@ -6380,7 +6366,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                         // Inject unsaved new-note draft as a synthetic tab so the user sees
                         // their in-progress work immediately (autosave fires after a 2s
                         // debounce / on blur, which is too late for "where did my note go").
-                        const isUnsavedDraft = editorOpen && !editingNote?.id && (title.trim() || content.trim());
+                        // Includes empty drafts too so Cmd+N shows an active tab right away.
+                        const isUnsavedDraft = editorOpen && !editingNote?.id;
                         if (isUnsavedDraft && tabDayOffset === 0 && !inFolder) {
                             allNotes.unshift({
                                 id: "__draft__",

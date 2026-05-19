@@ -310,7 +310,18 @@ export default function RichEditor({
                     // would blend on yellow / light notes). Accent goes to the click-
                     // highlight + handle via the CSS variable below.
                     caretColor: "#1a1a1a",
+                    cursor: "text",
                     ...(accentColor ? { ["--rich-accent" as any]: accentColor } : {}),
+                }}
+                onMouseDown={(e) => {
+                    // Clicking in the padding or empty area below the last line
+                    // should focus the editor and place the caret at the end —
+                    // contentEditable only catches clicks landing on the
+                    // ProseMirror node itself, so we forward padding clicks here.
+                    if (e.target === e.currentTarget && editor && !editor.isDestroyed) {
+                        e.preventDefault();
+                        editor.commands.focus("end");
+                    }
                 }}
             >
                 <EditorContent editor={editor} />
