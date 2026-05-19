@@ -3044,17 +3044,18 @@ const fireIntegrations = (trigger: string, note: any) => {
             // Resolve folderId from folderName — don't blindly use folderStack (tab+ may target a different folder)
             const matchedFolderRow = dbData.find(r => r.is_folder && r.folder_name === folderName);
             let folderId = matchedFolderRow && !String(matchedFolderRow.id).startsWith("virtual-") ? String(matchedFolderRow.id) : null;
-            const extractedTags = Array.from(new Set(
-                (saveContent.match(/#[a-zA-Z][a-zA-Z0-9_-]+/g) ?? [])
-                    .map(t => t.toLowerCase())
-                    .filter(t => {
-                        const val = t.slice(1); // strip #
-                        // Exclude hex colors (#fff, #ffffff, #ffcc00)
-                        if (/^[0-9a-f]{3}$|^[0-9a-f]{6}$/i.test(val)) return false;
-                        // Exclude things that look like they're inside a URL or code (preceded by / or .)
-                        return true;
-                    })
-            ));
+            // Smart tags: keyword-driven auto-tagging. Replaces the old #hashtag
+            // extraction (too many false positives — hex colors, anchor links,
+            // code samples). Smart tags fire only when a configured keyword
+            // appears as a standalone token in the title OR content.
+            const SMART_TAGS: { tag: string; pattern: RegExp }[] = [
+                { tag: "ai",   pattern: /\bAI\b/i },
+                { tag: "zeta", pattern: /\bzeta\b/i },
+            ];
+            const haystack = `${titleRaw.current ?? ""}\n${saveContent}`;
+            const extractedTags = SMART_TAGS
+                .filter(({ pattern }) => pattern.test(haystack))
+                .map(({ tag }) => tag);
             const currentFormat = ((editingNote as any)?.format ?? pendingFormat ?? "text") as "text" | "markdown" | "rich";
             const payload: any = {
                 title: resolvedTitle,
@@ -7098,8 +7099,15 @@ const fireIntegrations = (trigger: string, note: any) => {
                         ? new Date(editingNote.updated_at as string).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
                         : null;
                     return (
-                        <div className="shrink-0 flex items-center justify-between px-3 select-none border-t border-white/[0.06] relative overflow-x-auto overflow-y-hidden"
-                            style={{ height: 28, background: "#1e1e1e", fontSize: 10, scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
+                        <div className="shrink-0 flex items-center justify-between px-3 select-none border-t relative overflow-x-auto overflow-y-hidden"
+                            style={{
+                                height: 28, fontSize: 10,
+                                // Footer bar picks up the note's color identity — lighter than the
+                                // editor background so chips and timestamps read against it.
+                                background: noteColor ? `${noteColor}22` : "#1e1e1e",
+                                borderTopColor: noteColor ? `${noteColor}55` : "rgba(255,255,255,0.06)",
+                                scrollbarWidth: "none", WebkitOverflowScrolling: "touch",
+                            }}>
                             {showFindBar && findQuery.trim() && findMatches.length > 0 ? (
                                 // Find mode — show match info in status bar
                                 (() => {
@@ -7250,7 +7258,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                             <button type="button"
                                                 onClick={() => { if (pinnedFolders.size > 0) setShowFooterFolderPicker(v => !v); }}
                                                 className="font-mono font-black uppercase tracking-wide whitespace-nowrap px-1.5 py-px rounded-full hover:brightness-125 transition flex items-center gap-1"
-                                                style={{ fontSize: 8, background: `${fc}22`, color: fc, border: `1px solid ${fc}44` }}>
+                                                style={{ fontSize: 8, background: fc, color: isLightColor(fc) ? "#1c1c1e" : "#fff", border: `1px solid ${fc}` }}>
                                                 {fi ? <FolderIconDisplay value={fi} folderName={fn} className="w-2.5 h-2.5" /> : <FolderIcon className="w-2.5 h-2.5" />}
                                                 {fn}
                                             </button>
@@ -7267,9 +7275,9 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                             className="font-mono font-black uppercase tracking-wide whitespace-nowrap px-1.5 py-px rounded-full"
                                             style={{
                                                 fontSize: 8,
-                                                background: `${badge.color}22`,
-                                                color: badge.color,
-                                                border: `1px solid ${badge.color}44`,
+                                                background: badge.color,
+                                                color: isLightColor(badge.color) ? "#1c1c1e" : "#fff",
+                                                border: `1px solid ${badge.color}`,
                                                 cursor: "default",
                                                 transition: "background 0.15s, opacity 0.15s",
                                             }}
