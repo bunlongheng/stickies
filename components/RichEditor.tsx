@@ -1,6 +1,6 @@
 "use client";
 
-import { useEditor, EditorContent, type JSONContent, type Editor } from "@tiptap/react";
+import { useEditor, EditorContent, type JSONContent, type Editor, NodeViewWrapper, ReactNodeViewRenderer, type ReactNodeViewProps } from "@tiptap/react";
 import type { EditorView } from "@tiptap/pm/view";
 import StarterKit from "@tiptap/starter-kit";
 import Image from "@tiptap/extension-image";
@@ -31,6 +31,79 @@ interface RichEditorProps {
 
 // Empty doc helper — ProseMirror requires a doc with at least one block
 const EMPTY_DOC: JSONContent = { type: "doc", content: [{ type: "paragraph" }] };
+
+/**
+ * Image NodeView with a drag-resize corner handle.
+ *
+ * - Click the image: TipTap selects it (ProseMirror-selectednode class fires,
+ *   CSS highlights with the note's accent color, handle becomes visible).
+ * - Drag the bottom-right handle to resize. Aspect ratio is preserved
+ *   automatically because we only set width (height auto-scales).
+ * - Width persists as a px number on the node, so it survives save/load.
+ */
+function ResizableImageNode(props: ReactNodeViewProps) {
+    const { node, updateAttributes, selected } = props;
+    const attrs = node.attrs as { src: string; alt?: string; width?: string | null };
+    const imgRef = useRef<HTMLImageElement | null>(null);
+    const [draftWidth, setDraftWidth] = useState<number | null>(null);
+
+    const onMouseDown = (e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const img = imgRef.current;
+        if (!img) return;
+        const startX = e.clientX;
+        const startWidth = img.clientWidth;
+        const onMove = (ev: MouseEvent) => {
+            const w = Math.max(80, Math.min(2000, Math.round(startWidth + (ev.clientX - startX))));
+            setDraftWidth(w);
+        };
+        const onUp = () => {
+            window.removeEventListener("mousemove", onMove);
+            window.removeEventListener("mouseup", onUp);
+            setDraftWidth((finalW) => {
+                if (finalW !== null) updateAttributes({ width: `${finalW}` });
+                return null;
+            });
+        };
+        window.addEventListener("mousemove", onMove);
+        window.addEventListener("mouseup", onUp);
+    };
+
+    // Show placeholder spinner UI for in-flight uploads (src startsWith "placeholder://").
+    const isPlaceholder = typeof attrs.src === "string" && attrs.src.startsWith("placeholder://");
+    const renderedWidth = draftWidth !== null
+        ? `${draftWidth}px`
+        : attrs.width
+            ? (/\d$/.test(attrs.width) ? `${attrs.width}px` : attrs.width)
+            : undefined;
+
+    return (
+        <NodeViewWrapper
+            as="div"
+            className={`resizable-image-wrapper ${selected ? "is-selected" : ""}`}
+            style={{ display: "inline-block", position: "relative", maxWidth: "100%" }}
+        >
+            <img
+                ref={imgRef}
+                src={isPlaceholder ? undefined : attrs.src}
+                alt={attrs.alt ?? ""}
+                data-placeholder={isPlaceholder ? "1" : undefined}
+                style={renderedWidth ? { width: renderedWidth, maxWidth: "100%", height: "auto" } : { maxWidth: "100%", height: "auto" }}
+                draggable={false}
+            />
+            {/* Bottom-right drag handle — only visible when image is selected.
+              * Uses note accent color via --rich-accent. */}
+            {selected && !isPlaceholder && (
+                <div
+                    className="resize-handle"
+                    onMouseDown={onMouseDown}
+                    title="Drag to resize"
+                />
+            )}
+        </NodeViewWrapper>
+    );
+}
 
 /**
  * Insert an image node at the given position (or selection) as a "placeholder://"
@@ -110,8 +183,10 @@ export default function RichEditor({
                 heading: { levels: [1, 2, 3] },
                 codeBlock: { HTMLAttributes: { class: "rich-code-block" } },
             }),
-            // Extend default Image with a `width` attribute so click-to-cycle resize
-            // and the small/medium/large/full toolbar persist their state to the doc.
+            // Image with a `width` attribute (px) + custom NodeView that adds a
+            // bottom-right drag handle for resize. Aspect ratio is preserved (we only
+            // track horizontal drag, height auto-scales via CSS). Width persists on
+            // the node so it round-trips through save/load.
             Image.extend({
                 addAttributes() {
                     const parent = (this as any).parent?.() ?? {};
@@ -119,11 +194,14 @@ export default function RichEditor({
                         ...parent,
                         width: {
                             default: null,
-                            parseHTML: (el: HTMLElement) => el.getAttribute("width"),
+                            parseHTML: (el: HTMLElement) => el.getAttribute("width") ?? el.style.width ?? null,
                             renderHTML: (attrs: { width?: string | null }) =>
                                 attrs.width ? { width: String(attrs.width) } : {},
                         },
                     };
+                },
+                addNodeView() {
+                    return ReactNodeViewRenderer(ResizableImageNode);
                 },
             }).configure({ inline: false, allowBase64: false }),
             Link.configure({ openOnClick: true, autolink: true, HTMLAttributes: { rel: "noopener noreferrer", target: "_blank" } }),
@@ -145,18 +223,6 @@ export default function RichEditor({
             attributes: {
                 class: "rich-editor-prose focus:outline-none",
                 spellcheck: "true",
-            },
-            // Click on an image cycles its size: 25% -> 50% -> 100% -> auto.
-            handleClickOn(view, _pos, node, _nodePos, event) {
-                if (node.type.name !== "image") return false;
-                event.preventDefault();
-                const current = (node.attrs as any).width as string | null;
-                const cycle = ["25%", "50%", "100%", null];
-                const idx = cycle.indexOf(current);
-                const next = cycle[(idx + 1) % cycle.length];
-                const tr = view.state.tr.setNodeMarkup(_nodePos, undefined, { ...node.attrs, width: next });
-                view.dispatch(tr);
-                return true;
             },
             handlePaste(view, event) {
                 // 1) Image paste — insert a placeholder, upload, then swap to the real URL.

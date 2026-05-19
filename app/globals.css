@@ -511,35 +511,46 @@ body {
 }
 .rich-editor-prose ul[data-type="taskList"] { list-style: none; padding-left: 0.2em; }
 .rich-editor-prose ul[data-type="taskList"] li { display: flex; align-items: flex-start; gap: 0.5em; }
-/* Upload placeholder: shown while an image upload is in flight.
- * The src starts with "placeholder://" so we override the default broken-image
- * UI with a dashed border + animated spinner background. */
-.rich-editor-prose img[src^="placeholder://"] {
+/* ── Resizable image NodeView ──────────────────────────────────────────────
+ * Wraps every image in a positioned div so we can attach a drag handle.
+ * Click selects (adds .is-selected), drag the corner handle resizes. */
+.rich-editor-prose .resizable-image-wrapper { line-height: 0; }
+.rich-editor-prose .resizable-image-wrapper img {
+  display: block;
+  border-radius: 4px;
+  cursor: default;
+}
+.rich-editor-prose .resizable-image-wrapper.is-selected img {
+  outline: 3px solid var(--rich-accent, #FFCC00);
+  outline-offset: 3px;
+}
+.rich-editor-prose .resizable-image-wrapper .resize-handle {
+  position: absolute;
+  right: -7px;
+  bottom: -7px;
+  width: 14px;
+  height: 14px;
+  background: var(--rich-accent, #FFCC00);
+  border: 2px solid #fff;
+  border-radius: 50%;
+  cursor: nwse-resize;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  z-index: 2;
+}
+
+/* Upload placeholder: NodeView marks images with data-placeholder="1" while
+ * the upload is in flight. Show a dashed-border spinner box. */
+.rich-editor-prose img[data-placeholder] {
   min-width: 200px;
   min-height: 140px;
   width: 240px;
   border: 2px dashed rgba(0,0,0,0.2);
   border-radius: 6px;
-  color: transparent;                      /* hide alt text */
   background:
     center / 28px no-repeat
       url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 50 50'><circle cx='25' cy='25' r='20' fill='none' stroke='%23999' stroke-width='4' stroke-linecap='round' stroke-dasharray='80 50'><animateTransform attributeName='transform' type='rotate' from='0 25 25' to='360 25 25' dur='1s' repeatCount='indefinite'/></circle></svg>"),
     repeating-linear-gradient(45deg, #f5f5f5, #f5f5f5 10px, #ececec 10px, #ececec 20px);
 }
-
-/* Click-to-select highlight: TipTap adds .ProseMirror-selectednode when an
- * image is clicked. Show a colored outline using the note's accent color
- * (set as --rich-accent on the editor root). */
-.rich-editor-prose img.ProseMirror-selectednode {
-  outline: 3px solid var(--rich-accent, #FFCC00);
-  outline-offset: 3px;
-  cursor: pointer;
-}
-
-/* Click-to-cycle resize: the Image extension's width attr writes width="50%" etc. */
-.rich-editor-prose img[width="25%"]  { width: 25%; }
-.rich-editor-prose img[width="50%"]  { width: 50%; }
-.rich-editor-prose img[width="100%"] { width: 100%; }
 
 .rich-editor-prose p.is-editor-empty:first-child::before {
   content: attr(data-placeholder);
