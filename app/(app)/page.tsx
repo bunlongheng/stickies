@@ -3607,10 +3607,13 @@ const fireIntegrations = (trigger: string, note: any) => {
     }, []);
 
     async function uploadImage(file: File): Promise<{ url: string; name: string; type: string; extractedText?: string }> {
-        // Pass through every image type as-is — heic, webp, avif, png, jpg, gif, svg, tiff, bmp.
-        // (WebP conversion was dropped — Bunlong will request it back if/when desired.)
+        // Downscale very large photos before upload to save bandwidth + Google Drive storage,
+        // but stay above any visible-quality threshold (longest side >= 2000px, quality 0.95).
+        // PNG stays PNG (lossless), JPEG stays JPEG at 95%. Anything the browser can't decode
+        // in a canvas (HEIC/AVIF often, SVG, GIF) passes through as-is.
+        const optimized = await shrinkIfHuge(file);
         const fd = new FormData();
-        fd.append("file", file);
+        fd.append("file", optimized);
         fd.append("folder", targetFolder || activeFolder || "unsorted");
         const token = await getAuthToken();
         const res = await fetch("/api/stickies/gdrive", {
@@ -3620,6 +3623,38 @@ const fireIntegrations = (trigger: string, note: any) => {
         });
         if (!res.ok) throw new Error("Upload failed");
         return res.json();
+    }
+
+    /** Downscale to a max dimension if the source is huge; preserve format + quality. */
+    async function shrinkIfHuge(file: File, maxDim = 2000): Promise<File> {
+        // Skip unsupported types — canvas can't reliably decode these
+        if (!file.type.startsWith("image/")) return file;
+        if (/svg|gif/i.test(file.type)) return file;
+        // Heic/avif: browser support is inconsistent; pass through
+        if (/heic|heif|avif/i.test(file.type)) return file;
+        try {
+            const bitmap = await createImageBitmap(file);
+            const { width, height } = bitmap;
+            const longest = Math.max(width, height);
+            if (longest <= maxDim) { bitmap.close?.(); return file; }
+            const scale = maxDim / longest;
+            const w = Math.round(width * scale);
+            const h = Math.round(height * scale);
+            const canvas = document.createElement("canvas");
+            canvas.width = w; canvas.height = h;
+            canvas.getContext("2d")!.drawImage(bitmap, 0, 0, w, h);
+            bitmap.close?.();
+            // Preserve format. PNG -> lossless. JPEG -> 95%. Anything else -> JPEG 95%.
+            const outType = file.type === "image/png" ? "image/png" : "image/jpeg";
+            const quality = outType === "image/jpeg" ? 0.95 : undefined;
+            const blob: Blob = await new Promise((res, rej) =>
+                canvas.toBlob(b => b ? res(b) : rej(new Error("canvas.toBlob failed")), outType, quality),
+            );
+            return new File([blob], file.name, { type: outType });
+        } catch (err) {
+            console.warn("[shrinkIfHuge] falling back to original:", err);
+            return file;
+        }
     }
 
     async function pdfToImages(file: File): Promise<File[]> {

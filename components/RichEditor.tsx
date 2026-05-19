@@ -1,6 +1,7 @@
 "use client";
 
 import { useEditor, EditorContent, type JSONContent, type Editor } from "@tiptap/react";
+import type { EditorView } from "@tiptap/pm/view";
 import StarterKit from "@tiptap/starter-kit";
 import Image from "@tiptap/extension-image";
 import Link from "@tiptap/extension-link";
@@ -31,6 +32,63 @@ interface RichEditorProps {
 // Empty doc helper — ProseMirror requires a doc with at least one block
 const EMPTY_DOC: JSONContent = { type: "doc", content: [{ type: "paragraph" }] };
 
+/**
+ * Insert an image node at the given position (or selection) as a "placeholder://"
+ * src, kick off the upload, and replace the placeholder's src with the real URL
+ * when the upload resolves. CSS in app/globals.css styles placeholder:// images
+ * as a dashed-border spinner so the user gets immediate visual feedback that
+ * "an image is going here".
+ */
+let uploadCounter = 0;
+function insertWithPlaceholder(
+    view: EditorView,
+    file: File,
+    upload: (f: File) => Promise<string>,
+    atPos?: number,
+): void {
+    const id = `${++uploadCounter}-${Date.now()}`;
+    const placeholderSrc = `placeholder://${id}`;
+    const { schema } = view.state;
+    const node = schema.nodes.image.create({ src: placeholderSrc, alt: `Uploading ${file.name}...` });
+
+    const insertTr =
+        atPos !== undefined
+            ? view.state.tr.insert(atPos, node)
+            : view.state.tr.replaceSelectionWith(node);
+    view.dispatch(insertTr);
+
+    const findPlaceholder = (): number => {
+        let found = -1;
+        view.state.doc.descendants((n, pos) => {
+            if (n.type.name === "image" && (n.attrs as any).src === placeholderSrc) {
+                found = pos;
+                return false;
+            }
+            return found === -1;
+        });
+        return found;
+    };
+
+    void upload(file)
+        .then((url) => {
+            if (!url || typeof url !== "string") throw new Error("Upload returned no URL");
+            const pos = findPlaceholder();
+            if (pos === -1) return; // user removed it before upload finished
+            const real = schema.nodes.image.create({ src: url, alt: file.name });
+            view.dispatch(view.state.tr.replaceWith(pos, pos + 1, real));
+        })
+        .catch((err: unknown) => {
+            console.error("[RichEditor upload]", err);
+            const pos = findPlaceholder();
+            if (pos !== -1) view.dispatch(view.state.tr.delete(pos, pos + 1));
+            window.dispatchEvent(
+                new CustomEvent("stickies:upload-error", {
+                    detail: { name: file.name, error: (err as any)?.message ?? String(err) },
+                }),
+            );
+        });
+}
+
 export default function RichEditor({
     initialDoc,
     initialText,
@@ -52,7 +110,22 @@ export default function RichEditor({
                 heading: { levels: [1, 2, 3] },
                 codeBlock: { HTMLAttributes: { class: "rich-code-block" } },
             }),
-            Image.configure({ inline: false, allowBase64: false }),
+            // Extend default Image with a `width` attribute so click-to-cycle resize
+            // and the small/medium/large/full toolbar persist their state to the doc.
+            Image.extend({
+                addAttributes() {
+                    const parent = (this as any).parent?.() ?? {};
+                    return {
+                        ...parent,
+                        width: {
+                            default: null,
+                            parseHTML: (el: HTMLElement) => el.getAttribute("width"),
+                            renderHTML: (attrs: { width?: string | null }) =>
+                                attrs.width ? { width: String(attrs.width) } : {},
+                        },
+                    };
+                },
+            }).configure({ inline: false, allowBase64: false }),
             Link.configure({ openOnClick: true, autolink: true, HTMLAttributes: { rel: "noopener noreferrer", target: "_blank" } }),
             Table.configure({ resizable: true, HTMLAttributes: { class: "rich-table" } }),
             TableRow,
@@ -73,8 +146,20 @@ export default function RichEditor({
                 class: "rich-editor-prose focus:outline-none",
                 spellcheck: "true",
             },
+            // Click on an image cycles its size: 25% -> 50% -> 100% -> auto.
+            handleClickOn(view, _pos, node, _nodePos, event) {
+                if (node.type.name !== "image") return false;
+                event.preventDefault();
+                const current = (node.attrs as any).width as string | null;
+                const cycle = ["25%", "50%", "100%", null];
+                const idx = cycle.indexOf(current);
+                const next = cycle[(idx + 1) % cycle.length];
+                const tr = view.state.tr.setNodeMarkup(_nodePos, undefined, { ...node.attrs, width: next });
+                view.dispatch(tr);
+                return true;
+            },
             handlePaste(view, event) {
-                // 1) Image paste — upload to gdrive, insert as image node.
+                // 1) Image paste — insert a placeholder, upload, then swap to the real URL.
                 const items = Array.from(event.clipboardData?.items ?? []);
                 const imageItem = items.find(i => i.type.startsWith("image/"));
                 if (imageItem) {
@@ -83,18 +168,7 @@ export default function RichEditor({
                     event.preventDefault();
                     const upload = uploadRef.current;
                     if (!upload) return true;
-                    void upload(file)
-                        .then(url => {
-                            if (!url || typeof url !== "string") throw new Error("Upload returned no URL");
-                            const { schema } = view.state;
-                            const node = schema.nodes.image.create({ src: url, alt: file.name });
-                            const tr = view.state.tr.replaceSelectionWith(node);
-                            view.dispatch(tr);
-                        })
-                        .catch(err => {
-                            console.error("[RichEditor paste upload]", err);
-                            window.dispatchEvent(new CustomEvent("stickies:upload-error", { detail: { name: file.name, error: err?.message ?? String(err) } }));
-                        });
+                    insertWithPlaceholder(view, file, upload);
                     return true;
                 }
 
@@ -118,8 +192,6 @@ export default function RichEditor({
             },
             handleDrop(view, event, _slice, moved) {
                 if (moved) return false;
-                // Accept by MIME (image/*) OR by filename extension (covers .heic, .webp,
-                // pasted-from-clipboard files where the OS didn't set a type, etc.).
                 const isImageFile = (f: File) =>
                     f.type.startsWith("image/") ||
                     /\.(heic|heif|webp|avif|png|jpg|jpeg|gif|svg|bmp|tiff?|ico|jfif)$/i.test(f.name);
@@ -129,21 +201,7 @@ export default function RichEditor({
                 const upload = uploadRef.current;
                 if (!upload) return true;
                 const coords = view.posAtCoords({ left: event.clientX, top: event.clientY });
-                // Per-file upload so a single failure doesn't tank the whole batch.
-                files.forEach((file) => {
-                    void upload(file)
-                        .then(url => {
-                            if (!url || typeof url !== "string") throw new Error("Upload returned no URL");
-                            const { schema } = view.state;
-                            const node = schema.nodes.image.create({ src: url, alt: file.name });
-                            const tr = coords ? view.state.tr.insert(coords.pos, node) : view.state.tr.replaceSelectionWith(node);
-                            view.dispatch(tr);
-                        })
-                        .catch(err => {
-                            console.error("[RichEditor drop upload]", err);
-                            window.dispatchEvent(new CustomEvent("stickies:upload-error", { detail: { name: file.name, error: err?.message ?? String(err) } }));
-                        });
-                });
+                files.forEach((file) => insertWithPlaceholder(view, file, upload, coords?.pos));
                 return true;
             },
         },
@@ -168,9 +226,12 @@ export default function RichEditor({
     return (
         <div className="flex flex-col flex-1 min-h-0">
             {editor && <Toolbar editor={editor} onUploadImage={onUploadImage} />}
-            {/* Reduced left/right padding (px-3) and top/bottom (py-2.5) — Bunlong wanted
-              * "remove beginning spaces" and tighter overall density. */}
-            <div className="rich-editor-root flex-1 min-h-0 overflow-y-auto px-3 py-2.5" style={accentColor ? { caretColor: accentColor } : undefined}>
+            <div
+                className="rich-editor-root flex-1 min-h-0 overflow-y-auto px-3 py-2.5"
+                style={accentColor
+                    ? { caretColor: accentColor, ["--rich-accent" as any]: accentColor }
+                    : undefined}
+            >
                 <EditorContent editor={editor} />
             </div>
         </div>
