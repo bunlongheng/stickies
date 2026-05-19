@@ -1320,6 +1320,7 @@ export default function NotesMaster() {
     const [noteTags, setNoteTags] = useState<string[]>([]);
     const [showTagInput, setShowTagInput] = useState(false);
     const [tagInputValue, setTagInputValue] = useState("");
+    const [tagsExpanded, setTagsExpanded] = useState(false);
     const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
     const [uploadingImages, setUploadingImages] = useState(false);
 
@@ -7251,7 +7252,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                         >{label}</span>
                                     );
                                 })()}
-                                {noteTags.map((tag, i) => (
+                                {(tagsExpanded ? noteTags : noteTags.slice(0, 3)).map((tag, i) => (
                                     <span key={i} className="font-mono font-bold whitespace-nowrap px-1.5 py-px rounded-full cursor-pointer hover:line-through text-sky-400"
                                         style={{ fontSize: 8, background: "rgba(56,189,248,0.15)", border: "1px solid rgba(56,189,248,0.3)" }}
                                         onClick={() => {
@@ -7261,6 +7262,14 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                         }}
                                         title="Click to remove">{tag}</span>
                                 ))}
+                                {noteTags.length > 3 && (
+                                    <span className="font-mono font-bold whitespace-nowrap px-1.5 py-px rounded-full cursor-pointer text-sky-400 hover:brightness-125 transition"
+                                        style={{ fontSize: 8, background: "rgba(56,189,248,0.15)", border: "1px solid rgba(56,189,248,0.3)" }}
+                                        onClick={() => setTagsExpanded(v => !v)}
+                                        title={tagsExpanded ? "Show fewer" : "Show all tags"}>
+                                        {tagsExpanded ? "−" : `+${noteTags.length - 3}`}
+                                    </span>
+                                )}
                                 <button type="button"
                                     onClick={() => { setShowTagInput(true); setTagInputValue(""); }}
                                     className="font-mono font-bold whitespace-nowrap px-1 py-px rounded-full hover:brightness-125 transition"
