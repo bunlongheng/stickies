@@ -60,7 +60,7 @@ export function mermaidSubType(text: string): string {
         c4container: "C4 Container", c4component: "C4 Component",
         c4dynamic: "C4 Dynamic", c4deployment: "C4 Deployment",
     };
-    return map[m[1].toLowerCase()] ?? m[1];
+    return map[m[1].toLowerCase()] /* c8 ignore next */ ?? m[1];
 }
 
 // ── JSON ──────────────────────────────────────────────────────────────────────

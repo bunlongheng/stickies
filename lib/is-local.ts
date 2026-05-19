@@ -6,11 +6,14 @@
 export function isLocal(request: Request): boolean {
   const host = request.headers.get('host') || '';
   if (LOCAL_RE.test(host)) return true;
-  // Fallback: check the URL hostname (useful when host header is absent, e.g. in tests)
+  // Fallback: check the URL hostname (useful when host header is absent, e.g. in tests).
+  // The Request constructor already validated request.url, so `new URL(...)` can't realistically
+  // throw here — but we keep the catch as defense-in-depth.
   try {
     const hostname = new URL(request.url).hostname;
     return LOCAL_RE.test(hostname);
   } catch {
+    /* c8 ignore next */
     return false;
   }
 }

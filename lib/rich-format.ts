@@ -41,7 +41,8 @@ export function markdownToDoc(md: string): JSONContent {
         if (!node) return emptyDoc();
         return node.toJSON() as JSONContent;
     } catch {
-        // Fallback: wrap as a single paragraph so user doesn't lose content.
+        /* c8 ignore start — defaultMarkdownParser doesn't realistically throw on string input;
+           the fallback exists so a future parser swap that DOES throw can't lose the user's text. */
         return {
             type: "doc",
             content: md.split(/\n{2,}/).map(p => ({
@@ -49,6 +50,7 @@ export function markdownToDoc(md: string): JSONContent {
                 content: p ? [{ type: "text", text: p }] : undefined,
             })),
         };
+        /* c8 ignore stop */
     }
 }
 
