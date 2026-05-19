@@ -3056,6 +3056,10 @@ const fireIntegrations = (trigger: string, note: any) => {
             const extractedTags = SMART_TAGS
                 .filter(({ pattern }) => pattern.test(haystack))
                 .map(({ tag }) => tag);
+            const newSmartTags = extractedTags.filter(t => !noteTags.includes(t));
+            if (newSmartTags.length > 0) {
+                setNoteTags(prev => Array.from(new Set([...prev, ...newSmartTags])));
+            }
             const currentFormat = ((editingNote as any)?.format ?? pendingFormat ?? "text") as "text" | "markdown" | "rich";
             const payload: any = {
                 title: resolvedTitle,
@@ -7830,7 +7834,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                             }
                                         }
                                         return item.is_folder
-                                            ? { isolation: "isolate", "--fc": c, "--tc": isLightColor(c) ? "#1c1c1e" : "#fff", "--ic": isLightColor(c) ? "#1c1c1e" : "#fff" } as React.CSSProperties
+                                            ? { isolation: "isolate", "--fc": c, "--tc": appTheme === "light" ? "#1a1a1a" : (isLightColor(c) ? "#1c1c1e" : "#fff"), "--ic": appTheme === "light" ? "#1a1a1a" : (isLightColor(c) ? "#1c1c1e" : "#fff") } as React.CSSProperties
                                             : { isolation: "isolate", backgroundColor: c, borderRadius: "3px 3px 3px 14px" };
                                     })()}
                                     className={`${isListMode
@@ -8000,7 +8004,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                     </>
                                                 ) : (
                                                     <>
-                                                        {(() => { const tc = isLightColor(item.color || item.folder_color || "#888") ? "#1c1c1e" : "#fff"; return (<>
+                                                        {(() => { const tc = appTheme === "light" ? "#1a1a1a" : (isLightColor(item.color || item.folder_color || "#888") ? "#1c1c1e" : "#fff"); return (<>
                                                         <div style={{ fontSize: "3rem", lineHeight: 1, color: tc }} className="font-black relative z-10">
                                                             {showFileIcons && noteIcons[String(item.id)]
                                                                 ? <FolderIconDisplay value={noteIcons[String(item.id)]} folderName={item.title || "N"} className="w-10 h-10" />
@@ -8822,8 +8826,8 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                                 body: JSON.stringify({ active: next }),
                                                             }).catch(() => {});
                                                         }}>
-                                                        <div className={`w-9 h-5 rounded-full transition-colors relative ${auto.active ? "bg-emerald-500" : "bg-zinc-700"}`}>
-                                                            <div className={`absolute top-1 w-3 h-3 rounded-full bg-white transition-transform ${auto.active ? "translate-x-5" : "translate-x-1"}`} />
+                                                        <div className="w-9 h-5 rounded-full transition-colors relative" style={{ background: auto.active ? "#22c55e" : (appTheme === "light" ? "#d1d1d6" : "#48484a"), border: appTheme === "light" && !auto.active ? "1px solid rgba(0,0,0,0.1)" : "none" }}>
+                                                            <div className={`absolute top-1 w-3 h-3 rounded-full bg-white transition-transform ${auto.active ? "translate-x-5" : "translate-x-1"}`} style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.3)" }} />
                                                         </div>
                                                     </button>
                                                     {/* Info — tap to open logs */}
@@ -9278,8 +9282,8 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                     <button type="button"
                                         onClick={() => { const v = !showTabs; setShowTabs(v); try { localStorage.setItem("stickies:show-tabs:v1", String(v)); } catch {} }}
                                         className="relative w-11 h-6 rounded-full transition-colors duration-200"
-                                        style={{ background: showTabs ? "#34C759" : appTheme === "light" ? "rgba(0,0,0,0.15)" : "rgba(255,255,255,0.15)" }}>
-                                        <span className="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200" style={{ transform: showTabs ? "translateX(20px)" : "translateX(0)" }} />
+                                        style={{ background: showTabs ? "#22c55e" : (appTheme === "light" ? "#d1d1d6" : "#48484a"), border: appTheme === "light" && !showTabs ? "1px solid rgba(0,0,0,0.1)" : "none" }}>
+                                        <span className="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform duration-200" style={{ transform: showTabs ? "translateX(20px)" : "translateX(0)", boxShadow: "0 1px 4px rgba(0,0,0,0.3)" }} />
                                     </button>
                                 </div>
                                 {/* SUB-FOLDER ICONS */}
@@ -9288,8 +9292,8 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                     <button type="button"
                                         onClick={() => { const v = !showFileIcons; setShowFileIcons(v); try { localStorage.setItem(SHOW_FILE_ICONS_KEY, String(v)); } catch {} }}
                                         className="relative w-11 h-6 rounded-full transition-colors duration-200"
-                                        style={{ background: showFileIcons ? "#34C759" : appTheme === "light" ? "rgba(0,0,0,0.18)" : "rgba(255,255,255,0.15)" }}>
-                                        <span className="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200" style={{ transform: showFileIcons ? "translateX(20px)" : "translateX(0)" }} />
+                                        style={{ background: showFileIcons ? "#22c55e" : (appTheme === "light" ? "#d1d1d6" : "#48484a"), border: appTheme === "light" && !showFileIcons ? "1px solid rgba(0,0,0,0.1)" : "none" }}>
+                                        <span className="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform duration-200" style={{ transform: showFileIcons ? "translateX(20px)" : "translateX(0)", boxShadow: "0 1px 4px rgba(0,0,0,0.3)" }} />
                                     </button>
                                 </div>
                                 <button type="button" className="w-full flex items-center gap-4 px-6 py-4 text-left text-zinc-300 hover:bg-white/5 hover:text-white active:bg-white/10 transition"
@@ -9672,8 +9676,8 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                         width: 44,
                                         height: 26,
                                         borderRadius: 13,
-                                        background: isOn ? "#22c55e" : "rgba(255,255,255,0.12)",
-                                        border: "none",
+                                        background: isOn ? "#22c55e" : (appTheme === "light" ? "#d1d1d6" : "#48484a"),
+                                        border: appTheme === "light" && !isOn ? "1px solid rgba(0,0,0,0.1)" : "none",
                                         cursor: "pointer",
                                         padding: 0,
                                     }}
@@ -9694,19 +9698,36 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                             );
                         })()}
 
-                        {/* Link row — QR · Data · Burn */}
+                        {/* Link row — Copy · QR · Data · Burn */}
                         <div className="flex items-center gap-2 px-5 py-4 border-b border-white/5">
                             <p className="text-xs font-black text-white tracking-wide flex-1">Link</p>
+                            <button type="button"
+                                onClick={() => {
+                                    const noteId = editingNote?.id ? String(editingNote.id) : "";
+                                    if (!noteId) return;
+                                    const prodBase = process.env.NEXT_PUBLIC_APP_BASE_URL || "https://stickies-bheng.vercel.app";
+                                    const url = `${prodBase}/raw?noteId=${noteId}`;
+                                    secureCopy(url).then(() => {
+                                        setPublicLinkCopied(true);
+                                        setTimeout(() => setPublicLinkCopied(false), 3000);
+                                        showToast("Link copied", noteColor || "#34C759");
+                                    });
+                                    setSharePickerOpen(false);
+                                }}
+                                className={`${shareBtn} bg-blue-500`} title="Copy public link">
+                                <DocumentDuplicateIcon className="w-4 h-4" />
+                                <span className="text-[8px] font-black uppercase">Copy</span>
+                            </button>
                             <button type="button" onClick={() => { setSharePickerOpen(false); openNoteLinkQr(); }} className={`${shareBtn} bg-emerald-500`} title="QR link">
                                 <QrCodeIcon className="w-4 h-4" />
                                 <span className="text-[8px] font-black uppercase">QR</span>
                             </button>
                             <button type="button" onClick={() => { setSharePickerOpen(false); openNoteDataQr(); }} className={`${shareBtn} bg-pink-500`} title="QR data">
-                                <QrCodeIcon className="w-4 h-4" />
+                                <CodeBracketIcon className="w-4 h-4" />
                                 <span className="text-[8px] font-black uppercase">Data</span>
                             </button>
                             <button type="button" onClick={() => { setSharePickerOpen(false); shareBurnLink(); }} className={`${shareBtn} bg-orange-500`} title="Burn link (1×)">
-                                <QrCodeIcon className="w-4 h-4" />
+                                <FireIcon className="w-4 h-4" />
                                 <span className="text-[8px] font-black uppercase">Burn</span>
                             </button>
                         </div>
