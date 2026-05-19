@@ -6316,10 +6316,25 @@ const fireIntegrations = (trigger: string, note: any) => {
                             ? dbData.filter(n => !n.is_folder && !n.trashed_at && !dismissedTabs.has(String(n.id)) && new Date(n.created_at || 0) >= last24h)
                             : dbData.filter(n => !n.is_folder && !n.trashed_at && !dismissedTabs.has(String(n.id)) && (() => { const d = new Date(n.created_at || 0); return d >= dayStart && d < dayEnd; })())
                         ).sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")));
+                        // Inject unsaved new-note draft as a synthetic tab so the user sees
+                        // their in-progress work immediately (autosave fires after a 2s
+                        // debounce / on blur, which is too late for "where did my note go").
+                        const isUnsavedDraft = editorOpen && !editingNote?.id && (title.trim() || content.trim());
+                        if (isUnsavedDraft && tabDayOffset === 0 && !inFolder) {
+                            allNotes.unshift({
+                                id: "__draft__",
+                                title: title.trim() || "New note",
+                                folder_name: targetFolder || "Today",
+                                folder_color: noteColor || palette12[0],
+                                created_at: new Date().toISOString(),
+                                updated_at: new Date().toISOString(),
+                                _draft: true,
+                            } as any);
+                        }
                         const dayNotes = allNotes.slice(0, tabLimit);
                         const hasMore = allNotes.length > tabLimit;
                         const dayLabel = inFolder ? activeFolder : (tabDayOffset === 0 ? "Today" : tabDayOffset === 1 ? "Yesterday" : dayStart.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }));
-                        const activeId = String(editingNote?.id ?? "");
+                        const activeId = String(editingNote?.id ?? (isUnsavedDraft ? "__draft__" : ""));
                         const dismissTab = (id: string) => {
                             setDismissedTabs(prev => {
                                 const next = new Set(prev); next.add(id);
@@ -6354,7 +6369,17 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 </button>
                                                 {isActive && (
                                                     <button type="button"
-                                                        onClick={(e) => { e.stopPropagation(); const nid = String(n.id); dismissTab(nid); const remaining = dayNotes.filter(t => String(t.id) !== nid); if (remaining.length > 0) void openNote(remaining[0]); else void backToRootFromEditor(); }}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            const nid = String(n.id);
+                                                            // Drafts have a fake id — don't add to dismissedTabs (would
+                                                            // permanently hide every future draft). Just back out.
+                                                            if (nid === "__draft__") { void backToRootFromEditor(); return; }
+                                                            dismissTab(nid);
+                                                            const remaining = dayNotes.filter(t => String(t.id) !== nid);
+                                                            if (remaining.length > 0) void openNote(remaining[0]);
+                                                            else void backToRootFromEditor();
+                                                        }}
                                                         className="pr-2 flex items-center justify-center hover:opacity-60 transition flex-shrink-0" style={{ height: "100%", color: isLightColor(c) ? "#1c1c1e" : "#fff" }}>
                                                         <span className="text-[9px] leading-none">✕</span>
                                                     </button>
