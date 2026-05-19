@@ -5543,6 +5543,67 @@ const fireIntegrations = (trigger: string, note: any) => {
         };
     }, [editorOpen, saveNote]);
 
+    // Draft safety net — back unsaved new-note drafts up to localStorage on every
+    // change. The browser can unload before our beforeunload save fetch completes
+    // (no keepalive on our notesApi), and a refresh within the 2s autosave debounce
+    // also drops the work. The backup is cleared once the note gets a real id.
+    useEffect(() => {
+        if (!editorOpen) return;
+        if (editingNote?.id) return; // already persisted with an id
+        const hasWork = (title?.trim() || content?.trim() || (richDoc && richDoc.content?.length));
+        try {
+            if (hasWork) {
+                localStorage.setItem("stickies:draft-backup:v1", JSON.stringify({
+                    title: title || "",
+                    content: content || "",
+                    doc: richDoc || null,
+                    color: noteColor || null,
+                    folder: targetFolder || null,
+                    format: pendingFormat || null,
+                    type: pendingNoteType || null,
+                    savedAt: new Date().toISOString(),
+                }));
+            } else {
+                localStorage.removeItem("stickies:draft-backup:v1");
+            }
+        } catch {}
+    }, [editorOpen, editingNote?.id, title, content, richDoc, noteColor, targetFolder, pendingFormat, pendingNoteType]);
+
+    // Clear backup as soon as the draft transitions to a real saved note (id appears)
+    useEffect(() => {
+        if (editingNote?.id) {
+            try { localStorage.removeItem("stickies:draft-backup:v1"); } catch {}
+        }
+    }, [editingNote?.id]);
+
+    // Restore unsaved draft on mount if one exists. One-shot.
+    const draftRestoredRef = useRef(false);
+    useEffect(() => {
+        if (draftRestoredRef.current) return;
+        draftRestoredRef.current = true;
+        try {
+            const raw = localStorage.getItem("stickies:draft-backup:v1");
+            if (!raw) return;
+            const b = JSON.parse(raw);
+            const hasWork = b?.title?.trim() || b?.content?.trim() || b?.doc?.content?.length;
+            if (!hasWork) { localStorage.removeItem("stickies:draft-backup:v1"); return; }
+            // Restore after the initial render so openNewNote's resets don't clobber us
+            setTimeout(() => {
+                openNewNote(b.type || undefined, b.folder || undefined);
+                setTimeout(() => {
+                    setTitle(b.title || "");
+                    setContent(b.content || "");
+                    latestContentRef.current = b.content || "";
+                    if (b.doc) { setRichDoc(b.doc); latestRichDocRef.current = b.doc; }
+                    if (b.color) setNoteColor(b.color);
+                    if (b.format) setPendingFormat(b.format);
+                    showToast("Restored unsaved draft", "#22c55e");
+                }, 120);
+            }, 400);
+        } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
     useEffect(() => {
         if (!editorOpen || !shouldFocusTitleOnOpenRef.current) return;
         const frame = requestAnimationFrame(() => {
