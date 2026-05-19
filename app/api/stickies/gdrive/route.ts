@@ -103,7 +103,11 @@ export async function POST(req: Request) {
             headers: { Authorization: `Bearer ${process.env.STICKIES_API_KEY}` },
             body: proxyFd,
         });
-        if (!proxyRes.ok) return NextResponse.json({ error: "Prod upload failed" }, { status: 502 });
+        if (!proxyRes.ok) {
+            const detail = await proxyRes.text().catch(() => "");
+            console.error("[gdrive proxy] prod returned", proxyRes.status, detail);
+            return NextResponse.json({ error: `Prod upload failed (${proxyRes.status}): ${detail.slice(0, 200)}` }, { status: 502 });
+        }
         return NextResponse.json(await proxyRes.json());
     }
 

@@ -451,3 +451,87 @@ body {
   background-color: rgba(255,255,255,0.10) !important;
   color: #fff !important;
 }
+
+/* ── Rich (TipTap) editor surface ─────────────────────────── */
+.rich-editor-prose {
+  font-size: 15px;
+  line-height: 1.6;
+  color: #e4e4e7;
+}
+.rich-editor-prose > * + * { margin-top: 0.6em; }
+.rich-editor-prose h1 { font-size: 28px; font-weight: 800; line-height: 1.25; margin-top: 1.2em; }
+.rich-editor-prose h2 { font-size: 22px; font-weight: 800; line-height: 1.3;  margin-top: 1.1em; }
+.rich-editor-prose h3 { font-size: 18px; font-weight: 700; line-height: 1.35; margin-top: 1em; }
+.rich-editor-prose p  { white-space: pre-wrap; }
+.rich-editor-prose strong { color: #fff; }
+.rich-editor-prose em { font-style: italic; }
+.rich-editor-prose a  { color: #60a5fa; text-decoration: underline; text-underline-offset: 2px; }
+.rich-editor-prose ul, .rich-editor-prose ol { padding-left: 1.6em; }
+.rich-editor-prose ul { list-style: disc; }
+.rich-editor-prose ol { list-style: decimal; }
+.rich-editor-prose li > p { margin: 0; }
+.rich-editor-prose blockquote {
+  border-left: 3px solid rgba(255,255,255,0.25);
+  padding: 0.15em 0.9em;
+  color: #a1a1aa;
+  font-style: italic;
+}
+.rich-editor-prose code {
+  background: rgba(255,255,255,0.08);
+  padding: 0.1em 0.4em;
+  border-radius: 3px;
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9em;
+}
+.rich-editor-prose .rich-code-block {
+  background: rgba(0,0,0,0.45);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 6px;
+  padding: 0.9em 1em;
+  overflow-x: auto;
+}
+.rich-editor-prose .rich-code-block code { background: none; padding: 0; font-size: 13px; }
+.rich-editor-prose img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+  display: block;
+  margin: 0.3em 0;
+}
+.rich-editor-prose .rich-table {
+  border-collapse: collapse;
+  table-layout: fixed;
+  width: 100%;
+  margin: 0.6em 0;
+  overflow: hidden;
+}
+.rich-editor-prose .rich-table th,
+.rich-editor-prose .rich-table td {
+  border: 1px solid rgba(255,255,255,0.18);
+  padding: 6px 10px;
+  vertical-align: top;
+  min-width: 60px;
+}
+.rich-editor-prose .rich-table th {
+  background: rgba(255,255,255,0.06);
+  font-weight: 700;
+  text-align: left;
+}
+.rich-editor-prose ul[data-type="taskList"] { list-style: none; padding-left: 0.2em; }
+.rich-editor-prose ul[data-type="taskList"] li { display: flex; align-items: flex-start; gap: 0.5em; }
+.rich-editor-prose p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: rgba(255,255,255,0.25);
+  float: left;
+  pointer-events: none;
+  height: 0;
+}
+:root[data-theme="light"] .rich-editor-prose { color: #1c1c1e; }
+:root[data-theme="light"] .rich-editor-prose strong { color: #000; }
+:root[data-theme="light"] .rich-editor-prose blockquote { border-color: rgba(0,0,0,0.2); color: #52525b; }
+:root[data-theme="light"] .rich-editor-prose code { background: rgba(0,0,0,0.06); }
+:root[data-theme="light"] .rich-editor-prose .rich-code-block { background: rgba(0,0,0,0.05); border-color: rgba(0,0,0,0.1); }
+:root[data-theme="light"] .rich-editor-prose .rich-table th,
+:root[data-theme="light"] .rich-editor-prose .rich-table td { border-color: rgba(0,0,0,0.15); }
+:root[data-theme="light"] .rich-editor-prose .rich-table th { background: rgba(0,0,0,0.04); }
+:root[data-theme="light"] .rich-editor-prose p.is-editor-empty:first-child::before { color: rgba(0,0,0,0.3); }

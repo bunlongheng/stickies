@@ -50,7 +50,25 @@ async function getRemoteToken(integration: any): Promise<string | null> {
     return tokens.access_token;
 }
 
-// GET /api/hue/groups — returns all grouped_light resources
+// Build a map of grouped_light id → { name, parentType } by walking rooms + zones.
+// In Hue v2, grouped_light resources don't carry their own name; the name lives on
+// the parent room/zone that owns a service of type "grouped_light".
+function buildGroupNameMap(rooms: any, zones: any): Map<string, { name: string; parentType: string }> {
+    const map = new Map<string, { name: string; parentType: string }>();
+    for (const parent of [...(rooms?.data ?? []), ...(zones?.data ?? [])]) {
+        const name = parent?.metadata?.name;
+        const parentType = parent?.type;
+        if (!name) continue;
+        for (const svc of parent.services ?? []) {
+            if (svc?.rtype === "grouped_light" && svc?.rid) {
+                map.set(svc.rid, { name, parentType });
+            }
+        }
+    }
+    return map;
+}
+
+// GET /api/hue/groups — returns all grouped_light resources with friendly names
 export async function GET() {
     const integration = await queryOne<any>(
         `SELECT * FROM integrations WHERE type = $1 AND active = true LIMIT 1`,
@@ -70,18 +88,22 @@ export async function GET() {
     const token = await getRemoteToken(integration);
     if (token) {
         try {
-            const res = await fetch("https://api.meethue.com/route/clip/v2/resource/grouped_light", {
-                headers: {
-                    "Authorization": `Bearer ${token}`,
-                    "hue-application-key": appKey,
-                },
+            const headers = { "Authorization": `Bearer ${token}`, "hue-application-key": appKey };
+            const [glRes, roomRes, zoneRes] = await Promise.all([
+                fetch("https://api.meethue.com/route/clip/v2/resource/grouped_light", { headers }),
+                fetch("https://api.meethue.com/route/clip/v2/resource/room",           { headers }),
+                fetch("https://api.meethue.com/route/clip/v2/resource/zone",           { headers }),
+            ]);
+            const [glJson, roomJson, zoneJson] = await Promise.all([glRes.json(), roomRes.json(), zoneRes.json()]);
+            const nameMap = buildGroupNameMap(roomJson, zoneJson);
+            const groups = (glJson?.data ?? []).map((g: any) => {
+                const entry = nameMap.get(g.id);
+                return {
+                    id:   g.id,
+                    name: entry?.name ?? g.metadata?.name ?? "All lights",
+                    type: entry?.parentType ?? g.type ?? "grouped_light",
+                };
             });
-            const json = await res.json();
-            const groups = (json?.data ?? []).map((g: any) => ({
-                id:   g.id,
-                name: g.metadata?.name ?? g.id,
-                type: g.type ?? "grouped_light",
-            }));
             return NextResponse.json({ groups, via: "remote" });
         } catch (e: any) {
             return NextResponse.json({ error: e?.message }, { status: 500 });
@@ -91,12 +113,20 @@ export async function GET() {
     // 2️⃣ Fallback: local bridge
     if (!bridgeIp) return NextResponse.json({ error: "No remote token and no bridge_ip configured" }, { status: 503 });
     try {
-        const json = await localFetch(bridgeIp, appKey, "/clip/v2/resource/grouped_light");
-        const groups = (json?.data ?? []).map((g: any) => ({
-            id:   g.id,
-            name: g.metadata?.name ?? g.id,
-            type: g.type ?? "grouped_light",
-        }));
+        const [glJson, roomJson, zoneJson] = await Promise.all([
+            localFetch(bridgeIp, appKey, "/clip/v2/resource/grouped_light"),
+            localFetch(bridgeIp, appKey, "/clip/v2/resource/room"),
+            localFetch(bridgeIp, appKey, "/clip/v2/resource/zone"),
+        ]);
+        const nameMap = buildGroupNameMap(roomJson, zoneJson);
+        const groups = (glJson?.data ?? []).map((g: any) => {
+            const entry = nameMap.get(g.id);
+            return {
+                id:   g.id,
+                name: entry?.name ?? g.metadata?.name ?? "All lights",
+                type: entry?.parentType ?? g.type ?? "grouped_light",
+            };
+        });
         return NextResponse.json({ groups, via: "local" });
     } catch (e: any) {
         return NextResponse.json({ error: e?.message }, { status: 500 });

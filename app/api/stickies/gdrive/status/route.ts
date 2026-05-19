@@ -16,7 +16,13 @@ export async function GET(req: NextRequest) {
         ["gdrive"]
     );
 
+    const localConnected = !!(data?.refresh_token && data?.active);
+    // On Vercel, only local connection counts. Locally, the prod-proxy is a valid path too,
+    // so report connected when STICKIES_API_KEY is available (the proxy will use it).
+    const proxyAvailable = !process.env.VERCEL && !!process.env.STICKIES_API_KEY;
+
     return NextResponse.json({
-        connected: !!(data?.refresh_token && data?.active),
+        connected: localConnected || proxyAvailable,
+        via: localConnected ? "local" : proxyAvailable ? "proxy" : "none",
     });
 }
