@@ -9,7 +9,10 @@ export default defineConfig({
         include: ["lib/**/*.test.ts", "tests/unit/**/*.test.ts", "tests/integration/**/*.test.ts"],
         coverage: {
             provider: "v8",
-            thresholds: { lines: 60, functions: 50, branches: 45, statements: 58 },
+            // Thresholds reflect the state on 2026-05-19 after the auth migration
+            // and the test push. They're floors — anyone dropping below this on a
+            // PR will see CI fail. Push them up; don't lower them.
+            thresholds: { lines: 83, functions: 73, branches: 67, statements: 79 },
             include: ["lib/**/*.ts", "app/api/**/*.ts"],
             exclude: [
                 "lib/db.ts",

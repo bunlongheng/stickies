@@ -71,4 +71,71 @@ describe("POST /api/stickies/push-nav", () => {
         const body = await res.json();
         expect(body.ok).toBe(true);
     });
+
+    it("sends web-push notifications to subscriptions, skipping the sender's own endpoint", async () => {
+        const { query } = await import("@/lib/db-driver");
+        (query as any).mockResolvedValueOnce([
+            { endpoint: "https://push.example.com/A", keys: { p256dh: "k1", auth: "a1" } },
+            { endpoint: "https://push.example.com/B", keys: { p256dh: "k2", auth: "a2" } },
+            { endpoint: "https://push.example.com/SELF", keys: { p256dh: "k3", auth: "a3" } },
+        ]);
+        const webpush = (await import("web-push")) as any;
+        webpush.default.sendNotification.mockClear();
+        const req = new Request("http://localhost:4444/api/stickies/push-nav", {
+            method: "POST",
+            headers: { Authorization: "Bearer test-api-key", "Content-Type": "application/json" },
+            body: JSON.stringify({ url: "/?id=note-1", title: "Open Note", senderEndpoint: "https://push.example.com/SELF" }),
+        });
+        const res = await POST(req);
+        expect(res.status).toBe(200);
+        // 2 endpoints (A and B), not 3 — SELF is filtered out
+        expect(webpush.default.sendNotification).toHaveBeenCalledTimes(2);
+        // Payload includes the title + url
+        const sentPayload = JSON.parse(webpush.default.sendNotification.mock.calls[0][1]);
+        expect(sentPayload.url).toBe("/?id=note-1");
+        expect(sentPayload.title).toBe("Open Note");
+    });
+
+    it("uses default 'Stickies' title when none supplied", async () => {
+        const { query } = await import("@/lib/db-driver");
+        (query as any).mockResolvedValueOnce([
+            { endpoint: "https://push.example.com/A", keys: { p256dh: "k", auth: "a" } },
+        ]);
+        const webpush = (await import("web-push")) as any;
+        webpush.default.sendNotification.mockClear();
+        const req = new Request("http://localhost:4444/api/stickies/push-nav", {
+            method: "POST",
+            headers: { Authorization: "Bearer test-api-key", "Content-Type": "application/json" },
+            body: JSON.stringify({ url: "/x" }),
+        });
+        await POST(req);
+        const sentPayload = JSON.parse(webpush.default.sendNotification.mock.calls[0][1]);
+        expect(sentPayload.title).toBe("Stickies");
+    });
+
+    it("swallows web-push errors (Promise.allSettled, individual failures don't fail the route)", async () => {
+        const { query } = await import("@/lib/db-driver");
+        (query as any).mockResolvedValueOnce([
+            { endpoint: "https://push.example.com/dead", keys: { p256dh: "k", auth: "a" } },
+        ]);
+        const webpush = (await import("web-push")) as any;
+        webpush.default.sendNotification.mockReset().mockRejectedValueOnce(new Error("410 gone"));
+        const req = new Request("http://localhost:4444/api/stickies/push-nav", {
+            method: "POST",
+            headers: { Authorization: "Bearer test-api-key", "Content-Type": "application/json" },
+            body: JSON.stringify({ url: "/x" }),
+        });
+        const res = await POST(req);
+        expect(res.status).toBe(200);  // still ok despite the rejected send
+    });
+
+    it("rejects non-string url values (e.g. number, object) with 400", async () => {
+        const req = new Request("http://localhost:4444/api/stickies/push-nav", {
+            method: "POST",
+            headers: { Authorization: "Bearer test-api-key", "Content-Type": "application/json" },
+            body: JSON.stringify({ url: 42 }),
+        });
+        const res = await POST(req);
+        expect(res.status).toBe(400);
+    });
 });

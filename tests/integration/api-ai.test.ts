@@ -88,4 +88,36 @@ describe("POST /api/stickies/ai", () => {
         const res = await POST(req);
         expect(res.status).toBe(400);
     });
+
+    it("streams the actual delta text chunks (full body collected)", async () => {
+        const req = new Request("http://localhost:4444/api/stickies/ai", {
+            method: "POST",
+            headers: { Authorization: "Bearer test-api-key", "Content-Type": "application/json" },
+            body: JSON.stringify({ prompt: "Say hi" }),
+        });
+        const res = await POST(req);
+        const text = await res.text();
+        // Mocked stream emits "Hello" + " world"
+        expect(text).toBe("Hello world");
+    });
+
+    it("sends no-cache header so the streamed response isn't buffered by CDNs", async () => {
+        const req = new Request("http://localhost:4444/api/stickies/ai", {
+            method: "POST",
+            headers: { Authorization: "Bearer test-api-key", "Content-Type": "application/json" },
+            body: JSON.stringify({ prompt: "x" }),
+        });
+        const res = await POST(req);
+        expect(res.headers.get("cache-control")).toBe("no-cache");
+    });
+
+    it("works with only `prompt` (no title, no content)", async () => {
+        const req = new Request("http://localhost:4444/api/stickies/ai", {
+            method: "POST",
+            headers: { Authorization: "Bearer test-api-key", "Content-Type": "application/json" },
+            body: JSON.stringify({ prompt: "Just a one-liner" }),
+        });
+        const res = await POST(req);
+        expect(res.status).toBe(200);
+    });
 });
