@@ -1,39 +1,30 @@
 /**
  * POST /api/stickies/upload
- * Proxies file uploads to Google Drive via /api/stickies/gdrive
+ * Proxies file uploads to Google Drive via /api/stickies/gdrive.
+ * Auth: STICKIES_API_KEY / STICKIES_PASSWORD bearer OR a NextAuth owner session cookie.
  */
 import crypto from "crypto";
-import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
-
-function getSupabase() {
-    return createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY!
-    );
-}
+import { auth } from "@/auth";
 
 async function isAuthorized(req: Request): Promise<boolean> {
-    const auth = req.headers.get("authorization") ?? "";
-    const bearer = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+    const authHeader = req.headers.get("authorization") ?? "";
     const candidates = [
         process.env.STICKIES_API_KEY,
         process.env.STICKIES_PASSWORD,
     ].filter(Boolean) as string[];
     for (const secret of candidates) {
         const expected = `Bearer ${secret}`;
-        if (auth.length !== expected.length) continue;
+        if (authHeader.length !== expected.length) continue;
         try {
-            if (crypto.timingSafeEqual(Buffer.from(auth), Buffer.from(expected))) return true;
+            if (crypto.timingSafeEqual(Buffer.from(authHeader), Buffer.from(expected))) return true;
         } catch {}
     }
-    if (bearer) {
-        try {
-            const { data: { user } } = await getSupabase().auth.getUser(bearer);
-            if (user) return true;
-        } catch {}
-    }
-    return false;
+    // NextAuth session — only the owner email passes.
+    const ownerEmail = process.env.OWNER_EMAIL?.trim().toLowerCase();
+    if (!ownerEmail) return false;
+    const session = await auth();
+    return session?.user?.email?.toLowerCase() === ownerEmail;
 }
 
 export async function POST(req: Request) {
@@ -41,7 +32,6 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Forward to gdrive route internally
     const formData = await req.formData();
     const baseUrl = process.env.NEXT_PUBLIC_APP_BASE_URL || "http://localhost:4444";
 

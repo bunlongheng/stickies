@@ -1,8 +1,10 @@
-import { createClient } from '@/lib/supabase/server'
-import { NextResponse } from 'next/server'
+/**
+ * Logout: signs the user out of NextAuth and redirects to the sign-in page.
+ * Kept as a thin wrapper so existing client code that POSTs here still works.
+ */
+import { signOut } from "@/auth";
 
 export async function POST() {
-  const supabase = await createClient()
-  await supabase.auth.signOut()
-  return NextResponse.json({ ok: true })
+    // signOut() returns a redirect Response.
+    return await signOut({ redirect: false, redirectTo: "/sign-in" });
 }

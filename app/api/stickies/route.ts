@@ -1,8 +1,8 @@
-import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import Pusher from "pusher";
 import crypto from "crypto";
 import { query, queryOne, execute } from "@/lib/db-driver";
+import { auth as getSession } from "@/auth";
 
 /**
  * Quality check for markdown notes.
@@ -43,17 +43,6 @@ const palette12 = [
 ];
 
 // ── Singletons ───────────────────────────────────────────────────────────────
-let _supabaseAuth: ReturnType<typeof createClient> | null = null;
-function getSupabaseAuth() {
-    if (!_supabaseAuth) {
-        _supabaseAuth = createClient(
-            process.env.NEXT_PUBLIC_SUPABASE_URL!,
-            process.env.SUPABASE_SERVICE_ROLE_KEY!
-        );
-    }
-    return _supabaseAuth;
-}
-
 let _pusher: Pusher | null = null;
 function getPusher() {
     if (!_pusher) {
@@ -97,7 +86,23 @@ function triggerHue(color: string) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ color }),
-    }).catch(() => {});
+    })
+    .then(async (res) => {
+        const result = res.ok ? "ok" : "error";
+        const detail = res.ok ? `${color} via ${(await res.json().catch(() => ({}))).via || "unknown"}` : `HTTP ${res.status}`;
+        execute(
+            `INSERT INTO automation_logs (automation_id, automation_name, triggered_at, result, detail, via, trigger_payload)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            ["0f3b671c-95a1-4b4e-b59c-ffd2ed3de7e9", "Note Created \u2192 Hue Flash", new Date().toISOString(), result, detail, "ext-api", JSON.stringify({ color })]
+        ).catch(() => {});
+    })
+    .catch((err) => {
+        execute(
+            `INSERT INTO automation_logs (automation_id, automation_name, triggered_at, result, detail, via, trigger_payload)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            ["0f3b671c-95a1-4b4e-b59c-ffd2ed3de7e9", "Note Created \u2192 Hue Flash", new Date().toISOString(), "error", err?.message || "fetch failed", "ext-api", JSON.stringify({ color })]
+        ).catch(() => {});
+    });
 }
 
 // ── Auth ────────────────────────────────────────────────────────────────────
@@ -151,18 +156,18 @@ async function authenticate(req: Request): Promise<AuthResult | null> {
         return { type: "owner", userId: process.env.OWNER_USER_ID?.trim() ?? "" };
     }
 
-    if (!bearer) return null;
-
-    // Supabase JWT → verify via auth service (not database)
-    const { data: { user } } = await getSupabaseAuth().auth.getUser(bearer);
-    if (user) {
+    // NextAuth session (cookie-based). No bearer JWT for browser sessions anymore.
+    const session = await getSession();
+    if (session?.user?.email) {
         const ownerUserId = process.env.OWNER_USER_ID?.trim();
         const ownerEmail  = process.env.OWNER_EMAIL?.trim();
-        const isOwner =
-            (ownerUserId && user.id === ownerUserId) ||
-            (ownerEmail  && user.email?.toLowerCase() === ownerEmail.toLowerCase());
-        if (isOwner) return { type: "owner", userId: user.id };
-        return { type: "user", userId: user.id };
+        const isOwner = ownerEmail && session.user.email.toLowerCase() === ownerEmail.toLowerCase();
+        if (isOwner) {
+            // Surface the legacy OWNER_USER_ID so all 400+ existing notes still resolve.
+            return { type: "owner", userId: ownerUserId ?? String((session.user as any).id ?? "") };
+        }
+        // Non-owner authenticated user — scope to their NextAuth id for any future multi-user data.
+        return { type: "user", userId: String((session.user as any).id ?? "") };
     }
 
     return null;
@@ -179,12 +184,15 @@ function withUser(sql: string, params: unknown[], userId?: string): { sql: strin
 const RAW_INSERT_ALLOWED_COLS = new Set([
     "title", "content", "folder_name", "folder_color", "is_folder", "type",
     "order", "created_at", "updated_at", "parent_folder_name", "folder_id", "list_mode",
+    "format", "doc",
 ]);
 
 // ── Allowed columns for PATCH updates ────────────────────────────────────────
 const PATCH_ALLOWED_COLS = new Set([
     "title", "content", "folder_name", "folder_color", "is_folder", "type",
     "order", "updated_at", "parent_folder_name", "folder_id", "list_mode", "tags", "trashed_at", "is_public", "icon",
+    // Rich-text support: per-note editor mode + ProseMirror JSON doc
+    "format", "doc",
 ]);
 
 // ── Color helpers ────────────────────────────────────────────────────────────
@@ -358,7 +366,7 @@ export async function GET(req: Request) {
     }
 
     if (folderFilter) {
-        const FOLDER_COLS = `id, title, folder_name, folder_color, folder_id, parent_folder_name, "order", updated_at, created_at, type, is_folder, is_public, trashed_at, icon, list_mode, CASE WHEN (type = 'checklist' OR list_mode = true) AND content IS NOT NULL AND length(content) > 0 THEN (SELECT COUNT(*)::int FROM regexp_split_to_table(content, E'\\n') AS line WHERE TRIM(line) <> '' AND TRIM(line) !~ '^[-=*#~_.]{2,}$') ELSE 0 END AS task_count, CASE WHEN (type = 'checklist' OR list_mode = true) AND content IS NOT NULL AND length(content) > 0 THEN COALESCE((SELECT SUM(CASE WHEN TRIM(line) ~* '^\\[x\\]' THEN 1.0 WHEN TRIM(line) ~ '^\\[/\\]' THEN 0.5 ELSE 0 END)::float FROM regexp_split_to_table(content, E'\\n') AS line), 0) ELSE 0 END AS task_done_count, CASE WHEN (type = 'checklist' OR list_mode = true) AND content IS NOT NULL AND length(content) > 0 THEN (SELECT COUNT(*)::int FROM regexp_split_to_table(content, E'\\n') AS line WHERE TRIM(line) <> '' AND TRIM(line) !~ '^[-=*#~_.]{2,}$' AND TRIM(line) !~* '^\\[x\\]') ELSE 0 END AS task_remaining_count`;
+        const FOLDER_COLS = `id, title, folder_name, folder_color, folder_id, parent_folder_name, "order", updated_at, created_at, type, is_folder, is_public, trashed_at, icon, list_mode, format, CASE WHEN (type = 'checklist' OR list_mode = true) AND content IS NOT NULL AND length(content) > 0 THEN (SELECT COUNT(*)::int FROM regexp_split_to_table(content, E'\\n') AS line WHERE TRIM(line) <> '' AND TRIM(line) !~ '^[-=*#~_.]{2,}$') ELSE 0 END AS task_count, CASE WHEN (type = 'checklist' OR list_mode = true) AND content IS NOT NULL AND length(content) > 0 THEN COALESCE((SELECT SUM(CASE WHEN TRIM(line) ~* '^\\[x\\]' THEN 1.0 WHEN TRIM(line) ~ '^\\[/\\]' THEN 0.5 ELSE 0 END)::float FROM regexp_split_to_table(content, E'\\n') AS line), 0) ELSE 0 END AS task_done_count, CASE WHEN (type = 'checklist' OR list_mode = true) AND content IS NOT NULL AND length(content) > 0 THEN (SELECT COUNT(*)::int FROM regexp_split_to_table(content, E'\\n') AS line WHERE TRIM(line) <> '' AND TRIM(line) !~ '^[-=*#~_.]{2,}$' AND TRIM(line) !~* '^\\[x\\]') ELSE 0 END AS task_remaining_count`;
         const limitParam = parseInt(url.searchParams.get("limit") ?? "0");
         const offsetParam = parseInt(url.searchParams.get("offset") ?? "0");
         const sinceParam = url.searchParams.get("since"); // ISO timestamp — delta sync
@@ -441,7 +449,7 @@ export async function GET(req: Request) {
         return NextResponse.json({ notes: rows, total: rows.length });
     }
 
-    const LIST_COLS = `id, title, folder_name, folder_color, folder_id, parent_folder_name, "order", updated_at, created_at, type, is_folder, is_public, trashed_at, icon, list_mode, CASE WHEN (type = 'checklist' OR list_mode = true) AND content IS NOT NULL AND length(content) > 0 THEN (SELECT COUNT(*)::int FROM regexp_split_to_table(content, E'\\n') AS line WHERE TRIM(line) <> '' AND TRIM(line) !~ '^[-=*#~_.]{2,}$') ELSE 0 END AS task_count, CASE WHEN (type = 'checklist' OR list_mode = true) AND content IS NOT NULL AND length(content) > 0 THEN COALESCE((SELECT SUM(CASE WHEN TRIM(line) ~* '^\\[x\\]' THEN 1.0 WHEN TRIM(line) ~ '^\\[/\\]' THEN 0.5 ELSE 0 END)::float FROM regexp_split_to_table(content, E'\\n') AS line), 0) ELSE 0 END AS task_done_count, CASE WHEN (type = 'checklist' OR list_mode = true) AND content IS NOT NULL AND length(content) > 0 THEN (SELECT COUNT(*)::int FROM regexp_split_to_table(content, E'\\n') AS line WHERE TRIM(line) <> '' AND TRIM(line) !~ '^[-=*#~_.]{2,}$' AND TRIM(line) !~* '^\\[x\\]') ELSE 0 END AS task_remaining_count`;
+    const LIST_COLS = `id, title, folder_name, folder_color, folder_id, parent_folder_name, "order", updated_at, created_at, type, is_folder, is_public, trashed_at, icon, list_mode, format, CASE WHEN (type = 'checklist' OR list_mode = true) AND content IS NOT NULL AND length(content) > 0 THEN (SELECT COUNT(*)::int FROM regexp_split_to_table(content, E'\\n') AS line WHERE TRIM(line) <> '' AND TRIM(line) !~ '^[-=*#~_.]{2,}$') ELSE 0 END AS task_count, CASE WHEN (type = 'checklist' OR list_mode = true) AND content IS NOT NULL AND length(content) > 0 THEN COALESCE((SELECT SUM(CASE WHEN TRIM(line) ~* '^\\[x\\]' THEN 1.0 WHEN TRIM(line) ~ '^\\[/\\]' THEN 0.5 ELSE 0 END)::float FROM regexp_split_to_table(content, E'\\n') AS line), 0) ELSE 0 END AS task_done_count, CASE WHEN (type = 'checklist' OR list_mode = true) AND content IS NOT NULL AND length(content) > 0 THEN (SELECT COUNT(*)::int FROM regexp_split_to_table(content, E'\\n') AS line WHERE TRIM(line) <> '' AND TRIM(line) !~ '^[-=*#~_.]{2,}$' AND TRIM(line) !~* '^\\[x\\]') ELSE 0 END AS task_remaining_count`;
     const { sql, params } = withUser(
         `SELECT ${LIST_COLS} FROM "${table}" WHERE is_folder = false`,
         [],
@@ -619,7 +627,8 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: "No valid columns provided" }, { status: 400 });
         }
         const cols = Object.keys(filteredPayload).map((k) => `"${k}"`).join(", ");
-        const vals = Object.values(filteredPayload);
+        // Same JSONB stringify treatment as PATCH — see PATCH_ALLOWED_COLS notes above.
+        const vals = Object.entries(filteredPayload).map(([k, v]) => (k === "doc" && v !== null && typeof v === "object" ? JSON.stringify(v) : v));
         const placeholders = vals.map((_, i) => `$${i + 1}`).join(", ");
         const data = await queryOne(
             `INSERT INTO "${table}" (${cols}) VALUES (${placeholders}) RETURNING *`,
@@ -1012,7 +1021,9 @@ export async function PATCH(req: Request) {
     if (setEntries.length === 0) return NextResponse.json({ note: { id } });
 
     const setClauses = setEntries.map(([k], i) => `"${k}" = $${i + 1}`).join(", ");
-    const vals: unknown[] = setEntries.map(([, v]) => v);
+    // JSONB columns (`doc`) must be stringified before binding so node-pg serializes them
+    // correctly; objects passed raw stringify to "[object Object]" and break the JSONB cast.
+    const vals: unknown[] = setEntries.map(([k, v]) => (k === "doc" && v !== null && typeof v === "object" ? JSON.stringify(v) : v));
     vals.push(id);
     const { sql, params } = withUser(
         `UPDATE "${table}" SET ${setClauses} WHERE id = $${vals.length}`,

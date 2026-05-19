@@ -1,43 +1,25 @@
-import { createServerClient } from '@supabase/ssr'
-import { NextRequest, NextResponse } from 'next/server'
-
 /**
  * GET /api/auth/native-callback
- * OAuth callback for the native macOS app.
- * Exchanges the code for a session, then redirects to stickiesnative:// with tokens.
+ *
+ * OAuth callback for the native macOS app (stickies-native).
+ *
+ * NOTE: This route was built around Supabase's session exchange. The Supabase
+ * migration removed that mechanism; reworking the native flow is tracked
+ * separately (see project_rich_text.md notes on native integration).
+ *
+ * Interim contract: the native app should keep using STICKIES_API_KEY for any
+ * /api/stickies/ext calls. This route returns a clear 503 so the native app's
+ * error surface is obvious instead of silently failing or returning an empty {}.
  */
-export async function GET(request: NextRequest) {
-    const { searchParams } = new URL(request.url)
-    const code = searchParams.get('code')
+import { NextResponse } from "next/server";
 
-    if (!code) {
-        return NextResponse.json({ error: 'No code' }, { status: 400 })
-    }
-
-    const response = NextResponse.json({})
-    const supabase = createServerClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+export async function GET() {
+    return NextResponse.json(
         {
-            cookies: {
-                getAll() { return request.cookies.getAll() },
-                setAll(cookiesToSet) {
-                    cookiesToSet.forEach(({ name, value, options }) =>
-                        response.cookies.set(name, value, options)
-                    )
-                },
-            },
-        }
-    )
-
-    const { data, error } = await supabase.auth.exchangeCodeForSession(code)
-
-    if (error || !data.session) {
-        return NextResponse.json({ error: error?.message || 'Failed to exchange code' }, { status: 400 })
-    }
-
-    // Redirect to native app with tokens
-    const nativeURL = `stickiesnative://auth/callback?access_token=${data.session.access_token}&refresh_token=${data.session.refresh_token}&email=${encodeURIComponent(data.session.user.email || '')}`
-
-    return NextResponse.redirect(nativeURL)
+            error: "native_callback_unimplemented",
+            message:
+                "Native OAuth callback is being reworked after the move from Supabase to NextAuth. Use STICKIES_API_KEY for API access in the meantime; rich notes embed in WKWebView via /embed/note/[id]?key=<STICKIES_API_KEY>.",
+        },
+        { status: 503 },
+    );
 }

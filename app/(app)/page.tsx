@@ -2,14 +2,14 @@
 
 import React, { useState, useEffect, useRef, useMemo, useCallback, useTransition } from "react";
 import { createPortal } from "react-dom";
-import { createClient } from "@supabase/supabase-js";
-import { createClient as createBrowserClient } from "@/lib/supabase/client";
+// Supabase removed — auth now via NextAuth (see auth.ts at project root).
 import { usePageMeta } from "@/lib/usePageMeta";
 import dynamic from "next/dynamic";
 import LZString from "lz-string";
 const GraphView = dynamic(() => import("@/components/GraphView").then(m => m.GraphView), { ssr: false });
 const MarkdownPreview = dynamic(() => import("@/components/MarkdownPreview").then(m => m.MarkdownPreview), { ssr: false });
 const CodeViewer = dynamic(() => import("@/components/CodeViewer").then(m => m.CodeViewer), { ssr: false });
+const RichEditor = dynamic(() => import("@/components/RichEditor"), { ssr: false, loading: () => <div className="flex-1 px-6 py-4 text-zinc-500 text-xs">Loading rich editor…</div> });
 
 // Icons
 import MagnifyingGlassIcon from "@heroicons/react/24/outline/MagnifyingGlassIcon";
@@ -104,35 +104,12 @@ mdRenderer.code = function ({ text, lang }: { text: string; lang?: string }) {
 import { QRCodeSVG, QRCodeCanvas } from "qrcode.react";
 import PusherClient from "pusher-js";
 
-// Lazy to avoid build-time errors when env vars are not set
-const getSupabase = () => createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
-const supabase = { from: (...a: Parameters<ReturnType<typeof getSupabase>["from"]>) => getSupabase().from(...a) } as ReturnType<typeof getSupabase>;
-
-// Cache the JWT in memory so getSession() isn't called on every fetch.
-// Cleared automatically when the token is about to expire.
-let _tokenCache: { value: string; expiresAt: number } | null = null;
-
+// Browser-side fetch calls authenticate via NextAuth's session cookie (sent automatically).
+// `getAuthToken()` is kept for compatibility with existing call sites — returns an empty
+// string so the `Authorization: Bearer ` header doesn't carry a stale credential. The server
+// reads the session from the cookie via `auth()` in app/api/stickies/route.ts.
 async function getAuthToken(): Promise<string> {
-    // Return cached token if it's still valid for >60 seconds
-    if (_tokenCache && Date.now() < _tokenCache.expiresAt) return _tokenCache.value;
-
-    // Always use the Supabase session JWT — never send the static API key from the browser.
-    // The static key is for external callers (CLI, Claude) only; sending it from the browser
-    // would grant every visitor owner-level access to all notes.
-    // Use the SSR-aware browser client — reads session from cookies (set by @supabase/ssr)
-    const sb = createBrowserClient();
-    const { data: { session } } = await sb.auth.getSession();
-    if (!session) { _tokenCache = null; return ""; }
-    // Proactively refresh if the token expires within 60 seconds
-    const expiresAt = (session as any).expires_at as number | undefined;
-    let token = session.access_token;
-    if (expiresAt !== undefined && expiresAt - Math.floor(Date.now() / 1000) < 60) {
-        const { data } = await sb.auth.refreshSession();
-        token = data.session?.access_token ?? "";
-    }
-    // Cache for 50 seconds (well within the typical 3600s JWT lifetime)
-    _tokenCache = { value: token, expiresAt: Date.now() + 50_000 };
-    return token;
+    return "";
 }
 const notesApi = {
     update: async (id: string, fields: Record<string, unknown>) => {
@@ -1087,6 +1064,8 @@ export default function NotesMaster() {
     const [undoDeleteTask, setUndoDeleteTask] = useState<{ text: string; lineIdx: number } | null>(null);
     const taskContentHistory = useRef<string[]>([]);
     const pendingDeleteRef = useRef<{ note: any; title: string; content: string; noteColor: string; targetFolder: string; timeoutId: ReturnType<typeof setTimeout> } | null>(null);
+    // Multi-level undo stack for destructive ops (deletes that committed past the 8s window). In-memory, max 5.
+    const actionUndoStackRef = useRef<Array<{ type: "delete"; note: any; prevFolder: string | null }>>([]);
     useEffect(() => { if (!undoDeleteTask) return; const t = setTimeout(() => setUndoDeleteTask(null), 5000); return () => clearTimeout(t); }, [undoDeleteTask]);
     const [flashColor, setFlashColor] = useState("#ffffff");
     const [flashNote, setFlashNote] = useState<any | null>(null);
@@ -1121,6 +1100,10 @@ export default function NotesMaster() {
         if (titleInputMobileRef.current) titleInputMobileRef.current.value = title;
     }, [title]);
     const [content, setContent] = useState("");
+    // Rich-text (TipTap) state — only used when current note's format === 'rich'.
+    // Doc is the canonical ProseMirror JSON; content (above) is a derived plain-text mirror for search/CLI.
+    const [richDoc, setRichDoc] = useState<import("@tiptap/react").JSONContent | null>(null);
+    const latestRichDocRef = useRef<import("@tiptap/react").JSONContent | null>(null);
     const undoStackRef = useRef<string[]>([]);
     const redoStackRef = useRef<string[]>([]);
     const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1295,6 +1278,10 @@ export default function NotesMaster() {
     const [codeEditMode, setCodeEditMode] = useState(false);
     const [typeFilter, setTypeFilter] = useState<string | null>(null);
     const [pendingNoteType, setPendingNoteType] = useState<string | null>(null);
+    // For brand-new unsaved notes (editingNote=null), this drives the editor mode.
+    // openNewNote() seeds it to 'rich' so Cmd+N / + buttons default to Evernote-style.
+    // Ext API / CLI / AI agents are unaffected — they hit /api/stickies/ext with their own format.
+    const [pendingFormat, setPendingFormat] = useState<"text" | "markdown" | "rich" | null>(null);
     const [showNoteTypePicker, setShowNoteTypePicker] = useState(false);
     const [aiPromptOpen, setAiPromptOpen] = useState(false);
     const [aiPrompt, setAiPrompt] = useState("");
@@ -1403,7 +1390,7 @@ export default function NotesMaster() {
         description: "Personal sticky notes",
         url: `${origin}/`,
         basePath: "/icons/stickies",
-        themeColor: lastNote?.color || lastNote?.folder_color || "#007AFF",
+        themeColor: "#000000",
     });
 
     const setFolderFabOffsetWithRef = useCallback((next: { x: number; y: number }) => {
@@ -1554,37 +1541,38 @@ export default function NotesMaster() {
         } catch { /* ignore */ }
 
         try {
-            let token = await getAuthToken();
-            // If no session yet (OAuth redirect race), wait briefly and retry once
-            if (!token) {
+            // NextAuth session is cookie-based and sent automatically. Verify via /api/auth/session
+            // so we know whether we have an active sign-in before issuing the heavier fetches.
+            let sessionEmail: string | null = null;
+            try {
+                const r = await fetch("/api/auth/session", { cache: "no-store" });
+                if (r.ok) { const j = await r.json(); sessionEmail = j?.user?.email ?? null; }
+            } catch { /* network ok */ }
+            // OAuth redirect race: retry once after a short pause.
+            if (!sessionEmail && process.env.NODE_ENV === "production") {
                 await new Promise(r => setTimeout(r, 800));
-                _tokenCache = null;
-                token = await getAuthToken();
+                try {
+                    const r = await fetch("/api/auth/session", { cache: "no-store" });
+                    if (r.ok) { const j = await r.json(); sessionEmail = j?.user?.email ?? null; }
+                } catch {}
             }
-            syncHadTokenRef.current = !!token;
-            if (!token && process.env.NODE_ENV === "production") {
+            syncHadTokenRef.current = !!sessionEmail;
+            if (!sessionEmail && process.env.NODE_ENV === "production") {
                 // No session — clear stale cache and redirect to login
                 try { localStorage.removeItem(DB_CACHE_KEY); localStorage.removeItem(COUNTS_CACHE_KEY); } catch {}
                 window.location.href = "/sign-in";
                 return;
             }
             const _t0 = performance.now();
+            // NextAuth session cookie is sent automatically — no bearer header needed.
             const [foldersRes, integrationsResult, countsResult, prefsResult] = await Promise.all([
-                fetch("/api/stickies?folders=1", {
-                    headers: { Authorization: `Bearer ${token}` },
-                }).then((r) => {
+                fetch("/api/stickies?folders=1").then((r) => {
                     if (r.status === 401) { try { localStorage.removeItem(DB_CACHE_KEY); } catch {} }
                     return r.ok ? r.json() : { folders: [] };
                 }).catch(() => ({ folders: [] })),
-                fetch("/api/stickies/integrations", {
-                    headers: { Authorization: `Bearer ${token}` },
-                }).then((r) => r.ok ? r.json() : []).catch(() => []),
-                fetch("/api/stickies?counts=1", {
-                    headers: { Authorization: `Bearer ${token}` },
-                }).then((r) => r.ok ? r.json() : { counts: {} }).catch(() => ({ counts: {} })),
-                fetch("/api/stickies?prefs=1", {
-                    headers: { Authorization: `Bearer ${token}` },
-                }).then((r) => r.ok ? r.json() : { pinned_folders: [] }).catch(() => ({ pinned_folders: [] })),
+                fetch("/api/stickies/integrations").then((r) => r.ok ? r.json() : []).catch(() => []),
+                fetch("/api/stickies?counts=1").then((r) => r.ok ? r.json() : { counts: {} }).catch(() => ({ counts: {} })),
+                fetch("/api/stickies?prefs=1").then((r) => r.ok ? r.json() : { pinned_folders: [] }).catch(() => ({ pinned_folders: [] })),
             ]);
             const folderItems = (foldersRes.folders ?? []).map((f: any) => ({ ...f, is_folder: true }));
             // Preserve any already-loaded notes in dbData (from prior folder navigations)
@@ -1657,41 +1645,20 @@ export default function NotesMaster() {
         return () => window.removeEventListener("resize", updateCols);
     }, []);
 
+    // NextAuth session: pull email from /api/auth/session.
+    // Replaces the old Supabase onAuthStateChange listener — NextAuth signs in via a full-page
+    // redirect so the page mounts with the session already present (no need to listen for it).
     useEffect(() => {
-        const sb = createBrowserClient();
-        sb.auth.getUser().then(({ data }) => {
-            setUserEmail(data.user?.email ?? null);
-        });
-        // On fresh login: INITIAL_SESSION fires with null session (not yet logged in),
-        // then SIGNED_IN fires when the session is established from the OAuth callback.
-        // We track whether we've seen an INITIAL_SESSION first — if yes, the next
-        // SIGNED_IN is a real login (not just a page-refresh with an existing session).
-        let sawInitialSession = false;
-        const { data: { subscription } } = sb.auth.onAuthStateChange((event, session) => {
-            if (event === "INITIAL_SESSION") {
-                // If there's no session on first load, mark that we're waiting for login
-                if (!session) sawInitialSession = true;
-            }
-            if (event === "SIGNED_IN" && (sawInitialSession || !syncHadTokenRef.current)) {
-                // Fresh login — sync() may have fired before session was ready, re-run it now
+        void fetch("/api/auth/session").then(r => r.ok ? r.json() : null).then(data => {
+            const email = data?.user?.email ?? null;
+            setUserEmail(email);
+            // Treat a fresh page-load with a valid email as a successful sign-in for the
+            // welcome banner — equivalent to the old SIGNED_IN signal.
+            if (email && !syncHadTokenRef.current) {
                 sessionStorage.removeItem("stickies:session-started");
                 setShowWelcomeBack(true);
-                void sync().then(() => {
-                    void loadAllNotes();
-                    const urlFolder = new URLSearchParams(window.location.search).get("folder");
-                    if (!urlFolder) {
-                        const lastFolder = localStorage.getItem(LAST_FOLDER_KEY);
-                        if (lastFolder === "__all__") {
-                            setActiveFolder(null);
-                        } else {
-                            const target = lastFolder || localStorage.getItem(DEFAULT_FOLDER_KEY) || "CLAUDE";
-                            setActiveFolder(target);
-                        }
-                    }
-                });
             }
-        });
-        return () => subscription.unsubscribe();
+        }).catch(() => setUserEmail(null));
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
@@ -2138,21 +2105,44 @@ export default function NotesMaster() {
         if (IS_PHONE) return;
         const handler = (e: KeyboardEvent) => {
             const mod = e.metaKey || e.ctrlKey;
-            // Cmd+Z → undo note deletion
-            if (mod && e.key === "z" && pendingDeleteRef.current) {
-                e.preventDefault();
-                const pd = pendingDeleteRef.current;
-                clearTimeout(pd.timeoutId);
-                pendingDeleteRef.current = null;
-                setDbData((prev) => [pd.note, ...prev.filter((r) => String(r.id) !== String(pd.note.id))]);
-                setEditingNote(pd.note);
-                setTitle(pd.title);
-                setContent(pd.content);
-                setNoteColor(pd.noteColor);
-                setTargetFolder(pd.targetFolder);
-                setEditorOpen(true);
-                showToast("Restored", pd.noteColor || "#34C759");
-                return;
+            // Cmd+Z → undo note deletion (only when textarea isn't focused, so native text undo still works)
+            if (mod && e.key === "z" && !e.shiftKey) {
+                const active = document.activeElement as HTMLElement | null;
+                const inTextarea = !!active && (active.tagName === "TEXTAREA" || active.tagName === "INPUT" || active.isContentEditable);
+                // 1) Cancel pre-commit delete (8s window) — original behavior
+                if (pendingDeleteRef.current) {
+                    e.preventDefault();
+                    const pd = pendingDeleteRef.current;
+                    clearTimeout(pd.timeoutId);
+                    pendingDeleteRef.current = null;
+                    setDbData((prev) => [pd.note, ...prev.filter((r) => String(r.id) !== String(pd.note.id))]);
+                    setEditingNote(pd.note);
+                    setTitle(pd.title);
+                    setContent(pd.content);
+                    setNoteColor(pd.noteColor);
+                    setTargetFolder(pd.targetFolder);
+                    setEditorOpen(true);
+                    showToast("Restored", pd.noteColor || "#34C759");
+                    return;
+                }
+                // 2) Pop from multi-level action stack — only when not editing text
+                if (!inTextarea && actionUndoStackRef.current.length > 0) {
+                    e.preventDefault();
+                    const action = actionUndoStackRef.current.pop()!;
+                    if (action.type === "delete") {
+                        const restored = { ...action.note, folder_name: action.prevFolder, trashed_at: null };
+                        setDbData((prev) => {
+                            const exists = prev.some((r) => String(r.id) === String(restored.id));
+                            return exists
+                                ? prev.map((r) => String(r.id) === String(restored.id) ? { ...r, folder_name: action.prevFolder, trashed_at: null } : r)
+                                : [restored, ...prev];
+                        });
+                        void notesApi.update(String(restored.id), { folder_name: action.prevFolder, trashed_at: null });
+                        const t = String(restored.title || "Untitled").slice(0, 16);
+                        showToast(`Restored: ${t}`, restored.folder_color || "#34C759");
+                    }
+                    return;
+                }
             }
             if (!mod) return;
             if (e.key === "k") {
@@ -2286,6 +2276,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                 if (!prev || String(prev.id) !== String(note.id)) return prev;
                 if (note.content !== undefined) setContent(note.content);
                 if (note.title   !== undefined) setTitle(note.title);
+                if (note.doc     !== undefined) { setRichDoc(note.doc); latestRichDocRef.current = note.doc; }
                 if (note.list_mode !== undefined) {
                     const isChecklist = note.list_mode || note.type === "checklist";
                     if (isChecklist) setListModeNotes((s) => new Set([...s, String(note.id)]));
@@ -3021,6 +3012,16 @@ const fireIntegrations = (trigger: string, note: any) => {
     // Auto-save disabled — save only on Cmd+S
     // eslint-disable-next-line react-hooks/exhaustive-deps
 
+    // Debounced autosave for rich-text edits (TipTap doesn't naturally fire blur on typing
+    // the way <textarea> does, so we drive a 2s debounce off onChange instead).
+    const richSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const scheduleAutoSave = useCallback(() => {
+        if (richSaveTimerRef.current) clearTimeout(richSaveTimerRef.current);
+        richSaveTimerRef.current = setTimeout(() => {
+            void saveNoteRef.current?.({ silent: true });
+        }, 2000);
+    }, []);
+
     const saveNote = useCallback(
         async ({ silent = false, deriveTitle = false }: { silent?: boolean; deriveTitle?: boolean } = {}) => {
             // Never save a brand-new note with no meaningful content
@@ -3066,9 +3067,14 @@ const fireIntegrations = (trigger: string, note: any) => {
                         return true;
                     })
             ));
+            const currentFormat = ((editingNote as any)?.format ?? pendingFormat ?? "text") as "text" | "markdown" | "rich";
             const payload: any = {
                 title: resolvedTitle,
                 content: saveContent,
+                format: currentFormat,
+                // For rich notes, persist the ProseMirror JSON alongside the plain-text mirror.
+                // For text/markdown notes, doc stays null.
+                ...(currentFormat === "rich" ? { doc: latestRichDocRef.current ?? richDoc } : {}),
                 folder_name: folderName,
                 folder_color: noteColor || folders.find((f) => f.name === folderName)?.color || editingNote?.folder_color || palette12[0],
                 is_folder: false,
@@ -3153,6 +3159,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                             // Mark as own-insert so Realtime INSERT handler skips it
                             localWriteRef.current.set(String(data.id), Date.now());
                             setPendingNoteType(null);
+                            setPendingFormat(null); // format is now sourced from editingNote.format
+
                             // Only take editingNote if user hasn't already switched to a different note
                             setEditingNote((prev: any) => (prev === null || String(prev.id) === optimisticId) ? data : prev);
                             setDbData((prev) => { const seen = new Set<string>(); return prev.map((n) => String(n.id) === optimisticId ? data : n).filter((n) => { const id = String(n.id); if (seen.has(id)) return false; seen.add(id); return true; }); });
@@ -3181,7 +3189,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                 isSavingRef.current = false;
             }
         },
-        [isDraftDirty, targetFolder, noteColor, activeFolder, folderStack, editingNote, content, folders, dbData, pendingNoteType],
+        [isDraftDirty, targetFolder, noteColor, activeFolder, folderStack, editingNote, content, folders, dbData, pendingNoteType, richDoc],
     );
     // Always-current ref so other callbacks can call saveNote without stale closures
     useEffect(() => { saveNoteRef.current = saveNote; }, [saveNote]);
@@ -3278,17 +3286,22 @@ const fireIntegrations = (trigger: string, note: any) => {
     }, [saveNote, closeEditorTools, editingNote?.id, targetFolder, activeFolder, noteColor]);
 
     // Pick a random palette color, avoiding the last-used one if possible
-    // Cmd+S → save
+    // Cmd+S → save + toast
     useEffect(() => {
         const handler = (e: KeyboardEvent) => {
             if ((e.metaKey || e.ctrlKey) && e.key === "s") {
                 e.preventDefault();
-                if (editorOpen) void saveNote({ silent: true, deriveTitle: true });
+                if (editorOpen) {
+                    void saveNote({ silent: true, deriveTitle: true }).then(() => {
+                        const t = (title || "Untitled").slice(0, 10) + ((title || "").length > 10 ? "…" : "");
+                        showToast(`"${t}" saved`, noteColor || "#34C759");
+                    });
+                }
             }
         };
         window.addEventListener("keydown", handler);
         return () => window.removeEventListener("keydown", handler);
-    }, [saveNote, editorOpen]);
+    }, [saveNote, editorOpen, title, noteColor]);
 
     // Cmd+Z undo / Cmd+Shift+Z redo
     const editorOpenRef2 = useRef(editorOpen);
@@ -3399,9 +3412,14 @@ const fireIntegrations = (trigger: string, note: any) => {
         setEditingNote(null);
         setTitle(isStandup ? dateStr : "");
         setContent("");
+        setRichDoc(null);
+        latestRichDocRef.current = null;
         setImages([]);
         setNoteTags([]);
         setPendingNoteType(type ?? "text");
+        // New web-created notes default to rich (Evernote-style). Explicit `type` (markdown,
+        // code, etc.) overrides — those modes assume the textarea path.
+        setPendingFormat(type ? "text" : "rich");
         setTargetFolder(target);
         setNoteColor(palette12[Math.floor(Math.random() * palette12.length)]);
         shouldFocusTitleOnOpenRef.current = !isStandup;
@@ -3589,11 +3607,22 @@ const fireIntegrations = (trigger: string, note: any) => {
         return () => window.removeEventListener("stickies-toast", handler);
     }, []);
 
+    // Surface RichEditor image-upload failures via the existing error toast.
+    // RichEditor dispatches `stickies:upload-error` because it doesn't have direct access to showError.
+    useEffect(() => {
+        const handler = (e: Event) => {
+            const { name, error } = (e as CustomEvent).detail ?? {};
+            showError(`Upload failed: ${name ?? "image"}${error ? ` (${String(error).slice(0, 60)})` : ""}`);
+        };
+        window.addEventListener("stickies:upload-error", handler);
+        return () => window.removeEventListener("stickies:upload-error", handler);
+    }, []);
+
     async function uploadImage(file: File): Promise<{ url: string; name: string; type: string; extractedText?: string }> {
-        // Convert to WebP for smaller size
-        const optimized = file.type.startsWith("image/") ? await convertToWebP(file) : file;
+        // Pass through every image type as-is — heic, webp, avif, png, jpg, gif, svg, tiff, bmp.
+        // (WebP conversion was dropped — Bunlong will request it back if/when desired.)
         const fd = new FormData();
-        fd.append("file", optimized);
+        fd.append("file", file);
         fd.append("folder", targetFolder || activeFolder || "unsorted");
         const token = await getAuthToken();
         const res = await fetch("/api/stickies/gdrive", {
@@ -4066,6 +4095,10 @@ const fireIntegrations = (trigger: string, note: any) => {
                     if (existingNote?.folder_name) removeFromCachedNotes(String(existingNote.folder_name), noteId);
                     showToast(`"${label}" → Trash`, resolvedColor);
                     void notesApi.update(noteId, { folder_name: "TRASH", trashed_at: trashedAt });
+                    if (existingNote) {
+                        actionUndoStackRef.current.push({ type: "delete", note: existingNote, prevFolder: existingNote.folder_name || null });
+                        if (actionUndoStackRef.current.length > 5) actionUndoStackRef.current.shift();
+                    }
                 }
                 localStorage.removeItem(ACTIVE_DRAFT_KEY);
                 setPendingShare(null);
@@ -4102,10 +4135,13 @@ const fireIntegrations = (trigger: string, note: any) => {
         const label = title.trim().slice(0, 10) + (title.trim().length > 10 ? "…" : "") || "Untitled";
         const alreadyInTrash = editingNote.folder_name === "TRASH";
         const origColor = noteColor || "#FF3B30";
-        // Cancel any previous pending delete
+        // Cancel any previous pending delete — commit it and add to the multi-level undo stack
         if (pendingDeleteRef.current) {
-            clearTimeout(pendingDeleteRef.current.timeoutId);
-            void notesApi.update(String(pendingDeleteRef.current.note.id), { folder_name: "TRASH", trashed_at: new Date().toISOString() });
+            const prev = pendingDeleteRef.current;
+            clearTimeout(prev.timeoutId);
+            void notesApi.update(String(prev.note.id), { folder_name: "TRASH", trashed_at: new Date().toISOString() });
+            actionUndoStackRef.current.push({ type: "delete", note: prev.note, prevFolder: prev.targetFolder || prev.note.folder_name || null });
+            if (actionUndoStackRef.current.length > 5) actionUndoStackRef.current.shift();
             pendingDeleteRef.current = null;
         }
         // Remove from list immediately — don't wait for animation or API
@@ -4128,10 +4164,15 @@ const fireIntegrations = (trigger: string, note: any) => {
         } else {
             showToast(`"${label}" → Trash  ⌘Z`, origColor);
             const snap = { note: editingNote, title, content, noteColor: origColor, targetFolder: targetFolder || "" };
-            // Delay actual DB write 8s so ⌘Z can cancel it
+            // Delay actual DB write 8s so ⌘Z can cancel it; after commit, push to multi-level undo stack
             const timeoutId = setTimeout(async () => {
+                const committed = pendingDeleteRef.current;
                 pendingDeleteRef.current = null;
                 try { await notesApi.update(noteId, { folder_name: "TRASH", trashed_at: new Date().toISOString() }); } catch { /* ignore */ }
+                if (committed) {
+                    actionUndoStackRef.current.push({ type: "delete", note: committed.note, prevFolder: committed.targetFolder || committed.note.folder_name || null });
+                    if (actionUndoStackRef.current.length > 5) actionUndoStackRef.current.shift();
+                }
             }, 8000);
             pendingDeleteRef.current = { ...snap, timeoutId };
         }
@@ -4188,6 +4229,11 @@ const fireIntegrations = (trigger: string, note: any) => {
                 } else {
                     setDbData((prev) => prev.map((n) => ids.includes(String(n.id)) ? { ...n, folder_name: "TRASH", trashed_at: trashedAt } : n));
                     await Promise.all(ids.map((id) => notesApi.update(id, { folder_name: "TRASH", trashed_at: trashedAt })));
+                    // Push each soft-deleted note onto the multi-level undo stack
+                    toDelete.forEach((n: any) => {
+                        actionUndoStackRef.current.push({ type: "delete", note: n, prevFolder: n.folder_name || null });
+                    });
+                    while (actionUndoStackRef.current.length > 5) actionUndoStackRef.current.shift();
                 }
                 toDelete.forEach((n: any) => { if (n.folder_name) removeFromCachedNotes(String(n.folder_name), String(n.id)); });
                 setIsSelectMode(false);
@@ -4225,9 +4271,14 @@ const fireIntegrations = (trigger: string, note: any) => {
 
         // Open immediately with available metadata so the editor switches at once
         setPendingNoteType(null); // reset so noteType comes from note.type, not prior mode
+        setPendingFormat(null);   // ditto — format comes from note.format
         setEditingNote(note);
         setTitle(note.title || "");
         setContent(note.content ?? "");
+        // Rich-text doc: only present for format='rich' notes; null otherwise
+        const initialDoc = (note as any).doc ?? null;
+        setRichDoc(initialDoc);
+        latestRichDocRef.current = initialDoc;
         setImages((note as any).images ?? []);
         setNoteTags((note as any).tags ?? []);
         setShowTagInput(false);
@@ -4243,8 +4294,11 @@ const fireIntegrations = (trigger: string, note: any) => {
         setMdViewMode(isMobileView && isMarkdown ? "preview" : "text");
         setEditorOpen(true);
 
-        // Always fetch full content — list API omits the content column
-        if (note.content == null) {
+        // Always fetch full content — list API omits the content column.
+        // Also force-fetch when the note is `format='rich'` but no `doc` field arrived
+        // from the list (the list query doesn't include the heavy `doc` JSONB column).
+        const needsRichDocFetch = (note as any).format === "rich" && (note as any).doc == null;
+        if (note.content == null || needsRichDocFetch) {
             setNoteContentLoading(true);
             try {
                 const token = await getAuthToken();
@@ -4260,6 +4314,9 @@ const fireIntegrations = (trigger: string, note: any) => {
                         setEditingNote(fetched);
                         const body = fetched.content || "";
                         setContent(body);
+                        const fetchedDoc = (fetched as any).doc ?? null;
+                        setRichDoc(fetchedDoc);
+                        latestRichDocRef.current = fetchedDoc;
                         // Always use the DB title — no auto-derive
                         if (fetched.title) setTitle(fetched.title);
                         if (fetched.id && looksLikeMarkdown(fetched.content || "")) setMarkdownModeNotes((p: Set<string>) => new Set([...p, String(fetched.id)]));
@@ -4320,6 +4377,11 @@ const fireIntegrations = (trigger: string, note: any) => {
     const graphMode = currentNoteId ? graphModeNotes.has(currentNoteId) : false;
     const mindmapMode = currentNoteId ? mindmapModeNotes.has(currentNoteId) : false;
     const stackMode = currentNoteId ? stackModeNotes.has(currentNoteId) : false;
+    // Per-note `format` ('text' | 'markdown' | 'rich') — DB-backed for saved notes,
+    // pendingFormat for brand-new unsaved ones. Defaults to 'text'.
+    const noteFormat: "text" | "markdown" | "rich" =
+        ((editingNote as any)?.format ?? pendingFormat ?? "text") as "text" | "markdown" | "rich";
+    const isRichMode = noteFormat === "rich";
 
     // ── Type resolution: DB `type` is source of truth; fall back to client detection ──
     const dbType: string | null = (editingNote as any)?.type ?? null;
@@ -4363,7 +4425,7 @@ const fireIntegrations = (trigger: string, note: any) => {
     }, [noteType, listMode, content]);
 
     // Unified active mode label
-    const noteViewMode = stackMode ? "Stack" : mindmapMode ? "Mindmap" : graphMode ? "Graph" : listMode ? "Checklist" : codeMode ? noteType : markdownMode ? "Markdown" : htmlMode ? "HTML" : "Text";
+    const noteViewMode = stackMode ? "Stack" : mindmapMode ? "Mindmap" : graphMode ? "Graph" : listMode ? "Checklist" : isRichMode ? "Rich" : codeMode ? noteType : markdownMode ? "Markdown" : htmlMode ? "HTML" : "Text";
 
     // Folder stats for bottom status bar (active folder view, no note open)
     const folderStats = useMemo(() => {
@@ -4498,20 +4560,94 @@ const fireIntegrations = (trigger: string, note: any) => {
         setStackModeNotes((prev) => { const next = new Set(prev); if (next.has(currentNoteId)) next.delete(currentNoteId); else next.add(currentNoteId); return next; });
     }, [currentNoteId]);
 
-    // Cycle through note modes: Text → Checklist → Graph → Mindmap → Stack → Text
+    // Switch a note's `format` between text/markdown/rich.
+    // Lazy-imports rich-format helpers so the conversion cost is only paid on actual switch.
+    // Optimistically updates local state, reverts on API failure so the UI never lies about
+    // what's actually persisted.
+    const switchNoteFormat = useCallback(async (next: "text" | "markdown" | "rich") => {
+        if (!currentNoteId) { showError("Save the note first"); return; }
+        const current = ((editingNote as any)?.format ?? "text") as "text" | "markdown" | "rich";
+        if (current === next) return;
+        const { markdownToDoc, textToDoc, docToMarkdown, docToText } = await import("@/lib/rich-format");
+
+        const currentText = latestContentRef.current || content;
+        const currentDoc  = latestRichDocRef.current ?? richDoc;
+
+        // Snapshot rollback state before we touch anything
+        const prevContent = currentText;
+        const prevDoc     = currentDoc;
+        const prevFormat  = current;
+
+        const payload: Record<string, unknown> = { format: next };
+
+        if (next === "rich") {
+            const doc = current === "markdown" ? markdownToDoc(currentText) : textToDoc(currentText);
+            latestRichDocRef.current = doc;
+            setRichDoc(doc);
+            payload.doc = doc;
+            payload.content = docToText(doc);
+            showToast("Rich mode — Evernote-style editing", "#a78bfa");
+        } else if (current === "rich") {
+            const { md, lossy } = docToMarkdown(currentDoc);
+            payload.doc = null;
+            payload.content = md;
+            latestRichDocRef.current = null;
+            setRichDoc(null);
+            setContent(md);
+            latestContentRef.current = md;
+            if (lossy) showToast("Some formatting was simplified", "#fb923c");
+            else showToast(`Switched to ${next}`, "#22d3ee");
+        } else {
+            // text ↔ markdown is purely a flag flip; content already matches.
+            showToast(`Switched to ${next}`, "#22d3ee");
+        }
+
+        // Optimistic local state update
+        setEditingNote((prev: any) => prev ? { ...prev, format: next, ...(payload.doc !== undefined ? { doc: payload.doc } : {}) } : prev);
+        setDbData((prev: any[]) => prev.map(r => String(r.id) === currentNoteId ? { ...r, format: next, ...(payload.doc !== undefined ? { doc: payload.doc } : {}) } : r));
+
+        localWriteRef.current.set(currentNoteId, Date.now());
+        try {
+            await notesApi.update(currentNoteId, payload);
+        } catch (e) {
+            console.error("[switchNoteFormat] persistence failed, rolling back:", e);
+            // Roll back local state so UI matches DB
+            latestRichDocRef.current = prevDoc;
+            setRichDoc(prevDoc);
+            setContent(prevContent);
+            latestContentRef.current = prevContent;
+            setEditingNote((p: any) => p ? { ...p, format: prevFormat, doc: prevDoc } : p);
+            setDbData((p: any[]) => p.map(r => String(r.id) === currentNoteId ? { ...r, format: prevFormat, doc: prevDoc } : r));
+            showError("Format switch failed — reverted");
+        }
+    }, [currentNoteId, editingNote, content, richDoc]);
+
+    // Cycle through note modes: Text → Markdown → Rich → Checklist → Graph → Mindmap → Stack → Text
     const cycleNoteMode = useCallback(() => {
-        const modes = ["Text", "Checklist", "Graph", "Mindmap", "Stack"] as const;
-        const cur = stackMode ? "Stack" : mindmapMode ? "Mindmap" : graphMode ? "Graph" : listMode ? "Checklist" : "Text";
+        const modes = ["Text", "Markdown", "Rich", "Checklist", "Graph", "Mindmap", "Stack"] as const;
+        const fmt = ((editingNote as any)?.format ?? "text") as "text" | "markdown" | "rich";
+        const cur = stackMode ? "Stack"
+                  : mindmapMode ? "Mindmap"
+                  : graphMode ? "Graph"
+                  : listMode ? "Checklist"
+                  : fmt === "rich" ? "Rich"
+                  : fmt === "markdown" ? "Markdown"
+                  : "Text";
         const next = modes[(modes.indexOf(cur) + 1) % modes.length];
+        // Clear any non-format mode first
         if (listMode) toggleListMode();
         if (graphMode) toggleGraphMode();
         if (mindmapMode) toggleMindmapMode();
         if (stackMode) toggleStackMode();
+        // Apply the next mode
         if (next === "Checklist") toggleListMode();
         else if (next === "Graph") toggleGraphMode();
         else if (next === "Mindmap") toggleMindmapMode();
         else if (next === "Stack") toggleStackMode();
-    }, [stackMode, mindmapMode, graphMode, listMode, toggleListMode, toggleGraphMode, toggleMindmapMode, toggleStackMode]);
+        else if (next === "Text") void switchNoteFormat("text");
+        else if (next === "Markdown") void switchNoteFormat("markdown");
+        else if (next === "Rich") void switchNoteFormat("rich");
+    }, [stackMode, mindmapMode, graphMode, listMode, editingNote, toggleListMode, toggleGraphMode, toggleMindmapMode, toggleStackMode, switchNoteFormat]);
 
     // Toggle [x] done prefix on the nth non-empty line (0-based nodeIdx from mindmap)
     const toggleMindmapNode = useCallback((nodeIdx: number) => {
@@ -5687,7 +5823,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                 .fab-float {
                     animation: fabFloat 2.2s ease-in-out infinite;
                 }
-                .task-card-pattern {
+                [data-theme="dark"] .task-card-pattern {
                     background:
                         linear-gradient(to right, rgba(2,1,18,0.82) 0%, rgba(6,3,28,0.42) 35%, rgba(255,255,255,0.07) 65%, rgba(255,255,255,0.14) 100%),
                         repeating-linear-gradient(
@@ -5697,6 +5833,9 @@ const fireIntegrations = (trigger: string, note: any) => {
                             rgba(255,255,255,0.055) 7px,
                             rgba(255,255,255,0.055) 8px
                         );
+                }
+                [data-theme="light"] .task-card-pattern {
+                    background: none;
                 }
                 @keyframes spin { to { transform: rotate(360deg); } }
                 .md-preview { color: #1a1a1a; line-height: 1.7; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; font-size: 17px; text-align: left; word-wrap: break-word; overflow-wrap: break-word; min-width: 0; }
@@ -6171,19 +6310,26 @@ const fireIntegrations = (trigger: string, note: any) => {
                             </div>
                         </div>
                     )}
-                    <div className="safe-top-bar shrink-0" style={{ background: appTheme === "light" ? "#f5f5f5" : "black" }} />
-                    <div className="relative shrink-0 flex items-center h-[4rem] px-4" style={{ background: appTheme === "light" ? "#f5f5f5" : "black" }}>
+                    {(() => {
+                        const headerBg = noteColor || (appTheme === "light" ? "#f5f5f5" : "black");
+                        const headerText = noteColor ? (isLightColor(noteColor) ? "#1c1c1e" : "#fff") : "#fff";
+                        return (
+                    <>
+                    <div className="safe-top-bar shrink-0" style={{ background: headerBg }} />
+                    <div className="relative shrink-0 flex items-center h-[4rem] px-4" style={{ background: headerBg }}>
                         {/* Back button — hidden on desktop or in edit mode (left panel always visible) */}
                         <button
                             onClick={(e) => { e.stopPropagation(); if (mainListMode === "tabs") { setMainListMode("list"); } void backToRootFromEditor(); }}
-                            className="flex p-2 text-zinc-400 hover:bg-white/10 transition flex-shrink-0"
+                            className="flex p-2 hover:bg-white/10 transition flex-shrink-0"
+                            style={{ color: headerText }}
                             title={`Back to ${targetFolder || "folders"}`}
                             aria-label={`Back to ${targetFolder || "folders"}`}>
                             <ArrowLeftIcon className="w-[38px] h-[38px]" />
                         </button>
                         {/* Title only — Apple Notes style */}
-                        <input ref={titleInputRef} defaultValue={title} key={`title-${editingNote?.id || "new"}`} onChange={(e) => { titleRaw.current = e.target.value; }} onBlur={(e) => setTitle(e.target.value)} onFocus={() => { closeEditorTools(); setShowNoteActions(false); }} autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false} className="hidden sm:block bg-transparent border-0 appearance-none shadow-none ring-0 outline-none focus:outline-none focus:ring-0 px-1 min-w-0 flex-1 tracking-tight font-bold text-white placeholder:text-zinc-500" style={{ caretColor: activeAccentColor, fontSize: "clamp(18px, 2vw, 24px)" }} placeholder="Note Title" />
-                        <input ref={titleInputMobileRef} defaultValue={title} key={`title-m-${editingNote?.id || "new"}`} onChange={(e) => { titleRaw.current = e.target.value; }} onBlur={(e) => setTitle(e.target.value)} onFocus={() => { closeEditorTools(); setShowNoteActions(false); }} autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false} className="sm:hidden bg-transparent border-0 appearance-none shadow-none ring-0 outline-none focus:outline-none focus:ring-0 px-2 flex-grow min-w-0 text-white placeholder:text-zinc-500" style={{ caretColor: activeAccentColor, border: "none", fontSize: "clamp(18px, 5vw, 24px)", fontWeight: 700 }} placeholder="Note Title" />
+                        <input ref={titleInputRef} defaultValue={title} key={`title-${editingNote?.id || "new"}`} onChange={(e) => { titleRaw.current = e.target.value; }} onBlur={(e) => setTitle(e.target.value)} onFocus={() => { closeEditorTools(); setShowNoteActions(false); }} autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false} className="hidden sm:block bg-transparent border-0 appearance-none shadow-none ring-0 outline-none focus:outline-none focus:ring-0 px-1 min-w-0 flex-1 tracking-tight font-bold placeholder:text-zinc-500" style={{ caretColor: activeAccentColor, color: headerText, fontSize: "clamp(18px, 2vw, 24px)" }} placeholder="Note Title" />
+                        {/* Mobile title moved inside editor panel */}
+                        <div className="sm:hidden flex-grow" />
 
                         {/* Type badge removed — already shown in footer */}
                         {/* AI Grammar Fix */}
@@ -6212,14 +6358,17 @@ const fireIntegrations = (trigger: string, note: any) => {
                         </button>
                         )}
                         {/* Share removed — available in note actions menu */}
-                        {/* Editor header icons — absolute right, same position as all modes */}
-                        <div className="absolute right-2 flex items-center">
+                        {/* Editor header icons — in-flow at right (ml-auto) so they never overlap inline siblings */}
+                        <div className="ml-auto flex items-center flex-shrink-0">
                             <HeaderIconBtn icon={MagnifyingGlassIcon} label="Search" onClick={() => { setShowCmdK(true); setCmdKQuery(""); setCmdKCursor(0); }} />
                             <HeaderIconBtn icon={mdViewMode === "text" ? EyeIcon : CodeBracketIcon} label={mdViewMode === "text" ? "Preview" : "Code"} active={mdViewMode !== "text"} onClick={() => setMdViewMode(v => v === "text" ? "preview" : "text")} />
                             <HeaderIconBtn icon={viewModeIcon} label={viewModeLabel} onClick={cycleViewMode} />
                             <HeaderIconBtn icon={Cog6ToothIcon} label="Settings" onClick={() => { setShowNoteActions(v => !v); closeEditorTools(); }} />
                         </div>
                     </div>
+                    </>
+                    );
+                    })()}
                     {/* AI PROMPT BAR — fills entire editor when active */}
                     {aiPromptOpen && (
                         <div className="flex-1 flex flex-col gap-2 px-3 py-2 overflow-hidden" style={{ background: noteColor || "#1a0d2e" }}>
@@ -6283,7 +6432,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 className={`flex items-center transition-all ${isActive ? "relative z-10 flex-shrink-0" : "hover:brightness-110 opacity-75 flex-shrink-0 sm:flex-shrink"}`}
                                                 style={{ background: isActive ? c : `${c}99`, color: "#1c1c1e", height: isActive ? H + 6 : H, borderRadius: isActive ? "8px 8px 0 0" : 0, minWidth: IS_PHONE ? 44 : undefined }}>
                                                 <button type="button"
-                                                    onClick={() => { if (!isActive) { if (mainListMode !== "tabs" && n.folder_name && n.folder_name !== activeFolder) { const fr = dbData.find(r => r.is_folder && r.folder_name === n.folder_name); if (fr) enterFolder({ id: String(fr.id), name: n.folder_name, color: fr.folder_color || c }); } void openNote(n); } }}
+                                                    onClick={() => { if (!isActive) { if (mainListMode !== "tabs" && inFolder && n.folder_name && n.folder_name !== activeFolder) { const fr = dbData.find(r => r.is_folder && r.folder_name === n.folder_name); if (fr) enterFolder({ id: String(fr.id), name: n.folder_name, color: fr.folder_color || c }); } void openNote(n); } }}
                                                     className={`flex items-center text-[10px] sm:text-[10px] font-bold truncate ${isActive ? "pl-3 pr-1 max-w-[150px]" : "px-2 sm:px-1.5"}`} style={{ height: "100%" }}
                                                     title={n.title || "Untitled"}>
                                                     {(() => { const t = n.title || "Untitled"; if (isActive) return <>{t.slice(0, 20)}{t.length > 20 ? "…" : ""}</>; const len = dayNotes.length; const chars = len < 5 ? t.length : len < 15 ? 6 : len < 20 ? 4 : len < 30 ? 3 : 2; return t.slice(0, chars); })()}
@@ -6317,9 +6466,15 @@ const fireIntegrations = (trigger: string, note: any) => {
                         );
                     })()}
 
-                    <div className={`relative flex-1 flex overflow-hidden font-mono ${appTheme === "light" ? "bg-white" : "bg-black"}`} style={{ display: aiPromptOpen ? "none" : "flex", border: `2px solid ${noteColor || "#888"}`, transition: "border-color 0.3s ease" }}
-                        onDragOver={(e) => { if (Array.from(e.dataTransfer.items).some(i => i.kind === "file")) e.preventDefault(); }}
+                    <div className={`relative flex-1 flex flex-col overflow-hidden ${appTheme === "light" ? "bg-white" : "bg-black"}`} style={{ display: aiPromptOpen ? "none" : "flex", borderTop: `2px solid ${noteColor || "#888"}`, borderLeft: `2px solid ${noteColor || "#888"}`, borderRight: `2px solid ${noteColor || "#888"}`, borderBottom: `2px solid ${noteColor || "#888"}`, transition: "border-color 0.3s ease" }}>
+                    {/* Mobile title — inside editor panel top row */}
+                    <input ref={titleInputMobileRef} defaultValue={title} key={`title-m-${editingNote?.id || "new"}`} onChange={(e) => { titleRaw.current = e.target.value; }} onBlur={(e) => setTitle(e.target.value)} onFocus={() => { closeEditorTools(); setShowNoteActions(false); }} autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false} className={`sm:hidden bg-transparent border-0 border-b border-white/[0.06] appearance-none shadow-none ring-0 outline-none focus:outline-none focus:ring-0 px-3 py-2 w-full min-w-0 placeholder:text-zinc-500 shrink-0 ${appTheme === "light" ? "text-black" : "text-white"}`} style={{ caretColor: activeAccentColor, border: "none", borderBottom: `1px solid ${noteColor || "#888"}33`, fontSize: "clamp(16px, 4vw, 20px)", fontWeight: 700 }} placeholder="Note Title" />
+                    <div className={`relative flex-1 flex overflow-hidden font-mono`}
+                        onDragOver={(e) => { if (isRichMode) return; if (Array.from(e.dataTransfer.items).some(i => i.kind === "file")) e.preventDefault(); }}
                         onDrop={(e) => {
+                            // In rich mode, let TipTap's own handleDrop process the file (uploads + inline image node).
+                            // The plain-text branch below would insert markdown `![](url)` which makes no sense inside ProseMirror.
+                            if (isRichMode) return;
                             const files = Array.from(e.dataTransfer.files);
                             if (!files.length) return;
                             e.preventDefault();
@@ -6381,7 +6536,27 @@ const fireIntegrations = (trigger: string, note: any) => {
                             <button type="button" onClick={() => { setShowFindBar(false); editorTextRef.current?.focus(); }} className="p-0.5 text-zinc-500 hover:text-white transition ml-0.5" title="Close (Esc)"><XMarkIcon className="w-3 h-3" /></button>
                         </div>
                         )}
-                        {mindmapMode ? (
+                        {isRichMode ? (
+                            <div className="flex-1 flex flex-col overflow-hidden" style={{ background: noteColor || (appTheme === "light" ? "#fff" : "#222") }}>
+                                <RichEditor
+                                    initialDoc={richDoc}
+                                    placeholder="Start writing…"
+                                    accentColor={activeAccentColor}
+                                    autoFocus
+                                    onChange={({ doc, text }) => {
+                                        latestRichDocRef.current = doc;
+                                        latestContentRef.current = text;
+                                        setRichDoc(doc);
+                                        setContent(text);
+                                        scheduleAutoSave();
+                                    }}
+                                    onUploadImage={async (file) => {
+                                        const r = await uploadImage(file);
+                                        return r.url;
+                                    }}
+                                />
+                            </div>
+                        ) : mindmapMode ? (
                             <MindmapView title={title} content={content} onToggle={toggleMindmapNode} />
                         ) : graphMode ? (
                             <div ref={graphContainerRef} className="relative flex-1 overflow-hidden" onDoubleClick={(e) => { if (!(e.target as HTMLElement).closest("button")) cycleNoteMode(); }}>
@@ -6625,15 +6800,15 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         {/* Sliding content */}
                                         <div className="flex items-center gap-3 px-4 py-3 min-h-[54px] leading-snug relative overflow-hidden"
                                             style={{
-                                                background: task.done ? "rgba(255,255,255,0.04)" : `${c}50`,
+                                                background: task.done ? (appTheme === "light" ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.04)") : (appTheme === "light" ? `linear-gradient(to right, ${c}55, ${c}18)` : `${c}50`),
                                                 transform: `translateX(-${rowOffset}px)`,
                                                 transition: isDragging ? "none" : "transform 0.25s cubic-bezier(0.25,1,0.5,1)",
                                             }}>
                                             <span className="task-card-pattern absolute inset-0 pointer-events-none" />
-                                            {!task.done && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[14px] sm:text-[16px] font-black leading-none pointer-events-none select-none" style={{ color: "rgba(255,255,255,0.25)", fontFamily: "monospace" }}>{String(sortedIdx + 1).padStart(2, "0")}</span>}
-                                            <button type="button" onClick={() => toggleTask(task.lineIdx)} className="relative flex-shrink-0 w-5 h-5 rounded-sm border-2 flex items-center justify-center transition-all overflow-hidden" style={{ borderColor: task.done ? "rgba(255,255,255,0.25)" : c, backgroundColor: task.done ? "rgba(255,255,255,0.15)" : "transparent" }}>
+                                            {!task.done && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[14px] sm:text-[16px] font-black leading-none pointer-events-none select-none" style={{ color: appTheme === "light" ? `${c}40` : "rgba(255,255,255,0.25)", fontFamily: "monospace" }}>{String(sortedIdx + 1).padStart(2, "0")}</span>}
+                                            <button type="button" onClick={() => toggleTask(task.lineIdx)} className="relative flex-shrink-0 w-5 h-5 rounded-sm border-2 flex items-center justify-center transition-all overflow-hidden" style={{ borderColor: task.done ? (appTheme === "light" ? "rgba(0,0,0,0.2)" : "rgba(255,255,255,0.25)") : c, backgroundColor: task.done ? (appTheme === "light" ? "rgba(0,0,0,0.08)" : "rgba(255,255,255,0.15)") : "transparent" }}>
                                                 {task.done && (
-                                                    <svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="#000" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                                                    <svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke={appTheme === "light" ? "#333" : "#000"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
                                                 )}
                                                 {task.inProgress && !task.done && (
                                                     <span className="absolute left-0 right-0 bottom-0" style={{ height: "50%", background: c }} />
@@ -6647,12 +6822,12 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                     onChange={(e) => setEditingTaskText(e.target.value)}
                                                     onKeyDown={(e) => { if (e.key === "Enter") renameTask(task.lineIdx, editingTaskText); if (e.key === "Escape") setEditingTaskIdx(null); }}
                                                     onBlur={() => renameTask(task.lineIdx, editingTaskText || task.text)}
-                                                    className="relative flex-1 bg-transparent text-[12px] sm:text-sm font-bold outline-none border-b border-white/40 pb-0.5"
-                                                    style={{ color: "#ffffff" }}
+                                                    className="relative flex-1 bg-transparent text-[12px] sm:text-sm font-bold outline-none border-b pb-0.5"
+                                                    style={{ color: appTheme === "light" ? "#1a1a1a" : "#ffffff", borderColor: appTheme === "light" ? "rgba(0,0,0,0.2)" : "rgba(255,255,255,0.4)" }}
                                                     autoComplete="off"
                                                 />
                                             ) : (
-                                                <span className={`relative flex-1 text-left text-[12px] sm:text-sm font-bold truncate ${task.done ? "text-zinc-600" : "text-white"}`}>{task.text}</span>
+                                                <span className={`relative flex-1 text-left text-[12px] sm:text-sm font-bold truncate ${task.done ? (appTheme === "light" ? "text-zinc-400 line-through" : "text-zinc-600") : (appTheme === "light" ? "text-zinc-900" : "text-white")}`}>{task.text}</span>
                                             )}
                                             {!task.done && activeTaskIdx === origIdx && editingTaskIdx !== origIdx && (
                                                 <button type="button"
@@ -6864,8 +7039,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     }}
                                     placeholder="START TYPING..."
                                 />
-                                {/* Inline image overlays — after textarea so z-index wins */}
-                                {inlineImages.length > 0 && (
+                                {/* Inline image overlays — disabled in code mode, preview renders them natively */}
+                                {false && inlineImages.length > 0 && (
                                     <div style={{
                                         position: "absolute", top: 12, left: 12, right: 12, bottom: 0,
                                         pointerEvents: "none", zIndex: 10, overflow: "hidden",
@@ -6949,6 +7124,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                         </div>
                         );
                     })()}
+                    </div>
                 {/* ── Bottom status bar ── */}
                 {editingNote && (() => {
                     const bytes = content.length;
@@ -6963,8 +7139,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                         ? new Date(editingNote.updated_at as string).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
                         : null;
                     return (
-                        <div className="shrink-0 flex items-center justify-between px-3 select-none border-t border-white/[0.06] relative"
-                            style={{ height: 22, background: "#1e1e1e", fontSize: 10 }}>
+                        <div className="shrink-0 flex items-center justify-between px-3 select-none border-t border-white/[0.06] relative overflow-x-auto overflow-y-hidden"
+                            style={{ height: 28, background: "#1e1e1e", fontSize: 10, scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
                             {showFindBar && findQuery.trim() && findMatches.length > 0 ? (
                                 // Find mode — show match info in status bar
                                 (() => {
@@ -6983,13 +7159,13 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 })()
                             ) : (
                                 <div className="flex items-center gap-2 font-mono overflow-x-auto" style={{ fontSize: 9 }}>
-                                    <span className="text-zinc-600 whitespace-nowrap">{edited ?? ""}</span>
+                                    <span className="text-zinc-600 whitespace-nowrap hidden sm:inline">{edited ?? ""}</span>
                                 </div>
                             )}
                             {editingNote?.id && (
                                 <button type="button"
                                     onClick={() => { setShowNoteActions(false); closeEditorTools(); setConfirmDelete({ type: "note", noteId: String(editingNote.id), noteName: (title.trim() || editingNote.title || "Untitled").trim(), noteColor: noteColor || editingNote.folder_color || "#71717a" }); }}
-                                    className="absolute left-1/2 -translate-x-1/2 flex items-center gap-1 text-red-500/60 hover:text-red-400 transition z-[1]"
+                                    className="absolute left-1/2 -translate-x-1/2 hidden sm:flex items-center gap-1 text-red-500/60 hover:text-red-400 transition z-[1]"
                                     title="Delete note">
                                     <TrashIcon className="w-3 h-3" />
                                 </button>
@@ -6997,7 +7173,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                             {/* Photo upload button */}
                             <button type="button"
                                 onClick={() => fileInputRef.current?.click()}
-                                className="absolute left-1/2 translate-x-4 flex items-center text-zinc-600 hover:text-zinc-400 transition z-[1]"
+                                className="absolute left-1/2 translate-x-4 hidden sm:flex items-center text-zinc-600 hover:text-zinc-400 transition z-[1]"
                                 title="Add image">
                                 <PhotoIcon className="w-3 h-3" />
                             </button>
@@ -7018,11 +7194,11 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     } catch { showError("Upload failed"); }
                                 }}
                             />
-                            <div className="flex items-center gap-2 z-[2]">
+                            <div className="flex items-center gap-2 z-[2] flex-shrink-0">
                                 {mdViewMode !== "text" && (<>
                                     <button type="button"
                                         onClick={() => { void secureCopy(content); showToast("Copied!", "#34C759"); }}
-                                        className="flex items-center gap-1 px-1.5 py-px text-zinc-500 hover:text-white transition"
+                                        className="hidden sm:flex items-center gap-1 px-1.5 py-px text-zinc-500 hover:text-white transition"
                                         title="Copy markdown">
                                         <ClipboardDocumentListIcon className="w-3 h-3" />
                                         <span className="font-mono font-bold uppercase tracking-wide" style={{ fontSize: 8 }}>Copy</span>
@@ -7095,7 +7271,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                             printWin.document.close();
                                             setTimeout(() => { printWin.print(); }, 400);
                                         }}
-                                        className="flex items-center gap-1 px-1.5 py-px text-zinc-500 hover:text-white transition"
+                                        className="hidden sm:flex items-center gap-1 px-1.5 py-px text-zinc-500 hover:text-white transition"
                                         title="Export PDF">
                                         <ArrowDownTrayIcon className="w-3 h-3" />
                                         <span className="font-mono font-bold uppercase tracking-wide" style={{ fontSize: 8 }}>PDF</span>
@@ -8286,11 +8462,13 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                     <span className="text-[10px] font-black uppercase tracking-widest px-1.5 py-0.5" style={{ background: `${noteColor}25`, color: noteColor }}>{noteViewMode}</span>
                                 </div>
                                 <div className="grid grid-cols-2 gap-1.5">
-                                    {(["Text", "Checklist", "Graph", "Mindmap", "Stack"] as const).map((mode) => {
+                                    {(["Text", "Rich", "Checklist", "Graph", "Mindmap", "Stack"] as const).map((mode) => {
                                         const active = noteViewMode === mode;
-                                        const disabled = mode !== "Text" && contentLineCount < 15;
+                                        const disabled = mode !== "Text" && mode !== "Rich" && contentLineCount < 15;
                                         const icon = mode === "Text" ? (
                                             <Bars3Icon className="w-4 h-4" />
+                                        ) : mode === "Rich" ? (
+                                            <SwatchIcon className="w-4 h-4" />
                                         ) : mode === "Checklist" ? (
                                             <CheckCircleIcon className="w-4 h-4" />
                                         ) : mode === "Graph" ? (
@@ -8300,18 +8478,26 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                         ) : (
                                             <RectangleStackIcon className="w-4 h-4" />
                                         );
-                                        const isLastOdd = mode === "Stack"; // 5th item — span full width
+                                        const isLastOdd = mode === "Stack"; // last item — span full width
                                         return (
                                             <button key={mode} type="button"
                                                 disabled={disabled}
                                                 onClick={() => {
                                                     if (disabled) return;
-                                                    if (mode === "Checklist") {
+                                                    if (mode === "Rich") {
+                                                        if (listMode) toggleListMode();
+                                                        if (graphMode) toggleGraphMode();
+                                                        if (mindmapMode) toggleMindmapMode();
+                                                        if (stackMode) toggleStackMode();
+                                                        void switchNoteFormat("rich");
+                                                    } else if (mode === "Checklist") {
+                                                        if (isRichMode) void switchNoteFormat("text");
                                                         if (graphMode) toggleGraphMode();
                                                         if (mindmapMode) toggleMindmapMode();
                                                         if (stackMode) toggleStackMode();
                                                         toggleListMode();
                                                     } else {
+                                                        if (isRichMode) void switchNoteFormat("text");
                                                         if (listMode) toggleListMode();
                                                         if (graphMode) toggleGraphMode();
                                                         if (mindmapMode) toggleMindmapMode();
@@ -8421,8 +8607,10 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                             icon: <img src="/icons/stickies/android-chrome-192x192.png" className="w-full h-full object-cover" alt="Stickies" />,
                                         },
                                     };
-                                    const triggers = integrationsSnapshot.filter(ig => TRIGGER_TYPES.includes(ig.type));
-                                    const actions  = integrationsSnapshot.filter(ig => !TRIGGER_TYPES.includes(ig.type));
+                                    const ALLOWED_TYPES = new Set(["hue"]);
+                                    const visible = integrationsSnapshot.filter(ig => ALLOWED_TYPES.has(ig.type));
+                                    const triggers = visible.filter(ig => TRIGGER_TYPES.includes(ig.type));
+                                    const actions  = visible.filter(ig => !TRIGGER_TYPES.includes(ig.type));
 
                                     const renderRow = (ig: typeof integrationsSnapshot[0], i: number) => {
                                         const meta = META[ig.type] ?? { label: ig.type, color: "#71717a", icon: <span className="text-xl">🔌</span> };
@@ -8643,7 +8831,9 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                     <h2 className="text-sm font-black uppercase tracking-widest text-white flex-1">Automations</h2>
                                 </div>
                                 <div className="flex-1 overflow-y-auto">
-                                    {automationsList.length === 0 ? (
+                                    {(() => {
+                                    const stickyAutomations = automationsList.filter(a => a.trigger_type?.startsWith("note_"));
+                                    return stickyAutomations.length === 0 ? (
                                         <div className="px-6 py-10 text-center">
                                             <BoltIcon className="w-8 h-8 text-zinc-700 mx-auto mb-3" />
                                             <p className="text-xs font-black text-zinc-500 uppercase tracking-wide">No automations yet</p>
@@ -8651,7 +8841,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                         </div>
                                     ) : (
                                         <div className="divide-y divide-white/[0.06]">
-                                            {automationsList.map((auto) => (
+                                            {stickyAutomations.map((auto) => (
                                                 <div key={auto.id} className="w-full px-5 py-3.5 flex items-center gap-3">
                                                     {/* Active toggle */}
                                                     <button type="button"
@@ -8699,7 +8889,8 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                 </div>
                                             ))}
                                         </div>
-                                    )}
+                                    );
+                                    })()}
                                 </div>
 
                                 {/* LOGS PANEL — z-40 */}
@@ -9955,7 +10146,7 @@ const MobileEditorIconBtn = ({ icon: Icon, label, onClick, active = false, style
 );
 
 const HeaderIconBtn = ({ icon: Icon, label, onClick, style, active }: any) => (
-    <button type="button" onClick={onClick} className={`p-3 transition ${active ? "text-white bg-white/15" : "text-zinc-500 hover:text-white hover:bg-white/10"}`} title={label} aria-label={label} style={style}>
+    <button type="button" onClick={onClick} className={`p-3 transition ${active ? "text-white" : "text-zinc-500 hover:text-white"}`} title={label} aria-label={label} style={style}>
         <Icon className="w-[26px] h-[26px]" />
     </button>
 );
