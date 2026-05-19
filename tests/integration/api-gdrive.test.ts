@@ -117,13 +117,23 @@ describe("POST /api/stickies/gdrive", () => {
         expect(body.error).toMatch(/no file/i);
     });
 
-    it("uploads an image and returns lh3 URL", async () => {
+    it("uploads an image and returns a Google thumbnail URL", async () => {
         const res = await POST(makeUploadReq("photo.png", "image/png"));
         expect(res.status).toBe(200);
         const body = await res.json();
-        expect(body.url).toContain("lh3.googleusercontent.com");
+        // Switched 2026-05-19 from lh3.googleusercontent.com/d/<id> to
+        // drive.google.com/thumbnail?id=<id>&sz=w2000 for more reliable embeds.
+        expect(body.url).toContain("drive.google.com/thumbnail");
+        expect(body.url).toContain("sz=w2000");
         expect(body.name).toBe("photo.png");
         expect(body.type).toBe("image/png");
+    });
+
+    it("treats files with image extensions as images even when MIME is missing (e.g. heic)", async () => {
+        const res = await POST(makeUploadReq("vacation.heic", ""));
+        expect(res.status).toBe(200);
+        const body = await res.json();
+        expect(body.url).toContain("drive.google.com/thumbnail");
     });
 
     it("uploads a PDF and returns webViewLink + extractedText", async () => {

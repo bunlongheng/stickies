@@ -118,7 +118,12 @@ export default function RichEditor({
             },
             handleDrop(view, event, _slice, moved) {
                 if (moved) return false;
-                const files = Array.from(event.dataTransfer?.files ?? []).filter(f => f.type.startsWith("image/"));
+                // Accept by MIME (image/*) OR by filename extension (covers .heic, .webp,
+                // pasted-from-clipboard files where the OS didn't set a type, etc.).
+                const isImageFile = (f: File) =>
+                    f.type.startsWith("image/") ||
+                    /\.(heic|heif|webp|avif|png|jpg|jpeg|gif|svg|bmp|tiff?|ico|jfif)$/i.test(f.name);
+                const files = Array.from(event.dataTransfer?.files ?? []).filter(isImageFile);
                 if (files.length === 0) return false;
                 event.preventDefault();
                 const upload = uploadRef.current;

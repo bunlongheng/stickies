@@ -6389,8 +6389,12 @@ const fireIntegrations = (trigger: string, note: any) => {
                             const files = Array.from(e.dataTransfer.files);
                             if (!files.length) return;
                             e.preventDefault();
-                            const images = files.filter(f => f.type.startsWith("image/"));
-                            const textFiles = files.filter(f => !f.type.startsWith("image/") && f.type !== "application/pdf");
+                            // Accept by MIME OR by extension (heic/webp/etc. where the OS may omit type)
+                            const isImageFile = (f: File) =>
+                                f.type.startsWith("image/") ||
+                                /\.(heic|heif|webp|avif|png|jpg|jpeg|gif|svg|bmp|tiff?|ico|jfif)$/i.test(f.name);
+                            const images = files.filter(isImageFile);
+                            const textFiles = files.filter(f => !isImageFile(f) && f.type !== "application/pdf");
                             if (images.length > 0) {
                                 void (async () => {
                                     showToast(`Uploading ${images.length} image${images.length !== 1 ? "s" : ""}...`, "#a78bfa");
@@ -6942,7 +6946,11 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     onPaste={handleEditorPaste}
                                     onScroll={handleEditorScroll}
                                     onDragOver={(e) => { if (Array.from(e.dataTransfer.items).some(i => i.kind === "file")) e.preventDefault(); }}
-                                    onDrop={(e) => { if (Array.from(e.dataTransfer.files).some(f => f.type.startsWith("image/") || f.type === "application/pdf")) e.preventDefault(); }}
+                                    onDrop={(e) => {
+                                        const files = Array.from(e.dataTransfer.files);
+                                        const looksImage = (f: File) => f.type.startsWith("image/") || /\.(heic|heif|webp|avif|png|jpg|jpeg|gif|svg|bmp|tiff?|ico|jfif)$/i.test(f.name);
+                                        if (files.some(f => looksImage(f) || f.type === "application/pdf")) e.preventDefault();
+                                    }}
                                     className="ios-editor-scroll overscroll-none touch-pan-y"
                                     style={{
                                         flex: 1, background: "transparent", color: stickyText,
@@ -7451,7 +7459,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                             }
 
                             // Images → if editor open, upload and insert ![](url) inline
-                            if (files.length && editorOpen && files.every(f => f.type.startsWith("image/"))) {
+                            if (files.length && editorOpen && files.every(f => f.type.startsWith("image/") || /\.(heic|heif|webp|avif|png|jpg|jpeg|gif|svg|bmp|tiff?|ico|jfif)$/i.test(f.name))) {
                                 void (async () => {
                                     showToast(`Uploading ${files.length} image${files.length !== 1 ? "s" : ""}...`, "#a78bfa");
                                     const ta = editorTextRef.current;

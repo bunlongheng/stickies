@@ -161,10 +161,14 @@ export async function POST(req: Request) {
             requestBody: { role: "reader", type: "anyone" },
         });
 
-        // Use lh3 direct link for images, webViewLink for others
-        const isImage = file.type.startsWith("image/");
+        // Image embed URL: switched 2026-05-19 from lh3.googleusercontent.com/d/<id>
+        // to the drive.google.com/thumbnail endpoint. The lh3 pattern was failing
+        // intermittently for newly uploaded files (CDN propagation lag); thumbnail
+        // is Google's own image-serving endpoint, returns a real PNG/JPEG, and
+        // becomes available immediately after the public-permission grant above.
+        const isImage = file.type.startsWith("image/") || /\.(heic|heif|webp|avif|png|jpg|jpeg|gif|svg|bmp|tiff?|ico)$/i.test(file.name);
         const url = isImage
-            ? `https://lh3.googleusercontent.com/d/${uploaded.data.id}`
+            ? `https://drive.google.com/thumbnail?id=${uploaded.data.id}&sz=w2000`
             : uploaded.data.webViewLink || `https://drive.google.com/file/d/${uploaded.data.id}/view`;
 
         // Extract text from PDFs
