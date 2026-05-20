@@ -1319,8 +1319,6 @@ export default function NotesMaster() {
     const findMatchCountRef = useRef(0);
     const [images, setImages] = useState<Array<{ url: string; name: string; type: string }>>([]);
     const [noteTags, setNoteTags] = useState<string[]>([]);
-    const [showTagInput, setShowTagInput] = useState(false);
-    const [tagInputValue, setTagInputValue] = useState("");
     const [tagsExpanded, setTagsExpanded] = useState(false);
     const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
     const [uploadingImages, setUploadingImages] = useState(false);
@@ -4261,7 +4259,6 @@ const fireIntegrations = (trigger: string, note: any) => {
         latestRichDocRef.current = initialDoc;
         setImages((note as any).images ?? []);
         setNoteTags((note as any).tags ?? []);
-        setShowTagInput(false);
         undoStackRef.current = [];
         redoStackRef.current = [];
         setTargetFolder(note.folder_name || activeFolder || "General");
@@ -7169,10 +7166,13 @@ const fireIntegrations = (trigger: string, note: any) => {
                         <div className="shrink-0 flex items-center justify-between px-3 select-none relative overflow-x-auto overflow-y-hidden"
                             style={{
                                 minHeight: 28, fontSize: 10,
-                                // Footer bar picks up the note's color identity, and its tint
+                                // Footer is a reverse smoke gradient — blends out of the body at
+                                // the top, solid-ish note color at the bottom edge. The note tint
                                 // extends down through the home-indicator safe area so there's no
-                                // dead white strip below it.
-                                background: noteColor ? `${noteColor}2e` : (appTheme === "light" ? "#f2f2f7" : "#1e1e1e"),
+                                // dead white cap below it.
+                                background: noteColor
+                                    ? `linear-gradient(to bottom, ${noteColor}1f 0%, ${noteColor}66 100%)`
+                                    : (appTheme === "light" ? "#e8e8ed" : "#1e1e1e"),
                                 paddingBottom: "env(safe-area-inset-bottom, 0px)",
                                 scrollbarWidth: "none", WebkitOverflowScrolling: "touch",
                             }}>
@@ -7370,35 +7370,9 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                         {tagsExpanded ? "−" : `+${noteTags.length - 3}`}
                                     </span>
                                 )}
-                                <button type="button"
-                                    onClick={() => { setShowTagInput(true); setTagInputValue(""); }}
-                                    className="font-mono font-bold whitespace-nowrap px-1 py-px rounded-full hover:brightness-125 transition"
-                                    style={{ fontSize: 8, color: "#888", border: "1px dashed #555" }}
-                                    title="Add tag">+</button>
-                                {showTagInput && (
-                                    <input
-                                        autoFocus
-                                        value={tagInputValue}
-                                        onChange={e => setTagInputValue(e.target.value)}
-                                        onKeyDown={e => {
-                                            if (e.key === "Enter" && tagInputValue.trim()) {
-                                                const tag = tagInputValue.trim().startsWith("#") ? tagInputValue.trim() : `#${tagInputValue.trim()}`;
-                                                if (!noteTags.includes(tag)) {
-                                                    const next = [...noteTags, tag];
-                                                    setNoteTags(next);
-                                                    if (editingNote?.id) notesApi.update(String(editingNote.id), { tags: next });
-                                                }
-                                                setTagInputValue("");
-                                                setShowTagInput(false);
-                                            }
-                                            if (e.key === "Escape") setShowTagInput(false);
-                                        }}
-                                        onBlur={() => setShowTagInput(false)}
-                                        className="bg-transparent outline-none font-mono font-bold text-white"
-                                        style={{ fontSize: 8, width: 60, border: "1px solid #555", borderRadius: 8, padding: "1px 4px" }}
-                                        placeholder="#tag"
-                                    />
-                                )}
+                                {/* Manual add-tag button removed — tags are auto-managed by
+                                    smart-tag detection on save. Existing tags remain removable
+                                    by tapping a chip. */}
                             </div>
                         </div>
                     );
