@@ -5765,6 +5765,12 @@ const fireIntegrations = (trigger: string, note: any) => {
                     0%, 100% { opacity: 1; }
                     50% { opacity: 0.2; }
                 }
+                @keyframes noteLaunchBreath {
+                    0%   { transform: scale(0.9) rotate(-3deg); opacity: 0.85; }
+                    50%  { transform: scale(1.05) rotate(2deg); opacity: 1; }
+                    100% { transform: scale(0.9) rotate(-3deg); opacity: 0.85; }
+                }
+                .note-launch-tile { animation: noteLaunchBreath 1s ease-in-out infinite; }
                 @keyframes noteCardFlash {
                     0%   { opacity: 0; transform: scale(0.85); }
                     12%  { opacity: 1; transform: scale(1); }
@@ -6087,6 +6093,12 @@ const fireIntegrations = (trigger: string, note: any) => {
                 .safe-top-bar {
                     height: env(safe-area-inset-top, 0px);
                 }
+                /* Editor's own status-bar spacer — separate class so the global
+                   [data-theme=light] .safe-top-bar override doesn't force grey,
+                   letting it take the note-color gradient instead. */
+                .editor-top-safe {
+                    height: env(safe-area-inset-top, 0px);
+                }
                 @supports (-webkit-touch-callout: none) {
                     @media (max-width: 640px) {
                         .ios-mobile-header {
@@ -6267,18 +6279,22 @@ const fireIntegrations = (trigger: string, note: any) => {
                         </div>
                     )}
                     {(() => {
-                        // Header picks up the note's color identity as a 13% tint (matches footer aesthetic)
-                        const headerBg = noteColor
-                            ? `${noteColor}22`
-                            : (appTheme === "light" ? "#f5f5f5" : "#1e1e1e");
-                        const headerBorder = noteColor
-                            ? `${noteColor}55`
-                            : (appTheme === "light" ? "rgba(0,0,0,0.06)" : "rgba(255,255,255,0.06)");
+                        // Top is a "smoke" gradient — note color strongest at the status bar,
+                        // fading to transparent (i.e. into the white/dark body) by the bottom of
+                        // the header. No sharp divider line; it's a mood transition.
+                        const topSolid = noteColor
+                            ? `${noteColor}59`
+                            : (appTheme === "light" ? "#f2f2f7" : "#1e1e1e");
+                        const headerGradient = noteColor
+                            ? `linear-gradient(to bottom, ${noteColor}59 0%, ${noteColor}1f 55%, ${noteColor}00 100%)`
+                            : (appTheme === "light"
+                                ? "linear-gradient(to bottom, #f2f2f7 0%, rgba(242,242,247,0) 100%)"
+                                : "linear-gradient(to bottom, #1e1e1e 0%, rgba(30,30,30,0) 100%)");
                         const headerText = appTheme === "light" ? "#1a1a1a" : "#fff";
                         return (
                     <>
-                    <div className="safe-top-bar shrink-0" style={{ background: headerBg }} />
-                    <div className="relative shrink-0 flex items-center h-[4rem] px-4" style={{ background: headerBg, borderBottom: `1px solid ${headerBorder}` }}>
+                    <div className="editor-top-safe shrink-0" style={{ background: topSolid }} />
+                    <div className="relative shrink-0 flex items-center h-[4rem] px-4" style={{ background: headerGradient }}>
                         {/* Back button — hidden on desktop or in edit mode (left panel always visible) */}
                         <button
                             onClick={(e) => { e.stopPropagation(); if (mainListMode === "tabs") { setMainListMode("list"); } void backToRootFromEditor(); }}
@@ -6492,14 +6508,24 @@ const fireIntegrations = (trigger: string, note: any) => {
                             }
                         }}>
                         {/* ── Note loading spinner — scoped to editor panel only ── */}
-                        {noteContentLoading && (
-                            <div className="absolute inset-0 z-[50] flex items-center justify-center bg-black/60 pointer-events-none">
-                                <div className="w-24 h-24 flex items-center justify-center font-black text-white text-4xl animate-pulse"
-                                    style={{ backgroundColor: noteColor || "#71717a", borderRadius: "6px 6px 6px 28px", boxShadow: `0 0 48px ${noteColor || "#71717a"}bb` }}>
+                        {noteContentLoading && (() => {
+                            const lc = noteColor || "#71717a";
+                            return (
+                            <div className="absolute inset-0 z-[50] flex items-center justify-center pointer-events-none"
+                                style={{
+                                    // No black flash in light mode — a soft frosted tint of the
+                                    // note color in both themes (lighter on light, darker on dark).
+                                    background: appTheme === "light" ? `${lc}14` : "rgba(0,0,0,0.5)",
+                                    backdropFilter: "blur(10px)",
+                                    WebkitBackdropFilter: "blur(10px)",
+                                }}>
+                                <div className="w-24 h-24 flex items-center justify-center font-black text-4xl note-launch-tile"
+                                    style={{ backgroundColor: lc, color: isLightColor(lc) ? "#1c1c1e" : "#fff", borderRadius: "6px 6px 6px 28px", boxShadow: `0 0 48px ${lc}bb` }}>
                                     {meaningfulInitial(title || editingNote?.title || "", "N")}
                                 </div>
                             </div>
-                        )}
+                            );
+                        })()}
                         {/* ── Float copy pill — fades after 10s of editing ── */}
                         {/* ── Inline find bar (Cmd+F) ── */}
                         {showFindBar && (
@@ -7140,13 +7166,14 @@ const fireIntegrations = (trigger: string, note: any) => {
                         ? new Date(editingNote.updated_at as string).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
                         : null;
                     return (
-                        <div className="shrink-0 flex items-center justify-between px-3 select-none border-t relative overflow-x-auto overflow-y-hidden"
+                        <div className="shrink-0 flex items-center justify-between px-3 select-none relative overflow-x-auto overflow-y-hidden"
                             style={{
-                                height: 28, fontSize: 10,
-                                // Footer bar picks up the note's color identity — lighter than the
-                                // editor background so chips and timestamps read against it.
-                                background: noteColor ? `${noteColor}22` : "#1e1e1e",
-                                borderTopColor: noteColor ? `${noteColor}55` : "rgba(255,255,255,0.06)",
+                                minHeight: 28, fontSize: 10,
+                                // Footer bar picks up the note's color identity, and its tint
+                                // extends down through the home-indicator safe area so there's no
+                                // dead white strip below it.
+                                background: noteColor ? `${noteColor}2e` : (appTheme === "light" ? "#f2f2f7" : "#1e1e1e"),
+                                paddingBottom: "env(safe-area-inset-bottom, 0px)",
                                 scrollbarWidth: "none", WebkitOverflowScrolling: "touch",
                             }}>
                             {showFindBar && findQuery.trim() && findMatches.length > 0 ? (
@@ -7306,7 +7333,8 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                         </div>
                                     );
                                 })()}
-                                {/* Type pill */}
+                                {/* Type pill — it's just a file extension, so keep it dead
+                                    simple: black badge, white text. No per-type rainbow. */}
                                 {(() => {
                                     const badge = TYPE_BADGE[noteType] ?? TYPE_BADGE["text"];
                                     if (!badge) return null;
@@ -7316,11 +7344,10 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                             className="font-mono font-black uppercase tracking-wide whitespace-nowrap px-1.5 py-px rounded-full"
                                             style={{
                                                 fontSize: 8,
-                                                background: badge.color,
-                                                color: isLightColor(badge.color) ? "#1c1c1e" : "#fff",
-                                                border: `1px solid ${badge.color}`,
+                                                background: "#1a1a1a",
+                                                color: "#fff",
+                                                border: appTheme === "dark" ? "1px solid rgba(255,255,255,0.18)" : "none",
                                                 cursor: "default",
-                                                transition: "background 0.15s, opacity 0.15s",
                                             }}
                                         >{label}</span>
                                     );
@@ -9311,14 +9338,33 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                 {/* THEME */}
                                 <div className="px-6 py-3 border-b border-white/[0.06]">
                                     <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-1.5">Theme</p>
-                                    <div className="flex gap-1.5">
-                                        {(["auto", "light", "dark"] as const).map((mode) => (
+                                    {/* iOS-style segmented control — a defined track so the buttons
+                                        never blend into the white modal in light mode. */}
+                                    <div className="flex gap-1 p-1 rounded-xl"
+                                        style={{
+                                            background: appTheme === "light" ? "#e8e8ed" : "rgba(255,255,255,0.06)",
+                                            border: appTheme === "light" ? "1px solid rgba(0,0,0,0.08)" : "1px solid rgba(255,255,255,0.08)",
+                                        }}>
+                                        {(["auto", "light", "dark"] as const).map((mode) => {
+                                            const selected = appThemeMode === mode;
+                                            return (
                                             <button key={mode} type="button"
                                                 onClick={() => setAppThemeMode(mode)}
-                                                className={`flex-1 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wide transition ${appThemeMode === mode ? (appTheme === "light" ? "bg-black text-white" : "bg-white text-black") : (appTheme === "light" ? "bg-black/5 text-zinc-500 hover:bg-black/10" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200")}`}>
+                                                className="flex-1 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wide transition"
+                                                style={selected
+                                                    ? {
+                                                        background: appTheme === "light" ? "#ffffff" : "#3a3a3c",
+                                                        color: appTheme === "light" ? "#1a1a1a" : "#ffffff",
+                                                        boxShadow: "0 1px 3px rgba(0,0,0,0.18)",
+                                                    }
+                                                    : {
+                                                        background: "transparent",
+                                                        color: appTheme === "light" ? "#6b7280" : "#a1a1aa",
+                                                    }}>
                                                 {mode === "auto" ? "Auto" : mode === "light" ? "Light" : "Dark"}
                                             </button>
-                                        ))}
+                                            );
+                                        })}
                                     </div>
                                 </div>
                                 {/* TODAY TABS */}
@@ -9370,7 +9416,11 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                             </>)}
                         </div>
                         <div className="border-t border-white/10 p-4 flex gap-3">
-                            <button type="button" onClick={() => { setShowFolderActions(false); setIsGlobalSettings(false); setShowFolderColorPicker(false); setShowFolderIconPicker(false); setShowFolderMovePicker(false); }} className="flex-1 py-3 rounded-xl bg-white text-black font-black uppercase text-xs tracking-wide hover:bg-zinc-100 transition">Close</button>
+                            <button type="button" onClick={() => { setShowFolderActions(false); setIsGlobalSettings(false); setShowFolderColorPicker(false); setShowFolderIconPicker(false); setShowFolderMovePicker(false); }}
+                                className="flex-1 py-3 rounded-xl font-black uppercase text-xs tracking-wide transition"
+                                style={appTheme === "light"
+                                    ? { background: "#f4f4f5", color: "#1a1a1a", border: "1px solid rgba(0,0,0,0.12)" }
+                                    : { background: "#ffffff", color: "#000000" }}>Close</button>
                             {(folderStack.length === 0 || isGlobalSettings) && (
                                 <button type="button"
                                     onClick={async () => {
