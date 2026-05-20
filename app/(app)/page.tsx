@@ -6124,6 +6124,12 @@ const fireIntegrations = (trigger: string, note: any) => {
                 .editor-top-safe {
                     height: env(safe-area-inset-top, 0px);
                 }
+                /* Note-color frame around the editor body. Hidden on phones (looked
+                   odd cramped against the screen edge), shown on tablet/desktop. */
+                .editor-frame { border: none; transition: border-color 0.3s ease; }
+                @media (min-width: 640px) {
+                    .editor-frame { border: 2px solid var(--frame-color, #888); }
+                }
                 @supports (-webkit-touch-callout: none) {
                     @media (max-width: 640px) {
                         .ios-mobile-header {
@@ -6495,7 +6501,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                         );
                     })()}
 
-                    <div className={`relative flex-1 flex flex-col overflow-hidden ${appTheme === "light" ? "bg-white" : "bg-black"}`} style={{ display: aiPromptOpen ? "none" : "flex", borderTop: `2px solid ${noteColor || "#888"}`, borderLeft: `2px solid ${noteColor || "#888"}`, borderRight: `2px solid ${noteColor || "#888"}`, borderBottom: `2px solid ${noteColor || "#888"}`, transition: "border-color 0.3s ease" }}>
+                    <div className={`editor-frame relative flex-1 flex flex-col overflow-hidden ${appTheme === "light" ? "bg-white" : "bg-black"}`} style={{ display: aiPromptOpen ? "none" : "flex", ["--frame-color" as any]: noteColor || "#888" }}>
                     {/* Mobile title — inside editor panel top row */}
                     <input ref={titleInputMobileRef} defaultValue={title} key={`title-m-${editingNote?.id || "new"}`} onChange={(e) => { titleRaw.current = e.target.value; }} onBlur={(e) => setTitle(e.target.value)} onFocus={() => { closeEditorTools(); setShowNoteActions(false); }} autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false} className={`sm:hidden bg-transparent border-0 border-b border-white/[0.06] appearance-none shadow-none ring-0 outline-none focus:outline-none focus:ring-0 px-3 py-2 w-full min-w-0 placeholder:text-zinc-500 shrink-0 ${appTheme === "light" ? "text-black" : "text-white"}`} style={{ caretColor: appTheme === "light" ? "#000" : "#fff", border: "none", borderBottom: `1px solid ${noteColor || "#888"}33`, fontSize: "clamp(16px, 4vw, 20px)", fontWeight: 700 }} placeholder="Note Title" />
                     <div className={`relative flex-1 flex overflow-hidden font-mono`}
