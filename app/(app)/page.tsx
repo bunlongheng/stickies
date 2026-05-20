@@ -2690,8 +2690,30 @@ const fireIntegrations = (trigger: string, note: any) => {
                 return parentName === activeFolder;
             })
             .map((f) => ({ ...f, is_folder: true as const }));
+        // At root, prepend the virtual TODAY folder — purely computed (no DB row),
+        // counts notes created in the last 24h. Clicking it enters activeFolder
+        // "Today", which the displayItems memo renders as the <24h view. Notes
+        // themselves live in their real folder (CLAUDE etc), not under "Today".
+        if (folderStack.length === 0) {
+            const last24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+            const todayCount = dbData.filter((n) => !n.is_folder && !n.trashed_at && new Date(n.created_at || 0) >= last24h).length;
+            const todayCard = {
+                id: "virtual-today",
+                name: "Today",
+                color: "#FF3B30",
+                count: todayCount,
+                subfolderCount: 0,
+                order: -1,
+                latestUpdatedAt: "",
+                icon: "__hero:CalendarDaysIcon",
+                parent_folder_name: null as string | null,
+                is_folder: true as const,
+                _virtualToday: true,
+            };
+            return [todayCard, ...filtered];
+        }
         return filtered;
-    }, [folders, folderStack, activeFolder, pinnedFolders]);
+    }, [folders, folderStack, activeFolder, pinnedFolders, dbData]);
 
     const displayItems = useMemo(() => {
         const byUpdated = (a: any, b: any) => {
