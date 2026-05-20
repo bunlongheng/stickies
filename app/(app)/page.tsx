@@ -6310,22 +6310,18 @@ const fireIntegrations = (trigger: string, note: any) => {
                         </div>
                     )}
                     {(() => {
-                        // Top is a "smoke" gradient — note color strongest at the status bar,
-                        // fading to transparent (i.e. into the white/dark body) by the bottom of
-                        // the header. No sharp divider line; it's a mood transition.
-                        const topSolid = noteColor
-                            ? `${noteColor}59`
-                            : (appTheme === "light" ? "#f2f2f7" : "#1e1e1e");
-                        const headerGradient = noteColor
-                            ? `linear-gradient(to bottom, ${noteColor}59 0%, ${noteColor}1f 55%, ${noteColor}00 100%)`
-                            : (appTheme === "light"
-                                ? "linear-gradient(to bottom, #f2f2f7 0%, rgba(242,242,247,0) 100%)"
-                                : "linear-gradient(to bottom, #1e1e1e 0%, rgba(30,30,30,0) 100%)");
-                        const headerText = appTheme === "light" ? "#1a1a1a" : "#fff";
+                        // Solid full note-color header — status bar spacer + header bar are one
+                        // uniform block of the note's color (the original, cohesive look). The
+                        // .editor-top-safe class lets the status bar take the color in light mode
+                        // too (the global .safe-top-bar override would otherwise force it grey).
+                        const headerBg = noteColor || (appTheme === "light" ? "#f5f5f5" : "#1e1e1e");
+                        const headerText = noteColor
+                            ? (isLightColor(noteColor) ? "#1c1c1e" : "#fff")
+                            : (appTheme === "light" ? "#1a1a1a" : "#fff");
                         return (
                     <>
-                    <div className="editor-top-safe shrink-0" style={{ background: topSolid }} />
-                    <div className="relative shrink-0 flex items-center h-[4rem] px-4" style={{ background: headerGradient }}>
+                    <div className="editor-top-safe shrink-0" style={{ background: headerBg }} />
+                    <div className="relative shrink-0 flex items-center h-[4rem] px-4" style={{ background: headerBg }}>
                         {/* Back button — hidden on desktop or in edit mode (left panel always visible) */}
                         <button
                             onClick={(e) => { e.stopPropagation(); if (mainListMode === "tabs") { setMainListMode("list"); } void backToRootFromEditor(); }}
@@ -7197,17 +7193,14 @@ const fireIntegrations = (trigger: string, note: any) => {
                         ? new Date(editingNote.updated_at as string).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
                         : null;
                     return (
-                        <div className="shrink-0 flex items-center justify-between px-3 select-none relative overflow-x-auto overflow-y-hidden"
+                        <div className="shrink-0 flex items-center justify-between px-3 select-none border-t relative overflow-x-auto overflow-y-hidden"
                             style={{
-                                minHeight: 28, fontSize: 10,
-                                // Footer is a reverse smoke gradient — blends out of the body at
-                                // the top, solid-ish note color at the bottom edge. The note tint
-                                // extends down through the home-indicator safe area so there's no
-                                // dead white cap below it.
-                                background: noteColor
-                                    ? `linear-gradient(to bottom, ${noteColor}1f 0%, ${noteColor}66 100%)`
-                                    : (appTheme === "light" ? "#e8e8ed" : "#1e1e1e"),
-                                paddingBottom: "env(safe-area-inset-bottom, 0px)",
+                                height: 28, fontSize: 10,
+                                // Clean, uniform footer bar — solid neutral so the muted zinc
+                                // status text/timestamps stay legible. Fixed 28px height with
+                                // items-center keeps the chips vertically centered.
+                                background: appTheme === "light" ? "#f2f2f7" : "#1e1e1e",
+                                borderTopColor: appTheme === "light" ? "rgba(0,0,0,0.08)" : "rgba(255,255,255,0.06)",
                                 scrollbarWidth: "none", WebkitOverflowScrolling: "touch",
                             }}>
                             {showFindBar && findQuery.trim() && findMatches.length > 0 ? (
