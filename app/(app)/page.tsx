@@ -2998,6 +2998,8 @@ const fireIntegrations = (trigger: string, note: any) => {
             if (shouldDerive && !hasRealTitle) setTitle(resolvedTitle);
 
             let folderName = targetFolder || activeFolder || editingNote?.folder_name || "General";
+            // "Today" is a virtual view, never a real home — file into the default notebook.
+            if (folderName === "Today") folderName = defaultFolder || "CLAUDE";
             // Resolve folderId from folderName — don't blindly use folderStack (tab+ may target a different folder)
             const matchedFolderRow = dbData.find(r => r.is_folder && r.folder_name === folderName);
             let folderId = matchedFolderRow && !String(matchedFolderRow.id).startsWith("virtual-") ? String(matchedFolderRow.id) : null;
@@ -3132,7 +3134,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                 isSavingRef.current = false;
             }
         },
-        [isDraftDirty, targetFolder, noteColor, activeFolder, folderStack, editingNote, content, folders, dbData, pendingNoteType, richDoc],
+        [isDraftDirty, targetFolder, noteColor, activeFolder, folderStack, editingNote, content, folders, dbData, pendingNoteType, richDoc, defaultFolder],
     );
     // Always-current ref so other callbacks can call saveNote without stale closures
     useEffect(() => { saveNoteRef.current = saveNote; }, [saveNote]);
@@ -3348,7 +3350,11 @@ const fireIntegrations = (trigger: string, note: any) => {
         noteEverDirtyRef.current = false;
         if (autoSaveTimerRef.current) { clearTimeout(autoSaveTimerRef.current); autoSaveTimerRef.current = null; }
         latestContentRef.current = "";
-        const target = folder || activeFolder || "CLAUDE";
+        // "Today" is a virtual, time-based view (created_at < 24h), not a real home.
+        // File Today-created notes into the default notebook so they don't get
+        // orphaned under a stale literal "Today" folder once they age out of the view.
+        let target = folder || activeFolder || "CLAUDE";
+        if (target === "Today") target = defaultFolder || "CLAUDE";
         const isStandup = target.toLowerCase() === "standup";
         const today = new Date();
         const dateStr = `${today.getMonth() + 1}/${today.getDate()}/${String(today.getFullYear()).slice(-2)}`;
@@ -3369,7 +3375,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         closeEditorTools();
         setEditorOpen(true);
         playSound("create");
-    }, [activeFolder, closeEditorTools, folders]);
+    }, [activeFolder, closeEditorTools, folders, defaultFolder]);
 
     // AI magic — stream Claude response into note content
     const runAiPrompt = useCallback(async () => {
