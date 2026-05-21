@@ -205,34 +205,31 @@ function isLightColor(hex: string): boolean {
 const IS_PHONE = typeof navigator !== "undefined" && navigator.maxTouchPoints > 1 && typeof screen !== "undefined" && Math.min(screen.width, screen.height) < 768;
 
 /**
- * Wrap an HTML note for the preview iframe so it ALWAYS matches the app theme.
- * Author colors (even baked-in dark backgrounds) are overridden with !important —
- * a dark note must not render as a black box inside a light app, and vice-versa.
- * Posters never need to know the theme; rendering normalizes it here.
+ * Wrap an HTML note for the preview iframe with theme-aware DEFAULTS only.
+ * Author styling (inline styles, <style> blocks — colored pills, table borders,
+ * accent underlines) ALWAYS wins; we only fill in a sensible background/text/
+ * font when the author didn't specify, so plain HTML is readable and matches
+ * the app theme without a black box, while designed HTML renders as authored.
  */
 function wrapHtmlWithTheme(content: string, isDark: boolean): string {
     const bg     = isDark ? "#1a1a1a" : "#ffffff";
     const fg     = isDark ? "#e8e8e8" : "#1a1a1a";
-    const codeBg = isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.05)";
     const link   = isDark ? "#6ab0ff" : "#0066cc";
-    const border = isDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.12)";
     const thumb  = isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.18)";
     const scrollbarCss = `::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:${thumb};border-radius:6px}*{scrollbar-width:thin;scrollbar-color:${thumb} transparent}`;
-    // Force-theme: body bg+text, neutralize author block backgrounds, theme code + links.
-    const forceCss = `html,body{background:${bg}!important;color:${fg}!important;margin:0;padding:1.25rem 1.5rem;font-family:-apple-system,BlinkMacSystemFont,system-ui,sans-serif;line-height:1.6;font-size:14px}`
-        + `*{background-color:transparent!important;border-color:${border}!important}`
-        + `h1,h2,h3,h4,h5,h6,p,li,td,th,span,strong,b,em,i,blockquote,dt,dd,figcaption,label,div,small{color:${fg}!important}`
-        + `pre,code,kbd,samp{background:${codeBg}!important;color:${fg}!important}`
-        + `a{color:${link}!important}`
-        + `hr{border-color:${border}!important}`;
-    const themeStyle = `<style>${scrollbarCss}${forceCss}</style>`;
-    // Full document: inject our style LAST in <head> (or before </body>) so it wins over author styles.
+    // Theme DEFAULTS — no !important, so any author rule/inline style overrides.
+    const themeCss = `html,body{background:${bg};color:${fg};margin:0;padding:1.25rem 1.5rem;font-family:-apple-system,BlinkMacSystemFont,system-ui,sans-serif;line-height:1.6;font-size:15px}`
+        + `a{color:${link}}`;
+    // Defaults must lose to author styles, so inject them FIRST (before author CSS).
+    const themeStyle = `<style>${scrollbarCss}${themeCss}</style>`;
+    // Full document: inject defaults right after <head> opens (before author styles).
     if (/^\s*<!DOCTYPE\s+html/i.test(content) || /^\s*<html[\s>]/i.test(content)) {
-        if (/<\/head>/i.test(content)) return content.replace(/<\/head>/i, `${themeStyle}</head>`);
-        if (/<body[^>]*>/i.test(content)) return content.replace(/(<body[^>]*>)/i, `$1${themeStyle}`);
+        if (/<head[^>]*>/i.test(content)) return content.replace(/(<head[^>]*>)/i, `$1${themeStyle}`);
+        if (/<html[^>]*>/i.test(content)) return content.replace(/(<html[^>]*>)/i, `$1<head>${themeStyle}</head>`);
         return themeStyle + content;
     }
-    // Bare fragment: pull out bare <script> + bare CSS blocks, then wrap in a themed doc.
+    // Bare fragment: pull out bare <script> + bare CSS blocks, then wrap in a doc
+    // with theme defaults FIRST and the author's extracted CSS AFTER (author wins).
     let bodyContent = content;
     const extractedScripts = (content.match(/<script[\s\S]*?<\/script>/gi) ?? []).join("\n");
     bodyContent = bodyContent.replace(/<script[\s\S]*?<\/script>/gi, "");
@@ -242,8 +239,7 @@ function wrapHtmlWithTheme(content: string, isDark: boolean): string {
         const matches = [...bodyContent.matchAll(cssLineRegex)];
         if (matches.length >= 3) { extractedCss = matches.map(m => m[0]).join("\n"); bodyContent = bodyContent.replace(cssLineRegex, ""); }
     }
-    // Author's extracted CSS first, then our force-theme so the app theme wins.
-    return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${extractedCss}${forceCss}${scrollbarCss}</style></head><body>${bodyContent}${extractedScripts}</body></html>`;
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${scrollbarCss}${themeCss}</style><style>${extractedCss}</style></head><body>${bodyContent}${extractedScripts}</body></html>`;
 }
 
 /** Module-level hex→RGB cache — avoids re-parsing the same 12 colors on every mouse event */
