@@ -89,9 +89,10 @@ export function folderTileForeground(appTheme: AppTheme, isClaude = false): stri
     return appTheme === "light" ? TILE_DARK_FG : TILE_LIGHT_FG;
 }
 
-export function noteTileForeground(appTheme: AppTheme, bg: string, isLightFn: (hex: string) => boolean): string {
-    if (appTheme === "light") return TILE_DARK_FG;
-    return isLightFn(bg) ? TILE_DARK_FG : TILE_LIGHT_FG;
+// Same rule as folders — light = dark stroke, dark = white. Applies to note
+// initials too ("all letters"). No per-bg contrast: the rule is absolute.
+export function noteTileForeground(appTheme: AppTheme): string {
+    return appTheme === "light" ? TILE_DARK_FG : TILE_LIGHT_FG;
 }
 
 /** CLAUDE is the single folder that renders as a fixed-white tile in both themes. */

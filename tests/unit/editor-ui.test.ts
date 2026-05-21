@@ -172,21 +172,14 @@ describe("folderTileForeground", () => {
 });
 
 describe("noteTileForeground", () => {
-    const dummyIsLight = (hex: string) => hex.toLowerCase().startsWith("#ff") || hex.toLowerCase().startsWith("#fc");
-
-    it("light mode = dark stroke regardless of note color", () => {
-        expect(noteTileForeground("light", "#000000", dummyIsLight)).toBe("#1c1c1e");
-        expect(noteTileForeground("light", "#FFD600", dummyIsLight)).toBe("#1c1c1e");
-    });
-
-    it("dark mode = contrast against the note color", () => {
-        expect(noteTileForeground("dark", "#000000", dummyIsLight)).toBe("#fff");   // dark bg -> white
-        expect(noteTileForeground("dark", "#FFD600", dummyIsLight)).toBe("#1c1c1e"); // light bg -> dark
+    it("light mode = dark stroke, dark mode = white (same rule as folders, all letters)", () => {
+        expect(noteTileForeground("light")).toBe("#1c1c1e");
+        expect(noteTileForeground("dark")).toBe("#fff");
     });
 
     it("NEVER returns a grey-trigger hex", () => {
-        expect(GREY_TRIGGER_HEXES).not.toContain(noteTileForeground("light", "#000000", dummyIsLight));
-        expect(GREY_TRIGGER_HEXES).not.toContain(noteTileForeground("dark", "#FFD600", dummyIsLight));
+        expect(GREY_TRIGGER_HEXES).not.toContain(noteTileForeground("light"));
+        expect(GREY_TRIGGER_HEXES).not.toContain(noteTileForeground("dark"));
     });
 });
 
