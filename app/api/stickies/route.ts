@@ -3,6 +3,18 @@ import Pusher from "pusher";
 import crypto from "crypto";
 import { query, queryOne, execute } from "@/lib/db-driver";
 import { auth as getSession } from "@/auth";
+import { normalizeIcon, pickNoteIcon, SUPPORTED_NOTE_ICONS } from "@/lib/note-icons";
+
+/** Friendly rejection when an agent sends an icon we don't support. */
+function iconRejection(badIcon: unknown) {
+    return NextResponse.json({
+        ok: false,
+        code: "unsupported_icon",
+        error: `Icon "${String(badIcon)}" is not supported. Pick one from the supported list and resubmit.`,
+        how_to_fix: 'Set "icon" to one of the supported names (with or without the "__hero:" prefix), e.g. icon:"RocketLaunchIcon". Omit "icon" entirely and we will auto-pick one for you.',
+        supported_icons: SUPPORTED_NOTE_ICONS,
+    }, { status: 422 });
+}
 
 /**
  * Markdown is no longer accepted from external channels (API / CLI / MCP).
@@ -674,6 +686,7 @@ export async function POST(req: Request) {
     const isMarkdown = /text\/(plain|markdown|x-markdown)/i.test(contentType);
 
     let title = "", content = "", folder_name: string | null = null, rawColor = "", parentFolderHint: string | null = null, explicitType: string | null = null;
+    let rawIcon: unknown = undefined;
 
     if (isMarkdown) {
         const raw = await req.text();
@@ -693,6 +706,7 @@ export async function POST(req: Request) {
         folder_name = qFolder?.trim() || "CLAUDE";
         if (qColor?.trim()) rawColor = qColor.trim().toUpperCase();
         if (qType && VALID_TYPES.has(qType)) explicitType = qType;
+        rawIcon = url.searchParams.get("icon") ?? undefined;
     } else {
         let body: Record<string, unknown>;
         try { body = bodyForFolderCheck ?? await req.json(); }
@@ -705,6 +719,7 @@ export async function POST(req: Request) {
         parentFolderHint = typeof body.parent_folder === "string" ? body.parent_folder.trim() : null;
         const bodyType = typeof body.type === "string" ? body.type.trim().toLowerCase() : null;
         if (bodyType && VALID_TYPES.has(bodyType)) explicitType = bodyType;
+        rawIcon = body.icon;
     }
 
     // Auto-derive title from content if missing or "Untitled"
@@ -730,6 +745,16 @@ export async function POST(req: Request) {
     if (auth.type === "external") {
         const wouldBeType = explicitType ?? detectType(content, title);
         if (wouldBeType === "markdown" || isMarkdown) return markdownRejection();
+    }
+
+    // Icon: if the agent supplied one it MUST be from the supported set — reject
+    // early (before any DB work) so they resubmit a valid one. Resolved/auto-
+    // picked below at insert time when absent.
+    const hasIcon = rawIcon !== undefined && rawIcon !== null && String(rawIcon).trim() !== "";
+    let suppliedIcon: string | null = null;
+    if (hasIcon) {
+        suppliedIcon = normalizeIcon(rawIcon);
+        if (!suppliedIcon) return iconRejection(rawIcon);
     }
 
     // ── Non-browser API calls: enforce CLAUDE as parent for unknown simple folders ──
@@ -824,23 +849,34 @@ export async function POST(req: Request) {
     let noteType = explicitType ?? detectType(content, title);
     // Quality gate: if classified as markdown but fails quality check, downgrade to text
     if (noteType === "markdown" && !isQualityMarkdown(title, content)) noteType = "text";
+
     let data: Record<string, unknown> | null;
 
     if (existingNote?.id) {
-        data = await queryOne(
-            `UPDATE "stickies" SET content = $1, folder_color = $2, type = $3, updated_at = $4 WHERE id = $5 RETURNING *`,
-            [content, folder_color, noteType, now, existingNote.id]
-        );
+        // Upsert update: only touch icon when the agent explicitly sent one
+        // (don't clobber a manually-set icon on a plain content re-post).
+        if (suppliedIcon) {
+            data = await queryOne(
+                `UPDATE "stickies" SET content = $1, folder_color = $2, type = $3, icon = $4, updated_at = $5 WHERE id = $6 RETURNING *`,
+                [content, folder_color, noteType, suppliedIcon, now, existingNote.id]
+            );
+        } else {
+            data = await queryOne(
+                `UPDATE "stickies" SET content = $1, folder_color = $2, type = $3, updated_at = $4 WHERE id = $5 RETURNING *`,
+                [content, folder_color, noteType, now, existingNote.id]
+            );
+        }
     } else {
+        const resolvedIcon = suppliedIcon ?? pickNoteIcon(title, content, noteType);
         const nextOrder = await getNextOrder(userId, false);
         const folderIdClause = resolved_folder_id ? `, folder_id` : "";
-        const folderIdVal = resolved_folder_id ? `, $10` : "";
+        const folderIdVal = resolved_folder_id ? `, $11` : "";
         const extraParams: unknown[] = resolved_folder_id ? [resolved_folder_id] : [];
 
         data = await queryOne(
-            `INSERT INTO "stickies" (title, content, folder_name, folder_color, is_folder, type, "order", created_at, updated_at, user_id${folderIdClause})
-             VALUES ($1, $2, $3, $4, false, $5, $6, $7, $8, $9${folderIdVal}) RETURNING *`,
-            [title, content, resolved_folder_name, folder_color, noteType, nextOrder, now, now, userId, ...extraParams]
+            `INSERT INTO "stickies" (title, content, folder_name, folder_color, is_folder, type, icon, "order", created_at, updated_at, user_id${folderIdClause})
+             VALUES ($1, $2, $3, $4, false, $5, $6, $7, $8, $9, $10${folderIdVal}) RETURNING *`,
+            [title, content, resolved_folder_name, folder_color, noteType, resolvedIcon, nextOrder, now, now, userId, ...extraParams]
         );
     }
 

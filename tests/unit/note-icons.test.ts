@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { matchNoteIcon, pickNoteIcon, DEFAULT_NOTE_ICON, TYPE_ICON } from "@/lib/note-icons";
+import { matchNoteIcon, pickNoteIcon, normalizeIcon, SUPPORTED_NOTE_ICONS, DEFAULT_NOTE_ICON, TYPE_ICON } from "@/lib/note-icons";
 
 // Auto-icon matching. These lock in coverage so "auto icon not working much"
 // can't recur — every note resolves to a usable __hero: icon.
@@ -53,6 +53,30 @@ describe("pickNoteIcon — always returns an icon (never null)", () => {
         for (const [title, type] of [["", null], ["random words", "text"], ["xyz", "html"], ["Email", "text"]] as const) {
             const icon = pickNoteIcon(title, "", type);
             expect(icon).toMatch(/^__hero:[A-Za-z]+Icon$/);
+        }
+    });
+});
+
+describe("normalizeIcon — what agents are allowed to POST", () => {
+    it("accepts a bare supported name", () => {
+        expect(normalizeIcon("RocketLaunchIcon")).toBe("__hero:RocketLaunchIcon");
+    });
+
+    it("accepts the __hero: prefixed form and is case-insensitive", () => {
+        expect(normalizeIcon("__hero:EnvelopeIcon")).toBe("__hero:EnvelopeIcon");
+        expect(normalizeIcon("rocketlaunchicon")).toBe("__hero:RocketLaunchIcon");
+    });
+
+    it("rejects unsupported / junk input", () => {
+        expect(normalizeIcon("NotARealIcon")).toBeNull();
+        expect(normalizeIcon("")).toBeNull();
+        expect(normalizeIcon(null)).toBeNull();
+        expect(normalizeIcon(42)).toBeNull();
+    });
+
+    it("every supported icon normalizes to itself (round-trip)", () => {
+        for (const name of SUPPORTED_NOTE_ICONS) {
+            expect(normalizeIcon(name)).toBe(`__hero:${name}`);
         }
     });
 });

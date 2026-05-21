@@ -53,6 +53,35 @@ export const TYPE_ICON: Record<string, string> = {
 // Last-resort default so EVERY note ends up with an icon.
 export const DEFAULT_NOTE_ICON = "__hero:DocumentTextIcon";
 
+// The icon names agents are allowed to send on POST. Curated from the keyword
+// table + type fallbacks + a few common extras. All are valid Heroicons (the
+// app maps `__hero:<Name>` to @heroicons/react/24/outline). Keeping it a known
+// set means notes arrive already-iconed — no later AI pass to classify them.
+export const SUPPORTED_NOTE_ICONS: readonly string[] = Array.from(new Set([
+    ...NOTE_ICON_KEYWORDS.map(([, icon]) => icon),
+    ...Object.values(TYPE_ICON).map(v => v.replace(/^__hero:/, "")),
+    // common extras agents may want
+    "BellIcon", "FlagIcon", "HeartIcon", "BeakerIcon", "BoltIcon", "CpuChipIcon",
+    "DocumentTextIcon", "DocumentDuplicateIcon", "ClipboardIcon", "TagIcon",
+    "MapPinIcon", "ClockIcon", "ShieldCheckIcon", "SparklesIcon", "TrophyIcon",
+    "ExclamationTriangleIcon", "QuestionMarkCircleIcon", "InboxIcon", "ServerIcon",
+])).sort();
+
+const SUPPORTED_SET = new Set(SUPPORTED_NOTE_ICONS.map(n => n.toLowerCase()));
+
+/**
+ * Normalize an agent-supplied icon to a supported `__hero:<Name>` value.
+ * Accepts "__hero:RocketLaunchIcon", "RocketLaunchIcon", or "rocketlaunchicon"
+ * (case-insensitive). Returns null if the icon isn't in the supported set.
+ */
+export function normalizeIcon(input: unknown): string | null {
+    if (typeof input !== "string") return null;
+    const bare = input.trim().replace(/^__hero:/i, "");
+    if (!bare) return null;
+    const match = SUPPORTED_NOTE_ICONS.find(n => n.toLowerCase() === bare.toLowerCase());
+    return match ? `__hero:${match}` : null;
+}
+
 export function matchNoteIcon(title: string, content?: string): string | null {
     const text = ` ${title} ${(content || "").slice(0, 200)} `.toLowerCase();
     for (const [keywords, icon] of NOTE_ICON_KEYWORDS) {

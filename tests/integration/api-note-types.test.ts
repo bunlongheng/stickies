@@ -195,6 +195,35 @@ describe("PATCH /api/stickies — persists the icon column", () => {
     });
 });
 
+// ─── POST forces a supported icon (so notes arrive already-iconed) ───────────
+// The reject path runs before any DB work, so it's deterministic. Accept/auto-
+// assign behavior is unit-covered in tests/unit/note-icons.test.ts.
+describe("POST /api/stickies — icon enforcement", () => {
+    beforeEach(() => { mockQueryOne.mockResolvedValue(null); mockQuery.mockResolvedValue([]); });
+
+    it("rejects an unsupported icon with the supported list (422)", async () => {
+        const { POST } = await import("@/app/api/stickies/ext/route");
+        const res = await POST(apiReq("/api/stickies/ext", {
+            method: "POST",
+            body: JSON.stringify({ title: "X", content: "y", icon: "NotARealIcon", folder_name: "CLAUDE" }),
+        }));
+        expect(res.status).toBe(422);
+        const body = await res.json();
+        expect(body.code).toBe("unsupported_icon");
+        expect(Array.isArray(body.supported_icons)).toBe(true);
+        expect(body.supported_icons).toContain("RocketLaunchIcon");
+    });
+
+    it("a supported icon passes the validation guard (not 422)", async () => {
+        const { POST } = await import("@/app/api/stickies/ext/route");
+        const res = await POST(apiReq("/api/stickies/ext", {
+            method: "POST",
+            body: JSON.stringify({ title: "X", content: "y", icon: "RocketLaunchIcon", folder_name: "CLAUDE" }),
+        }));
+        expect(res.status).not.toBe(422);
+    });
+});
+
 // ─── Checklist list_mode flag ────────────────────────────────────────────────
 describe("checklist mode flag", () => {
     it("PATCH accepts list_mode=true", async () => {
