@@ -8052,7 +8052,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                     <>
                                                         {(() => { const tc = noteTileForeground(appTheme); return (<>
                                                         <div style={{ fontSize: "3rem", lineHeight: 1, color: tc }} className="font-black relative z-10">
-                                                            {showFileIcons && noteIcons[String(item.id)]
+                                                            {noteIcons[String(item.id)]
                                                                 ? <FolderIconDisplay value={noteIcons[String(item.id)]} folderName={item.title || "N"} className="w-10 h-10" />
                                                                 : meaningfulInitial(item.title || "", "N")}
                                                         </div>
