@@ -96,10 +96,8 @@ html { -webkit-text-size-adjust: none !important; text-size-adjust: none !import
 [data-theme="light"] [data-icon-sq]:hover { box-shadow: 0 0 0 2px #1a1a1a !important; }
 [data-theme="light"] .list-row-hover:hover { background: rgba(0,0,0,0.04) !important; }
 [data-theme="light"] .list-row-hover:active { background: rgba(0,0,0,0.08) !important; }
-/* CLAUDE folder icon — ALWAYS white bg + border, both themes, everywhere */
-.folder-icon-badge-claude,
-.folder-grid-tile-claude { background: #fff !important; border: 1px solid rgba(0,0,0,0.12) !important; }
-[style*="--fc"] img[src*="claude-icon"] { background: #fff !important; }
+/* CLAUDE icon PNG is transparent now — it renders like any other folder icon,
+   no white box. (White special-casing removed.) */
 
 /* Dark mode: ensure white text/icons/strokes everywhere */
 [data-theme="dark"] {
@@ -307,11 +305,6 @@ body {
 .folder-icon-badge:hover {
   opacity: 0.85;
 }
-/* CLAUDE stays white — special */
-.folder-icon-badge-claude {
-  background: #fff !important;
-  color: inherit !important;
-}
 /* Folder list row — name text turns white on row hover */
 .list-row-hover:hover .folder-name-text {
   color: #fff !important;
@@ -327,21 +320,6 @@ body {
 }
 .folder-grid-tile .folder-icon-badge {
   background: rgba(0,0,0,0.08);
-}
-/* CLAUDE grid tile stays white */
-.folder-grid-tile-claude {
-  background: #fff !important;
-  border: 1px solid rgba(0,0,0,0.12);
-}
-.folder-grid-tile-claude .folder-grid-name,
-.folder-grid-tile-claude .folder-grid-initial {
-  color: #1a1a1a !important;
-}
-.folder-grid-tile-claude .folder-icon-badge {
-  background: #fff !important;
-}
-.folder-grid-tile-claude:hover {
-  filter: brightness(0.95);
 }
 
 
