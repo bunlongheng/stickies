@@ -7920,7 +7920,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                             }
                                         }
                                         return item.is_folder
-                                            ? { isolation: "isolate", "--fc": c, "--tc": appTheme === "light" ? "#1a1a1a" : (isLightColor(c) ? "#1c1c1e" : "#fff"), "--ic": appTheme === "light" ? "#1a1a1a" : (isLightColor(c) ? "#1c1c1e" : "#fff") } as React.CSSProperties
+                                            ? { isolation: "isolate", "--fc": c, "--tc": isLightColor(c) ? "#1c1c1e" : "#fff", "--ic": isLightColor(c) ? "#1c1c1e" : "#fff" } as React.CSSProperties
                                             : { isolation: "isolate", backgroundColor: c, borderRadius: "3px 3px 3px 14px" };
                                     })()}
                                     className={`${isListMode
@@ -8071,7 +8071,10 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                     <>
                                                         {(() => {
                                                             const fc = item.color || item.folder_color || "#888";
-                                                            const tc = item.name === "CLAUDE" ? "#1a1a1a" : appTheme === "light" ? "#1a1a1a" : "#fff";
+                                                            // Contrast against the colored tile (white on dark folder colors,
+                                                            // near-black on light). Avoids the literal "#1a1a1a" string that the
+                                                            // global [style*="#1a1a1a"] rule would flatten to grey.
+                                                            const tc = isLightColor(fc) ? "#1c1c1e" : "#fff";
                                                             return (<>
                                                                 {item.name === "CLAUDE"
                                                                     ? <img src="/claude-icon.png" alt="Claude" className="w-14 h-14 object-contain relative z-10" />
@@ -8090,7 +8093,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                     </>
                                                 ) : (
                                                     <>
-                                                        {(() => { const tc = appTheme === "light" ? "#1a1a1a" : (isLightColor(item.color || item.folder_color || "#888") ? "#1c1c1e" : "#fff"); return (<>
+                                                        {(() => { const tc = isLightColor(item.color || item.folder_color || "#888") ? "#1c1c1e" : "#fff"; return (<>
                                                         <div style={{ fontSize: "3rem", lineHeight: 1, color: tc }} className="font-black relative z-10">
                                                             {showFileIcons && noteIcons[String(item.id)]
                                                                 ? <FolderIconDisplay value={noteIcons[String(item.id)]} folderName={item.title || "N"} className="w-10 h-10" />
