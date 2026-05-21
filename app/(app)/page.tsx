@@ -6446,9 +6446,18 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                 style={{ background: isActive ? c : `${c}99`, color: "#1c1c1e", height: isActive ? H + 6 : H, borderRadius: isActive ? "8px 8px 0 0" : 0, minWidth: IS_PHONE ? 44 : undefined }}>
                                                 <button type="button"
                                                     onClick={() => { if (!isActive) { if (mainListMode !== "tabs" && inFolder && n.folder_name && n.folder_name !== activeFolder) { const fr = dbData.find(r => r.is_folder && r.folder_name === n.folder_name); if (fr) enterFolder({ id: String(fr.id), name: n.folder_name, color: fr.folder_color || c }); } void openNote(n); } }}
-                                                    className={`flex items-center text-[10px] sm:text-[10px] font-bold truncate ${isActive ? "pl-3 pr-1 max-w-[150px]" : "px-2 sm:px-1.5"}`} style={{ height: "100%" }}
+                                                    className={`flex items-center gap-1 text-[10px] sm:text-[10px] font-bold truncate ${isActive ? "pl-2.5 pr-1 max-w-[160px]" : "px-2"}`} style={{ height: "100%" }}
                                                     title={n.title || "Untitled"}>
-                                                    {(() => { const t = n.title || "Untitled"; if (isActive) return <>{t.slice(0, 20)}{t.length > 20 ? "…" : ""}</>; const len = dayNotes.length; const chars = len < 5 ? t.length : len < 15 ? 6 : len < 20 ? 4 : len < 30 ? 3 : 2; return t.slice(0, chars); })()}
+                                                    {(() => {
+                                                        const ni = noteIcons[String(n.id)];
+                                                        const glyph = ni
+                                                            ? <FolderIconDisplay value={ni} folderName={n.title || "N"} className="w-3.5 h-3.5 flex-shrink-0" />
+                                                            : <span className="font-black flex-shrink-0">{meaningfulInitial(n.title || "", "N")}</span>;
+                                                        // Inactive tabs = icon/initial only (compact, fit more). Active = icon + title.
+                                                        if (!isActive) return glyph;
+                                                        const t = n.title || "Untitled";
+                                                        return <>{glyph}<span className="truncate">{t.slice(0, 20)}{t.length > 20 ? "…" : ""}</span></>;
+                                                    })()}
                                                 </button>
                                                 {isActive && (
                                                     <button type="button"
