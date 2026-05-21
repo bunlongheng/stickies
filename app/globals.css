@@ -321,6 +321,10 @@ body {
 .folder-grid-tile .folder-icon-badge {
   background: rgba(0,0,0,0.08);
 }
+/* CLAUDE is the one folder with a fixed white tile (brand "app icon" look),
+   both themes. The robot PNG is transparent, so it sits cleanly on the white. */
+.folder-grid-tile-claude,
+.folder-icon-badge-claude { background: #fff !important; border: 1px solid rgba(0,0,0,0.12) !important; }
 
 
 @keyframes confettiShoot {

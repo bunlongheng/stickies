@@ -6,7 +6,10 @@ import {
     truncateTagsForDisplay,
     switchTrackColors,
     headerColors,
-    pickTileForeground,
+    folderTileForeground,
+    noteTileForeground,
+    isFixedWhiteTile,
+    GREY_TRIGGER_HEXES,
     serializeDraft,
     parseDraftBackup,
     backupHasWork,
@@ -147,18 +150,53 @@ describe("headerColors", () => {
     });
 });
 
-describe("pickTileForeground", () => {
-    const dummyIsLight = (hex: string) => hex.toLowerCase().startsWith("#ff") || hex.toLowerCase().startsWith("#fc");
-
-    it("forces black in light mode regardless of bg contrast", () => {
-        // Even on a dark bg color, light mode should pick black.
-        expect(pickTileForeground("#000000", "light", dummyIsLight)).toBe("#1a1a1a");
-        expect(pickTileForeground("#FFD600", "light", dummyIsLight)).toBe("#1a1a1a");
+// Tile foreground rules — locked in so the grey-out / lost-color regression can't recur.
+describe("folderTileForeground", () => {
+    it("light mode = dark icon stroke, dark mode = white", () => {
+        expect(folderTileForeground("light")).toBe("#1c1c1e");
+        expect(folderTileForeground("dark")).toBe("#fff");
     });
 
-    it("uses contrast picker in dark mode", () => {
-        expect(pickTileForeground("#000000", "dark", dummyIsLight)).toBe("#fff");
-        expect(pickTileForeground("#FFD600", "dark", dummyIsLight)).toBe("#1c1c1e");
+    it("CLAUDE label is dark in BOTH themes (it's the fixed-white tile)", () => {
+        expect(folderTileForeground("light", true)).toBe("#1c1c1e");
+        expect(folderTileForeground("dark", true)).toBe("#1c1c1e");
+    });
+
+    it("NEVER returns a grey-trigger hex (would flatten the tile to grey)", () => {
+        for (const theme of ["light", "dark"] as const) {
+            for (const claude of [true, false]) {
+                expect(GREY_TRIGGER_HEXES).not.toContain(folderTileForeground(theme, claude));
+            }
+        }
+    });
+});
+
+describe("noteTileForeground", () => {
+    const dummyIsLight = (hex: string) => hex.toLowerCase().startsWith("#ff") || hex.toLowerCase().startsWith("#fc");
+
+    it("light mode = dark stroke regardless of note color", () => {
+        expect(noteTileForeground("light", "#000000", dummyIsLight)).toBe("#1c1c1e");
+        expect(noteTileForeground("light", "#FFD600", dummyIsLight)).toBe("#1c1c1e");
+    });
+
+    it("dark mode = contrast against the note color", () => {
+        expect(noteTileForeground("dark", "#000000", dummyIsLight)).toBe("#fff");   // dark bg -> white
+        expect(noteTileForeground("dark", "#FFD600", dummyIsLight)).toBe("#1c1c1e"); // light bg -> dark
+    });
+
+    it("NEVER returns a grey-trigger hex", () => {
+        expect(GREY_TRIGGER_HEXES).not.toContain(noteTileForeground("light", "#000000", dummyIsLight));
+        expect(GREY_TRIGGER_HEXES).not.toContain(noteTileForeground("dark", "#FFD600", dummyIsLight));
+    });
+});
+
+describe("isFixedWhiteTile", () => {
+    it("only CLAUDE is the fixed-white tile", () => {
+        expect(isFixedWhiteTile("CLAUDE")).toBe(true);
+        expect(isFixedWhiteTile("TODAY")).toBe(false);
+        expect(isFixedWhiteTile("Work")).toBe(false);
+        expect(isFixedWhiteTile(null)).toBe(false);
+        expect(isFixedWhiteTile(undefined)).toBe(false);
     });
 });
 

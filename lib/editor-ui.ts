@@ -71,12 +71,32 @@ export function headerColors(noteColor: string | null | undefined, appTheme: App
     return { bg, border, text };
 }
 
-// ─── Light-mode foreground rule ──────────────────────────────────────────────
-// Bunlong's rule: in light theme, all tile/chip foregrounds must render black
-// regardless of bg luminance. Dark theme uses the standard contrast picker.
-export function pickTileForeground(bg: string, appTheme: AppTheme, isLightFn: (hex: string) => boolean): string {
-    if (appTheme === "light") return "#1a1a1a";
-    return isLightFn(bg) ? "#1c1c1e" : "#fff";
+// ─── Grid tile foreground rules ──────────────────────────────────────────────
+// Bunlong's rules (kept colorful, dark-stroke in light):
+//  - Light mode  = DARK icon/initial stroke (#1c1c1e)
+//  - Dark mode   = white (#fff)  [folders] / contrast-vs-bg [notes]
+//  - CLAUDE      = the ONE fixed-white tile, so its label is dark in BOTH themes
+// IMPORTANT: never return "#1a1a1a" — that exact string trips the global
+// [data-theme=light] [style*="#1a1a1a"]{background:#f2f2f7} override and silently
+// greys the tile, wiping the folder color. Use "#1c1c1e".
+export const TILE_DARK_FG = "#1c1c1e";
+export const TILE_LIGHT_FG = "#fff";
+/** The literal hex strings that, if placed in an inline style, get force-greyed in light mode. */
+export const GREY_TRIGGER_HEXES = ["#1a1a1a", "#1e1e1e", "#222222", "#2a2a2a", "#050507"];
+
+export function folderTileForeground(appTheme: AppTheme, isClaude = false): string {
+    if (isClaude) return TILE_DARK_FG; // fixed-white tile -> always dark label
+    return appTheme === "light" ? TILE_DARK_FG : TILE_LIGHT_FG;
+}
+
+export function noteTileForeground(appTheme: AppTheme, bg: string, isLightFn: (hex: string) => boolean): string {
+    if (appTheme === "light") return TILE_DARK_FG;
+    return isLightFn(bg) ? TILE_DARK_FG : TILE_LIGHT_FG;
+}
+
+/** CLAUDE is the single folder that renders as a fixed-white tile in both themes. */
+export function isFixedWhiteTile(folderName: string | null | undefined): boolean {
+    return folderName === "CLAUDE";
 }
 
 // ─── Draft backup (localStorage safety net) ──────────────────────────────────

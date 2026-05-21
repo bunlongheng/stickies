@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback, useTransition
 import { createPortal } from "react-dom";
 // Supabase removed — auth now via NextAuth (see auth.ts at project root).
 import { usePageMeta } from "@/lib/usePageMeta";
-import { extractSmartTags, mergeSmartTags, DRAFT_BACKUP_KEY, serializeDraft, parseDraftBackup, backupHasWork } from "@/lib/editor-ui";
+import { extractSmartTags, mergeSmartTags, DRAFT_BACKUP_KEY, serializeDraft, parseDraftBackup, backupHasWork, folderTileForeground, noteTileForeground } from "@/lib/editor-ui";
 import dynamic from "next/dynamic";
 import LZString from "lz-string";
 const GraphView = dynamic(() => import("@/components/GraphView").then(m => m.GraphView), { ssr: false });
@@ -7919,8 +7919,9 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                 return { position: "relative", isolation: "isolate", "--row-color": rowColor, "--fc": rowColor, borderBottom: `1px solid ${rowColor}30`, ...(isActive && !item.is_folder ? { borderRightColor: rowColor, background: `${rowColor}35` } : isActive ? { borderRightColor: rowColor } : {}), ...(item.is_folder ? { background: `${rowColor}18` } : {}) } as unknown as React.CSSProperties;
                                             }
                                         }
+                                        const folderFg = folderTileForeground(appTheme, item.name === "CLAUDE");
                                         return item.is_folder
-                                            ? { isolation: "isolate", "--fc": c, "--tc": isLightColor(c) ? "#1c1c1e" : "#fff", "--ic": isLightColor(c) ? "#1c1c1e" : "#fff" } as React.CSSProperties
+                                            ? { isolation: "isolate", "--fc": c, "--tc": folderFg, "--ic": folderFg } as React.CSSProperties
                                             : { isolation: "isolate", backgroundColor: c, borderRadius: "3px 3px 3px 14px" };
                                     })()}
                                     className={`${isListMode
@@ -8071,10 +8072,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                     <>
                                                         {(() => {
                                                             const fc = item.color || item.folder_color || "#888";
-                                                            // Contrast against the colored tile (white on dark folder colors,
-                                                            // near-black on light). Avoids the literal "#1a1a1a" string that the
-                                                            // global [style*="#1a1a1a"] rule would flatten to grey.
-                                                            const tc = isLightColor(fc) ? "#1c1c1e" : "#fff";
+                                                            const tc = folderTileForeground(appTheme, item.name === "CLAUDE");
                                                             return (<>
                                                                 {item.name === "CLAUDE"
                                                                     ? <img src="/claude-icon.png" alt="Claude" className="w-14 h-14 object-contain relative z-10" />
@@ -8093,7 +8091,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                     </>
                                                 ) : (
                                                     <>
-                                                        {(() => { const tc = isLightColor(item.color || item.folder_color || "#888") ? "#1c1c1e" : "#fff"; return (<>
+                                                        {(() => { const tc = noteTileForeground(appTheme, item.color || item.folder_color || "#888", isLightColor); return (<>
                                                         <div style={{ fontSize: "3rem", lineHeight: 1, color: tc }} className="font-black relative z-10">
                                                             {showFileIcons && noteIcons[String(item.id)]
                                                                 ? <FolderIconDisplay value={noteIcons[String(item.id)]} folderName={item.title || "N"} className="w-10 h-10" />
