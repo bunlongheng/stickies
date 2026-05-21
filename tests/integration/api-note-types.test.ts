@@ -53,7 +53,8 @@ const apiReq = (path: string, init?: RequestInit) =>
 // ─── POST round-trip per type ────────────────────────────────────────────────
 const TYPE_CASES: { name: string; type: string; content: string }[] = [
     { name: "text",            type: "text",            content: "Just a plain paragraph." },
-    { name: "markdown",        type: "markdown",        content: "# Heading\n\n- bullet one\n- bullet two\n\n> quote" },
+    // NOTE: markdown is intentionally absent — external channels no longer accept it
+    // (see the "rejects markdown" describe block below). HTML is the rich format.
     { name: "html",            type: "html",            content: "<!DOCTYPE html><html><body><h1>hi</h1></body></html>" },
     { name: "json",            type: "json",            content: '{"hello":"world","items":[1,2,3]}' },
     { name: "mermaid",         type: "mermaid",         content: "graph TD\n  A-->B" },
@@ -83,6 +84,55 @@ describe.each(TYPE_CASES)("POST /api/stickies?raw=1 — $name", ({ type, content
         // The SQL INSERT included our `type` column
         const params = mockQueryOne.mock.calls[0][1] as unknown[];
         expect(params).toContain(type);
+    });
+});
+
+// ─── markdown is rejected from external channels ─────────────────────────────
+describe("POST /api/stickies — rejects markdown from external (API/CLI/MCP)", () => {
+    it("rejects raw=1 with type:markdown (422 + actionable body)", async () => {
+        const { POST } = await import("@/app/api/stickies/ext/route");
+        const res = await POST(apiReq("/api/stickies/ext?raw=1", {
+            method: "POST",
+            body: JSON.stringify({ title: "T", content: "# Heading\n- a\n- b", type: "markdown", folder_name: "CLAUDE" }),
+        }));
+        expect(res.status).toBe(422);
+        const body = await res.json();
+        expect(body.code).toBe("markdown_not_supported");
+        expect(body.accepted_types).toContain("html");
+        expect(body.example.type).toBe("html");
+    });
+
+    it("rejects a JSON note with type:markdown", async () => {
+        const { POST } = await import("@/app/api/stickies/ext/route");
+        const res = await POST(apiReq("/api/stickies/ext", {
+            method: "POST",
+            body: JSON.stringify({ title: "Doc", content: "# Title\n\nbody text here", type: "markdown" }),
+        }));
+        expect(res.status).toBe(422);
+        expect((await res.json()).code).toBe("markdown_not_supported");
+    });
+
+    it("rejects a text/markdown content-type body", async () => {
+        const { POST } = await import("@/app/api/stickies/ext/route");
+        const res = await POST(apiReq("/api/stickies/ext?folder=CLAUDE", {
+            method: "POST",
+            headers: { "Content-Type": "text/markdown" },
+            body: "# Heading\n\n- bullet\n- bullet\n\n> quote",
+        }));
+        expect(res.status).toBe(422);
+        expect((await res.json()).code).toBe("markdown_not_supported");
+    });
+
+    it("still accepts html", async () => {
+        const expected = { id: "uuid-h", title: "T", content: "<h1>hi</h1>", type: "html", folder_name: "CLAUDE" };
+        mockQueryOne.mockResolvedValue(expected);
+        const { POST } = await import("@/app/api/stickies/ext/route");
+        const res = await POST(apiReq("/api/stickies/ext?raw=1", {
+            method: "POST",
+            body: JSON.stringify({ title: "T", content: "<h1>hi</h1>", type: "html", folder_name: "CLAUDE" }),
+        }));
+        expect(res.status).toBe(201);
+        expect((await res.json()).note.type).toBe("html");
     });
 });
 

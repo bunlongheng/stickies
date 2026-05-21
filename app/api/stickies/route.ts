@@ -5,6 +5,27 @@ import { query, queryOne, execute } from "@/lib/db-driver";
 import { auth as getSession } from "@/auth";
 
 /**
+ * Markdown is no longer accepted from external channels (API / CLI / MCP).
+ * Notes must be posted as HTML (or plain text). This builds the friendly,
+ * actionable rejection telling the agent how to fix and resubmit.
+ */
+function markdownRejection() {
+    return NextResponse.json({
+        ok: false,
+        code: "markdown_not_supported",
+        error: "Markdown is no longer accepted. Convert your content to HTML and resubmit.",
+        how_to_fix: "Re-render the content as HTML and set type:\"html\". Use real tags: <h1>/<h2> for headings, <p> for paragraphs, <ul>/<ol>/<li> for lists, <pre><code> for code, <table> for tables, <strong>/<em> for emphasis.",
+        example: {
+            title: "My Note",
+            content: "<h1>My Note</h1><p>First paragraph.</p><ul><li>Point one</li><li>Point two</li></ul>",
+            type: "html",
+            folder: "CLAUDE",
+        },
+        accepted_types: ["html", "text"],
+    }, { status: 422 });
+}
+
+/**
  * Quality check for markdown notes.
  * Returns true if content meets markdown standards.
  *
@@ -559,6 +580,11 @@ export async function POST(req: Request) {
                         ? (String(item.folder ?? "").trim() || (() => { throw new Error("folder cannot be empty"); })())
                         : "CLAUDE";
                     let batchType = (typeof item.type === "string" && VALID_TYPES.has(item.type)) ? item.type : detectType(content, title);
+                    // External channels may no longer create markdown — reject the item so the agent resubmits as HTML.
+                    if (auth.type === "external" && batchType === "markdown") {
+                        results.push({ type: "note", data: null, error: "markdown_not_supported: convert this item's content to HTML and resubmit with type:\"html\"" });
+                        continue;
+                    }
                     if (batchType === "markdown" && !isQualityMarkdown(title, content)) batchType = "text";
                     const folder_color = pickColor(item.color as string);
                     const row = await queryOne(
@@ -617,6 +643,10 @@ export async function POST(req: Request) {
         let payload: Record<string, unknown>;
         try { payload = bodyForFolderCheck ?? await req.json(); }
         catch { return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 }); }
+        // External channels may no longer create markdown — force HTML.
+        if (auth.type === "external" && typeof payload.type === "string" && payload.type.toLowerCase() === "markdown") {
+            return markdownRejection();
+        }
         const now = new Date().toISOString();
         const insertPayload = { ...payload, updated_at: now, created_at: payload.created_at ?? now, user_id: userId };
         // Fix #2: whitelist allowed columns — reject arbitrary user-supplied column names
@@ -693,6 +723,14 @@ export async function POST(req: Request) {
     if (!content?.trim()) return NextResponse.json({ error: "content required" }, { status: 400 });
     if (folder_name !== null && !folder_name?.trim()) return NextResponse.json({ error: "folder cannot be empty" }, { status: 400 });
     if (!folder_name?.trim()) folder_name = "CLAUDE";
+
+    // External channels (API/CLI/MCP) may no longer create markdown — force HTML.
+    // Reject early, before any DB work. Browser sessions (owner/user JWT) keep
+    // markdown for the editor's preview mode.
+    if (auth.type === "external") {
+        const wouldBeType = explicitType ?? detectType(content, title);
+        if (wouldBeType === "markdown" || isMarkdown) return markdownRejection();
+    }
 
     // ── Non-browser API calls: enforce CLAUDE as parent for unknown simple folders ──
     const isExternalCall = !/mozilla/i.test(req.headers.get("user-agent") ?? "");
