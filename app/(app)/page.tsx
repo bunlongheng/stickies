@@ -203,6 +203,48 @@ function isLightColor(hex: string): boolean {
 /** True on phones (no physical keyboard expected) — skip attaching keydown shortcuts */
 const IS_PHONE = typeof navigator !== "undefined" && navigator.maxTouchPoints > 1 && typeof screen !== "undefined" && Math.min(screen.width, screen.height) < 768;
 
+/**
+ * Wrap an HTML note for the preview iframe so it ALWAYS matches the app theme.
+ * Author colors (even baked-in dark backgrounds) are overridden with !important —
+ * a dark note must not render as a black box inside a light app, and vice-versa.
+ * Posters never need to know the theme; rendering normalizes it here.
+ */
+function wrapHtmlWithTheme(content: string, isDark: boolean): string {
+    const bg     = isDark ? "#1a1a1a" : "#ffffff";
+    const fg     = isDark ? "#e8e8e8" : "#1a1a1a";
+    const codeBg = isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.05)";
+    const link   = isDark ? "#6ab0ff" : "#0066cc";
+    const border = isDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.12)";
+    const thumb  = isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.18)";
+    const scrollbarCss = `::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:${thumb};border-radius:6px}*{scrollbar-width:thin;scrollbar-color:${thumb} transparent}`;
+    // Force-theme: body bg+text, neutralize author block backgrounds, theme code + links.
+    const forceCss = `html,body{background:${bg}!important;color:${fg}!important;margin:0;padding:1.25rem 1.5rem;font-family:-apple-system,BlinkMacSystemFont,system-ui,sans-serif;line-height:1.6;font-size:14px}`
+        + `*{background-color:transparent!important;border-color:${border}!important}`
+        + `h1,h2,h3,h4,h5,h6,p,li,td,th,span,strong,b,em,i,blockquote,dt,dd,figcaption,label,div,small{color:${fg}!important}`
+        + `pre,code,kbd,samp{background:${codeBg}!important;color:${fg}!important}`
+        + `a{color:${link}!important}`
+        + `hr{border-color:${border}!important}`;
+    const themeStyle = `<style>${scrollbarCss}${forceCss}</style>`;
+    // Full document: inject our style LAST in <head> (or before </body>) so it wins over author styles.
+    if (/^\s*<!DOCTYPE\s+html/i.test(content) || /^\s*<html[\s>]/i.test(content)) {
+        if (/<\/head>/i.test(content)) return content.replace(/<\/head>/i, `${themeStyle}</head>`);
+        if (/<body[^>]*>/i.test(content)) return content.replace(/(<body[^>]*>)/i, `$1${themeStyle}`);
+        return themeStyle + content;
+    }
+    // Bare fragment: pull out bare <script> + bare CSS blocks, then wrap in a themed doc.
+    let bodyContent = content;
+    const extractedScripts = (content.match(/<script[\s\S]*?<\/script>/gi) ?? []).join("\n");
+    bodyContent = bodyContent.replace(/<script[\s\S]*?<\/script>/gi, "");
+    let extractedCss = "";
+    if (!bodyContent.includes("<style")) {
+        const cssLineRegex = /^[ \t]*(?:\*|#[\w-]|\.[\w-]|@[\w]|(?!(?:new|const|let|var|function|if|for|while|return|import|export)\b)[a-z][\w-]*(?:\s*[{,:.>+~]|\s+[.#*[\w]))[^;{}(]*\{[^{}]*\}[ \t]*$/gm;
+        const matches = [...bodyContent.matchAll(cssLineRegex)];
+        if (matches.length >= 3) { extractedCss = matches.map(m => m[0]).join("\n"); bodyContent = bodyContent.replace(cssLineRegex, ""); }
+    }
+    // Author's extracted CSS first, then our force-theme so the app theme wins.
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${extractedCss}${forceCss}${scrollbarCss}</style></head><body>${bodyContent}${extractedScripts}</body></html>`;
+}
+
 /** Module-level hex→RGB cache — avoids re-parsing the same 12 colors on every mouse event */
 const _hexRgbCache: Record<string, [number, number, number]> = {};
 function hexToRgb(hex: string): [number, number, number] {
@@ -6957,8 +6999,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 {noteType === "html" ? (
                                     <iframe
                                         className="flex-1 select-text"
-                                        style={{ border: "none", background: "#fff" }}
-                                        srcDoc={content}
+                                        style={{ border: "none", background: appTheme === "dark" ? "#1a1a1a" : "#fff" }}
+                                        srcDoc={wrapHtmlWithTheme(content, appTheme === "dark")}
                                         sandbox="allow-same-origin"
                                     />
                                 ) : (
@@ -6984,36 +7026,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                         ) : htmlMode ? (
                             <div className="flex-1 flex flex-col">
                                 <iframe
-                                    srcDoc={(() => {
-                                        const scrollbarCss = appTheme === "light"
-                                            ? `::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.18);border-radius:6px}::-webkit-scrollbar-thumb:hover{background:rgba(0,0,0,0.32)}*{scrollbar-width:thin;scrollbar-color:rgba(0,0,0,0.18) transparent}`
-                                            : `::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.12);border-radius:6px}::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,0.22)}*{scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.12) transparent}`;
-                                        if (/^\s*<!DOCTYPE\s+html/i.test(content) || /^\s*<html[\s>]/i.test(content)) {
-                                            return content.replace(/(<head[^>]*>)/i, `$1<style>${scrollbarCss}</style>`);
-                                        }
-                                        // Extract bare CSS blocks (outside <style> tags) and bare <script> blocks
-                                        // so CSS renders correctly when content lacks full HTML structure
-                                        let bodyContent = content;
-                                        let extractedCss = '';
-                                        let extractedScripts = '';
-                                        // Move bare <script> tags to end (they may appear before body content)
-                                        extractedScripts = (content.match(/<script[\s\S]*?<\/script>/gi) ?? []).join('\n');
-                                        bodyContent = bodyContent.replace(/<script[\s\S]*?<\/script>/gi, '');
-                                        // Detect bare CSS: lines that look like CSS rules not wrapped in <style>
-                                        // Heuristic: line starts with a CSS selector (*,#,.,[a-z element],@) and ends with }
-                                        // Exclude JS-like lines (new, const, let, var, function, //, =)
-                                        const styleWrapped = bodyContent.includes('<style');
-                                        if (!styleWrapped) {
-                                            const cssLineRegex = /^[ \t]*(?:\*|#[\w-]|\.[\w-]|@[\w]|(?!(?:new|const|let|var|function|if|for|while|return|import|export)\b)[a-z][\w-]*(?:\s*[{,:.>+~]|\s+[.#*[\w]))[^;{}(]*\{[^{}]*\}[ \t]*$/gm;
-                                            const matches = [...bodyContent.matchAll(cssLineRegex)];
-                                            if (matches.length >= 3) { // Only extract if clearly CSS (3+ rules)
-                                                extractedCss = matches.map(m => m[0]).join('\n');
-                                                bodyContent = bodyContent.replace(cssLineRegex, '');
-                                            }
-                                        }
-                                        const baseCss = `*{box-sizing:border-box}body{background:#000;color:#d1d5db;font-family:system-ui,-apple-system,sans-serif;padding:1.5rem 2rem;margin:0;line-height:1.7;font-size:14px}p{margin:0 0 1em}em,i{color:#a78bfa}strong,b{color:#fff}h1,h2,h3{color:#fff;margin:1em 0 0.5em}a{color:#60a5fa}`;
-                                        return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${baseCss}${extractedCss}${scrollbarCss}</style></head><body>${bodyContent}${extractedScripts}</body></html>`;
-                                    })()}
+                                    srcDoc={wrapHtmlWithTheme(content, appTheme === "dark")}
                                     className="flex-1 w-full border-0"
                                     sandbox="allow-scripts"
                                     title="HTML Preview"
