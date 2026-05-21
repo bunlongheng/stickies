@@ -175,6 +175,26 @@ describe("PATCH /api/stickies — preserves note type when updating other fields
     });
 });
 
+// ─── icon column persists through PATCH (auto-icon "make sure icons updated") ──
+describe("PATCH /api/stickies — persists the icon column", () => {
+    it("accepts and stores a __hero: icon", async () => {
+        // PATCH with just {id, icon} runs a single UPDATE ... RETURNING *
+        mockQueryOne.mockResolvedValue({ id: "uuid-1", title: "Deploy notes", icon: "__hero:RocketLaunchIcon" });
+        const { PATCH } = await import("@/app/api/stickies/ext/route");
+        const res = await PATCH(apiReq("/api/stickies/ext", {
+            method: "PATCH",
+            body: JSON.stringify({ id: "uuid-1", icon: "__hero:RocketLaunchIcon" }),
+        }));
+        expect(res.status).toBe(200);
+        const body = await res.json();
+        expect(body.note.icon).toBe("__hero:RocketLaunchIcon");
+        // The icon column was actually included in the UPDATE (not stripped by the whitelist)
+        const updateCall = mockQueryOne.mock.calls.find(c => /UPDATE/i.test(String(c[0])));
+        expect(updateCall).toBeTruthy();
+        expect(JSON.stringify(updateCall![1])).toContain("__hero:RocketLaunchIcon");
+    });
+});
+
 // ─── Checklist list_mode flag ────────────────────────────────────────────────
 describe("checklist mode flag", () => {
     it("PATCH accepts list_mode=true", async () => {

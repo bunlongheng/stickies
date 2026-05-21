@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 // Supabase removed — auth now via NextAuth (see auth.ts at project root).
 import { usePageMeta } from "@/lib/usePageMeta";
 import { extractSmartTags, mergeSmartTags, DRAFT_BACKUP_KEY, serializeDraft, parseDraftBackup, backupHasWork, folderTileForeground, noteTileForeground } from "@/lib/editor-ui";
+import { matchNoteIcon, pickNoteIcon } from "@/lib/note-icons";
 import dynamic from "next/dynamic";
 import LZString from "lz-string";
 const GraphView = dynamic(() => import("@/components/GraphView").then(m => m.GraphView), { ssr: false });
@@ -829,50 +830,6 @@ function FolderIconDisplay({ value, folderName, className = "w-4 h-4" }: { value
         return <img src={value} alt={folderName} className={className} style={{ objectFit: "contain", borderRadius: 2, filter: "brightness(0) invert(1)" }} />;
     }
     return <span className="font-black">{folderName.charAt(0).toUpperCase()}</span>;
-}
-
-// ── Note icon auto-assign via keyword matching ──────────────────────────────
-const NOTE_ICON_KEYWORDS: [string[], string][] = [
-    [["deploy","ship","release","launch","rocket","vercel","netlify","ci","cd"], "RocketLaunchIcon"],
-    [["ai","llm","gpt","claude","anthropic","openai","ml","model","neural","brain","bot","robot","chatbot","automation"], "RobotIcon"],
-    [["docker","container","kubernetes","k8s","pod"], "CubeTransparentIcon"],
-    [["security","hack","kali","pentest","vuln","xss","csrf","auth","owasp","shield"], "KeyIcon"],
-    [["todo","checklist","task","test","quality","qa","jest","vitest","playwright","coverage","lint"], "ClipboardDocumentListIcon"],
-    [["database","db","postgres","sql","supabase","mongo","redis","migration"], "TableCellsIcon"],
-    [["api","rest","graphql","endpoint","route","fetch","webhook","http"], "GlobeAltIcon"],
-    [["terminal","bash","shell","cli","command","script","zsh","sh"], "CodeBracketIcon"],
-    [["cloud","aws","gcp","azure","s3","lambda","serverless"], "CloudIcon"],
-    [["network","dns","proxy","nginx","gateway","mcp","socket","websocket"], "GlobeAmericasIcon"],
-    [["config","env","settings","setup","install","dotenv","yaml","toml","integrations","integration","plugin","extension"], "WrenchIcon"],
-    [["git","github","branch","commit","merge","pr","repo"], "FolderIcon"],
-    [["bug","fix","error","debug","issue","crash","exception"], "FireIcon"],
-    [["design","ui","ux","figma","css","style","theme","color","layout"], "SwatchIcon"],
-    [["meeting","standup","sync","agenda","notes","minutes"], "ChatBubbleLeftRightIcon"],
-    [["idea","brainstorm","plan","strategy","think","concept"], "LightBulbIcon"],
-    [["money","budget","cost","price","billing","invoice","payment"], "BanknotesIcon"],
-    [["user","team","people","member","org","staff","hire"], "UserGroupIcon"],
-    [["calendar","schedule","deadline","date","event","reminder"], "CalendarDaysIcon"],
-    [["link","url","bookmark","resource","reference"], "LinkIcon"],
-    [["photo","image","screenshot","pic","camera"], "PhotoIcon"],
-    [["music","audio","sound","podcast","spotify"], "MusicalNoteIcon"],
-    [["video","film","youtube","stream","record"], "FilmIcon"],
-    [["book","read","docs","documentation","wiki","readme"], "BookOpenIcon"],
-    [["chart","analytics","metrics","data","dashboard","graph"], "ChartBarIcon"],
-    [["diagram","flowchart","mermaid","sequence","mindmap","timeline"], "ShareIcon"],
-    [["home","house","personal","family","life"], "HomeIcon"],
-    [["work","office","job","career","project","task"], "BriefcaseIcon"],
-    [["code","dev","program","function","module","component","react","next"], "CodeBracketIcon"],
-    [["phone","mobile","ios","android","app","pwa"], "DevicePhoneMobileIcon"],
-    [["star","favorite","important","priority","bookmark"], "StarIcon"],
-    [["trash","delete","removed","archived","recycle"], "ArchiveBoxIcon"],
-    [["demo","example","sample","tutorial","showcase"], "PuzzlePieceIcon"],
-];
-function matchNoteIcon(title: string, content?: string): string | null {
-    const text = ` ${title} ${(content || "").slice(0, 200)} `.toLowerCase();
-    for (const [keywords, icon] of NOTE_ICON_KEYWORDS) {
-        if (keywords.some(kw => kw.length <= 3 ? text.includes(` ${kw} `) || text.includes(`${kw}/`) || text.includes(`/${kw}`) : text.includes(kw))) return `__hero:${icon}`;
-    }
-    return null;
 }
 
 const FLOATING_FAB_VIEWPORT_PAD = 8;
@@ -3354,20 +3311,13 @@ const fireIntegrations = (trigger: string, note: any) => {
         let count = 0;
         const noteUpdates: Record<string, string> = {};
         const folderUpdates: Record<string, string> = {};
-        // Auto-assign icons to notes — keyword match first, then fall back to note type
-        const TYPE_ICON: Record<string, string> = {
-            checklist: "__hero:ClipboardDocumentListIcon", code: "__hero:CodeBracketIcon",
-            javascript: "__hero:CodeBracketIcon", typescript: "__hero:CodeBracketIcon",
-            python: "__hero:CodeBracketIcon", css: "__hero:CodeBracketIcon",
-            sql: "__hero:TableCellsIcon", bash: "__hero:CodeBracketIcon",
-            markdown: "__hero:BookOpenIcon", mermaid: "__hero:ShareIcon",
-            json: "__hero:WrenchIcon", html: "__hero:GlobeAltIcon",
-        };
+        // Auto-assign icons to notes — keyword match → type fallback → default doc icon.
+        // pickNoteIcon never returns null, so every note ends up with an icon.
         for (const note of dbData.filter(n => !n.is_folder && n.title)) {
             const id = String(note.id);
             if (noteIcons[id]) continue;
-            const icon = matchNoteIcon(note.title, note.content) || TYPE_ICON[(note as any).type] || null;
-            if (icon) { noteUpdates[id] = icon; count++; }
+            noteUpdates[id] = pickNoteIcon(note.title, note.content, (note as any).type);
+            count++;
         }
         // Auto-assign icons to folders — uses derived folders array (includes virtual folders)
         for (const folder of folders) {
