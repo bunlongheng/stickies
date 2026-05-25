@@ -117,14 +117,14 @@ describe("POST /api/stickies/gdrive", () => {
         expect(body.error).toMatch(/no file/i);
     });
 
-    it("uploads an image and returns a Google thumbnail URL", async () => {
+    it("uploads an image and returns the same-origin proxy URL", async () => {
         const res = await POST(makeUploadReq("photo.png", "image/png"));
         expect(res.status).toBe(200);
         const body = await res.json();
-        // Switched 2026-05-19 from lh3.googleusercontent.com/d/<id> to
-        // drive.google.com/thumbnail?id=<id>&sz=w2000 for more reliable embeds.
-        expect(body.url).toContain("drive.google.com/thumbnail");
-        expect(body.url).toContain("sz=w2000");
+        // 2026-05-22: images now serve through our same-origin proxy
+        // (/api/stickies/gdrive?img=<id>) — Drive's thumbnail URL 302-redirects
+        // and lh3 lags, so neither embeds reliably in <img>.
+        expect(body.url).toBe("/api/stickies/gdrive?img=new-file-id");
         expect(body.name).toBe("photo.png");
         expect(body.type).toBe("image/png");
     });
@@ -133,7 +133,7 @@ describe("POST /api/stickies/gdrive", () => {
         const res = await POST(makeUploadReq("vacation.heic", ""));
         expect(res.status).toBe(200);
         const body = await res.json();
-        expect(body.url).toContain("drive.google.com/thumbnail");
+        expect(body.url).toBe("/api/stickies/gdrive?img=new-file-id");
     });
 
     it("uploads a PDF and returns webViewLink + extractedText", async () => {

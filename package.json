@@ -17,6 +17,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
+    "test:all": "vitest run --coverage && playwright test",
     "test:ui": "playwright test",
     "test:ui:headed": "playwright test --headed"
   },
@@ -63,13 +64,18 @@
   "devDependencies": {
     "@playwright/test": "^1.58.2",
     "@tailwindcss/typography": "^0.5.19",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/web-push": "^3.6.4",
+    "@vitejs/plugin-react": "^6.0.2",
     "@vitest/coverage-v8": "^4.1.2",
     "@vitest/ui": "^4.1.0",
     "autoprefixer": "^10.4.27",
+    "jsdom": "^29.1.1",
     "tailwindcss": "^3.4.19",
     "typescript": "^5",
     "vitest": "^4.1.0"

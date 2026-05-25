@@ -4,6 +4,7 @@ import crypto from "crypto";
 import { query, queryOne, execute } from "@/lib/db-driver";
 import { auth as getSession } from "@/auth";
 import { normalizeIcon, pickNoteIcon, SUPPORTED_NOTE_ICONS } from "@/lib/note-icons";
+import { colorName, stripEmoji } from "@/lib/note-format";
 
 /** Friendly rejection when an agent sends an icon we don't support. */
 function iconRejection(badIcon: unknown) {
@@ -74,6 +75,7 @@ const palette12 = [
     "#D4E157", "#34C759", "#00C7BE", "#32ADE6",
     "#007AFF", "#5856D6", "#AF52DE", "#FF2D55",
 ];
+
 
 // ── Singletons ───────────────────────────────────────────────────────────────
 let _pusher: Pusher | null = null;
@@ -584,7 +586,7 @@ export async function POST(req: Request) {
                     );
                     results.push({ type: "folder", data: row as Record<string, unknown> });
                 } else {
-                    const title = String(item.title ?? "").trim();
+                    const title = stripEmoji(String(item.title ?? "").trim());
                     if (!title) { results.push({ type: "note", data: null, error: "title required" }); continue; }
                     const content = String(item.content ?? "").trim();
                     if (!content) { results.push({ type: "note", data: null, error: "content required" }); continue; }
@@ -735,6 +737,8 @@ export async function POST(req: Request) {
             title = firstLine.replace(/^#+\s*/, "").slice(0, 80).trim() || "Untitled";
         }
     }
+    // Keep API titles clean text — strip emoji so they don't clash with the icon.
+    title = stripEmoji(title) || "Untitled";
     if (!content?.trim()) return NextResponse.json({ error: "content required" }, { status: 400 });
     if (folder_name !== null && !folder_name?.trim()) return NextResponse.json({ error: "folder cannot be empty" }, { status: 400 });
     if (!folder_name?.trim()) folder_name = "CLAUDE";
@@ -887,7 +891,16 @@ export async function POST(req: Request) {
         triggerHue(folder_color);
     }
 
-    return NextResponse.json({ note: data, action: existingNote?.id ? "updated" : "created" }, { status: 201 });
+    const action = existingNote?.id ? "updated" : "created";
+    const savedColor = String((data as any)?.folder_color || folder_color);
+    return NextResponse.json({
+        ok: true,
+        action,
+        message: `Successfully ${action}. Your sticky color is ${colorName(savedColor)} (${savedColor}).`,
+        color: savedColor,
+        color_name: colorName(savedColor),
+        note: data,
+    }, { status: 201 });
 }
 
 // ── DELETE ──────────────────────────────────────────────────────────────────

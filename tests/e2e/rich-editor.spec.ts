@@ -13,7 +13,20 @@
  * in `authenticate()` lets us skip the OAuth dance. CI should set
  * NODE_ENV=development for the same reason.
  */
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
+
+// New notes are created via the speed-dial FAB: click the floating + button,
+// then the "File" bubble (which calls openNewNote → a rich note). The FAB is
+// icon-only (no aria-label), so target the bottom-right floating container and
+// the File action's title — the same proven flow the notes-crud suite uses.
+async function openNewNote(page: Page) {
+    const fab = page.locator('div.fixed.bottom-5.right-4 > button').first();
+    await expect(fab).toBeVisible({ timeout: 10_000 });
+    await fab.click({ force: true }); // FAB has a perpetual pulse; force past stability wait
+    const fileBubble = page.locator('button[title="File"]');
+    await expect(fileBubble).toBeVisible({ timeout: 10_000 });
+    await fileBubble.click();
+}
 
 test.describe("Rich editor (Phase 1)", () => {
     test("sign-in page renders the Stickies card", async ({ page }) => {
@@ -47,23 +60,22 @@ test.describe("Rich editor (Phase 1)", () => {
         await expect(page.locator(".rich-editor-prose")).toHaveCount(0);
     });
 
-    test("creating a new note mounts the rich editor + toolbar", async ({ page }) => {
+    test("creating a new note mounts the rich editor + toolbar", async ({ page, isMobile }) => {
         await page.goto("/");
-        // Find a "New note" / + button anywhere on the page
-        const newNoteBtn = page.locator('[aria-label="New note"], [aria-label*="new"]').first();
-        await newNoteBtn.click({ timeout: 10_000 });
+        await openNewNote(page);
         // Rich editor surface should mount (new notes default to format='rich')
         await expect(page.locator(".rich-editor-prose")).toBeVisible({ timeout: 10_000 });
-        // Toolbar B / I / H1 buttons exist
-        await expect(page.getByTitle(/Bold/i)).toBeVisible();
-        await expect(page.getByTitle(/Italic/i)).toBeVisible();
-        await expect(page.getByTitle(/Heading 1/i)).toBeVisible();
+        // Bold / Italic are always in the toolbar (.first — wider viewports render
+        // a second responsive toolbar variant, so the loose title regex matches 2).
+        await expect(page.getByTitle(/Bold/i).first()).toBeVisible();
+        await expect(page.getByTitle(/Italic/i).first()).toBeVisible();
+        // Heading buttons are hidden on small screens (hidden sm:inline-flex) — desktop only.
+        if (!isMobile) await expect(page.getByTitle(/Heading 1/i).first()).toBeVisible();
     });
 
     test("rich editor accepts typed text", async ({ page }) => {
         await page.goto("/");
-        const newNoteBtn = page.locator('[aria-label="New note"], [aria-label*="new"]').first();
-        await newNoteBtn.click();
+        await openNewNote(page);
         const editor = page.locator(".rich-editor-prose");
         await expect(editor).toBeVisible({ timeout: 10_000 });
         await editor.click();
@@ -71,10 +83,10 @@ test.describe("Rich editor (Phase 1)", () => {
         await expect(editor).toContainText("Hello from Playwright");
     });
 
-    test("Bold toolbar button toggles bold on selection", async ({ page }) => {
+    test("Bold toolbar button toggles bold on selection", async ({ page, isMobile }) => {
+        test.skip(isMobile, "Select-all + toolbar bolding is a desktop keyboard interaction");
         await page.goto("/");
-        const newNoteBtn = page.locator('[aria-label="New note"], [aria-label*="new"]').first();
-        await newNoteBtn.click();
+        await openNewNote(page);
         const editor = page.locator(".rich-editor-prose");
         await expect(editor).toBeVisible({ timeout: 10_000 });
         await editor.click();
@@ -87,8 +99,7 @@ test.describe("Rich editor (Phase 1)", () => {
 
     test("editor area is black-on-white regardless of note color", async ({ page }) => {
         await page.goto("/");
-        const newNoteBtn = page.locator('[aria-label="New note"], [aria-label*="new"]').first();
-        await newNoteBtn.click();
+        await openNewNote(page);
         const editor = page.locator(".rich-editor-prose");
         await expect(editor).toBeVisible({ timeout: 10_000 });
         // Computed color should be very dark, background very light
@@ -101,37 +112,37 @@ test.describe("Rich editor (Phase 1)", () => {
 });
 
 test.describe("Open an existing rich note", () => {
-    test("regression: existing rich note loads its doc content (not just empty toolbar)", async ({ page }) => {
+    // Self-cleaning: the seeded rich note is hard-deleted after each test.
+    const createdIds: string[] = [];
+    test.afterEach(async ({ request }) => {
+        while (createdIds.length) {
+            await request.delete(`/api/stickies?id=${encodeURIComponent(createdIds.pop()!)}`).catch(() => {});
+        }
+    });
+
+    test("regression: existing rich note loads its doc content (not just empty toolbar)", async ({ page, request }) => {
         // Bug 2026-05-19: opening any saved rich note showed only the toolbar +
         // "Start writing…" placeholder because the autoFocus + late-arriving
         // initialDoc tripped the editor.isFocused guard inside RichEditor.
+        //
+        // Deterministic + viewport-independent: seed a rich note (format='rich' +
+        // doc) straight through the API, open it via the ?noteId= deep-link, and
+        // assert the saved text renders inside the editor (not just a placeholder).
+        const distinctive = `__e2e_rich_reload_${Date.now()}`;
+        const doc = { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: distinctive }] }] };
+        const res = await request.post("/api/stickies?raw=1", {
+            data: { title: distinctive, content: distinctive, doc, format: "rich", type: "text", folder_name: "CLAUDE" },
+            timeout: 30_000,
+        });
+        expect(res.ok()).toBeTruthy();
+        const { note } = await res.json();
+        createdIds.push(String(note.id));
 
-        await page.goto("/");
+        await page.goto(`/?noteId=${encodeURIComponent(note.id)}`, { waitUntil: "domcontentloaded" });
 
-        // 1. Create + save a new rich note with distinctive text
-        const distinctive = `__test__rich-reload-${Date.now()}`;
-        const newNoteBtn = page.locator('[aria-label="New note"], [aria-label*="new"]').first();
-        await newNoteBtn.click({ timeout: 10_000 });
-        const editor = page.locator(".rich-editor-prose");
-        await expect(editor).toBeVisible({ timeout: 10_000 });
-        await editor.click();
-        await page.keyboard.type(distinctive);
-        // Wait past the 2s autosave debounce
-        await page.waitForTimeout(2500);
-
-        // 2. Navigate away (back to folder)
-        const backBtn = page.locator('[aria-label*="Back"]').first();
-        if (await backBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
-            await backBtn.click();
-        }
-
-        // 3. Reopen the note — find it by title
-        const noteTile = page.locator(`text=${distinctive}`).first();
-        await noteTile.click({ timeout: 10_000 });
-
-        // 4. The text must be visible — not just the empty placeholder.
         const reopenedEditor = page.locator(".rich-editor-prose");
-        await expect(reopenedEditor).toContainText(distinctive, { timeout: 5_000 });
+        await expect(reopenedEditor).toBeVisible({ timeout: 20_000 });
+        await expect(reopenedEditor).toContainText(distinctive, { timeout: 10_000 });
     });
 });
 

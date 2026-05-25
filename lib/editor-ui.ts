@@ -163,3 +163,75 @@ export function isUnsavedDraft(editorOpen: boolean, editingNoteId: string | numb
     if (editingNoteId == null) return true;
     return String(editingNoteId).length === 0;
 }
+
+// ─── Rich-doc sanitization ───────────────────────────────────────────────────
+// While an image upload is in-flight the rich editor shows a `placeholder://`
+// image node (a dashed spinner). That node must NEVER be persisted: if it
+// reaches the DB it reloads as a broken-image spinner with no upload left to
+// resolve it — the "image upload is unreliable / stuck" bug. We strip these
+// nodes from the doc both before every save and on load (so already-broken
+// notes self-heal). The real image node replaces the placeholder once the
+// upload lands, firing another save with the correct URL.
+export const PLACEHOLDER_IMAGE_PREFIX = "placeholder://";
+
+// A file the rich editor can embed as an image. Checks the MIME type first,
+// then falls back to the extension for formats browsers don't always type
+// (HEIC/HEIF from iOS, JFIF, etc.). Used by both paste and drag-and-drop.
+export function isImageFile(f: File): boolean {
+    return f.type.startsWith("image/") ||
+        /\.(heic|heif|webp|avif|png|jpg|jpeg|gif|svg|bmp|tiff?|ico|jfif)$/i.test(f.name);
+}
+
+// True when a drag/drop event carries external files (vs. an internal node
+// move). Lets the editor show its drop overlay only for real file drags and
+// leave ProseMirror's internal drag-to-reorder untouched.
+export function dragHasFiles(dt: { types?: readonly string[] | string[] } | null | undefined): boolean {
+    return !!dt && Array.from(dt.types ?? []).includes("Files");
+}
+
+// Cmd+K relevance tier for a note (lower = better). Match QUALITY picks the
+// tier; the caller breaks ties WITHIN a tier by recency (date desc). Prefix and
+// substring title matches deliberately share one tier so the LATEST title match
+// floats to the top — don't bury a fresh "Email to Vincent…" under an older note
+// that merely starts with the query. Returns CMDK_NO_MATCH when nothing matches.
+export const CMDK_NO_MATCH = 9;
+
+export function cmdkMatchTier(title: string, content: string, query: string, pinned = false): number {
+    const t = (title || "").toLowerCase();
+    const c = (content || "").toLowerCase();
+    const q = query.toLowerCase();
+    if (!q) return CMDK_NO_MATCH;
+    if (t === q) return 0;
+    if (t.includes(q)) return pinned ? 1 : 2;
+    if (pinned && c.includes(q)) return 3;
+    if (c.includes(q)) return 4;
+    return CMDK_NO_MATCH;
+}
+
+// Merge a freshly-fetched batch of recent notes into the existing rows without
+// clobbering folders or un-confirmed optimistic notes. Fetched notes win for
+// matching ids so creates/edits made elsewhere apply. Backs the realtime
+// catch-up that runs on tab refocus / reconnect (covers events missed while the
+// Pusher socket was asleep).
+export function mergeRecentNotes<T extends { id: string | number; is_folder?: boolean; _optimistic?: boolean }>(
+    prev: T[],
+    incoming: T[],
+): T[] {
+    const freshIds = new Set(incoming.map((n) => String(n.id)));
+    const kept = prev.filter((r) => r.is_folder || r._optimistic || !freshIds.has(String(r.id)));
+    return [...kept, ...incoming];
+}
+
+export function stripPlaceholderImages<T>(node: T): T {
+    const n = node as unknown as { type?: string; attrs?: { src?: unknown }; content?: unknown[] };
+    if (!n || typeof n !== "object" || !Array.isArray(n.content)) return node;
+    return {
+        ...n,
+        content: n.content
+            .filter((c) => {
+                const child = c as { type?: string; attrs?: { src?: unknown } };
+                return !(child?.type === "image" && typeof child?.attrs?.src === "string" && child.attrs.src.startsWith(PLACEHOLDER_IMAGE_PREFIX));
+            })
+            .map((c) => stripPlaceholderImages(c)),
+    } as unknown as T;
+}

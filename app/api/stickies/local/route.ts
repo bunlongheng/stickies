@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import crypto from "crypto";
 import { authorizeOwner } from "@/app/api/stickies/_auth";
 import { queryOne } from "@/lib/db-driver";
 import Pusher from "pusher";
@@ -16,27 +15,6 @@ function getPusher() {
         cluster: process.env.PUSHER_CLUSTER!,
         useTLS: true,
     });
-}
-
-// Two valid tokens:
-//   1. STICKIES_API_KEY                        — AI / server-to-server
-//   2. STICKIES_API_KEY + STICKIES_LOCAL_SALT  — FE (salt is env-only, never exposed)
-function authorize(req: Request): boolean {
-    const auth = req.headers.get("authorization") ?? "";
-    const bearer = auth.startsWith("Bearer ") ? auth.slice(7) : "";
-    if (!bearer) return false;
-
-    const apiKey  = process.env.STICKIES_API_KEY ?? "";
-    const salt    = process.env.STICKIES_LOCAL_SALT ?? "";
-    const feToken = apiKey + salt;
-
-    const safe = (a: string, b: string): boolean => {
-        if (!a || !b) return false;
-        try { return a.length === b.length && crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b)); }
-        catch { return false; }
-    };
-
-    return safe(bearer, apiKey) || safe(bearer, feToken);
 }
 
 // POST /api/stickies/local

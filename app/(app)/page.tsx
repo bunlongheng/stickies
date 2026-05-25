@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback, useTransition
 import { createPortal } from "react-dom";
 // Supabase removed — auth now via NextAuth (see auth.ts at project root).
 import { usePageMeta } from "@/lib/usePageMeta";
-import { extractSmartTags, mergeSmartTags, DRAFT_BACKUP_KEY, serializeDraft, parseDraftBackup, backupHasWork, folderTileForeground, noteTileForeground } from "@/lib/editor-ui";
+import { extractSmartTags, mergeSmartTags, DRAFT_BACKUP_KEY, serializeDraft, parseDraftBackup, backupHasWork, folderTileForeground, noteTileForeground, mergeRecentNotes, cmdkMatchTier, CMDK_NO_MATCH } from "@/lib/editor-ui";
 import { matchNoteIcon, pickNoteIcon } from "@/lib/note-icons";
 import dynamic from "next/dynamic";
 import LZString from "lz-string";
@@ -92,7 +92,6 @@ import UserIcon from "@heroicons/react/24/outline/UserIcon";
 import GlobeAmericasIcon from "@heroicons/react/24/outline/GlobeAmericasIcon";
 import ArchiveBoxIcon from "@heroicons/react/24/outline/ArchiveBoxIcon";
 import TableCellsIcon from "@heroicons/react/24/outline/TableCellsIcon";
-import PhotoIcon from "@heroicons/react/24/outline/PhotoIcon";
 import LinkIcon from "@heroicons/react/24/outline/LinkIcon";
 import { marked, Renderer } from "marked";
 
@@ -217,9 +216,20 @@ function wrapHtmlWithTheme(content: string, isDark: boolean): string {
     const link   = isDark ? "#6ab0ff" : "#0066cc";
     const thumb  = isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.18)";
     const scrollbarCss = `::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:${thumb};border-radius:6px}*{scrollbar-width:thin;scrollbar-color:${thumb} transparent}`;
+    // No-swing guards — ENFORCED (!important) so a wide table / long string /
+    // fixed-width element can never push horizontal overflow and make the note
+    // wobble sideways. Layout-only; doesn't touch author colors.
+    const noSwingCss = `html,body{max-width:100%!important;overflow-x:hidden!important}`
+        + `*,*::before,*::after{box-sizing:border-box}`
+        + `body{overflow-wrap:break-word;word-break:break-word}`
+        + `img,svg,video,canvas,iframe{max-width:100%!important;height:auto}`
+        + `pre{max-width:100%;overflow-x:auto}`           // long code scrolls inside its own box, not the page
+        + `table{max-width:100%;table-layout:fixed;width:100%}`
+        + `td,th{overflow-wrap:break-word;word-break:break-word}`;
     // Theme DEFAULTS — no !important, so any author rule/inline style overrides.
     const themeCss = `html,body{background:${bg};color:${fg};margin:0;padding:1.25rem 1.5rem;font-family:-apple-system,BlinkMacSystemFont,system-ui,sans-serif;line-height:1.6;font-size:15px}`
-        + `a{color:${link}}`;
+        + `a{color:${link}}`
+        + noSwingCss;
     // Defaults must lose to author styles, so inject them FIRST (before author CSS).
     const themeStyle = `<style>${scrollbarCss}${themeCss}</style>`;
     // Full document: inject defaults right after <head> opens (before author styles).
@@ -1204,7 +1214,7 @@ export default function NotesMaster() {
     const [openTabs, setOpenTabs] = useState<string[]>([]); // note IDs
     const [showTabs, setShowTabs] = useState(() => { try { if (typeof window === "undefined") return true; return localStorage.getItem("stickies:show-tabs:v1") !== "false"; } catch { return true; } });
     const [dismissedTabs, setDismissedTabs] = useState<Set<string>>(() => { try { if (typeof window === "undefined") return new Set(); const raw = localStorage.getItem("stickies:dismissed-tabs:v1"); return raw ? new Set(JSON.parse(raw)) : new Set(); } catch { return new Set(); } });
-    const [tabLimit, setTabLimit] = useState(10);
+    const [tabLimit, setTabLimit] = useState(20);
     const [tabDayOffset, setTabDayOffset] = useState(0); // 0=today, 1=yesterday, etc.
     const [activeTaskIdx, setActiveTaskIdx] = useState<number | null>(null);
     const [editingTaskIdx, setEditingTaskIdx] = useState<number | null>(null);
@@ -1335,7 +1345,8 @@ export default function NotesMaster() {
     const [editorScrollY, setEditorScrollY] = useState(0);
     const scrollRafRef = useRef(0);
     const computedLineH = useRef(19.2);
-    const fileInputRef = useRef<HTMLInputElement>(null);
+    // Current tab strip (ordered notes + active id) for Left/Right arrow nav.
+    const tabNavRef = useRef<{ notes: any[]; activeId: string }>({ notes: [], activeId: "" });
     const handleEditorScroll = useCallback(() => {
         const el = editorTextRef.current;
         if (!el) return;
@@ -1457,7 +1468,6 @@ export default function NotesMaster() {
         folderNotesLoadingRef.current = true;
         setFolderNotesLoading(true);
         try {
-            const _t0 = performance.now();
             const token = await getAuthToken();
             const res = await fetch(`/api/stickies`, { headers: { Authorization: `Bearer ${token}` } });
             if (!res.ok) return;
@@ -1483,7 +1493,6 @@ export default function NotesMaster() {
         folderNotesLoadingRef.current = true;
         setFolderNotesLoading(true);
         try {
-            const _t0 = performance.now();
             const token = await getAuthToken();
             const res = await fetch(
                 `/api/stickies?folder=${encodeURIComponent(folderName)}`,
@@ -1552,7 +1561,6 @@ export default function NotesMaster() {
                 window.location.href = "/sign-in";
                 return;
             }
-            const _t0 = performance.now();
             // NextAuth session cookie is sent automatically — no bearer header needed.
             const [foldersRes, integrationsResult, countsResult, prefsResult] = await Promise.all([
                 fetch("/api/stickies?folders=1").then((r) => {
@@ -2174,8 +2182,9 @@ export default function NotesMaster() {
     useEffect(() => {
         const tick = () => setNow(new Date());
         const ms = 60000 - (Date.now() % 60000);
-        const t = setTimeout(() => { tick(); const i = setInterval(tick, 60000); return () => clearInterval(i); }, ms);
-        return () => clearTimeout(t);
+        let interval: ReturnType<typeof setInterval> | undefined;
+        const t = setTimeout(() => { tick(); interval = setInterval(tick, 60000); }, ms);
+        return () => { clearTimeout(t); if (interval) clearInterval(interval); };
     }, []);
 
     // Pusher — real-time note events
@@ -2313,6 +2322,39 @@ const fireIntegrations = (trigger: string, note: any) => {
     // If external tools (curl, batch) need live updates, they should POST
     // through the API which triggers Pusher.
 
+    // Realtime catch-up — Pusher only delivers events while the socket is alive.
+    // On iPad/Safari the socket sleeps when the tab is backgrounded (or a network
+    // blip drops it), so notes posted via the API during that window are missed
+    // and the list looks stale until a manual hard-refresh. Re-fetch the recent
+    // notes whenever the tab regains focus / the network comes back so the list
+    // self-heals seamlessly. Non-destructive: merges by id, keeps folders + any
+    // un-confirmed optimistic notes.
+    useEffect(() => {
+        let inFlight = false;
+        const catchUp = async () => {
+            if (inFlight || document.visibilityState !== "visible") return;
+            inFlight = true;
+            try {
+                const token = await getAuthToken();
+                const res = await fetch("/api/stickies?recent=today", { headers: { Authorization: `Bearer ${token}` } });
+                if (!res.ok) return;
+                const { notes = [] } = await res.json();
+                if (notes.length === 0) return;
+                setDbData((prev) => mergeRecentNotes(prev, notes));
+            } catch { /* offline / transient — next focus retries */ }
+            finally { inFlight = false; }
+        };
+        const onVisible = () => { if (document.visibilityState === "visible") void catchUp(); };
+        document.addEventListener("visibilitychange", onVisible);
+        window.addEventListener("focus", onVisible);
+        window.addEventListener("online", onVisible);
+        return () => {
+            document.removeEventListener("visibilitychange", onVisible);
+            window.removeEventListener("focus", onVisible);
+            window.removeEventListener("online", onVisible);
+        };
+    }, []);
+
     useEffect(() => {
         const prevHtmlOverflow = document.documentElement.style.overflow;
         const prevHtmlOverscroll = document.documentElement.style.overscrollBehavior;
@@ -2403,6 +2445,11 @@ const fireIntegrations = (trigger: string, note: any) => {
                         setEditingNote(note);
                         setTitle(note.title || "");
                         setContent(note.content || "");
+                        // Load the rich doc too — without this a format='rich' note opened
+                        // via a ?noteId= deep-link (note not yet in dbData) mounts an EMPTY
+                        // editor (content + title set, but the TipTap doc never loaded).
+                        setRichDoc((note as any).doc ?? null);
+                        latestRichDocRef.current = (note as any).doc ?? null;
                         setTargetFolder(note.folder_name || "General");
                         setNoteColor(note.folder_color || palette12[0]);
                         setEditorOpen(true);
@@ -2847,18 +2894,14 @@ const fireIntegrations = (trigger: string, note: any) => {
             })
             .sort((a, b) => a._score - b._score)
             .slice(0, 5);
-        const scoreEntry = (e: typeof cmdKIndex[0]): number => {
-            const pinned = pinnedIds.has(String(e._orig.id));
-            if (e.t === q)              return 0;
-            if (e.t.startsWith(q))      return 1;
-            if (e.t.includes(q))        return pinned ? 2 : 3;
-            if (pinned && e.c.includes(q)) return 4;
-            if (e.c.includes(q))        return 5;
-            return 9;
-        };
+        // Match QUALITY decides the tier; recency (date desc, below) decides order
+        // WITHIN a tier so the LATEST matching note floats to the top. See
+        // cmdkMatchTier for the tiering rationale.
+        const scoreEntry = (e: typeof cmdKIndex[0]): number =>
+            cmdkMatchTier(e.t, e.c, q, pinnedIds.has(String(e._orig.id)));
         const scored = cmdKIndex
             .map(e => ({ e, s: scoreEntry(e) }))
-            .filter(x => x.s < 9)
+            .filter(x => x.s < CMDK_NO_MATCH)
             .sort((a, b) => a.s !== b.s ? a.s - b.s : b.e.date.localeCompare(a.e.date))
             .slice(0, 30);
         return [...matchingFolders, ...scored.map(x => x.e._orig)];
@@ -3301,6 +3344,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         window.addEventListener("keydown", handler);
         return () => window.removeEventListener("keydown", handler);
     }, [activeFolder, loadFolderNotes]);
+
 
 
     const autoAssignNoteIcons = useCallback(() => {
@@ -4325,6 +4369,30 @@ const fireIntegrations = (trigger: string, note: any) => {
             if (note.id && note.mindmap_mode) setMindmapModeNotes((p: Set<string>) => new Set([...p, String(note.id)]));
         }
     }, [activeFolder, folders]);
+
+    // ← / → arrows flip through open tabs (Gmail-style). Guarded so it never
+    // hijacks the arrows while you're typing in a note's title/body/editor.
+    useEffect(() => {
+        if (IS_PHONE) return;
+        const handler = (e: KeyboardEvent) => {
+            if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+            if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+            const el = document.activeElement as HTMLElement | null;
+            if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable)) return;
+            if (!editorOpen) return;
+            const { notes, activeId } = tabNavRef.current;
+            if (!notes || notes.length < 2) return;
+            const idx = notes.findIndex((n: any) => String(n.id) === activeId);
+            if (idx === -1) return;
+            const nextIdx = e.key === "ArrowRight" ? idx + 1 : idx - 1;
+            const target = notes[nextIdx];
+            if (!target || String(target.id) === "__draft__") return;
+            e.preventDefault();
+            void openNote(target);
+        };
+        window.addEventListener("keydown", handler);
+        return () => window.removeEventListener("keydown", handler);
+    }, [editorOpen, openNote]);
 
     useEffect(() => {
         if (!pendingRestoreNoteId || !isDataLoaded) return;
@@ -5474,12 +5542,19 @@ const fireIntegrations = (trigger: string, note: any) => {
     }, []);
 
     useEffect(() => {
+        // Coalesce resize-driven DOM reads to one per frame (the recalc helpers
+        // each read scrollHeight/clientHeight, which thrash layout if unthrottled).
+        let raf = 0;
         const onResize = () => {
-            recalcMainScrollable();
-            recalcEditorScrollable();
+            if (raf) return;
+            raf = requestAnimationFrame(() => {
+                raf = 0;
+                recalcMainScrollable();
+                recalcEditorScrollable();
+            });
         };
         window.addEventListener("resize", onResize);
-        return () => window.removeEventListener("resize", onResize);
+        return () => { window.removeEventListener("resize", onResize); if (raf) cancelAnimationFrame(raf); };
     }, [recalcMainScrollable, recalcEditorScrollable]);
 
     useEffect(() => {
@@ -6325,8 +6400,9 @@ const fireIntegrations = (trigger: string, note: any) => {
                         <div className="sm:hidden flex-grow" />
 
                         {/* Type badge removed — already shown in footer */}
-                        {/* AI Grammar Fix */}
-                        {!content.trim() && (
+                        {/* AI Magic — only on a brand-new draft, never while an existing
+                            note's content is still loading (avoids a 1s icon flash). */}
+                        {!content.trim() && !editingNote?.id && (
                         <>
                         {/* AI Magic */}
                         <button type="button"
@@ -6353,10 +6429,12 @@ const fireIntegrations = (trigger: string, note: any) => {
                         {/* Share removed — available in note actions menu */}
                         {/* Editor header icons — in-flow at right (ml-auto) so they never overlap inline siblings */}
                         <div className="ml-auto flex items-center flex-shrink-0">
-                            <HeaderIconBtn icon={MagnifyingGlassIcon} label="Search" onClick={() => { setShowCmdK(true); setCmdKQuery(""); setCmdKCursor(0); }} />
-                            <HeaderIconBtn icon={mdViewMode === "text" ? EyeIcon : CodeBracketIcon} label={mdViewMode === "text" ? "Preview" : "Code"} active={mdViewMode !== "text"} onClick={() => setMdViewMode(v => v === "text" ? "preview" : "text")} />
-                            <HeaderIconBtn icon={viewModeIcon} label={viewModeLabel} onClick={cycleViewMode} />
-                            <HeaderIconBtn icon={Cog6ToothIcon} label="Settings" onClick={() => { setShowNoteActions(v => !v); closeEditorTools(); }} />
+                            <HeaderIconBtn icon={MagnifyingGlassIcon} label="Search" color={headerText} onClick={() => { setShowCmdK(true); setCmdKQuery(""); setCmdKCursor(0); }} />
+                            {markdownMode && (
+                            <HeaderIconBtn icon={mdViewMode === "text" ? EyeIcon : CodeBracketIcon} label={mdViewMode === "text" ? "Preview" : "Code"} color={headerText} active={mdViewMode !== "text"} onClick={() => setMdViewMode(v => v === "text" ? "preview" : "text")} />
+                            )}
+                            <HeaderIconBtn icon={viewModeIcon} label={viewModeLabel} color={headerText} onClick={cycleViewMode} />
+                            <HeaderIconBtn icon={Cog6ToothIcon} label="Settings" color={headerText} onClick={() => { setShowNoteActions(v => !v); closeEditorTools(); }} />
                         </div>
                     </div>
                     </>
@@ -6414,6 +6492,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                         const hasMore = allNotes.length > tabLimit;
                         const dayLabel = inFolder ? activeFolder : (tabDayOffset === 0 ? "Today" : tabDayOffset === 1 ? "Yesterday" : dayStart.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }));
                         const activeId = String(editingNote?.id ?? (isUnsavedDraft ? "__draft__" : ""));
+                        tabNavRef.current = { notes: dayNotes, activeId };
                         const dismissTab = (id: string) => {
                             setDismissedTabs(prev => {
                                 const next = new Set(prev); next.add(id);
@@ -6439,20 +6518,21 @@ const fireIntegrations = (trigger: string, note: any) => {
                                         return (
                                             <div key={n.id} {...(isActive ? { "data-tab-active": "" } : {})}
                                                 className={`flex items-center transition-all ${isActive ? "relative z-10 flex-shrink-0" : "hover:brightness-110 opacity-75 flex-shrink-0 sm:flex-shrink"}`}
-                                                style={{ background: isActive ? c : `${c}99`, color: "#1c1c1e", height: isActive ? H + 6 : H, borderRadius: isActive ? "8px 8px 0 0" : 0, minWidth: IS_PHONE ? 44 : undefined }}>
+                                                style={{ background: isActive ? c : `${c}99`, color: folderTileForeground(appTheme), height: isActive ? H + 6 : H, borderRadius: isActive ? "8px 8px 0 0" : 0, minWidth: IS_PHONE ? 44 : undefined }}>
                                                 <button type="button"
                                                     onClick={() => { if (!isActive) { if (mainListMode !== "tabs" && inFolder && n.folder_name && n.folder_name !== activeFolder) { const fr = dbData.find(r => r.is_folder && r.folder_name === n.folder_name); if (fr) enterFolder({ id: String(fr.id), name: n.folder_name, color: fr.folder_color || c }); } void openNote(n); } }}
-                                                    className={`flex items-center gap-1 text-[10px] sm:text-[10px] font-bold truncate ${isActive ? "pl-2.5 pr-1 max-w-[160px]" : "px-2"}`} style={{ height: "100%" }}
+                                                    className={`flex items-center gap-1 text-[10px] sm:text-[10px] font-bold truncate ${isActive ? "pl-2.5 pr-1 max-w-[180px]" : "px-2 max-w-[130px]"}`} style={{ height: "100%" }}
                                                     title={n.title || "Untitled"}>
                                                     {(() => {
                                                         const ni = noteIcons[String(n.id)];
                                                         const glyph = ni
                                                             ? <FolderIconDisplay value={ni} folderName={n.title || "N"} className="w-3.5 h-3.5 flex-shrink-0" />
                                                             : <span className="font-black flex-shrink-0">{meaningfulInitial(n.title || "", "N")}</span>;
-                                                        // Inactive tabs = icon/initial only (compact, fit more). Active = icon + title.
+                                                        // Inactive tabs show the icon only so many more fit; the
+                                                        // active tab keeps its title to stay identifiable.
                                                         if (!isActive) return glyph;
                                                         const t = n.title || "Untitled";
-                                                        return <>{glyph}<span className="truncate">{t.slice(0, 20)}{t.length > 20 ? "…" : ""}</span></>;
+                                                        return <>{glyph}<span className="truncate">{t.slice(0, 24)}{t.length > 24 ? "…" : ""}</span></>;
                                                     })()}
                                                 </button>
                                                 {isActive && (
@@ -6483,6 +6563,8 @@ const fireIntegrations = (trigger: string, note: any) => {
                                             <ChevronLeftIcon className="w-3 h-3" />
                                         </button>
                                     )}
+                                    {/* Always show the day label + count — with icon-only tabs there's
+                                        room, and it's hard to read the strip without it. */}
                                     <span className="px-1 text-[9px] font-bold text-zinc-400 uppercase tracking-wide select-none">{dayLabel} ({allNotes.length})</span>
                                     {!inFolder && (
                                         <button type="button" onClick={() => setTabDayOffset(d => d + 1)} className={`${btnCls} px-1`} style={{ height: H }} title="Older">
@@ -7160,6 +7242,14 @@ const fireIntegrations = (trigger: string, note: any) => {
                     const edited = editingNote.updated_at
                         ? new Date(editingNote.updated_at as string).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
                         : null;
+                    // Created date + time — shown bottom-left in the footer.
+                    const createdDt = (() => {
+                        const v = (editingNote as any)?.created_at;
+                        if (!v) return null;
+                        const d = new Date(v);
+                        if (isNaN(d.getTime())) return null;
+                        return `${d.toLocaleDateString("en-US", { month: "short", day: "numeric" })} · ${d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`;
+                    })();
                     return (
                         <div className="shrink-0 flex items-center justify-between px-3 select-none border-t relative overflow-x-auto overflow-y-hidden"
                             style={{
@@ -7189,7 +7279,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 })()
                             ) : (
                                 <div className="flex items-center gap-2 font-mono overflow-x-auto" style={{ fontSize: 9 }}>
-                                    <span className="text-zinc-600 whitespace-nowrap hidden sm:inline">{edited ?? ""}</span>
+                                    <span className="text-zinc-500 whitespace-nowrap tabular-nums" title="Created">{createdDt ?? edited ?? ""}</span>
                                 </div>
                             )}
                             {editingNote?.id && (
@@ -7200,30 +7290,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                     <TrashIcon className="w-3 h-3" />
                                 </button>
                             )}
-                            {/* Photo upload button */}
-                            <button type="button"
-                                onClick={() => fileInputRef.current?.click()}
-                                className="absolute left-1/2 translate-x-4 hidden sm:flex items-center text-zinc-600 hover:text-zinc-400 transition z-[1]"
-                                title="Add image">
-                                <PhotoIcon className="w-3 h-3" />
-                            </button>
-                            <input ref={fileInputRef} type="file" accept="image/*" className="hidden"
-                                onChange={async (e) => {
-                                    const file = e.target.files?.[0];
-                                    if (!file) return;
-                                    e.target.value = "";
-                                    showToast("Uploading...", "#a78bfa");
-                                    try {
-                                        const upload = await uploadImage(file);
-                                        const ta = editorTextRef.current;
-                                        const pos = ta?.selectionStart ?? content.length;
-                                        const md = `![${file.name}](${upload.url})`;
-                                        const newContent = content.slice(0, pos) + md + "\n" + content.slice(pos);
-                                        handleEditorChange(newContent);
-                                        showToast("Image added", "#34C759");
-                                    } catch { showError("Upload failed"); }
-                                }}
-                            />
+                            {/* Photo upload button removed — drag-and-drop handles images. */}
                             <div className="flex items-center gap-2 z-[2] flex-shrink-0">
                                 {mdViewMode !== "text" && (<>
                                     <button type="button"
@@ -7417,7 +7484,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                                 }}
                                                                 className={`flex items-center gap-1.5 font-normal tracking-tight truncate sm:max-w-[150px] flex-shrink-0 px-0.5 sm:px-1 transition text-xs ${i === folderStack.length - 1 ? "text-white hover:text-zinc-300" : "text-white hover:text-zinc-300"}`}
                                                                 title={i === folderStack.length - 1 ? `${frame.name} settings` : frame.name}>
-                                                                <span className="flex-shrink-0 w-6 h-6 flex items-center justify-center text-sm font-black leading-none overflow-hidden" style={{ background: frame.name === "CLAUDE" ? "#fff" : (folderColors[frame.name] || frame.color || "#888"), color: frame.name === "CLAUDE" ? (folderColors[frame.name] || "#888") : ("#fff"), borderRadius: 4 } as React.CSSProperties}>
+                                                                <span className="flex-shrink-0 w-6 h-6 flex items-center justify-center text-sm font-black leading-none overflow-hidden" style={{ background: frame.name === "CLAUDE" ? "#fff" : (folderColors[frame.name] || frame.color || "#888"), color: folderTileForeground(appTheme, frame.name === "CLAUDE"), borderRadius: 4 } as React.CSSProperties}>
                                                                     {frame.name === "CLAUDE" ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-0.5" /> : <FolderIconDisplay value={folderIcons[frame.name] || ""} folderName={frame.name} className="w-3.5 h-3.5" />}
                                                                 </span>
                                                                 <span className={`uppercase ${i === folderStack.length - 1 && folderStack.length <= 2 ? "inline" : "hidden sm:inline"}`}>{frame.name}</span>
@@ -7950,16 +8017,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                         {item.subfolderCount > 0 && <span>{item.subfolderCount} folder{item.subfolderCount !== 1 ? "s" : ""}{item.count > 0 ? " · " : ""}</span>}
                                                         {item.count > 0 && <span>{item.count} note{item.count !== 1 ? "s" : ""}</span>}
                                                     </div>
-                                                ) : (
-                                                    (() => {
-                                                        const c = item.content || "";
-                                                        const isListModeNote = listModeNotes.has(String(item.id));
-                                                        const isChecklist = isListModeNote || (item as any).type === "checklist" || /^\[[ x]\]/im.test(c);
-                                                        const lines = c.split("\n").filter((l: string) => l.trim());
-                                                        const checked = lines.filter((l: string) => /^\[x\]/i.test(l.trim())).length;
-                                                        return null;
-                                                    })()
-                                                )}
+                                                ) : null}
                                             </div>
                                             {!item.is_folder && looksLikeUrl(item.content || "") && !isSelectMode && (item.folder_name || activeFolder) !== "TEAM" && (
                                                 <button
@@ -10198,8 +10256,11 @@ const MobileEditorIconBtn = ({ icon: Icon, label, onClick, active = false, style
     </button>
 );
 
-const HeaderIconBtn = ({ icon: Icon, label, onClick, style, active }: any) => (
-    <button type="button" onClick={onClick} className={`p-3 transition ${active ? "text-white" : "text-zinc-500 hover:text-white"}`} title={label} aria-label={label} style={style}>
+const HeaderIconBtn = ({ icon: Icon, label, onClick, style, active, color }: any) => (
+    <button type="button" onClick={onClick}
+        className={`p-3 transition hover:opacity-70 ${color ? "" : (active ? "text-white" : "text-zinc-500 hover:text-white")}`}
+        title={label} aria-label={label}
+        style={{ ...(color ? { color, opacity: active ? 1 : 0.85 } : {}), ...style }}>
         <Icon className="w-[26px] h-[26px]" />
     </button>
 );

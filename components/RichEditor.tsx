@@ -13,6 +13,7 @@ import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
 import Placeholder from "@tiptap/extension-placeholder";
 import { useEffect, useRef, useState } from "react";
+import { stripPlaceholderImages, isImageFile, dragHasFiles } from "@/lib/editor-ui";
 
 export interface RichEditorChange {
     doc: JSONContent;
@@ -217,11 +218,11 @@ export default function RichEditor({
             TaskItem.configure({ nested: true }),
             Placeholder.configure({ placeholder: placeholder ?? "Start writing…" }),
         ],
-        content: initialDoc ?? (initialText ? { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: initialText }] }] } : EMPTY_DOC),
+        content: (initialDoc && stripPlaceholderImages(initialDoc)) ?? (initialText ? { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: initialText }] }] } : EMPTY_DOC),
         autofocus: autoFocus ? "end" : false,
         onUpdate: ({ editor: e }) => {
             const fn = onChangeRef.current;
-            if (fn) fn({ doc: e.getJSON(), text: e.getText() });
+            if (fn) fn({ doc: stripPlaceholderImages(e.getJSON()), text: e.getText() });
         },
         editorProps: {
             attributes: {
@@ -260,22 +261,52 @@ export default function RichEditor({
 
                 return false;
             },
-            handleDrop(view, event, _slice, moved) {
-                if (moved) return false;
-                const isImageFile = (f: File) =>
-                    f.type.startsWith("image/") ||
-                    /\.(heic|heif|webp|avif|png|jpg|jpeg|gif|svg|bmp|tiff?|ico|jfif)$/i.test(f.name);
-                const files = Array.from(event.dataTransfer?.files ?? []).filter(isImageFile);
-                if (files.length === 0) return false;
-                event.preventDefault();
-                const upload = uploadRef.current;
-                if (!upload) return true;
-                const coords = view.posAtCoords({ left: event.clientX, top: event.clientY });
-                files.forEach((file) => insertWithPlaceholder(view, file, upload, coords?.pos));
-                return true;
-            },
+            // External file drops are handled at the editor-container level (see the
+            // drag handlers on the wrapper below) so the WHOLE editor body is a drop
+            // target — ProseMirror's own handleDrop only fires over the text content,
+            // which is tiny for short notes. Internal node moves fall through to PM.
         },
     });
+
+    // ── Drag-and-drop over the whole editor body ──────────────────────────────
+    // dragActive drives the "drop here" overlay. dragDepthRef counts enter/leave
+    // so moving across child elements doesn't flicker the overlay off.
+    const [dragActive, setDragActive] = useState(false);
+    const dragDepthRef = useRef(0);
+
+    const onDragEnter = (e: React.DragEvent) => {
+        if (!dragHasFiles(e.dataTransfer)) return;
+        e.preventDefault();
+        dragDepthRef.current += 1;
+        setDragActive(true);
+    };
+    const onDragOver = (e: React.DragEvent) => {
+        if (!dragHasFiles(e.dataTransfer)) return;
+        e.preventDefault(); // required so the browser fires `drop`
+        e.dataTransfer.dropEffect = "copy";
+    };
+    const onDragLeave = (e: React.DragEvent) => {
+        if (!dragHasFiles(e.dataTransfer)) return;
+        dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+        if (dragDepthRef.current === 0) setDragActive(false);
+    };
+    const onDrop = (e: React.DragEvent) => {
+        if (!dragHasFiles(e.dataTransfer)) return;
+        e.preventDefault();
+        dragDepthRef.current = 0;
+        setDragActive(false);
+        if (!editor || editor.isDestroyed) return;
+        const upload = uploadRef.current;
+        if (!upload) return;
+        const files = Array.from(e.dataTransfer.files).filter(isImageFile);
+        if (files.length === 0) return;
+        const view = editor.view;
+        // Drop at the caret nearest the cursor; fall back to the end of the doc
+        // when the drop lands in the empty padding below the content.
+        const coords = view.posAtCoords({ left: e.clientX, top: e.clientY });
+        const pos = coords?.pos ?? Math.max(0, view.state.doc.content.size - 1);
+        files.forEach((file) => insertWithPlaceholder(view, file, upload, pos));
+    };
 
     // Apply external doc changes (e.g. Pusher sync, async note fetch) without
     // clobbering in-progress edits. The "focused" guard is only honoured when the
@@ -283,8 +314,9 @@ export default function RichEditor({
     // empty doc would refuse to load the late-arriving initialDoc.
     useEffect(() => {
         if (!editor || !initialDoc) return;
+        const cleanDoc = stripPlaceholderImages(initialDoc);
         const current = editor.getJSON();
-        if (JSON.stringify(current) === JSON.stringify(initialDoc)) return;
+        if (JSON.stringify(current) === JSON.stringify(cleanDoc)) return;
         const isEditorEmpty = !current.content?.length ||
             (current.content.length === 1 &&
              current.content[0].type === "paragraph" &&
@@ -295,14 +327,35 @@ export default function RichEditor({
         let cancelled = false;
         const id = setTimeout(() => {
             if (cancelled || editor.isDestroyed) return;
-            editor.commands.setContent(initialDoc, false);
+            editor.commands.setContent(cleanDoc, false);
         }, 0);
         return () => { cancelled = true; clearTimeout(id); };
     }, [editor, initialDoc]);
 
     return (
-        <div className="flex flex-col flex-1 min-h-0">
+        <div
+            className="relative flex flex-col flex-1 min-h-0"
+            onDragEnter={onDragEnter}
+            onDragOver={onDragOver}
+            onDragLeave={onDragLeave}
+            onDrop={onDrop}
+        >
             {editor && <Toolbar editor={editor} onUploadImage={onUploadImage} />}
+            {/* Drop indicator — covers the whole editor body so you can let go
+                anywhere. pointer-events-none keeps drag events flowing to the wrapper. */}
+            {dragActive && (
+                <div
+                    className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none"
+                    style={{ background: "rgba(37,99,235,0.10)", border: `2px dashed ${accentColor || "#2563eb"}`, borderRadius: 8 }}
+                >
+                    <div
+                        className="flex items-center gap-2 px-4 py-2 rounded-full font-bold text-sm shadow-lg"
+                        style={{ background: accentColor || "#2563eb", color: "#fff" }}
+                    >
+                        <span style={{ fontSize: 16 }}>↓</span> Drop image to add
+                    </div>
+                </div>
+            )}
             <div
                 className="rich-editor-root flex-1 min-h-0 overflow-y-auto px-3 py-2.5"
                 style={{

@@ -161,14 +161,14 @@ export async function POST(req: Request) {
             requestBody: { role: "reader", type: "anyone" },
         });
 
-        // Image embed URL: switched 2026-05-19 from lh3.googleusercontent.com/d/<id>
-        // to the drive.google.com/thumbnail endpoint. The lh3 pattern was failing
-        // intermittently for newly uploaded files (CDN propagation lag); thumbnail
-        // is Google's own image-serving endpoint, returns a real PNG/JPEG, and
-        // becomes available immediately after the public-permission grant above.
+        // Image embed URL: serve through OUR same-origin proxy (GET below) instead
+        // of a Drive URL. Drive's thumbnail endpoint 302-redirects (won't load in
+        // <img>) and lh3.googleusercontent.com lags for fresh uploads. The proxy
+        // streams the bytes server-side with the owner's token — always 200, no
+        // CDN lag, no redirect, no permission flakiness.
         const isImage = file.type.startsWith("image/") || /\.(heic|heif|webp|avif|png|jpg|jpeg|gif|svg|bmp|tiff?|ico)$/i.test(file.name);
         const url = isImage
-            ? `https://drive.google.com/thumbnail?id=${uploaded.data.id}&sz=w2000`
+            ? `/api/stickies/gdrive?img=${uploaded.data.id}`
             : uploaded.data.webViewLink || `https://drive.google.com/file/d/${uploaded.data.id}/view`;
 
         // Extract text from PDFs
@@ -200,5 +200,38 @@ export async function POST(req: Request) {
             if (proxyRes.ok) return NextResponse.json(await proxyRes.json());
         } catch {}
         return NextResponse.json({ error: err?.message || "Upload failed" }, { status: 500 });
+    }
+}
+
+/**
+ * GET /api/stickies/gdrive?img=<driveFileId>
+ * Same-origin image proxy — streams the Drive file's bytes with the owner's
+ * token so <img> tags load reliably (Drive's thumbnail URL 302-redirects and
+ * lh3 lags). Public (no auth): the underlying files are already shared "anyone
+ * with link", so this exposes nothing new, and <img> can't send a bearer token.
+ */
+export async function GET(req: Request) {
+    const id = new URL(req.url).searchParams.get("img");
+    if (!id || !/^[A-Za-z0-9_-]+$/.test(id)) {
+        return NextResponse.json({ error: "img id required" }, { status: 400 });
+    }
+    try {
+        const accessToken = await getAccessToken();
+        const oauth2Client = new google.auth.OAuth2();
+        oauth2Client.setCredentials({ access_token: accessToken });
+        const drive = google.drive({ version: "v3", auth: oauth2Client });
+        const meta = await drive.files.get({ fileId: id, fields: "mimeType" });
+        const media = await drive.files.get({ fileId: id, alt: "media" }, { responseType: "arraybuffer" });
+        const bytes = Buffer.from(media.data as ArrayBuffer);
+        return new Response(bytes, {
+            status: 200,
+            headers: {
+                "Content-Type": meta.data.mimeType || "application/octet-stream",
+                "Cache-Control": "public, max-age=31536000, immutable",
+            },
+        });
+    } catch (err: any) {
+        console.error("[gdrive img proxy]", err?.message || err);
+        return NextResponse.json({ error: "image fetch failed" }, { status: 502 });
     }
 }

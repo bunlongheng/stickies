@@ -15,6 +15,13 @@ import {
     backupHasWork,
     isUnsavedDraft,
     DRAFT_BACKUP_KEY,
+    stripPlaceholderImages,
+    PLACEHOLDER_IMAGE_PREFIX,
+    isImageFile,
+    dragHasFiles,
+    mergeRecentNotes,
+    cmdkMatchTier,
+    CMDK_NO_MATCH,
 } from "@/lib/editor-ui";
 
 // These are the tiny user-facing UI helpers (smart-tag auto-tag, toggle switch
@@ -169,6 +176,14 @@ describe("folderTileForeground", () => {
             }
         }
     });
+
+    // Same helper drives the breadcrumb folder-badge icon/initial color
+    // (app/(app)/page.tsx ~7420). It must NOT be hardcoded white — a TODAY/Work
+    // badge in light mode shows a DARK glyph, like every other tile.
+    it("breadcrumb badge: dark glyph in light mode, white in dark", () => {
+        expect(folderTileForeground("light", false)).toBe("#1c1c1e");
+        expect(folderTileForeground("dark", false)).toBe("#fff");
+    });
 });
 
 describe("noteTileForeground", () => {
@@ -284,5 +299,170 @@ describe("DRAFT_BACKUP_KEY constant", () => {
     it("uses a versioned key so schema changes can bump cleanly", () => {
         expect(DRAFT_BACKUP_KEY).toMatch(/:v\d+$/);
         expect(DRAFT_BACKUP_KEY).toContain("stickies");
+    });
+});
+
+// Regression guard: an in-flight upload renders a `placeholder://` image node.
+// If that node is ever persisted, the note reloads as a permanently-broken
+// spinner (no upload left to resolve it). stripPlaceholderImages must remove
+// them before save and on load, while leaving real images untouched.
+describe("stripPlaceholderImages", () => {
+    const img = (src: string) => ({ type: "image", attrs: { src, alt: "x" } });
+    const para = (text: string) => ({ type: "paragraph", content: [{ type: "text", text }] });
+
+    it("removes a top-level placeholder image but keeps real images", () => {
+        const doc = {
+            type: "doc",
+            content: [
+                para("hello"),
+                img(`${PLACEHOLDER_IMAGE_PREFIX}1-1700000000000`),
+                img("/api/stickies/gdrive?img=abc123"),
+            ],
+        };
+        const out = stripPlaceholderImages(doc);
+        expect(out.content).toHaveLength(2);
+        expect(out.content.some((n: any) => n.type === "image" && n.attrs.src.startsWith(PLACEHOLDER_IMAGE_PREFIX))).toBe(false);
+        expect(out.content.some((n: any) => n.attrs?.src === "/api/stickies/gdrive?img=abc123")).toBe(true);
+    });
+
+    it("strips placeholders nested inside other nodes (e.g. table cells)", () => {
+        const doc = {
+            type: "doc",
+            content: [
+                {
+                    type: "tableCell",
+                    content: [img(`${PLACEHOLDER_IMAGE_PREFIX}9-x`), img("https://cdn/real.png")],
+                },
+            ],
+        };
+        const out = stripPlaceholderImages(doc);
+        expect(out.content[0].content).toHaveLength(1);
+        expect(out.content[0].content[0].attrs.src).toBe("https://cdn/real.png");
+    });
+
+    it("leaves a clean doc structurally unchanged", () => {
+        const doc = { type: "doc", content: [para("a"), img("https://cdn/x.png"), para("b")] };
+        expect(stripPlaceholderImages(doc)).toEqual(doc);
+    });
+
+    it("is a no-op for null / leaf / contentless nodes", () => {
+        expect(stripPlaceholderImages(null as any)).toBeNull();
+        expect(stripPlaceholderImages({ type: "text", text: "hi" } as any)).toEqual({ type: "text", text: "hi" });
+    });
+
+    it("removes a doc made up entirely of placeholders (the reported stuck note)", () => {
+        const doc = {
+            type: "doc",
+            content: [
+                img(`${PLACEHOLDER_IMAGE_PREFIX}1-a`),
+                img(`${PLACEHOLDER_IMAGE_PREFIX}2-b`),
+            ],
+        };
+        expect(stripPlaceholderImages(doc).content).toHaveLength(0);
+    });
+});
+
+// Drag-and-drop image support: a drop anywhere in the editor must be accepted.
+// These guard the two pure predicates the drop handler relies on.
+describe("isImageFile", () => {
+    const file = (name: string, type = "") => new File([new Uint8Array([0])], name, { type });
+
+    it("accepts files by image/* MIME type", () => {
+        expect(isImageFile(file("x.png", "image/png"))).toBe(true);
+        expect(isImageFile(file("photo", "image/jpeg"))).toBe(true);
+    });
+
+    it("accepts image extensions even when the browser sets no MIME type", () => {
+        for (const ext of ["png", "jpg", "jpeg", "gif", "webp", "heic", "heif", "avif", "svg", "jfif"]) {
+            expect(isImageFile(file(`pic.${ext}`))).toBe(true);
+        }
+    });
+
+    it("rejects non-image files", () => {
+        expect(isImageFile(file("notes.txt", "text/plain"))).toBe(false);
+        expect(isImageFile(file("archive.zip", "application/zip"))).toBe(false);
+        expect(isImageFile(file("data"))).toBe(false);
+    });
+});
+
+describe("dragHasFiles", () => {
+    it("is true only when the drag carries external files", () => {
+        expect(dragHasFiles({ types: ["Files"] })).toBe(true);
+        expect(dragHasFiles({ types: ["Files", "text/plain"] })).toBe(true);
+    });
+
+    it("is false for internal node drags (no Files type) and missing data", () => {
+        expect(dragHasFiles({ types: ["text/html"] })).toBe(false);
+        expect(dragHasFiles({ types: [] })).toBe(false);
+        expect(dragHasFiles(null)).toBe(false);
+        expect(dragHasFiles(undefined)).toBe(false);
+    });
+});
+
+// Realtime catch-up: when the tab refocuses we re-fetch recent notes to recover
+// any Pusher events missed while the socket slept. This merge must add the new
+// note, dedupe it if it already arrived live, never drop folders, and keep
+// optimistic (un-saved) notes the server doesn't know about yet.
+describe("mergeRecentNotes", () => {
+    const folder = { id: "f1", is_folder: true, folder_name: "CLAUDE" };
+    const noteA = { id: "a", is_folder: false, title: "A" };
+
+    it("appends a brand-new incoming note (the missed-while-asleep case)", () => {
+        const incoming = [{ id: "b", is_folder: false, title: "B (new via API)" }];
+        const out = mergeRecentNotes([folder, noteA], incoming);
+        expect(out.map((n) => n.id)).toEqual(["f1", "a", "b"]);
+    });
+
+    it("dedupes when the note also arrived live (no double row), incoming wins", () => {
+        const stale = { id: "b", is_folder: false, title: "old title" };
+        const incoming = [{ id: "b", is_folder: false, title: "fresh title" }];
+        const out = mergeRecentNotes([folder, noteA, stale], incoming);
+        expect(out.filter((n) => n.id === "b")).toHaveLength(1);
+        expect(out.find((n) => n.id === "b")!.title).toBe("fresh title");
+    });
+
+    it("never drops folders and keeps optimistic notes not yet on the server", () => {
+        const optimistic = { id: "tmp-1", is_folder: false, _optimistic: true, title: "typing…" };
+        const incoming = [{ id: "a", is_folder: false, title: "A refreshed" }];
+        const out = mergeRecentNotes([folder, optimistic, noteA], incoming);
+        expect(out.some((n) => n.id === "f1")).toBe(true);
+        expect(out.some((n) => n.id === "tmp-1")).toBe(true);
+        expect(out.find((n) => n.id === "a")!.title).toBe("A refreshed");
+    });
+
+    it("returns just folders + existing rows when nothing new comes back", () => {
+        const out = mergeRecentNotes([folder, noteA], []);
+        expect(out.map((n) => n.id)).toEqual(["f1", "a"]);
+    });
+});
+
+// Cmd+K ranking. The reported bug: searching "vincen" put older notes whose
+// title STARTS with the query above a fresher "Email to Vincent…" note. The fix
+// is that prefix and substring title matches share a tier, so recency (applied
+// by the caller) decides — the latest match ends up on top.
+describe("cmdkMatchTier", () => {
+    it("ranks exact title above any partial, and title above content", () => {
+        expect(cmdkMatchTier("vincen", "", "vincen")).toBe(0);
+        expect(cmdkMatchTier("Vincent notes", "", "vincen")).toBeLessThan(cmdkMatchTier("x", "vincen body", "vincen"));
+    });
+
+    it("REGRESSION: prefix and substring title matches share the same tier", () => {
+        const prefix = cmdkMatchTier("Vincent Performance", "", "vincen");      // title starts with query
+        const substring = cmdkMatchTier("Email to Vincent (final)", "", "vincen"); // query mid-title
+        expect(prefix).toBe(substring); // so date desc (caller) lets the latest win
+    });
+
+    it("pinned notes edge out non-pinned within the same match kind", () => {
+        expect(cmdkMatchTier("Email to Vincent", "", "vincen", true))
+            .toBeLessThan(cmdkMatchTier("Email to Vincent", "", "vincen", false));
+    });
+
+    it("returns CMDK_NO_MATCH for no match or empty query", () => {
+        expect(cmdkMatchTier("hello", "world", "zzz")).toBe(CMDK_NO_MATCH);
+        expect(cmdkMatchTier("hello", "world", "")).toBe(CMDK_NO_MATCH);
+    });
+
+    it("is case-insensitive", () => {
+        expect(cmdkMatchTier("VINCENT", "", "vincent")).toBe(0);
     });
 });

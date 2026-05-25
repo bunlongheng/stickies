@@ -6,14 +6,22 @@ export default defineConfig({
         globals: true,
         environment: "node",
         setupFiles: ["./tests/setup.ts"],
-        include: ["lib/**/*.test.ts", "tests/unit/**/*.test.ts", "tests/integration/**/*.test.ts"],
+        include: [
+            "lib/**/*.test.ts",
+            "tests/unit/**/*.test.ts",
+            "tests/integration/**/*.test.ts",
+            // Component tests (React Testing Library + jsdom). Each component test
+            // file opts into the jsdom environment with a `// @vitest-environment
+            // jsdom` docblock so the node-env API/lib tests are unaffected.
+            "tests/components/**/*.test.tsx",
+        ],
         coverage: {
             provider: "v8",
             // Thresholds reflect the state on 2026-05-19 after the auth migration
             // and the test push. They're floors — anyone dropping below this on a
             // PR will see CI fail. Push them up; don't lower them.
             thresholds: { lines: 83, functions: 73, branches: 67, statements: 79 },
-            include: ["lib/**/*.ts", "app/api/**/*.ts"],
+            include: ["lib/**/*.ts", "app/api/**/*.ts", "components/**/*.{ts,tsx}"],
             exclude: [
                 "lib/db.ts",
                 "lib/db-driver.ts",

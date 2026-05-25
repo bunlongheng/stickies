@@ -51,9 +51,10 @@ test.describe("Stickies Smoke Tests", () => {
         // Click the first folder
         await folderTile.click();
 
-        // After clicking a folder, the "New note" button should become available
-        // or the note list area should render (back button appears)
-        const backOrNew = page.locator('[aria-label="New note"], [aria-label*="Back to"]');
-        await expect(backOrNew.first()).toBeVisible({ timeout: 10_000 });
+        // Inside a folder the header back arrow appears. It is an icon-only button
+        // with no aria-label, so match the header svg button (same selector the
+        // navigation suite uses) rather than the obsolete [aria-label="New note"].
+        const backArrow = page.locator('header button:has(svg)').first();
+        await expect(backArrow).toBeVisible({ timeout: 10_000 });
     });
 });
