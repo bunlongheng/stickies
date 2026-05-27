@@ -1492,6 +1492,18 @@ export default function NotesMaster() {
         }
     };
 
+    // Load the Today virtual view: notes created < 24h, straight from the server, merged
+    // in non-destructively. Independent of the 500-row full-list cap so it never under-fills.
+    const loadTodayNotes = async () => {
+        try {
+            const token = await getAuthToken();
+            const res = await fetch(`/api/stickies?recent=today`, { headers: { Authorization: `Bearer ${token}` } });
+            if (!res.ok) return;
+            const { notes = [] } = await res.json();
+            setDbData((prev) => mergeRecentNotes(prev, notes));
+        } catch { /* offline / transient — refocus catch-up retries */ }
+    };
+
     // --- LOAD ALL FOLDER NOTES (no pagination) ---
     const loadFolderNotes = async (folderName: string, _append = false) => {
         if (folderNotesLoadingRef.current) return;
@@ -5218,9 +5230,13 @@ const fireIntegrations = (trigger: string, note: any) => {
         });
     }, []);
 
-    // Load all notes when entering graph mode or Today folder
+    // Today is a virtual <24h view. Load it from the authoritative recent=today endpoint
+    // (created_at filter, no row cap) and merge in — NOT loadAllNotes, whose ORDER BY
+    // "order" ASC LIMIT 500 drops the newest notes (exactly the Today ones) once the
+    // library passes 500 notes. Graph mode still uses the full list.
     useEffect(() => {
-        if (mainListMode === "graph" || activeFolder === "Today") { folderNotesLoadingRef.current = false; void loadAllNotes(); }
+        if (activeFolder === "Today") { void loadTodayNotes(); return; }
+        if (mainListMode === "graph") { folderNotesLoadingRef.current = false; void loadAllNotes(); }
     }, [mainListMode, activeFolder]);
 
     // Compute exact square cell size via ResizeObserver → set as CSS var on grid container
