@@ -1009,6 +1009,9 @@ export default function NotesMaster() {
         setFolderStack(name ? [{ id: `virtual-${name}`, name, color: palette12[0] }] : []);
     }, []);
     const enterFolder = useCallback((frame: { id: string; name: string; color: string }) => {
+        // Virtual "Today" view (notes created < 24h) is never a real folder — keep it
+        // single-level and never resolve it against DB rows or nest it under a parent.
+        if (frame.id === "virtual-today") { setFolderStack([frame]); return; }
         setFolderStack((prev) => {
             // Build path from a known row id — avoids name collisions across parent folders
             const buildPathFromId = (id: string): { id: string; name: string; color: string }[] | null => {
@@ -1617,9 +1620,11 @@ export default function NotesMaster() {
         }
     };
 
-    // Load first 15 notes when entering a folder; clear on exit
+    // Load first 15 notes when entering a folder; clear on exit.
+    // "Today" is a virtual view (notes < 24h, any folder) handled by loadAllNotes —
+    // skip the folder fetch here so the two loads don't race and flicker.
     useEffect(() => {
-        if (activeFolder) {
+        if (activeFolder && activeFolder !== "Today") {
             folderPaginationRef.current.delete(activeFolder);
             void loadFolderNotes(activeFolder, false);
         }

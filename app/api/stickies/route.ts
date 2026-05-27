@@ -766,6 +766,9 @@ export async function POST(req: Request) {
     if (!content?.trim()) return NextResponse.json({ error: "content required" }, { status: 400 });
     if (folder_name !== null && !folder_name?.trim()) return NextResponse.json({ error: "folder cannot be empty" }, { status: 400 });
     if (!folder_name?.trim()) folder_name = "CLAUDE";
+    // "Today" is a virtual view (notes created < 24h), never a real folder. Remap a
+    // leading "Today" segment to CLAUDE so AI notes don't recreate a literal folder.
+    if (folder_name) folder_name = folder_name.replace(/^\s*today(?=\s*$|\/)/i, "CLAUDE");
 
     // External channels (API/CLI/MCP) may no longer create markdown — force HTML.
     // Reject early, before any DB work. Browser sessions (owner/user JWT) keep
