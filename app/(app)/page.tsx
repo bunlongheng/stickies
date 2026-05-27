@@ -6544,8 +6544,12 @@ const fireIntegrations = (trigger: string, note: any) => {
                                                             // permanently hide every future draft). Just back out.
                                                             if (nid === "__draft__") { void backToRootFromEditor(); return; }
                                                             dismissTab(nid);
+                                                            // Activate the ADJACENT tab (the one that slides into the
+                                                            // closed slot) instead of jumping to the first. Closing the
+                                                            // last tab falls back to the new last.
+                                                            const idx = dayNotes.findIndex(t => String(t.id) === nid);
                                                             const remaining = dayNotes.filter(t => String(t.id) !== nid);
-                                                            if (remaining.length > 0) void openNote(remaining[0]);
+                                                            if (remaining.length > 0) void openNote(remaining[Math.min(idx, remaining.length - 1)]);
                                                             else void backToRootFromEditor();
                                                         }}
                                                         className="pr-2 flex items-center justify-center hover:opacity-60 transition flex-shrink-0" style={{ height: "100%", color: isLightColor(c) ? "#1c1c1e" : "#fff" }}>
@@ -7381,7 +7385,9 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                 {/* Folder pill with icon */}
                                 {(() => {
                                     const fn = targetFolder || activeFolder || editingNote?.folder_name || "General";
-                                    const fc = folders.find(f => f.name === fn)?.color || noteColor;
+                                    // Use the folder's real color (same map list/thumb view uses) so the
+                                    // pill matches the folder, not the note. Fall back only if unknown.
+                                    const fc = folderColors[fn] || folders.find(f => f.name === fn)?.color || noteColor;
                                     const fi = folderIcons[fn] || "";
                                     return (
                                         <div className="relative" ref={(el) => { if (el) el.dataset.folderPillRef = "1"; }}>

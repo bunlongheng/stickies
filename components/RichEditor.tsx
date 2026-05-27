@@ -338,7 +338,11 @@ export default function RichEditor({
     // the 8px base (never grows); normal notes stay at 8px.
     useEffect(() => {
         if (!editor) return;
-        const BASE = 8, MIN = 6;
+        // Measure at REF, then size the font so the widest line ~fills the editor
+        // width, clamped to [MIN, MAX]: grows to use the available space (no more
+        // tiny text sitting in white space) and only shrinks for genuinely wide
+        // tables, never below a readable floor.
+        const REF = 12, MIN = 9, MAX = 15;
         const proseEl = editor.view.dom as HTMLElement;
         const measure = document.createElement("div");
         measure.style.cssText = "position:absolute;left:-9999px;top:0;visibility:hidden;white-space:pre;display:inline-block;width:auto;max-width:none;";
@@ -349,14 +353,14 @@ export default function RichEditor({
             if (editor.isDestroyed) return;
             const avail = proseEl.clientWidth - 4;
             if (avail <= 0) return; // not laid out yet; a later tick will retry
-            // Measure the widest rendered line at BASE size. Lines are separated by
+            // Measure the widest rendered line at REF size. Lines are separated by
             // <br>, so text-splitting under-counts; render each block's HTML into an
             // offscreen inline-block with white-space:pre and take the widest. Font
             // is set explicitly (the measurer is outside .rich-editor-prose).
             const cs = getComputedStyle(proseEl);
             measure.style.fontFamily = cs.fontFamily;
             measure.style.fontWeight = cs.fontWeight;
-            measure.style.fontSize = `${BASE}px`;
+            measure.style.fontSize = `${REF}px`;
             let natural = 0;
             for (const el of Array.from(proseEl.children) as HTMLElement[]) {
                 measure.innerHTML = el.innerHTML;
@@ -364,7 +368,8 @@ export default function RichEditor({
             }
             measure.innerHTML = "";
             if (natural <= 0) return; // content not in the DOM yet; retry on next tick
-            const px = natural <= avail ? BASE : Math.max(MIN, Math.floor((BASE * avail) / natural));
+            // Font that makes the widest line span the available width, clamped.
+            const px = Math.max(MIN, Math.min(MAX, Math.round((REF * avail) / natural)));
             if (px === lastPx) return; // no change; also breaks any ResizeObserver loop
             lastPx = px;
             proseEl.style.setProperty("--rich-prose-font", `${px}px`);
