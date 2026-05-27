@@ -996,6 +996,7 @@ export default function NotesMaster() {
     const [folderCounts, setFolderCounts] = useState<Record<string, number>>({});
     const [folderCountsById, setFolderCountsById] = useState<Record<string, number>>({});
     const [todayCount, setTodayCount] = useState(0); // server-authoritative count of notes created < 24h (Today virtual view)
+    const [todayNotes, setTodayNotes] = useState<any[]>([]); // notes for the Today view, from recent=today — decoupled from the 500-capped dbData
     const [folderLatestById, setFolderLatestById] = useState<Record<string, string>>({});
     const [folderNotesLoading, setFolderNotesLoading] = useState(false);
     const folderNotesLoadingRef = useRef(false);
@@ -1500,6 +1501,9 @@ export default function NotesMaster() {
             const res = await fetch(`/api/stickies?recent=today`, { headers: { Authorization: `Bearer ${token}` } });
             if (!res.ok) return;
             const { notes = [] } = await res.json();
+            // Dedicated state is the view's source of truth, so a later loadAllNotes (which
+            // replaces dbData with the 500-capped list) can't wipe these back out.
+            setTodayNotes(notes);
             setDbData((prev) => mergeRecentNotes(prev, notes));
         } catch { /* offline / transient — refocus catch-up retries */ }
     };
@@ -2818,9 +2822,17 @@ const fireIntegrations = (trigger: string, note: any) => {
             // Today folder: virtual — show all notes updated in last 24h OR with folder_name "Today"
             if (activeFolder === "Today") {
                 const last24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
-                const notes = dbData.filter((n) => !n.is_folder && !n.trashed_at && (
-                    new Date(n.created_at || 0) >= last24h
-                )).sort(byUpdated);
+                // Source of truth: the uncapped recent=today fetch (todayNotes). Union with any
+                // <24h notes already in dbData (e.g. just-created optimistic ones) so new posts
+                // appear instantly. Dedup by id, drop anything that aged past 24h, sort.
+                const seen = new Set<string>();
+                const notes = [
+                    ...todayNotes,
+                    ...dbData.filter((n) => !n.is_folder && !n.trashed_at && new Date(n.created_at || 0) >= last24h),
+                ]
+                    .filter((n) => !n.is_folder && !n.trashed_at && new Date(n.created_at || 0) >= last24h)
+                    .filter((n) => { const id = String(n.id); if (seen.has(id)) return false; seen.add(id); return true; })
+                    .sort(byUpdated);
                 return showFileIcons ? [...currentLevelFolders, ...notes] : [...notes, ...currentLevelFolders];
             }
             // Inside a folder: icons on = subfolders first; icons off = notes first, folders at bottom
@@ -2835,7 +2847,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         }
         // Root: show folders
         return currentLevelFolders;
-    }, [dbData, activeFolder, folderStack, search, currentLevelFolders, pendingNoteOrder, pinnedIds]);
+    }, [dbData, activeFolder, folderStack, search, currentLevelFolders, pendingNoteOrder, pinnedIds, todayNotes]);
 
     // Available type chips for the filter row (only types present in current view, notes only)
     // Debounced content — heavy computations (JSON parse, tree walk, line split) only run 400ms after typing stops
