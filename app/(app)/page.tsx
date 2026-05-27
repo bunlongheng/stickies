@@ -2755,7 +2755,9 @@ const fireIntegrations = (trigger: string, note: any) => {
             const todayCard = {
                 id: "virtual-today",
                 name: "Today",
-                color: "#FF3B30",
+                // Magenta — the one hue not used by the 12-color folder palette, so the
+                // virtual Today card never collides with a real folder (e.g. red Todo/CLAUDE).
+                color: "#E63ACB",
                 count: Math.max(todayCount, todayCountLocal),
                 subfolderCount: 0,
                 order: -1,
