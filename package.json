@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "stickies": "node scripts/stickies-cli.mjs",
+    "stickies:key": "node scripts/stickies-key.mjs",
     "predev": "node scripts/dev-banner.mjs; kill $(lsof -ti :4444) 2>/dev/null || true",
     "dev": "node scripts/dev.mjs",
     "build": "next build",

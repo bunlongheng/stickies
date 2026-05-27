@@ -5,6 +5,16 @@ import { query, queryOne, execute } from "@/lib/db-driver";
 import { auth as getSession } from "@/auth";
 import { normalizeIcon, pickNoteIcon, SUPPORTED_NOTE_ICONS } from "@/lib/note-icons";
 import { colorName, stripEmoji } from "@/lib/note-format";
+import { identifyCaller } from "@/app/api/stickies/_auth";
+import { hashApiKey } from "@/lib/api-keys";
+
+// Ensure the created_by_key attribution column exists. Runs once per process.
+let _createdByKeyEnsured = false;
+async function ensureCreatedByKeyColumn() {
+    if (_createdByKeyEnsured) return;
+    try { await execute(`ALTER TABLE "stickies" ADD COLUMN IF NOT EXISTS created_by_key TEXT`); } catch {}
+    _createdByKeyEnsured = true;
+}
 
 /** Friendly rejection when an agent sends an icon we don't support. */
 function iconRejection(badIcon: unknown) {
@@ -186,6 +196,14 @@ async function authenticate(req: Request): Promise<AuthResult | null> {
         }
     }
 
+    // Per-machine API key (api_keys table) → external caller owned by the owner.
+    if (bearer && bearer !== apiKey) {
+        try {
+            const rows = await query<{ id: string }>(`SELECT id FROM api_keys WHERE key_hash = $1 AND revoked_at IS NULL`, [hashApiKey(bearer)]);
+            if (rows[0]) return { type: "external", userId: process.env.OWNER_USER_ID?.trim() ?? "" };
+        } catch {}
+    }
+
     // Dev bypass: no login needed in development (browser requests without API key)
     if (process.env.NODE_ENV === "development" && !bearer) {
         return { type: "owner", userId: process.env.OWNER_USER_ID?.trim() ?? "" };
@@ -219,7 +237,7 @@ function withUser(sql: string, params: unknown[], userId?: string): { sql: strin
 const RAW_INSERT_ALLOWED_COLS = new Set([
     "title", "content", "folder_name", "folder_color", "is_folder", "type",
     "order", "created_at", "updated_at", "parent_folder_name", "folder_id", "list_mode",
-    "format", "doc",
+    "format", "doc", "created_by_key",
 ]);
 
 // ── Allowed columns for PATCH updates ────────────────────────────────────────
@@ -504,6 +522,11 @@ export async function POST(req: Request) {
     const table = "stickies";
     const userId = auth.userId;
 
+    // Attribution: which key created the note. NULL for owner/JWT/local creates.
+    const caller = await identifyCaller(req);
+    const createdByKey = (caller.via === "apikey" || caller.via === "static") ? caller.label ?? null : null;
+    if (createdByKey) await ensureCreatedByKeyColumn();
+
     const url = new URL(req.url);
     const isJsonBody = /application\/json/i.test(req.headers.get("content-type") ?? "");
     let bodyForFolderCheck: Record<string, unknown> | null = null;
@@ -662,7 +685,8 @@ export async function POST(req: Request) {
             return markdownRejection();
         }
         const now = new Date().toISOString();
-        const insertPayload = { ...payload, updated_at: now, created_at: payload.created_at ?? now, user_id: userId };
+        const insertPayload: Record<string, unknown> = { ...payload, updated_at: now, created_at: payload.created_at ?? now, user_id: userId };
+        if (createdByKey) insertPayload.created_by_key = createdByKey;
         // Fix #2: whitelist allowed columns — reject arbitrary user-supplied column names
         const filteredPayload = Object.fromEntries(
             Object.entries(insertPayload).filter(([k]) => RAW_INSERT_ALLOWED_COLS.has(k) || k === "user_id")
@@ -877,10 +901,14 @@ export async function POST(req: Request) {
         const folderIdVal = resolved_folder_id ? `, $11` : "";
         const extraParams: unknown[] = resolved_folder_id ? [resolved_folder_id] : [];
 
+        const baseParams: unknown[] = [title, content, resolved_folder_name, folder_color, noteType, resolvedIcon, nextOrder, now, now, userId, ...extraParams];
+        const keyClause = createdByKey ? `, created_by_key` : "";
+        const keyVal = createdByKey ? `, $${baseParams.length + 1}` : "";
+        if (createdByKey) baseParams.push(createdByKey);
         data = await queryOne(
-            `INSERT INTO "stickies" (title, content, folder_name, folder_color, is_folder, type, icon, "order", created_at, updated_at, user_id${folderIdClause})
-             VALUES ($1, $2, $3, $4, false, $5, $6, $7, $8, $9, $10${folderIdVal}) RETURNING *`,
-            [title, content, resolved_folder_name, folder_color, noteType, resolvedIcon, nextOrder, now, now, userId, ...extraParams]
+            `INSERT INTO "stickies" (title, content, folder_name, folder_color, is_folder, type, icon, "order", created_at, updated_at, user_id${folderIdClause}${keyClause})
+             VALUES ($1, $2, $3, $4, false, $5, $6, $7, $8, $9, $10${folderIdVal}${keyVal}) RETURNING *`,
+            baseParams
         );
     }
 

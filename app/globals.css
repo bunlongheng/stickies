@@ -427,7 +427,10 @@ body {
  * not the content background — matches the Apple-Notes/iA-Writer pattern. */
 .rich-editor-root { background: #ffffff; color: #1a1a1a; }
 .rich-editor-prose {
-  font-size: 11px;                /* was 15px; ~30% smaller per Bunlong */
+  /* 8px base (~30% smaller than the prior 11px per Bunlong). The auto-fit
+     effect in RichEditor.tsx lowers --rich-prose-font further when a note has
+     wide content (e.g. a pasted ASCII table) so it fits without manual zoom. */
+  font-size: var(--rich-prose-font, 8px);
   line-height: 1.55;
   color: #1a1a1a;
 }

@@ -332,6 +332,64 @@ export default function RichEditor({
         return () => { cancelled = true; clearTimeout(id); };
     }, [editor, initialDoc]);
 
+    // Auto-fit: shrink the prose font so the widest line fits the editor width
+    // without wrapping. Lets pasted ASCII tables / wide monospace content fit on
+    // screen without the user having to zoom the browser out. Only shrinks below
+    // the 8px base (never grows); normal notes stay at 8px.
+    useEffect(() => {
+        if (!editor) return;
+        const BASE = 8, MIN = 6;
+        const proseEl = editor.view.dom as HTMLElement;
+        const measure = document.createElement("div");
+        measure.style.cssText = "position:absolute;left:-9999px;top:0;visibility:hidden;white-space:pre;display:inline-block;width:auto;max-width:none;";
+        document.body.appendChild(measure);
+        let timer: ReturnType<typeof setTimeout> | null = null, lastPx = -1;
+        const fit = () => {
+            timer = null;
+            if (editor.isDestroyed) return;
+            const avail = proseEl.clientWidth - 4;
+            if (avail <= 0) return; // not laid out yet; a later tick will retry
+            // Measure the widest rendered line at BASE size. Lines are separated by
+            // <br>, so text-splitting under-counts; render each block's HTML into an
+            // offscreen inline-block with white-space:pre and take the widest. Font
+            // is set explicitly (the measurer is outside .rich-editor-prose).
+            const cs = getComputedStyle(proseEl);
+            measure.style.fontFamily = cs.fontFamily;
+            measure.style.fontWeight = cs.fontWeight;
+            measure.style.fontSize = `${BASE}px`;
+            let natural = 0;
+            for (const el of Array.from(proseEl.children) as HTMLElement[]) {
+                measure.innerHTML = el.innerHTML;
+                if (measure.offsetWidth > natural) natural = measure.offsetWidth;
+            }
+            measure.innerHTML = "";
+            if (natural <= 0) return; // content not in the DOM yet; retry on next tick
+            const px = natural <= avail ? BASE : Math.max(MIN, Math.floor((BASE * avail) / natural));
+            if (px === lastPx) return; // no change; also breaks any ResizeObserver loop
+            lastPx = px;
+            proseEl.style.setProperty("--rich-prose-font", `${px}px`);
+        };
+        // setTimeout (not requestAnimationFrame) so the fit still runs when the
+        // tab is backgrounded — rAF is paused in hidden tabs, which would leave a
+        // note that loaded while hidden un-fitted until the next interaction.
+        const schedule = () => { if (!timer) timer = setTimeout(fit, 60); };
+        // ResizeObserver catches BOTH container resizes and the async content load
+        // (loaded notes apply their doc via setContent(false), which fires no
+        // "update" event but does change the editor's size).
+        const ro = new ResizeObserver(schedule);
+        ro.observe(proseEl);
+        editor.on("update", schedule);
+        window.addEventListener("resize", schedule); // orientation / split-view changes
+        schedule();
+        return () => {
+            editor.off("update", schedule);
+            ro.disconnect();
+            window.removeEventListener("resize", schedule);
+            if (timer) clearTimeout(timer);
+            measure.remove();
+        };
+    }, [editor]);
+
     return (
         <div
             className="relative flex flex-col flex-1 min-h-0"
