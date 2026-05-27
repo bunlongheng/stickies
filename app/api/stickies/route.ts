@@ -7,6 +7,7 @@ import { normalizeIcon, pickNoteIcon, SUPPORTED_NOTE_ICONS } from "@/lib/note-ic
 import { colorName, stripEmoji } from "@/lib/note-format";
 import { identifyCaller } from "@/app/api/stickies/_auth";
 import { hashApiKey } from "@/lib/api-keys";
+import { isReservedFolderName, remapReservedFolderPath } from "@/lib/reserved-folders";
 
 // Ensure the created_by_key attribution column exists. Runs once per process.
 let _createdByKeyEnsured = false;
@@ -415,7 +416,14 @@ export async function GET(req: Request) {
             total += n;
         }
 
-        return NextResponse.json({ counts: byName, countsByFolderId: byId, latestByFolderId, total });
+        // "Today" virtual view count — notes created < 24h, computed server-side so the
+        // card never depends on how many notes happen to be loaded into the client.
+        const todayRows = await query<{ n: string }>(
+            `SELECT COUNT(*) AS n FROM "stickies" WHERE is_folder = false AND user_id = $1 AND trashed_at IS NULL AND created_at >= NOW() - INTERVAL '24 hours'`,
+            [userId]
+        );
+        const todayCount = Number(todayRows[0]?.n ?? 0);
+        return NextResponse.json({ counts: byName, countsByFolderId: byId, latestByFolderId, total, todayCount });
     }
 
     if (folderFilter) {
@@ -596,6 +604,7 @@ export async function POST(req: Request) {
                 if (type === "folder") {
                     const name = String(item.name ?? "").trim();
                     if (!name) { results.push({ type: "folder", data: null, error: "name required" }); continue; }
+                    if (isReservedFolderName(name)) { results.push({ type: "folder", data: null, error: "reserved_name: \"Today\"/\"Yesterday\" are virtual views, not folders" }); continue; }
                     const folder_color = pickColor(item.color as string);
                     const parent_folder_name = String(item.parent_folder ?? "").trim() || null;
                     const folderIcon = String(item.icon ?? "").trim();
@@ -613,9 +622,9 @@ export async function POST(req: Request) {
                     if (!title) { results.push({ type: "note", data: null, error: "title required" }); continue; }
                     const content = String(item.content ?? "").trim();
                     if (!content) { results.push({ type: "note", data: null, error: "content required" }); continue; }
-                    const folder_name = "folder" in item
+                    const folder_name = remapReservedFolderPath("folder" in item
                         ? (String(item.folder ?? "").trim() || (() => { throw new Error("folder cannot be empty"); })())
-                        : "CLAUDE";
+                        : "CLAUDE");
                     let batchType = (typeof item.type === "string" && VALID_TYPES.has(item.type)) ? item.type : detectType(content, title);
                     // External channels may no longer create markdown — reject the item so the agent resubmits as HTML.
                     if (auth.type === "external" && batchType === "markdown") {
@@ -652,6 +661,7 @@ export async function POST(req: Request) {
     if (isFolderCreate) {
         const name = String(url.searchParams.get("name") || (bodyForFolderCheck?.name as string) || "").trim();
         if (!name) return NextResponse.json({ error: "name is required for folder" }, { status: 400 });
+        if (isReservedFolderName(name)) return NextResponse.json({ error: "\"Today\"/\"Yesterday\" are virtual views, not folders" }, { status: 400 });
 
         const rawColor = String(url.searchParams.get("color") || (bodyForFolderCheck?.color as string) || "").trim();
         const parentFolder = String(url.searchParams.get("parent") || (bodyForFolderCheck?.parent_folder as string) || "").trim() || null;
@@ -766,9 +776,8 @@ export async function POST(req: Request) {
     if (!content?.trim()) return NextResponse.json({ error: "content required" }, { status: 400 });
     if (folder_name !== null && !folder_name?.trim()) return NextResponse.json({ error: "folder cannot be empty" }, { status: 400 });
     if (!folder_name?.trim()) folder_name = "CLAUDE";
-    // "Today" is a virtual view (notes created < 24h), never a real folder. Remap a
-    // leading "Today" segment to CLAUDE so AI notes don't recreate a literal folder.
-    if (folder_name) folder_name = folder_name.replace(/^\s*today(?=\s*$|\/)/i, "CLAUDE");
+    // "Today"/"Yesterday" are virtual views, never real folders — file under CLAUDE.
+    folder_name = remapReservedFolderPath(folder_name!);
 
     // External channels (API/CLI/MCP) may no longer create markdown — force HTML.
     // Reject early, before any DB work. Browser sessions (owner/user JWT) keep
@@ -1050,6 +1059,7 @@ export async function PATCH(req: Request) {
         const { from, to } = body.rename_folder as { from: string; to: string };
         if (!from?.trim() || !to?.trim()) return NextResponse.json({ error: "rename_folder requires from and to" }, { status: 400 });
         const toTrimmed = to.trim();
+        if (isReservedFolderName(toTrimmed)) return NextResponse.json({ error: "\"Today\"/\"Yesterday\" are reserved virtual views" }, { status: 400 });
         const { sql: sql1, params: params1 } = withUser(
             `UPDATE "${table}" SET folder_name = $1, title = $2, updated_at = $3 WHERE is_folder = true AND folder_name = $4`,
             [toTrimmed, toTrimmed, now, from.trim()],
@@ -1068,6 +1078,7 @@ export async function PATCH(req: Request) {
     if (body.merge_folder) {
         const { from, to } = body.merge_folder as { from: string; to: string };
         if (!from?.trim() || !to?.trim()) return NextResponse.json({ error: "merge_folder requires from and to" }, { status: 400 });
+        if (isReservedFolderName(to.trim())) return NextResponse.json({ error: "\"Today\"/\"Yesterday\" are reserved virtual views" }, { status: 400 });
         const { sql: sql1, params: params1 } = withUser(
             `UPDATE "${table}" SET folder_name = $1, updated_at = $2 WHERE is_folder = false AND folder_name = $3`,
             [to.trim(), now, from.trim()],

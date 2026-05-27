@@ -6,6 +6,7 @@ import { createPortal } from "react-dom";
 import { usePageMeta } from "@/lib/usePageMeta";
 import { extractSmartTags, mergeSmartTags, DRAFT_BACKUP_KEY, serializeDraft, parseDraftBackup, backupHasWork, folderTileForeground, noteTileForeground, mergeRecentNotes, cmdkMatchTier, CMDK_NO_MATCH } from "@/lib/editor-ui";
 import { matchNoteIcon, pickNoteIcon } from "@/lib/note-icons";
+import { isReservedFolderName } from "@/lib/reserved-folders";
 import dynamic from "next/dynamic";
 import LZString from "lz-string";
 const GraphView = dynamic(() => import("@/components/GraphView").then(m => m.GraphView), { ssr: false });
@@ -994,6 +995,7 @@ export default function NotesMaster() {
     const [dbData, setDbData] = useState<any[]>([]);
     const [folderCounts, setFolderCounts] = useState<Record<string, number>>({});
     const [folderCountsById, setFolderCountsById] = useState<Record<string, number>>({});
+    const [todayCount, setTodayCount] = useState(0); // server-authoritative count of notes created < 24h (Today virtual view)
     const [folderLatestById, setFolderLatestById] = useState<Record<string, string>>({});
     const [folderNotesLoading, setFolderNotesLoading] = useState(false);
     const folderNotesLoadingRef = useRef(false);
@@ -1535,9 +1537,10 @@ export default function NotesMaster() {
             }
             const cachedCounts = localStorage.getItem(COUNTS_CACHE_KEY);
             if (cachedCounts) {
-                const { counts, countsByFolderId } = JSON.parse(cachedCounts);
+                const { counts, countsByFolderId, todayCount: cachedToday } = JSON.parse(cachedCounts);
                 if (counts) setFolderCounts(counts);
                 if (countsByFolderId) setFolderCountsById(countsByFolderId);
+                if (typeof cachedToday === "number") setTodayCount(cachedToday);
             }
         } catch { /* ignore */ }
 
@@ -1584,6 +1587,7 @@ export default function NotesMaster() {
             const freshCountsById = countsResult.countsByFolderId ?? {};
             setFolderCounts(freshCounts);
             setFolderCountsById(freshCountsById);
+            if (typeof countsResult.todayCount === "number") setTodayCount(countsResult.todayCount);
             if (countsResult.latestByFolderId) setFolderLatestById(countsResult.latestByFolderId);
             // Sync pinned folders from DB
             const dbPinned = prefsResult.pinned_folders ?? [];
@@ -1595,7 +1599,7 @@ export default function NotesMaster() {
             // Persist folders + counts cache for instant next load
             try {
                 localStorage.setItem(DB_CACHE_KEY, JSON.stringify(folderItems));
-                localStorage.setItem(COUNTS_CACHE_KEY, JSON.stringify({ counts: freshCounts, countsByFolderId: freshCountsById }));
+                localStorage.setItem(COUNTS_CACHE_KEY, JSON.stringify({ counts: freshCounts, countsByFolderId: freshCountsById, todayCount: countsResult.todayCount ?? 0 }));
             } catch { /* quota exceeded — skip */ }
             // Extract folder icons from folder rows (content field stores icon value)
             const folderIconsFromDb: Record<string, string> = {};
@@ -2243,6 +2247,8 @@ const fireIntegrations = (trigger: string, note: any) => {
             });
             // Write-through: keep notes cache in sync with real-time creates
             if (note.folder_name) mergeIntoCachedNotes(note.folder_name, [note]);
+            // A realtime create is always "now" → it counts for the Today virtual view.
+            if (!note.is_folder) setTodayCount((c) => c + 1);
             // Live-update folder tile count badge
             if (!note.is_folder && note.folder_name) {
                 setFolderCounts((prev) => {
@@ -2743,12 +2749,14 @@ const fireIntegrations = (trigger: string, note: any) => {
         // themselves live in their real folder (CLAUDE etc), not under "Today".
         if (folderStack.length === 0) {
             const last24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
-            const todayCount = dbData.filter((n) => !n.is_folder && !n.trashed_at && new Date(n.created_at || 0) >= last24h).length;
+            // Prefer the server-authoritative count; fall back to the partial client set
+            // only before counts have loaded (so the card never shows a stale low number).
+            const todayCountLocal = dbData.filter((n) => !n.is_folder && !n.trashed_at && new Date(n.created_at || 0) >= last24h).length;
             const todayCard = {
                 id: "virtual-today",
                 name: "Today",
                 color: "#FF3B30",
-                count: todayCount,
+                count: Math.max(todayCount, todayCountLocal),
                 subfolderCount: 0,
                 order: -1,
                 latestUpdatedAt: "",
@@ -2760,7 +2768,7 @@ const fireIntegrations = (trigger: string, note: any) => {
             return [todayCard, ...filtered];
         }
         return filtered;
-    }, [folders, folderStack, activeFolder, pinnedFolders, dbData]);
+    }, [folders, folderStack, activeFolder, pinnedFolders, dbData, todayCount]);
 
     const displayItems = useMemo(() => {
         const byUpdated = (a: any, b: any) => {
@@ -4973,6 +4981,7 @@ const fireIntegrations = (trigger: string, note: any) => {
     const renameFolderTo = useCallback(async (newName: string) => {
         if (!activeFolder || !newName.trim() || newName.trim() === activeFolder) return;
         const trimmed = newName.trim();
+        if (isReservedFolderName(trimmed)) { showToast(`"${trimmed}" is a virtual view, not a folder`); return; }
         // Optimistic update
         setDbData((data) => data.map((r) => {
             if (r.folder_name === activeFolder) return { ...r, folder_name: trimmed };
@@ -5031,6 +5040,7 @@ const fireIntegrations = (trigger: string, note: any) => {
     const confirmCreateFolder = useCallback(async () => {
         const folderName = newFolderName.trim();
         if (!folderName) return;
+        if (isReservedFolderName(folderName)) { showToast(`"${folderName}" is a virtual view, not a folder`); return; }
         setShowCreateFolder(false);
         setShowFolderIconPicker(false);
         setNewFolderName("");
