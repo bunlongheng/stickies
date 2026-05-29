@@ -2740,8 +2740,10 @@ const fireIntegrations = (trigger: string, note: any) => {
         // Sort by DB order column, then assign palette color by position
         const sorted = all.sort((a, b) => a.order - b.order);
         const fullPalette = [...palette12, "#8E8E93", "#FFFFFF"];
-        // Root folders get color from position index (not array index)
-        let rootIdx = 0;
+        // Root folders get color from position index (not array index). Index 0 is
+        // reserved for the virtual Today card (red), so real folders start at 1 and
+        // push by one — Today=red, first folder=next palette color, and so on.
+        let rootIdx = 1;
         sorted.forEach((f) => {
             if (f.parent_folder_name) return; // subfolders keep parent color
             f.color = fullPalette[rootIdx % fullPalette.length];
@@ -2771,9 +2773,9 @@ const fireIntegrations = (trigger: string, note: any) => {
             const todayCard = {
                 id: "virtual-today",
                 name: "Today",
-                // Magenta — the one hue not used by the 12-color folder palette, so the
-                // virtual Today card never collides with a real folder (e.g. red Todo/CLAUDE).
-                color: "#E63ACB",
+                // Today starts the palette at red (index 0); real folders push by one,
+                // so the list reads as a clean rainbow from the top.
+                color: palette12[0],
                 count: Math.max(todayCount, todayCountLocal),
                 subfolderCount: 0,
                 order: -1,
