@@ -252,7 +252,17 @@ const PATCH_ALLOWED_COLS = new Set([
     "order", "updated_at", "parent_folder_name", "folder_id", "list_mode", "tags", "trashed_at", "is_public", "icon",
     // Rich-text support: per-note editor mode + ProseMirror JSON doc
     "format", "doc",
+    // Write-protect lock — only field allowed to change when row is locked
+    "locked",
 ]);
+
+// Lazy column add — keeps prod DB in sync without a separate migration step
+let _lockedColumnEnsured = false;
+async function ensureLockedColumn(): Promise<void> {
+    if (_lockedColumnEnsured) return;
+    _lockedColumnEnsured = true;
+    try { await execute(`ALTER TABLE "stickies" ADD COLUMN IF NOT EXISTS locked boolean NOT NULL DEFAULT false`); } catch {}
+}
 
 // ── Color helpers ────────────────────────────────────────────────────────────
 async function pickLeastUsedColor(userId: string, rawColor?: string): Promise<string> {
@@ -340,6 +350,8 @@ export async function GET(req: Request) {
     const table = "stickies";
     const userId = auth.userId;
 
+    await ensureLockedColumn();
+
     // Auto-expire: permanently delete TRASH notes older than 7 days
     try {
         await execute(
@@ -389,7 +401,7 @@ export async function GET(req: Request) {
     }
 
     if (url.searchParams.get("recent") === "today") {
-        const RECENT_COLS = `id, title, folder_name, folder_color, folder_id, parent_folder_name, "order", updated_at, created_at, type, is_folder, is_public, trashed_at, icon, list_mode`;
+        const RECENT_COLS = `id, title, folder_name, folder_color, folder_id, parent_folder_name, "order", updated_at, created_at, type, is_folder, is_public, trashed_at, icon, list_mode, locked`;
         const { sql, params } = withUser(
             `SELECT ${RECENT_COLS} FROM "${table}" WHERE is_folder = false AND trashed_at IS NULL AND created_at >= NOW() - INTERVAL '24 hours'`,
             [],
@@ -432,7 +444,7 @@ export async function GET(req: Request) {
     }
 
     if (folderFilter) {
-        const FOLDER_COLS = `id, title, folder_name, folder_color, folder_id, parent_folder_name, "order", updated_at, created_at, type, is_folder, is_public, trashed_at, icon, list_mode, format, CASE WHEN (type = 'checklist' OR list_mode = true) AND content IS NOT NULL AND length(content) > 0 THEN (SELECT COUNT(*)::int FROM regexp_split_to_table(content, E'\\n') AS line WHERE TRIM(line) <> '' AND TRIM(line) !~ '^[-=*#~_.]{2,}$') ELSE 0 END AS task_count, CASE WHEN (type = 'checklist' OR list_mode = true) AND content IS NOT NULL AND length(content) > 0 THEN COALESCE((SELECT SUM(CASE WHEN TRIM(line) ~* '^\\[x\\]' THEN 1.0 WHEN TRIM(line) ~ '^\\[/\\]' THEN 0.5 ELSE 0 END)::float FROM regexp_split_to_table(content, E'\\n') AS line), 0) ELSE 0 END AS task_done_count, CASE WHEN (type = 'checklist' OR list_mode = true) AND content IS NOT NULL AND length(content) > 0 THEN (SELECT COUNT(*)::int FROM regexp_split_to_table(content, E'\\n') AS line WHERE TRIM(line) <> '' AND TRIM(line) !~ '^[-=*#~_.]{2,}$' AND TRIM(line) !~* '^\\[x\\]') ELSE 0 END AS task_remaining_count`;
+        const FOLDER_COLS = `id, title, folder_name, folder_color, folder_id, parent_folder_name, "order", updated_at, created_at, type, is_folder, is_public, trashed_at, icon, list_mode, locked, format, CASE WHEN (type = 'checklist' OR list_mode = true) AND content IS NOT NULL AND length(content) > 0 THEN (SELECT COUNT(*)::int FROM regexp_split_to_table(content, E'\\n') AS line WHERE TRIM(line) <> '' AND TRIM(line) !~ '^[-=*#~_.]{2,}$') ELSE 0 END AS task_count, CASE WHEN (type = 'checklist' OR list_mode = true) AND content IS NOT NULL AND length(content) > 0 THEN COALESCE((SELECT SUM(CASE WHEN TRIM(line) ~* '^\\[x\\]' THEN 1.0 WHEN TRIM(line) ~ '^\\[/\\]' THEN 0.5 ELSE 0 END)::float FROM regexp_split_to_table(content, E'\\n') AS line), 0) ELSE 0 END AS task_done_count, CASE WHEN (type = 'checklist' OR list_mode = true) AND content IS NOT NULL AND length(content) > 0 THEN (SELECT COUNT(*)::int FROM regexp_split_to_table(content, E'\\n') AS line WHERE TRIM(line) <> '' AND TRIM(line) !~ '^[-=*#~_.]{2,}$' AND TRIM(line) !~* '^\\[x\\]') ELSE 0 END AS task_remaining_count`;
         const limitParam = parseInt(url.searchParams.get("limit") ?? "0");
         const offsetParam = parseInt(url.searchParams.get("offset") ?? "0");
         const sinceParam = url.searchParams.get("since"); // ISO timestamp — delta sync
@@ -483,7 +495,7 @@ export async function GET(req: Request) {
     }
 
     if (q) {
-        const SEARCH_COLS = `id, title, folder_name, folder_color, folder_id, parent_folder_name, "order", updated_at, created_at, type, is_folder, is_public, trashed_at, icon`;
+        const SEARCH_COLS = `id, title, folder_name, folder_color, folder_id, parent_folder_name, "order", updated_at, created_at, type, is_folder, is_public, trashed_at, icon, locked`;
         const { sql, params } = withUser(
             `SELECT ${SEARCH_COLS} FROM "${table}" WHERE is_folder = false AND (title ILIKE $1 OR content ILIKE $1)`,
             [`%${q}%`],
@@ -515,7 +527,7 @@ export async function GET(req: Request) {
         return NextResponse.json({ notes: rows, total: rows.length });
     }
 
-    const LIST_COLS = `id, title, folder_name, folder_color, folder_id, parent_folder_name, "order", updated_at, created_at, type, is_folder, is_public, trashed_at, icon, list_mode, format, CASE WHEN (type = 'checklist' OR list_mode = true) AND content IS NOT NULL AND length(content) > 0 THEN (SELECT COUNT(*)::int FROM regexp_split_to_table(content, E'\\n') AS line WHERE TRIM(line) <> '' AND TRIM(line) !~ '^[-=*#~_.]{2,}$') ELSE 0 END AS task_count, CASE WHEN (type = 'checklist' OR list_mode = true) AND content IS NOT NULL AND length(content) > 0 THEN COALESCE((SELECT SUM(CASE WHEN TRIM(line) ~* '^\\[x\\]' THEN 1.0 WHEN TRIM(line) ~ '^\\[/\\]' THEN 0.5 ELSE 0 END)::float FROM regexp_split_to_table(content, E'\\n') AS line), 0) ELSE 0 END AS task_done_count, CASE WHEN (type = 'checklist' OR list_mode = true) AND content IS NOT NULL AND length(content) > 0 THEN (SELECT COUNT(*)::int FROM regexp_split_to_table(content, E'\\n') AS line WHERE TRIM(line) <> '' AND TRIM(line) !~ '^[-=*#~_.]{2,}$' AND TRIM(line) !~* '^\\[x\\]') ELSE 0 END AS task_remaining_count`;
+    const LIST_COLS = `id, title, folder_name, folder_color, folder_id, parent_folder_name, "order", updated_at, created_at, type, is_folder, is_public, trashed_at, icon, list_mode, locked, format, CASE WHEN (type = 'checklist' OR list_mode = true) AND content IS NOT NULL AND length(content) > 0 THEN (SELECT COUNT(*)::int FROM regexp_split_to_table(content, E'\\n') AS line WHERE TRIM(line) <> '' AND TRIM(line) !~ '^[-=*#~_.]{2,}$') ELSE 0 END AS task_count, CASE WHEN (type = 'checklist' OR list_mode = true) AND content IS NOT NULL AND length(content) > 0 THEN COALESCE((SELECT SUM(CASE WHEN TRIM(line) ~* '^\\[x\\]' THEN 1.0 WHEN TRIM(line) ~ '^\\[/\\]' THEN 0.5 ELSE 0 END)::float FROM regexp_split_to_table(content, E'\\n') AS line), 0) ELSE 0 END AS task_done_count, CASE WHEN (type = 'checklist' OR list_mode = true) AND content IS NOT NULL AND length(content) > 0 THEN (SELECT COUNT(*)::int FROM regexp_split_to_table(content, E'\\n') AS line WHERE TRIM(line) <> '' AND TRIM(line) !~ '^[-=*#~_.]{2,}$' AND TRIM(line) !~* '^\\[x\\]') ELSE 0 END AS task_remaining_count`;
     const { sql, params } = withUser(
         `SELECT ${LIST_COLS} FROM "${table}" WHERE is_folder = false`,
         [],
@@ -964,6 +976,10 @@ export async function DELETE(req: Request) {
     const folderName = url.searchParams.get("folder_name")?.trim();
 
     if (noteId) {
+        await ensureLockedColumn();
+        const sel = withUser(`SELECT locked FROM "${table}" WHERE id = $1`, [noteId], userId);
+        const lockedRow = await queryOne<{ locked: boolean }>(sel.sql, sel.params);
+        if (lockedRow?.locked) return NextResponse.json({ error: "Note is locked", locked: true }, { status: 423 });
         const { sql, params } = withUser(`DELETE FROM "${table}" WHERE id = $1`, [noteId], userId);
         await execute(sql, params);
         try { await getPusher().trigger("stickies", "note-deleted", { id: noteId }); } catch {}
@@ -1051,6 +1067,10 @@ export async function PATCH(req: Request) {
     if (body.rename_note) {
         const { id, title } = body.rename_note as { id: string; title: string };
         if (!id?.trim() || !title?.trim()) return NextResponse.json({ error: "rename_note requires id and title" }, { status: 400 });
+        await ensureLockedColumn();
+        const rnSel = withUser(`SELECT locked FROM "${table}" WHERE id = $1`, [id.trim()], userId);
+        const rnLocked = await queryOne<{ locked: boolean }>(rnSel.sql, rnSel.params);
+        if (rnLocked?.locked) return NextResponse.json({ error: "Note is locked", locked: true }, { status: 423 });
         const { sql, params } = withUser(
             `UPDATE "${table}" SET title = $1, updated_at = $2 WHERE id = $3`,
             [title.trim(), now, id.trim()],
@@ -1132,7 +1152,17 @@ export async function PATCH(req: Request) {
 
     if (Array.isArray(body.updates)) {
         const updates = body.updates as Array<{ id: string; [key: string]: unknown }>;
-        await Promise.all(updates.map(({ id, ...fields }) => {
+        await ensureLockedColumn();
+        // Skip any locked rows in batch updates — never silently overwrite them.
+        const ids = updates.map(u => u.id).filter(Boolean);
+        const lockedIds = new Set<string>();
+        if (ids.length) {
+            const ph = ids.map((_, i) => `$${i + 1}`).join(",");
+            const lk = withUser(`SELECT id FROM "${table}" WHERE id IN (${ph}) AND locked = true`, ids, userId);
+            const rows = await query<{ id: string }>(lk.sql, lk.params);
+            for (const r of rows) lockedIds.add(String(r.id));
+        }
+        await Promise.all(updates.filter(u => !lockedIds.has(String(u.id))).map(({ id, ...fields }) => {
             const setEntries = Object.entries({ ...fields, updated_at: now });
             const setClauses = setEntries.map(([k], i) => `"${k}" = $${i + 1}`).join(", ");
             const setVals: unknown[] = setEntries.map(([, v]) => v);
@@ -1144,11 +1174,20 @@ export async function PATCH(req: Request) {
             );
             return execute(sql, params);
         }));
-        return NextResponse.json({ ok: true });
+        return NextResponse.json({ ok: true, locked_skipped: [...lockedIds] });
     }
 
     const { id, ...fields } = body;
     if (!id || typeof id !== "string") return NextResponse.json({ error: "id is required" }, { status: 400 });
+
+    await ensureLockedColumn();
+    const lockedSel = withUser(`SELECT locked FROM "${table}" WHERE id = $1`, [id], userId);
+    const lockedRow = await queryOne<{ locked: boolean }>(lockedSel.sql, lockedSel.params);
+    // Locked rows: only the lock-release patch ({locked:false}) is honored.
+    // Any other field is silently dropped so accidental autosaves can't bypass it.
+    if (lockedRow?.locked && fields.locked !== false) {
+        return NextResponse.json({ error: "Note is locked", locked: true }, { status: 423 });
+    }
 
     const filteredFields = Object.fromEntries(Object.entries(fields).filter(([k]) => PATCH_ALLOWED_COLS.has(k)));
     const setEntries = Object.entries({ ...filteredFields, updated_at: now });

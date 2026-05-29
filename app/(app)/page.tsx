@@ -79,6 +79,8 @@ import SunIcon from "@heroicons/react/24/outline/SunIcon";
 import MoonIcon from "@heroicons/react/24/outline/MoonIcon";
 import CloudIcon from "@heroicons/react/24/outline/CloudIcon";
 import FireIcon from "@heroicons/react/24/outline/FireIcon";
+import LockClosedIcon from "@heroicons/react/24/outline/LockClosedIcon";
+import LockOpenIcon from "@heroicons/react/24/outline/LockOpenIcon";
 import FlagIcon from "@heroicons/react/24/outline/FlagIcon";
 import TrophyIcon from "@heroicons/react/24/outline/TrophyIcon";
 import RocketLaunchIcon from "@heroicons/react/24/outline/RocketLaunchIcon";
@@ -120,6 +122,10 @@ const notesApi = {
             headers: { "Content-Type": "application/json", Authorization: `Bearer ${await getAuthToken()}` },
             body: JSON.stringify({ id, ...fields }),
         });
+        // 423 Locked: server refused because the note is write-protected. Swallow
+        // silently so background autosaves on a locked note don't crash the UI;
+        // the lock toggle in the share picker is the only sanctioned way to mutate.
+        if (res.status === 423) return { note: { id, locked: true } };
         if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error ?? "update failed"); }
         return res.json() as Promise<{ note: Record<string, unknown> }>;
     },
@@ -129,6 +135,7 @@ const notesApi = {
             headers: { "Content-Type": "application/json", Authorization: `Bearer ${await getAuthToken()}` },
             body: JSON.stringify({ updates }),
         });
+        if (res.status === 423) return;
         if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error ?? "bulk update failed"); }
     },
     insert: async (payload: Record<string, unknown>) => {
@@ -1220,7 +1227,7 @@ export default function NotesMaster() {
     const [openTabs, setOpenTabs] = useState<string[]>([]); // note IDs
     const [showTabs, setShowTabs] = useState(() => { try { if (typeof window === "undefined") return true; return localStorage.getItem("stickies:show-tabs:v1") !== "false"; } catch { return true; } });
     const [dismissedTabs, setDismissedTabs] = useState<Set<string>>(() => { try { if (typeof window === "undefined") return new Set(); const raw = localStorage.getItem("stickies:dismissed-tabs:v1"); return raw ? new Set(JSON.parse(raw)) : new Set(); } catch { return new Set(); } });
-    const [tabLimit, setTabLimit] = useState(20);
+    const [tabLimit, setTabLimit] = useState(200);
     const [tabDayOffset, setTabDayOffset] = useState(0); // 0=today, 1=yesterday, etc.
     const [activeTaskIdx, setActiveTaskIdx] = useState<number | null>(null);
     const [editingTaskIdx, setEditingTaskIdx] = useState<number | null>(null);
@@ -6442,7 +6449,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                             <ArrowLeftIcon className="w-[38px] h-[38px]" />
                         </button>
                         {/* Title only — Apple Notes style */}
-                        <input ref={titleInputRef} defaultValue={title} key={`title-${editingNote?.id || "new"}`} onChange={(e) => { titleRaw.current = e.target.value; }} onBlur={(e) => setTitle(e.target.value)} onFocus={() => { closeEditorTools(); setShowNoteActions(false); }} autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false} className="hidden sm:block bg-transparent border-0 appearance-none shadow-none ring-0 outline-none focus:outline-none focus:ring-0 px-1 min-w-0 flex-1 tracking-tight font-bold placeholder:text-zinc-500" style={{ caretColor: headerText, color: headerText, fontSize: "clamp(18px, 2vw, 24px)" }} placeholder="Note Title" />
+                        <input ref={titleInputRef} defaultValue={title} key={`title-${editingNote?.id || "new"}`} readOnly={!!editingNote?.locked} onChange={(e) => { titleRaw.current = e.target.value; }} onBlur={(e) => setTitle(e.target.value)} onFocus={() => { closeEditorTools(); setShowNoteActions(false); }} autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false} className="hidden sm:block bg-transparent border-0 appearance-none shadow-none ring-0 outline-none focus:outline-none focus:ring-0 px-1 min-w-0 flex-1 tracking-tight font-bold placeholder:text-zinc-500" style={{ caretColor: headerText, color: headerText, fontSize: "clamp(18px, 2vw, 24px)" }} placeholder="Note Title" />
                         {/* Mobile title moved inside editor panel */}
                         <div className="sm:hidden flex-grow" />
 
@@ -6513,10 +6520,17 @@ const fireIntegrations = (trigger: string, note: any) => {
                         const last24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
                         const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0); dayStart.setDate(dayStart.getDate() - tabDayOffset);
                         const dayEnd = new Date(dayStart); dayEnd.setDate(dayEnd.getDate() + 1);
+                        // Today (tabDayOffset 0, no folder) is authoritative from `todayNotes`
+                        // (uncapped recent=today fetch). dbData is capped at 500 and would
+                        // hide older same-day notes, leaving only 1-2 tabs even when Today
+                        // counter says 42. Union + dedupe by id so any in-flight optimistic
+                        // updates in dbData also show through.
+                        const dedupeById = (arr: any[]) => Array.from(new Map(arr.map(n => [String(n.id), n])).values());
                         const allNotes = (inFolder
                             ? dbData.filter(n => !n.is_folder && !n.trashed_at && !dismissedTabs.has(String(n.id)) && n.folder_name === activeFolder)
                             : tabDayOffset === 0
-                            ? dbData.filter(n => !n.is_folder && !n.trashed_at && !dismissedTabs.has(String(n.id)) && new Date(n.created_at || 0) >= last24h)
+                            ? dedupeById([...todayNotes, ...dbData.filter(n => new Date(n.created_at || 0) >= last24h)])
+                                .filter(n => !n.is_folder && !n.trashed_at && !dismissedTabs.has(String(n.id)))
                             : dbData.filter(n => !n.is_folder && !n.trashed_at && !dismissedTabs.has(String(n.id)) && (() => { const d = new Date(n.created_at || 0); return d >= dayStart && d < dayEnd; })())
                         ).sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")));
                         // Inject unsaved new-note draft as a synthetic tab so the user sees
@@ -6629,7 +6643,7 @@ const fireIntegrations = (trigger: string, note: any) => {
 
                     <div className={`editor-frame relative flex-1 flex flex-col overflow-hidden ${appTheme === "light" ? "bg-white" : "bg-black"}`} style={{ display: aiPromptOpen ? "none" : "flex", ["--frame-color" as any]: noteColor || "#888" }}>
                     {/* Mobile title — inside editor panel top row */}
-                    <input ref={titleInputMobileRef} defaultValue={title} key={`title-m-${editingNote?.id || "new"}`} onChange={(e) => { titleRaw.current = e.target.value; }} onBlur={(e) => setTitle(e.target.value)} onFocus={() => { closeEditorTools(); setShowNoteActions(false); }} autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false} className={`sm:hidden bg-transparent border-0 border-b border-white/[0.06] appearance-none shadow-none ring-0 outline-none focus:outline-none focus:ring-0 px-3 py-2 w-full min-w-0 placeholder:text-zinc-500 shrink-0 ${appTheme === "light" ? "text-black" : "text-white"}`} style={{ caretColor: appTheme === "light" ? "#000" : "#fff", border: "none", borderBottom: `1px solid ${noteColor || "#888"}33`, fontSize: "clamp(16px, 4vw, 20px)", fontWeight: 700 }} placeholder="Note Title" />
+                    <input ref={titleInputMobileRef} defaultValue={title} key={`title-m-${editingNote?.id || "new"}`} readOnly={!!editingNote?.locked} onChange={(e) => { titleRaw.current = e.target.value; }} onBlur={(e) => setTitle(e.target.value)} onFocus={() => { closeEditorTools(); setShowNoteActions(false); }} autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false} className={`sm:hidden bg-transparent border-0 border-b border-white/[0.06] appearance-none shadow-none ring-0 outline-none focus:outline-none focus:ring-0 px-3 py-2 w-full min-w-0 placeholder:text-zinc-500 shrink-0 ${appTheme === "light" ? "text-black" : "text-white"}`} style={{ caretColor: appTheme === "light" ? "#000" : "#fff", border: "none", borderBottom: `1px solid ${noteColor || "#888"}33`, fontSize: "clamp(16px, 4vw, 20px)", fontWeight: 700 }} placeholder="Note Title" />
                     <div className={`relative flex-1 flex overflow-hidden font-mono`}
                         onDragOver={(e) => { if (isRichMode) return; if (Array.from(e.dataTransfer.items).some(i => i.kind === "file")) e.preventDefault(); }}
                         onDrop={(e) => {
@@ -7062,6 +7076,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 <textarea
                                     ref={editorTextRef}
                                     value={content}
+                                    readOnly={!!editingNote?.locked}
                                     onChange={(e) => handleEditorChange(e.target.value)}
                                     onClick={() => closeEditorTools()}
                                     onFocus={() => closeEditorTools()}
@@ -7170,6 +7185,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 <textarea
                                     ref={editorTextRef}
                                     value={content}
+                                    readOnly={!!editingNote?.locked}
                                     onChange={(e) => handleEditorChange(e.target.value)}
                                     onClick={() => closeEditorTools()}
                                     onFocus={() => closeEditorTools()}
@@ -7334,12 +7350,21 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 </div>
                             )}
                             {editingNote?.id && (
-                                <button type="button"
-                                    onClick={() => { setShowNoteActions(false); closeEditorTools(); setConfirmDelete({ type: "note", noteId: String(editingNote.id), noteName: (title.trim() || editingNote.title || "Untitled").trim(), noteColor: noteColor || editingNote.folder_color || "#71717a" }); }}
-                                    className="absolute left-1/2 -translate-x-1/2 hidden sm:flex items-center gap-1 text-red-500/60 hover:text-red-400 transition z-[1]"
-                                    title="Delete note">
-                                    <TrashIcon className="w-3 h-3" />
-                                </button>
+                                editingNote.locked ? (
+                                    <button type="button"
+                                        onClick={() => { setSharePickerOpen(true); setShowNoteActions(false); closeEditorTools(); }}
+                                        className="absolute left-1/2 -translate-x-1/2 hidden sm:flex items-center gap-1 text-amber-400/80 hover:text-amber-300 transition z-[1]"
+                                        title="Locked — click to unlock">
+                                        <LockClosedIcon className="w-3 h-3" />
+                                    </button>
+                                ) : (
+                                    <button type="button"
+                                        onClick={() => { setShowNoteActions(false); closeEditorTools(); setConfirmDelete({ type: "note", noteId: String(editingNote.id), noteName: (title.trim() || editingNote.title || "Untitled").trim(), noteColor: noteColor || editingNote.folder_color || "#71717a" }); }}
+                                        className="absolute left-1/2 -translate-x-1/2 hidden sm:flex items-center gap-1 text-red-500/60 hover:text-red-400 transition z-[1]"
+                                        title="Delete note">
+                                        <TrashIcon className="w-3 h-3" />
+                                    </button>
+                                )
                             )}
                             {/* Photo upload button removed — drag-and-drop handles images. */}
                             <div className="flex items-center gap-2 z-[2] flex-shrink-0">
@@ -9866,6 +9891,50 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                         height: 20,
                                         borderRadius: "50%",
                                         background: "#fff",
+                                        transition: "left 0.2s cubic-bezier(0.4,0,0.2,1)",
+                                        boxShadow: "0 1px 4px rgba(0,0,0,0.3)",
+                                    }} />
+                                </button>
+                            </div>
+                            );
+                        })()}
+
+                        {/* Lock toggle — write-protects the note (no edits, no delete) */}
+                        {(() => {
+                            const isLocked = !!(editingNote?.locked);
+                            return (
+                            <div className="flex items-center gap-3 px-5 py-4 border-b border-white/5">
+                                <div className="flex-1">
+                                    <p className="text-xs font-black text-white tracking-wide flex items-center gap-1.5">
+                                        {isLocked ? <LockClosedIcon className="w-3 h-3 text-amber-400" /> : <LockOpenIcon className="w-3 h-3" />}
+                                        Lock
+                                    </p>
+                                    <p className="text-[10px] text-zinc-500 mt-0.5">{isLocked ? "Edits and delete are blocked" : "Prevent edits and deletion"}</p>
+                                </div>
+                                <button
+                                    type="button"
+                                    role="switch"
+                                    aria-checked={isLocked}
+                                    onClick={() => {
+                                        const noteId = editingNote?.id ? String(editingNote.id) : "";
+                                        if (!noteId) return;
+                                        const newLocked = !isLocked;
+                                        void notesApi.update(noteId, { locked: newLocked });
+                                        setEditingNote((prev: any) => prev ? { ...prev, locked: newLocked } : prev);
+                                        setDbData((prev: any[]) => prev.map((r: any) => String(r.id) === noteId ? { ...r, locked: newLocked } : r));
+                                        showToast(newLocked ? "Locked" : "Unlocked", newLocked ? "#f59e0b" : "#22c55e");
+                                    }}
+                                    className="flex-shrink-0 relative transition-all duration-200"
+                                    style={{
+                                        width: 44, height: 26, borderRadius: 13,
+                                        background: isLocked ? "#f59e0b" : (appTheme === "light" ? "#d1d1d6" : "#48484a"),
+                                        border: appTheme === "light" && !isLocked ? "1px solid rgba(0,0,0,0.1)" : "none",
+                                        cursor: "pointer", padding: 0,
+                                    }}
+                                >
+                                    <span style={{
+                                        position: "absolute", top: 3, left: isLocked ? 21 : 3,
+                                        width: 20, height: 20, borderRadius: "50%", background: "#fff",
                                         transition: "left 0.2s cubic-bezier(0.4,0,0.2,1)",
                                         boxShadow: "0 1px 4px rgba(0,0,0,0.3)",
                                     }} />
