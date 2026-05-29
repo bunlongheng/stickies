@@ -9860,9 +9860,15 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                         const noteId = editingNote?.id ? String(editingNote.id) : "";
                                         if (!noteId) return;
                                         const newPublic = !isOn;
-                                        void notesApi.update(noteId, { is_public: newPublic });
-                                        setEditingNote((prev: any) => prev ? { ...prev, is_public: newPublic } : prev);
-                                        setDbData((prev: any[]) => prev.map((r: any) => String(r.id) === noteId ? { ...r, is_public: newPublic } : r));
+                                        // Turning Public off also releases the lock + clears the
+                                        // password - a locked-but-unshared note serves no purpose,
+                                        // matching the "lock = freeze for sharing" mental model.
+                                        // Server clears lock_password_hash whenever locked goes false.
+                                        const fields: Record<string, unknown> = { is_public: newPublic };
+                                        if (!newPublic) fields.locked = false;
+                                        void notesApi.update(noteId, fields);
+                                        setEditingNote((prev: any) => prev ? { ...prev, is_public: newPublic, ...(newPublic ? {} : { locked: false }) } : prev);
+                                        setDbData((prev: any[]) => prev.map((r: any) => String(r.id) === noteId ? { ...r, is_public: newPublic, ...(newPublic ? {} : { locked: false }) } : r));
                                         if (newPublic) {
                                             const prodBase = process.env.NEXT_PUBLIC_APP_BASE_URL || "https://stickies-bheng.vercel.app";
                                             const url = `${prodBase}/raw?noteId=${noteId}`;
