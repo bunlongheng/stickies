@@ -228,7 +228,7 @@ function wrapHtmlWithTheme(content: string, isDark: boolean): string {
         + `table{max-width:100%;table-layout:fixed;width:100%}`
         + `td,th{overflow-wrap:break-word;word-break:break-word}`;
     // Theme DEFAULTS — no !important, so any author rule/inline style overrides.
-    const themeCss = `html,body{background:${bg};color:${fg};margin:0;padding:1.25rem 1.5rem;font-family:-apple-system,BlinkMacSystemFont,system-ui,sans-serif;line-height:1.6;font-size:15px}`
+    const themeCss = `html,body{background:${bg};color:${fg};margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,system-ui,sans-serif;line-height:1.6;font-size:15px}`
         + `a{color:${link}}`
         + noSwingCss;
     // Defaults must lose to author styles, so inject them FIRST (before author CSS).
