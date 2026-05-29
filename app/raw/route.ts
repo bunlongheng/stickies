@@ -1,1 +1,1 @@
-export { GET } from "@/app/api/stickies/public/raw/route";
+export { GET, POST } from "@/app/api/stickies/public/raw/route";

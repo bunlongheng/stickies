@@ -253,7 +253,7 @@ const PATCH_ALLOWED_COLS = new Set([
     // Rich-text support: per-note editor mode + ProseMirror JSON doc
     "format", "doc",
     // Write-protect lock — only field allowed to change when row is locked
-    "locked",
+    "locked", "lock_password_hash",
 ]);
 
 // Lazy column add — keeps prod DB in sync without a separate migration step
@@ -262,6 +262,7 @@ async function ensureLockedColumn(): Promise<void> {
     if (_lockedColumnEnsured) return;
     _lockedColumnEnsured = true;
     try { await execute(`ALTER TABLE "stickies" ADD COLUMN IF NOT EXISTS locked boolean NOT NULL DEFAULT false`); } catch {}
+    try { await execute(`ALTER TABLE "stickies" ADD COLUMN IF NOT EXISTS lock_password_hash text`); } catch {}
 }
 
 // ── Color helpers ────────────────────────────────────────────────────────────
@@ -1183,15 +1184,30 @@ export async function PATCH(req: Request) {
     await ensureLockedColumn();
     const lockedSel = withUser(`SELECT locked FROM "${table}" WHERE id = $1`, [id], userId);
     const lockedRow = await queryOne<{ locked: boolean }>(lockedSel.sql, lockedSel.params);
-    // Locked rows: only sharing-flag changes (`is_public`) and the lock release
-    // itself (`locked:false`) are honored. Everything else (title/content/folder)
-    // is rejected so accidental autosaves can't bypass the write-protect.
+    // Locked rows: only sharing-flag changes (`is_public`), the lock release
+    // (`locked:false`), and password rotation (`lock_password`) are honored.
+    // Everything else (title/content/folder) is rejected so accidental autosaves
+    // can't bypass the write-protect.
     if (lockedRow?.locked) {
         const fieldKeys = Object.keys(fields);
-        const onlySharingOrUnlock = fieldKeys.every(k => k === "is_public" || k === "locked");
-        if (!onlySharingOrUnlock) {
+        const allowed = new Set(["is_public", "locked", "lock_password"]);
+        if (!fieldKeys.every(k => allowed.has(k))) {
             return NextResponse.json({ error: "Note is locked", locked: true }, { status: 423 });
         }
+    }
+
+    // Translate plaintext `lock_password` into a hash before persisting; the
+    // raw column `lock_password_hash` is server-managed and not client-writable.
+    // Unlocking (`locked:false`) clears the hash so a subsequent re-lock starts
+    // fresh — no stale password lingering after an unlock.
+    if (typeof fields.lock_password === "string") {
+        const { hashLockPassword } = await import("@/lib/lock-password");
+        const plain = (fields.lock_password as string).trim();
+        (fields as any).lock_password_hash = plain ? hashLockPassword(plain) : null;
+        delete (fields as any).lock_password;
+    }
+    if (fields.locked === false) {
+        (fields as any).lock_password_hash = null;
     }
 
     const filteredFields = Object.fromEntries(Object.entries(fields).filter(([k]) => PATCH_ALLOWED_COLS.has(k)));
