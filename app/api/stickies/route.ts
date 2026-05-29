@@ -1183,10 +1183,15 @@ export async function PATCH(req: Request) {
     await ensureLockedColumn();
     const lockedSel = withUser(`SELECT locked FROM "${table}" WHERE id = $1`, [id], userId);
     const lockedRow = await queryOne<{ locked: boolean }>(lockedSel.sql, lockedSel.params);
-    // Locked rows: only the lock-release patch ({locked:false}) is honored.
-    // Any other field is silently dropped so accidental autosaves can't bypass it.
-    if (lockedRow?.locked && fields.locked !== false) {
-        return NextResponse.json({ error: "Note is locked", locked: true }, { status: 423 });
+    // Locked rows: only sharing-flag changes (`is_public`) and the lock release
+    // itself (`locked:false`) are honored. Everything else (title/content/folder)
+    // is rejected so accidental autosaves can't bypass the write-protect.
+    if (lockedRow?.locked) {
+        const fieldKeys = Object.keys(fields);
+        const onlySharingOrUnlock = fieldKeys.every(k => k === "is_public" || k === "locked");
+        if (!onlySharingOrUnlock) {
+            return NextResponse.json({ error: "Note is locked", locked: true }, { status: 423 });
+        }
     }
 
     const filteredFields = Object.fromEntries(Object.entries(fields).filter(([k]) => PATCH_ALLOWED_COLS.has(k)));

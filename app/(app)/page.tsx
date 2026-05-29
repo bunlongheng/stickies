@@ -9919,10 +9919,25 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                         const noteId = editingNote?.id ? String(editingNote.id) : "";
                                         if (!noteId) return;
                                         const newLocked = !isLocked;
-                                        void notesApi.update(noteId, { locked: newLocked });
-                                        setEditingNote((prev: any) => prev ? { ...prev, locked: newLocked } : prev);
-                                        setDbData((prev: any[]) => prev.map((r: any) => String(r.id) === noteId ? { ...r, locked: newLocked } : r));
-                                        showToast(newLocked ? "Locked" : "Unlocked", newLocked ? "#f59e0b" : "#22c55e");
+                                        const wasPublic = !!(editingNote?.is_public);
+                                        // Locking a note implies "freeze it for sharing", so flip
+                                        // is_public on at the same time if it wasn't already and copy
+                                        // the share link. Unlocking leaves is_public alone — never
+                                        // surprise-unpublish a link the user may have already shared.
+                                        const fields: Record<string, unknown> = { locked: newLocked };
+                                        if (newLocked && !wasPublic) fields.is_public = true;
+                                        void notesApi.update(noteId, fields);
+                                        setEditingNote((prev: any) => prev ? { ...prev, locked: newLocked, ...(newLocked && !wasPublic ? { is_public: true } : {}) } : prev);
+                                        setDbData((prev: any[]) => prev.map((r: any) => String(r.id) === noteId ? { ...r, locked: newLocked, ...(newLocked && !wasPublic ? { is_public: true } : {}) } : r));
+                                        showToast(newLocked ? (wasPublic ? "Locked" : "Locked + Public") : "Unlocked", newLocked ? "#f59e0b" : "#22c55e");
+                                        if (newLocked && !wasPublic) {
+                                            const prodBase = process.env.NEXT_PUBLIC_APP_BASE_URL || "https://stickies-bheng.vercel.app";
+                                            const url = `${prodBase}/raw?noteId=${noteId}`;
+                                            secureCopy(url).then(() => {
+                                                setPublicLinkCopied(true);
+                                                setTimeout(() => setPublicLinkCopied(false), 3000);
+                                            });
+                                        }
                                     }}
                                     className="flex-shrink-0 relative transition-all duration-200"
                                     style={{
