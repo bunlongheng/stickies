@@ -201,7 +201,12 @@ async function authenticate(req: Request): Promise<AuthResult | null> {
     if (bearer && bearer !== apiKey) {
         try {
             const rows = await query<{ id: string }>(`SELECT id FROM api_keys WHERE key_hash = $1 AND revoked_at IS NULL`, [hashApiKey(bearer)]);
-            if (rows[0]) return { type: "external", userId: process.env.OWNER_USER_ID?.trim() ?? "" };
+            if (rows[0]) {
+                // Fire-and-forget last-used bump so per-app keys are tracked on every
+                // request (not just POSTs that hit identifyCaller). Never block on it.
+                execute(`UPDATE api_keys SET last_used_at = now() WHERE id = $1`, [rows[0].id]).catch(() => {});
+                return { type: "external", userId: process.env.OWNER_USER_ID?.trim() ?? "" };
+            }
         } catch {}
     }
 
