@@ -57,7 +57,13 @@ export async function POST(req: Request) {
     }
 
     const token = signUnlockCookie(noteId, row.lock_password_hash);
-    const res = NextResponse.redirect(new URL(`/raw?noteId=${noteId}`, req.url), 302);
+    const res = new NextResponse(unlockedSuccessPage(noteId), {
+        status: 200,
+        headers: {
+            "Content-Type": "text/html; charset=utf-8",
+            "Cache-Control": "no-store",
+        },
+    });
     res.cookies.set(unlockCookieName(noteId), token, {
         httpOnly: true, sameSite: "lax", secure: req.url.startsWith("https://"),
         path: "/", maxAge: 60 * 60 * 24 * 30, // 30 days
@@ -100,6 +106,90 @@ function contentResponse(row: { title: string; content: string; type: string | n
             "Cache-Control": "private, max-age=0, no-store",
         },
     });
+}
+
+function unlockedSuccessPage(noteId: string): string {
+    const target = `/raw?noteId=${encodeURIComponent(noteId)}`;
+    return `<!DOCTYPE html><html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Access granted</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:radial-gradient(circle at 50% 40%,#1a1a2e 0%,#050510 70%);color:#fff;font-family:-apple-system,BlinkMacSystemFont,system-ui,sans-serif;overflow:hidden}
+.scene{position:relative;height:100%;display:flex;align-items:center;justify-content:center}
+.vault{position:relative;width:280px;height:280px}
+.frame{position:absolute;inset:0;border-radius:50%;background:linear-gradient(145deg,#2a2a3e,#0a0a1a);box-shadow:inset 0 0 40px rgba(0,0,0,0.8),0 30px 80px -10px rgba(245,158,11,0.4)}
+.door{position:absolute;inset:14px;border-radius:50%;background:linear-gradient(145deg,#3a3a52,#1a1a2e);box-shadow:inset 0 4px 12px rgba(255,255,255,0.05),inset 0 -8px 16px rgba(0,0,0,0.5),0 8px 24px rgba(0,0,0,0.4);transform-origin:14px 50%;animation:open 1.6s cubic-bezier(0.5,0,0.2,1) 0.3s forwards}
+.door::before{content:"";position:absolute;inset:18px;border-radius:50%;border:2px dashed rgba(255,255,255,0.06)}
+.handle{position:absolute;top:50%;left:50%;width:80px;height:80px;margin:-40px 0 0 -40px;border-radius:50%;background:linear-gradient(145deg,#f59e0b,#92660b);box-shadow:0 4px 14px rgba(0,0,0,0.5),inset 0 2px 4px rgba(255,255,255,0.3);animation:spin 1.2s ease-in forwards}
+.handle::before,.handle::after{content:"";position:absolute;background:#1a1a2e;border-radius:3px}
+.handle::before{top:50%;left:6px;right:6px;height:6px;margin-top:-3px}
+.handle::after{left:50%;top:6px;bottom:6px;width:6px;margin-left:-3px}
+.glow{position:absolute;inset:-20px;border-radius:50%;background:radial-gradient(circle,#f59e0b66,transparent 70%);opacity:0;animation:glow 1.8s ease-out 0.2s forwards;pointer-events:none}
+.text{position:absolute;bottom:24%;left:50%;transform:translateX(-50%);text-align:center;opacity:0;animation:fadeUp 0.6s ease-out 1.4s forwards}
+.text .tag{display:inline-block;font-size:10px;letter-spacing:0.3em;text-transform:uppercase;color:#f59e0b;font-weight:700;padding:4px 12px;border:1px solid #f59e0b66;border-radius:99px;margin-bottom:10px}
+.text h1{font-size:22px;font-weight:800;letter-spacing:-0.02em}
+.text p{font-size:12px;color:#9ca3af;margin-top:4px}
+.confetti{position:absolute;width:8px;height:14px;top:50%;left:50%;opacity:0;border-radius:1px}
+@keyframes open{0%{transform:rotateY(0deg)}100%{transform:rotateY(-115deg)}}
+@keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(540deg)}}
+@keyframes glow{0%{opacity:0;transform:scale(0.7)}40%{opacity:1;transform:scale(1.05)}100%{opacity:0;transform:scale(1.3)}}
+@keyframes fadeUp{from{opacity:0;transform:translate(-50%,12px)}to{opacity:1;transform:translate(-50%,0)}}
+@keyframes burst{0%{opacity:1;transform:translate(0,0) rotate(0deg) scale(1)}100%{opacity:0;transform:translate(var(--x),var(--y)) rotate(var(--r)) scale(0.6)}}
+</style>
+</head><body>
+<div class="scene">
+  <div class="vault">
+    <div class="glow"></div>
+    <div class="frame"></div>
+    <div class="door"><div class="handle"></div></div>
+  </div>
+  <div class="text"><span class="tag">Access granted</span><h1>Welcome in.</h1><p>Loading note...</p></div>
+</div>
+<script>
+(function(){
+  // Robotic "access granted" beep — three rising square-wave tones.
+  try {
+    var AC = window.AudioContext || window.webkitAudioContext;
+    if (AC) {
+      var ctx = new AC();
+      var beep = function(freq, start, dur){
+        var o = ctx.createOscillator(), g = ctx.createGain();
+        o.type = "square"; o.frequency.value = freq;
+        g.gain.setValueAtTime(0, ctx.currentTime + start);
+        g.gain.linearRampToValueAtTime(0.08, ctx.currentTime + start + 0.01);
+        g.gain.linearRampToValueAtTime(0, ctx.currentTime + start + dur);
+        o.connect(g); g.connect(ctx.destination);
+        o.start(ctx.currentTime + start); o.stop(ctx.currentTime + start + dur + 0.02);
+      };
+      beep(523.25, 0.20, 0.10);  // C5
+      beep(659.25, 0.32, 0.10);  // E5
+      beep(987.77, 0.44, 0.22);  // B5 sustain
+    }
+  } catch(e){}
+
+  // Confetti burst from the vault center
+  var colors = ["#f59e0b","#22c55e","#3b82f6","#ec4899","#a855f7","#facc15","#ef4444","#06b6d4"];
+  var scene = document.querySelector(".scene");
+  for (var i = 0; i < 80; i++){
+    var c = document.createElement("div");
+    c.className = "confetti";
+    c.style.background = colors[i % colors.length];
+    var angle = Math.random() * Math.PI * 2;
+    var distance = 180 + Math.random() * 260;
+    c.style.setProperty("--x", Math.cos(angle) * distance + "px");
+    c.style.setProperty("--y", Math.sin(angle) * distance + Math.random() * 200 + "px");
+    c.style.setProperty("--r", (Math.random() * 720 - 360) + "deg");
+    c.style.animation = "burst " + (1 + Math.random() * 0.8) + "s cubic-bezier(0.2,0.7,0.4,1) " + (0.4 + Math.random() * 0.3) + "s forwards";
+    scene.appendChild(c);
+  }
+
+  // Redirect to the unlocked content after the show
+  setTimeout(function(){ window.location.replace(${JSON.stringify(target)}); }, 2400);
+})();
+</script>
+</body></html>`;
 }
 
 function gatePage(noteId: string, title: string, badPassword: boolean) {
