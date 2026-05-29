@@ -7350,21 +7350,12 @@ const fireIntegrations = (trigger: string, note: any) => {
                                 </div>
                             )}
                             {editingNote?.id && (
-                                editingNote.locked ? (
-                                    <button type="button"
-                                        onClick={() => { setSharePickerOpen(true); setShowNoteActions(false); closeEditorTools(); }}
-                                        className="absolute left-1/2 -translate-x-1/2 hidden sm:flex items-center gap-1 text-amber-400/80 hover:text-amber-300 transition z-[1]"
-                                        title="Locked — click to unlock">
-                                        <LockClosedIcon className="w-3 h-3" />
-                                    </button>
-                                ) : (
-                                    <button type="button"
-                                        onClick={() => { setShowNoteActions(false); closeEditorTools(); setConfirmDelete({ type: "note", noteId: String(editingNote.id), noteName: (title.trim() || editingNote.title || "Untitled").trim(), noteColor: noteColor || editingNote.folder_color || "#71717a" }); }}
-                                        className="absolute left-1/2 -translate-x-1/2 hidden sm:flex items-center gap-1 text-red-500/60 hover:text-red-400 transition z-[1]"
-                                        title="Delete note">
-                                        <TrashIcon className="w-3 h-3" />
-                                    </button>
-                                )
+                                <button type="button"
+                                    onClick={() => { setShowNoteActions(false); closeEditorTools(); setConfirmDelete({ type: "note", noteId: String(editingNote.id), noteName: (title.trim() || editingNote.title || "Untitled").trim(), noteColor: noteColor || editingNote.folder_color || "#71717a" }); }}
+                                    className="absolute left-1/2 -translate-x-1/2 hidden sm:flex items-center gap-1 text-red-500/60 hover:text-red-400 transition z-[1]"
+                                    title="Delete note">
+                                    <TrashIcon className="w-3 h-3" />
+                                </button>
                             )}
                             {/* Photo upload button removed — drag-and-drop handles images. */}
                             <div className="flex items-center gap-2 z-[2] flex-shrink-0">
@@ -7452,6 +7443,9 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                 </>)}
                                 {editingNote?.is_public && (
                                     <GlobeAltIcon className="w-3 h-3 text-emerald-400 flex-shrink-0" title="Public note" />
+                                )}
+                                {editingNote?.locked && (
+                                    <LockClosedIcon className="w-3 h-3 text-amber-400 flex-shrink-0" title="Locked — edits blocked, delete allowed" />
                                 )}
                                 {/* Tags — first */}
                                 {/* Folder pill with icon */}

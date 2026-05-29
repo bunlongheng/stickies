@@ -977,10 +977,8 @@ export async function DELETE(req: Request) {
     const folderName = url.searchParams.get("folder_name")?.trim();
 
     if (noteId) {
-        await ensureLockedColumn();
-        const sel = withUser(`SELECT locked FROM "${table}" WHERE id = $1`, [noteId], userId);
-        const lockedRow = await queryOne<{ locked: boolean }>(sel.sql, sel.params);
-        if (lockedRow?.locked) return NextResponse.json({ error: "Note is locked", locked: true }, { status: 423 });
+        // Lock blocks edits (PATCH 423), but deletion is always allowed from the
+        // owner's editor — the user can throw away their own snapshots.
         const { sql, params } = withUser(`DELETE FROM "${table}" WHERE id = $1`, [noteId], userId);
         await execute(sql, params);
         try { await getPusher().trigger("stickies", "note-deleted", { id: noteId }); } catch {}
