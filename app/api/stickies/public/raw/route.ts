@@ -113,30 +113,40 @@ function unlockedSuccessPage(noteId: string): string {
     return `<!DOCTYPE html><html lang="en"><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Access granted</title>
+<title>ACCESS GRANTED</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-html,body{height:100%;background:radial-gradient(circle at 50% 40%,#1a1a2e 0%,#050510 70%);color:#fff;font-family:-apple-system,BlinkMacSystemFont,system-ui,sans-serif;overflow:hidden}
+html,body{height:100%;background:radial-gradient(circle at 50% 40%,#181818 0%,#000 70%);color:#f4f4f4;font-family:'SF Pro Display',-apple-system,BlinkMacSystemFont,system-ui,sans-serif;overflow:hidden;-webkit-font-smoothing:antialiased}
 .scene{position:relative;height:100%;display:flex;align-items:center;justify-content:center}
 .vault{position:relative;width:280px;height:280px}
-.frame{position:absolute;inset:0;border-radius:50%;background:linear-gradient(145deg,#2a2a3e,#0a0a1a);box-shadow:inset 0 0 40px rgba(0,0,0,0.8),0 30px 80px -10px rgba(245,158,11,0.4)}
-.door{position:absolute;inset:14px;border-radius:50%;background:linear-gradient(145deg,#3a3a52,#1a1a2e);box-shadow:inset 0 4px 12px rgba(255,255,255,0.05),inset 0 -8px 16px rgba(0,0,0,0.5),0 8px 24px rgba(0,0,0,0.4);transform-origin:14px 50%;animation:open 1.6s cubic-bezier(0.5,0,0.2,1) 0.3s forwards}
-.door::before{content:"";position:absolute;inset:18px;border-radius:50%;border:2px dashed rgba(255,255,255,0.06)}
-.handle{position:absolute;top:50%;left:50%;width:80px;height:80px;margin:-40px 0 0 -40px;border-radius:50%;background:linear-gradient(145deg,#f59e0b,#92660b);box-shadow:0 4px 14px rgba(0,0,0,0.5),inset 0 2px 4px rgba(255,255,255,0.3);animation:spin 1.2s ease-in forwards}
-.handle::before,.handle::after{content:"";position:absolute;background:#1a1a2e;border-radius:3px}
+.frame{position:absolute;inset:0;border-radius:50%;
+  background:radial-gradient(circle at 35% 30%,#2a2a2a 0%,#0a0a0a 70%,#000 100%);
+  box-shadow:inset 0 0 40px rgba(0,0,0,0.9),inset 0 1px 0 rgba(255,255,255,0.06),0 30px 80px -10px rgba(255,255,255,0.08)}
+.frame::before{content:"";position:absolute;inset:0;border-radius:50%;pointer-events:none;
+  background:repeating-conic-gradient(from 0deg,rgba(255,255,255,0.025) 0deg,rgba(255,255,255,0.025) 1deg,transparent 1deg,transparent 6deg)}
+.door{position:absolute;inset:14px;border-radius:50%;
+  background:linear-gradient(145deg,#2a2a2a 0%,#0c0c0c 60%,#050505 100%);
+  box-shadow:inset 0 4px 12px rgba(255,255,255,0.06),inset 0 -8px 16px rgba(0,0,0,0.7),0 8px 24px rgba(0,0,0,0.6);
+  transform-origin:14px 50%;animation:open 1.6s cubic-bezier(0.5,0,0.2,1) 0.3s forwards}
+.door::before{content:"";position:absolute;inset:18px;border-radius:50%;border:1.5px dashed rgba(255,255,255,0.08)}
+.handle{position:absolute;top:50%;left:50%;width:80px;height:80px;margin:-40px 0 0 -40px;border-radius:50%;
+  background:linear-gradient(145deg,#e8e8e8 0%,#7a7a7a 50%,#3a3a3a 100%);
+  box-shadow:0 4px 14px rgba(0,0,0,0.7),inset 0 2px 4px rgba(255,255,255,0.45),inset 0 -2px 4px rgba(0,0,0,0.4);
+  animation:spin 1.2s ease-in forwards}
+.handle::before,.handle::after{content:"";position:absolute;background:#050505;border-radius:3px}
 .handle::before{top:50%;left:6px;right:6px;height:6px;margin-top:-3px}
 .handle::after{left:50%;top:6px;bottom:6px;width:6px;margin-left:-3px}
-.glow{position:absolute;inset:-20px;border-radius:50%;background:radial-gradient(circle,#f59e0b66,transparent 70%);opacity:0;animation:glow 1.8s ease-out 0.2s forwards;pointer-events:none}
-.text{position:absolute;bottom:24%;left:50%;transform:translateX(-50%);text-align:center;opacity:0;animation:fadeUp 0.6s ease-out 1.4s forwards}
-.text .tag{display:inline-block;font-size:10px;letter-spacing:0.3em;text-transform:uppercase;color:#f59e0b;font-weight:700;padding:4px 12px;border:1px solid #f59e0b66;border-radius:99px;margin-bottom:10px}
-.text h1{font-size:22px;font-weight:800;letter-spacing:-0.02em}
-.text p{font-size:12px;color:#9ca3af;margin-top:4px}
-.confetti{position:absolute;width:8px;height:14px;top:50%;left:50%;opacity:0;border-radius:1px}
+.glow{position:absolute;inset:-20px;border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,0.22),transparent 70%);opacity:0;animation:glow 1.8s ease-out 0.2s forwards;pointer-events:none}
+.text{position:absolute;bottom:22%;left:50%;transform:translateX(-50%);text-align:center;opacity:0;animation:fadeUp 0.6s ease-out 1.4s forwards}
+.text .tag{display:inline-block;font-size:10px;letter-spacing:0.32em;color:#f4f4f4;font-weight:800;font-family:ui-monospace,monospace;padding:5px 12px;border:1px solid rgba(255,255,255,0.35);border-radius:99px;margin-bottom:12px;text-shadow:0 0 8px rgba(255,255,255,0.4)}
+.text h1{font-size:22px;font-weight:800;letter-spacing:-0.02em;color:#fff}
+.text p{font-size:11px;color:#7a7a7a;margin-top:5px;letter-spacing:0.2em;text-transform:uppercase;font-family:ui-monospace,monospace}
+.spark{position:absolute;width:2px;height:10px;top:50%;left:50%;opacity:0;background:#fff;border-radius:1px;box-shadow:0 0 6px rgba(255,255,255,0.7)}
 @keyframes open{0%{transform:rotateY(0deg)}100%{transform:rotateY(-115deg)}}
 @keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(540deg)}}
 @keyframes glow{0%{opacity:0;transform:scale(0.7)}40%{opacity:1;transform:scale(1.05)}100%{opacity:0;transform:scale(1.3)}}
 @keyframes fadeUp{from{opacity:0;transform:translate(-50%,12px)}to{opacity:1;transform:translate(-50%,0)}}
-@keyframes burst{0%{opacity:1;transform:translate(0,0) rotate(0deg) scale(1)}100%{opacity:0;transform:translate(var(--x),var(--y)) rotate(var(--r)) scale(0.6)}}
+@keyframes burst{0%{opacity:1;transform:translate(0,0) rotate(0deg) scale(1)}100%{opacity:0;transform:translate(var(--x),var(--y)) rotate(var(--r)) scale(0.5)}}
 </style>
 </head><body>
 <div class="scene">
@@ -145,11 +155,11 @@ html,body{height:100%;background:radial-gradient(circle at 50% 40%,#1a1a2e 0%,#0
     <div class="frame"></div>
     <div class="door"><div class="handle"></div></div>
   </div>
-  <div class="text"><span class="tag">Access granted</span><h1>Welcome in.</h1><p>Loading note...</p></div>
+  <div class="text"><span class="tag">ACCESS GRANTED</span><h1>Welcome in.</h1><p>Loading payload</p></div>
 </div>
 <script>
 (function(){
-  // Robotic "access granted" beep — three rising square-wave tones.
+  // Robotic "access granted" — three rising square-wave tones.
   try {
     var AC = window.AudioContext || window.webkitAudioContext;
     if (AC) {
@@ -169,23 +179,22 @@ html,body{height:100%;background:radial-gradient(circle at 50% 40%,#1a1a2e 0%,#0
     }
   } catch(e){}
 
-  // Confetti burst from the vault center
-  var colors = ["#f59e0b","#22c55e","#3b82f6","#ec4899","#a855f7","#facc15","#ef4444","#06b6d4"];
+  // Monochrome spark burst from the vault center — no rainbow, just white pulses
   var scene = document.querySelector(".scene");
-  for (var i = 0; i < 80; i++){
+  for (var i = 0; i < 60; i++){
     var c = document.createElement("div");
-    c.className = "confetti";
-    c.style.background = colors[i % colors.length];
+    c.className = "spark";
+    var shade = 220 + Math.floor(Math.random() * 36); // 220 - 255, all white-ish
+    c.style.background = "rgb(" + shade + "," + shade + "," + shade + ")";
     var angle = Math.random() * Math.PI * 2;
-    var distance = 180 + Math.random() * 260;
+    var distance = 160 + Math.random() * 240;
     c.style.setProperty("--x", Math.cos(angle) * distance + "px");
-    c.style.setProperty("--y", Math.sin(angle) * distance + Math.random() * 200 + "px");
+    c.style.setProperty("--y", Math.sin(angle) * distance + Math.random() * 160 + "px");
     c.style.setProperty("--r", (Math.random() * 720 - 360) + "deg");
-    c.style.animation = "burst " + (1 + Math.random() * 0.8) + "s cubic-bezier(0.2,0.7,0.4,1) " + (0.4 + Math.random() * 0.3) + "s forwards";
+    c.style.animation = "burst " + (0.9 + Math.random() * 0.7) + "s cubic-bezier(0.2,0.7,0.4,1) " + (0.4 + Math.random() * 0.3) + "s forwards";
     scene.appendChild(c);
   }
 
-  // Redirect to the unlocked content after the show
   setTimeout(function(){ window.location.replace(${JSON.stringify(target)}); }, 2400);
 })();
 </script>
@@ -195,39 +204,120 @@ html,body{height:100%;background:radial-gradient(circle at 50% 40%,#1a1a2e 0%,#0
 function gatePage(noteId: string, title: string, badPassword: boolean) {
     const safeTitle = escapeHtml(title);
     const errorBlock = badPassword
-        ? `<p style="color:#f87171;font-size:13px;margin:0 0 12px 0">Wrong password. Try again.</p>`
-        : "";
+        ? `<div class="alert">ACCESS DENIED</div>`
+        : `<div class="alert hidden">&nbsp;</div>`;
+    const ledClass = badPassword ? "led led-fast" : "led led-slow";
     const html = `<!DOCTYPE html><html lang="en"><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Locked - ${safeTitle}</title>
+<title>SAFE // ${safeTitle}</title>
 <style>
-*{box-sizing:border-box}
-html,body{margin:0;padding:0;height:100%;background:#0a0a0a;color:#e8e8e8;font-family:-apple-system,BlinkMacSystemFont,system-ui,sans-serif}
-.wrap{min-height:100%;display:flex;align-items:center;justify-content:center;padding:24px}
-.card{width:100%;max-width:380px;background:#161616;border:1px solid #262626;border-radius:16px;padding:32px 28px;box-shadow:0 30px 60px -20px rgba(0,0,0,0.6)}
-.icon{width:48px;height:48px;border-radius:50%;background:#f59e0b1a;display:flex;align-items:center;justify-content:center;margin:0 auto 18px;color:#f59e0b}
-.icon svg{width:22px;height:22px}
-h1{font-size:18px;font-weight:700;margin:0 0 6px 0;text-align:center}
-.subtitle{font-size:13px;color:#9ca3af;text-align:center;margin:0 0 22px 0;word-break:break-word}
-label{font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#9ca3af;display:block;margin-bottom:6px}
-input[type=password]{width:100%;padding:12px 14px;font-size:15px;background:#0a0a0a;color:#fff;border:1px solid #2a2a2a;border-radius:10px;outline:none;font-family:inherit}
-input[type=password]:focus{border-color:#f59e0b;box-shadow:0 0 0 3px #f59e0b22}
-button{width:100%;margin-top:14px;padding:12px 16px;font-size:14px;font-weight:700;background:#f59e0b;color:#0a0a0a;border:0;border-radius:10px;cursor:pointer;font-family:inherit;letter-spacing:0.02em}
-button:hover{background:#fbbf24}
-.foot{margin-top:18px;font-size:11px;color:#525252;text-align:center}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:radial-gradient(ellipse at 50% 30%,#181818 0%,#000 80%);color:#bdbdbd;font-family:'SF Pro Display',-apple-system,BlinkMacSystemFont,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+.room{min-height:100%;display:flex;align-items:center;justify-content:center;padding:32px 20px;perspective:1400px}
+.safe{position:relative;width:100%;max-width:420px;padding:38px 30px 34px;border-radius:22px;
+  background:linear-gradient(145deg,#1c1c1c 0%,#0e0e0e 35%,#050505 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.07),
+    inset 0 -1px 0 rgba(0,0,0,0.7),
+    inset 0 0 0 1px rgba(255,255,255,0.025),
+    0 1px 0 rgba(255,255,255,0.04),
+    0 30px 60px -20px rgba(0,0,0,0.95),
+    0 80px 120px -40px rgba(0,0,0,0.8);
+  transform:rotateX(2deg);
+}
+/* brushed metal sheen */
+.safe::before{content:"";position:absolute;inset:0;border-radius:22px;pointer-events:none;
+  background:repeating-linear-gradient(90deg,rgba(255,255,255,0.014) 0,rgba(255,255,255,0.014) 1px,transparent 1px,transparent 3px);
+  mix-blend-mode:overlay;}
+.rivet{position:absolute;width:9px;height:9px;border-radius:50%;
+  background:radial-gradient(circle at 35% 30%,#3a3a3a 0%,#0c0c0c 70%,#000 100%);
+  box-shadow:inset 0 0.5px 1px rgba(255,255,255,0.18),0 1px 2px rgba(0,0,0,0.9);}
+.rivet.tl{top:12px;left:12px}.rivet.tr{top:12px;right:12px}
+.rivet.bl{bottom:12px;left:12px}.rivet.br{bottom:12px;right:12px}
+.bar{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px}
+.brand{font-size:9px;letter-spacing:0.32em;color:#555;font-weight:700;font-family:ui-monospace,SFMono-Regular,monospace}
+.brand b{color:#bdbdbd}
+.status{display:flex;align-items:center;gap:8px;font-size:9px;letter-spacing:0.2em;color:#6c6c6c;font-family:ui-monospace,monospace;font-weight:700}
+.led{width:9px;height:9px;border-radius:50%;display:inline-block;background:#fff;
+  box-shadow:0 0 6px #fff,0 0 14px rgba(255,255,255,0.5),inset 0 -1px 1px rgba(0,0,0,0.3)}
+.led-slow{animation:pulse 1.6s ease-in-out infinite}
+.led-fast{animation:pulse 0.45s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
+/* LCD display — black + white phosphor */
+.lcd{
+  background:linear-gradient(180deg,#0a0a0a 0%,#020202 100%);
+  border:1px solid #1a1a1a;
+  border-radius:8px;
+  padding:18px 18px 16px;
+  margin-bottom:22px;
+  box-shadow:inset 0 2px 8px rgba(0,0,0,0.9),inset 0 0 0 1px rgba(0,0,0,0.4),0 1px 0 rgba(255,255,255,0.04);
+  font-family:ui-monospace,'SF Mono',Menlo,monospace;
+  position:relative;
+}
+.lcd::after{content:"";position:absolute;inset:0;border-radius:8px;pointer-events:none;
+  background:repeating-linear-gradient(0deg,rgba(0,0,0,0.22) 0,rgba(0,0,0,0.22) 1px,transparent 1px,transparent 2px);}
+.lcd .label{font-size:9px;letter-spacing:0.32em;color:#5a5a5a;font-weight:700;margin-bottom:6px}
+.lcd .name{font-size:14px;color:#f4f4f4;text-shadow:0 0 8px rgba(255,255,255,0.18);font-weight:600;word-break:break-word;line-height:1.4}
+.alert{margin:-6px 0 16px;font-size:10px;letter-spacing:0.3em;color:#fff;font-weight:700;text-align:center;font-family:ui-monospace,monospace;text-shadow:0 0 10px rgba(255,255,255,0.7);animation:flash 0.5s ease-in-out 3}
+@keyframes flash{0%,100%{opacity:1}50%{opacity:0.25}}
+.alert.hidden{visibility:hidden;animation:none}
+.entry{
+  display:flex;align-items:center;gap:10px;
+  background:linear-gradient(180deg,#0a0a0a 0%,#020202 100%);
+  border:1px solid #1a1a1a;border-radius:10px;
+  padding:6px 6px 6px 14px;
+  box-shadow:inset 0 2px 6px rgba(0,0,0,0.9),0 1px 0 rgba(255,255,255,0.03);
+}
+.entry input{flex:1;background:transparent;border:0;outline:0;color:#fff;font-size:16px;font-family:ui-monospace,monospace;letter-spacing:0.25em;padding:10px 0;text-shadow:0 0 4px rgba(255,255,255,0.3)}
+.entry input::placeholder{color:#3a3a3a;letter-spacing:0.15em;font-size:12px}
+.unlock{
+  flex-shrink:0;height:40px;padding:0 18px;border:0;border-radius:8px;cursor:pointer;
+  font-family:ui-monospace,monospace;font-size:11px;font-weight:800;letter-spacing:0.25em;
+  color:#050505;
+  background:linear-gradient(180deg,#f4f4f4 0%,#9c9c9c 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.6),
+    inset 0 -1px 0 rgba(0,0,0,0.3),
+    0 2px 6px rgba(0,0,0,0.7),
+    0 0 12px rgba(255,255,255,0.1);
+  transition:transform 80ms ease,box-shadow 80ms ease;
+}
+.unlock:hover{box-shadow:inset 0 1px 0 rgba(255,255,255,0.6),inset 0 -1px 0 rgba(0,0,0,0.3),0 2px 8px rgba(0,0,0,0.8),0 0 22px rgba(255,255,255,0.25)}
+.unlock:active{transform:translateY(1px);box-shadow:inset 0 2px 4px rgba(0,0,0,0.5),0 1px 2px rgba(0,0,0,0.7)}
+.meta{margin-top:18px;display:flex;align-items:center;justify-content:space-between;font-size:9px;letter-spacing:0.25em;color:#3a3a3a;font-family:ui-monospace,monospace;font-weight:600}
+.meta .dot{width:4px;height:4px;border-radius:50%;background:#3a3a3a;display:inline-block;margin:0 8px;vertical-align:middle}
 </style>
 </head><body>
-<div class="wrap"><form class="card" method="POST" action="/raw?noteId=${encodeURIComponent(noteId)}">
-<div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
-<h1>Locked note</h1>
-<p class="subtitle">${safeTitle}</p>
-${errorBlock}
-<label for="pw">Password</label>
-<input id="pw" name="password" type="password" autofocus autocomplete="off" required>
-<button type="submit">Unlock</button>
-<p class="foot">Shared via Stickies</p>
-</form></div>
+<div class="room">
+<form class="safe" method="POST" action="/raw?noteId=${encodeURIComponent(noteId)}">
+  <span class="rivet tl"></span><span class="rivet tr"></span>
+  <span class="rivet bl"></span><span class="rivet br"></span>
+
+  <div class="bar">
+    <div class="brand"><b>STICKIES</b> &middot; SAFE&nbsp;01</div>
+    <div class="status"><span class="${ledClass}"></span>${badPassword ? "DENIED" : "LOCKED"}</div>
+  </div>
+
+  <div class="lcd">
+    <div class="label">CONTENTS</div>
+    <div class="name">${safeTitle}</div>
+  </div>
+
+  ${errorBlock}
+
+  <div class="entry">
+    <input name="password" type="password" autofocus autocomplete="off" required placeholder="enter passcode">
+    <button class="unlock" type="submit">UNLOCK</button>
+  </div>
+
+  <div class="meta">
+    <span>AES&middot;256</span>
+    <span><span class="dot"></span>SECURE&nbsp;CHANNEL<span class="dot"></span></span>
+    <span>STK&middot;v1</span>
+  </div>
+</form>
+</div>
 </body></html>`;
     return new NextResponse(html, {
         status: badPassword ? 401 : 200,
