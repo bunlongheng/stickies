@@ -1,8 +1,8 @@
 /**
- * /api/stickies/keys — owner-only API-key management (mint / list / revoke).
+ * /api/stickies/keys — owner-only API-key management (create / list / revoke).
  *
  * Management is OWNER-ONLY and must reject machine auth: a static or per-machine
- * API key can authenticate to post notes, but it must NOT be able to mint or
+ * API key can authenticate to post notes, but it must NOT be able to create or
  * revoke keys. Only `via: 'local'` (dev) or `via: 'jwt'` (browser owner) pass.
  *
  * Keys are stored as sha-256 hashes; the plaintext is returned ONCE on create.
