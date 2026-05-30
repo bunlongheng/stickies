@@ -4419,7 +4419,10 @@ const fireIntegrations = (trigger: string, note: any) => {
     }, [activeFolder, folders]);
 
     // ← / → arrows flip through open tabs (Gmail-style). Guarded so it never
-    // hijacks the arrows while you're typing in a note's title/body/editor.
+    // hijacks the arrows once the user has clicked into the editor (title input,
+    // body textarea, or rich contentEditable) — at that point arrows are caret
+    // movement. Tab switching is only active when nothing in the editor is
+    // focused, which is the default state right after opening a note.
     useEffect(() => {
         if (IS_PHONE) return;
         const handler = (e: KeyboardEvent) => {
