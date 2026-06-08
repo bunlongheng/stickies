@@ -16,7 +16,7 @@ export const NOTE_ICON_KEYWORDS: [string[], string][] = [
     [["network","dns","proxy","nginx","gateway","mcp","socket","websocket"], "GlobeAmericasIcon"],
     [["config","env","settings","setup","install","dotenv","yaml","toml","integrations","integration","plugin","extension"], "WrenchIcon"],
     [["git","github","branch","commit","merge","repo"], "FolderIcon"],
-    [["bug","fix","error","debug","issue","crash","exception"], "FireIcon"],
+    [["bug","fix","error","debug","issue","crash","exception"], "BugAntIcon"],
     [["design","ui","ux","figma","css","style","theme","color","layout"], "SwatchIcon"],
     [["meeting","standup","sync","agenda","minutes"], "ChatBubbleLeftRightIcon"],
     [["idea","brainstorm","plan","strategy","think","concept"], "LightBulbIcon"],

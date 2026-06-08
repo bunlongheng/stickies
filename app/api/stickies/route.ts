@@ -8,6 +8,7 @@ import { colorName, stripEmoji } from "@/lib/note-format";
 import { identifyCaller } from "@/app/api/stickies/_auth";
 import { hashApiKey } from "@/lib/api-keys";
 import { isReservedFolderName, remapReservedFolderPath } from "@/lib/reserved-folders";
+import { machineForIp } from "@/lib/machines";
 
 // Ensure the created_by_key attribution column exists. Runs once per process.
 let _createdByKeyEnsured = false;
@@ -15,6 +16,32 @@ async function ensureCreatedByKeyColumn() {
     if (_createdByKeyEnsured) return;
     try { await execute(`ALTER TABLE "stickies" ADD COLUMN IF NOT EXISTS created_by_key TEXT`); } catch {}
     _createdByKeyEnsured = true;
+}
+
+// Ensure the created_by_machine attribution column exists. Runs once per process.
+// Records which machine the API call came from (sent via X-Stickies-Machine header).
+let _createdByMachineEnsured = false;
+async function ensureCreatedByMachineColumn() {
+    if (_createdByMachineEnsured) return;
+    try { await execute(`ALTER TABLE "stickies" ADD COLUMN IF NOT EXISTS created_by_machine TEXT`); } catch {}
+    _createdByMachineEnsured = true;
+}
+
+// Read + sanitize the posting machine from the request header. Safe chars only,
+// capped at 64 — keeps a hostname like "M4" but rejects junk/oversized values.
+function machineFromRequest(req: Request): string | null {
+    // Explicit override wins, if a caller chooses to send it.
+    const raw = (req.headers.get("x-stickies-machine") ?? "").trim();
+    if (raw) {
+        const clean = raw.replace(/[^A-Za-z0-9._-]/g, "").slice(0, 64);
+        if (clean) return clean;
+    }
+    // Otherwise derive from the request IP (localhost = the M4 hub).
+    const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
+        ?? req.headers.get("x-real-ip")?.trim()
+        ?? req.headers.get("cf-connecting-ip")?.trim()
+        ?? "";
+    return machineForIp(ip);
 }
 
 /** Friendly rejection when an agent sends an icon we don't support. */
@@ -243,7 +270,7 @@ function withUser(sql: string, params: unknown[], userId?: string): { sql: strin
 const RAW_INSERT_ALLOWED_COLS = new Set([
     "title", "content", "folder_name", "folder_color", "is_folder", "type",
     "order", "created_at", "updated_at", "parent_folder_name", "folder_id", "list_mode",
-    "format", "doc", "created_by_key",
+    "format", "doc", "created_by_key", "created_by_machine",
 ]);
 
 // ── Allowed columns for PATCH updates ────────────────────────────────────────
@@ -402,14 +429,18 @@ export async function GET(req: Request) {
     }
 
     if (url.searchParams.get("recent") === "today") {
-        const RECENT_COLS = `id, title, folder_name, folder_color, folder_id, parent_folder_name, "order", updated_at, created_at, type, is_folder, is_public, trashed_at, icon, list_mode, locked`;
+        // "days" widens the Today window in 24h steps for the Load-more button
+        // (days=1 → last 24h, days=2 → last 48h, …). Clamped 1..30.
+        const days = Math.min(30, Math.max(1, parseInt(url.searchParams.get("days") ?? "1") || 1));
+        const hours = days * 24;
+        const RECENT_COLS = `id, title, folder_name, folder_color, folder_id, parent_folder_name, "order", updated_at, created_at, type, is_folder, is_public, trashed_at, icon, list_mode, locked, created_by_key, created_by_machine`;
         const { sql, params } = withUser(
-            `SELECT ${RECENT_COLS} FROM "${table}" WHERE is_folder = false AND trashed_at IS NULL AND created_at >= NOW() - INTERVAL '24 hours'`,
+            `SELECT ${RECENT_COLS} FROM "${table}" WHERE is_folder = false AND trashed_at IS NULL AND created_at >= NOW() - INTERVAL '${hours} hours'`,
             [],
             userId
         );
-        const rows = await query(`${sql} ORDER BY updated_at DESC LIMIT 100`, params);
-        return NextResponse.json({ notes: rows });
+        const rows = await query(`${sql} ORDER BY updated_at DESC LIMIT 500`, params);
+        return NextResponse.json({ notes: rows, days });
     }
 
     if (url.searchParams.get("counts") === "1") {
@@ -445,7 +476,7 @@ export async function GET(req: Request) {
     }
 
     if (folderFilter) {
-        const FOLDER_COLS = `id, title, folder_name, folder_color, folder_id, parent_folder_name, "order", updated_at, created_at, type, is_folder, is_public, trashed_at, icon, list_mode, locked, format, CASE WHEN (type = 'checklist' OR list_mode = true) AND content IS NOT NULL AND length(content) > 0 THEN (SELECT COUNT(*)::int FROM regexp_split_to_table(content, E'\\n') AS line WHERE TRIM(line) <> '' AND TRIM(line) !~ '^[-=*#~_.]{2,}$') ELSE 0 END AS task_count, CASE WHEN (type = 'checklist' OR list_mode = true) AND content IS NOT NULL AND length(content) > 0 THEN COALESCE((SELECT SUM(CASE WHEN TRIM(line) ~* '^\\[x\\]' THEN 1.0 WHEN TRIM(line) ~ '^\\[/\\]' THEN 0.5 ELSE 0 END)::float FROM regexp_split_to_table(content, E'\\n') AS line), 0) ELSE 0 END AS task_done_count, CASE WHEN (type = 'checklist' OR list_mode = true) AND content IS NOT NULL AND length(content) > 0 THEN (SELECT COUNT(*)::int FROM regexp_split_to_table(content, E'\\n') AS line WHERE TRIM(line) <> '' AND TRIM(line) !~ '^[-=*#~_.]{2,}$' AND TRIM(line) !~* '^\\[x\\]') ELSE 0 END AS task_remaining_count`;
+        const FOLDER_COLS = `id, title, folder_name, folder_color, folder_id, parent_folder_name, "order", updated_at, created_at, type, is_folder, is_public, trashed_at, icon, list_mode, locked, created_by_key, created_by_machine, format, CASE WHEN (type = 'checklist' OR list_mode = true) AND content IS NOT NULL AND length(content) > 0 THEN (SELECT COUNT(*)::int FROM regexp_split_to_table(content, E'\\n') AS line WHERE TRIM(line) <> '' AND TRIM(line) !~ '^[-=*#~_.]{2,}$') ELSE 0 END AS task_count, CASE WHEN (type = 'checklist' OR list_mode = true) AND content IS NOT NULL AND length(content) > 0 THEN COALESCE((SELECT SUM(CASE WHEN TRIM(line) ~* '^\\[x\\]' THEN 1.0 WHEN TRIM(line) ~ '^\\[/\\]' THEN 0.5 ELSE 0 END)::float FROM regexp_split_to_table(content, E'\\n') AS line), 0) ELSE 0 END AS task_done_count, CASE WHEN (type = 'checklist' OR list_mode = true) AND content IS NOT NULL AND length(content) > 0 THEN (SELECT COUNT(*)::int FROM regexp_split_to_table(content, E'\\n') AS line WHERE TRIM(line) <> '' AND TRIM(line) !~ '^[-=*#~_.]{2,}$' AND TRIM(line) !~* '^\\[x\\]') ELSE 0 END AS task_remaining_count`;
         const limitParam = parseInt(url.searchParams.get("limit") ?? "0");
         const offsetParam = parseInt(url.searchParams.get("offset") ?? "0");
         const sinceParam = url.searchParams.get("since"); // ISO timestamp — delta sync
@@ -528,7 +559,7 @@ export async function GET(req: Request) {
         return NextResponse.json({ notes: rows, total: rows.length });
     }
 
-    const LIST_COLS = `id, title, folder_name, folder_color, folder_id, parent_folder_name, "order", updated_at, created_at, type, is_folder, is_public, trashed_at, icon, list_mode, locked, format, CASE WHEN (type = 'checklist' OR list_mode = true) AND content IS NOT NULL AND length(content) > 0 THEN (SELECT COUNT(*)::int FROM regexp_split_to_table(content, E'\\n') AS line WHERE TRIM(line) <> '' AND TRIM(line) !~ '^[-=*#~_.]{2,}$') ELSE 0 END AS task_count, CASE WHEN (type = 'checklist' OR list_mode = true) AND content IS NOT NULL AND length(content) > 0 THEN COALESCE((SELECT SUM(CASE WHEN TRIM(line) ~* '^\\[x\\]' THEN 1.0 WHEN TRIM(line) ~ '^\\[/\\]' THEN 0.5 ELSE 0 END)::float FROM regexp_split_to_table(content, E'\\n') AS line), 0) ELSE 0 END AS task_done_count, CASE WHEN (type = 'checklist' OR list_mode = true) AND content IS NOT NULL AND length(content) > 0 THEN (SELECT COUNT(*)::int FROM regexp_split_to_table(content, E'\\n') AS line WHERE TRIM(line) <> '' AND TRIM(line) !~ '^[-=*#~_.]{2,}$' AND TRIM(line) !~* '^\\[x\\]') ELSE 0 END AS task_remaining_count`;
+    const LIST_COLS = `id, title, folder_name, folder_color, folder_id, parent_folder_name, "order", updated_at, created_at, type, is_folder, is_public, trashed_at, icon, list_mode, locked, created_by_key, created_by_machine, format, CASE WHEN (type = 'checklist' OR list_mode = true) AND content IS NOT NULL AND length(content) > 0 THEN (SELECT COUNT(*)::int FROM regexp_split_to_table(content, E'\\n') AS line WHERE TRIM(line) <> '' AND TRIM(line) !~ '^[-=*#~_.]{2,}$') ELSE 0 END AS task_count, CASE WHEN (type = 'checklist' OR list_mode = true) AND content IS NOT NULL AND length(content) > 0 THEN COALESCE((SELECT SUM(CASE WHEN TRIM(line) ~* '^\\[x\\]' THEN 1.0 WHEN TRIM(line) ~ '^\\[/\\]' THEN 0.5 ELSE 0 END)::float FROM regexp_split_to_table(content, E'\\n') AS line), 0) ELSE 0 END AS task_done_count, CASE WHEN (type = 'checklist' OR list_mode = true) AND content IS NOT NULL AND length(content) > 0 THEN (SELECT COUNT(*)::int FROM regexp_split_to_table(content, E'\\n') AS line WHERE TRIM(line) <> '' AND TRIM(line) !~ '^[-=*#~_.]{2,}$' AND TRIM(line) !~* '^\\[x\\]') ELSE 0 END AS task_remaining_count`;
     const { sql, params } = withUser(
         `SELECT ${LIST_COLS} FROM "${table}" WHERE is_folder = false`,
         [],
@@ -548,10 +579,19 @@ export async function POST(req: Request) {
     const table = "stickies";
     const userId = auth.userId;
 
-    // Attribution: which key created the note. NULL for owner/JWT/local creates.
+    // Attribution: which key created the note. External keys carry their label;
+    // owner browser/local creates (jwt/local) are stamped 'stickies' so notes made
+    // in the web app itself show the Stickies icon like any other app.
     const caller = await identifyCaller(req);
-    const createdByKey = (caller.via === "apikey" || caller.via === "static") ? caller.label ?? null : null;
+    const createdByKey =
+        (caller.via === "apikey" || caller.via === "static") ? caller.label ?? null
+        : (caller.via === "jwt" || caller.via === "local") ? "stickies"
+        : null;
     if (createdByKey) await ensureCreatedByKeyColumn();
+
+    // Which machine the API call came from (X-Stickies-Machine header, e.g. "M4").
+    const createdByMachine = machineFromRequest(req);
+    if (createdByMachine) await ensureCreatedByMachineColumn();
 
     const url = new URL(req.url);
     const isJsonBody = /application\/json/i.test(req.headers.get("content-type") ?? "");
@@ -624,7 +664,8 @@ export async function POST(req: Request) {
                     if (!name) { results.push({ type: "folder", data: null, error: "name required" }); continue; }
                     if (isReservedFolderName(name)) { results.push({ type: "folder", data: null, error: "reserved_name: \"Today\"/\"Yesterday\" are virtual views, not folders" }); continue; }
                     const folder_color = pickColor(item.color as string);
-                    const parent_folder_name = String(item.parent_folder ?? "").trim() || null;
+                    // External callers may not create root folders — nest under CLAUDE when no parent given.
+                    const parent_folder_name = String(item.parent_folder ?? "").trim() || (auth.type === "external" ? "CLAUDE" : null);
                     const folderIcon = String(item.icon ?? "").trim();
                     // Skip if folder already exists at this level
                     const dup = await queryOne(`SELECT id FROM "stickies" WHERE is_folder = true AND folder_name = $1 AND COALESCE(parent_folder_name, '') = $2 AND user_id = $3`, [name, parent_folder_name || "", userId]);
@@ -651,10 +692,17 @@ export async function POST(req: Request) {
                     }
                     if (batchType === "markdown" && !isQualityMarkdown(title, content)) batchType = "text";
                     const folder_color = pickColor(item.color as string);
+                    const bKeyClause = createdByKey ? `, created_by_key` : "";
+                    const bMachineClause = createdByMachine ? `, created_by_machine` : "";
+                    const bExtra = [
+                        ...(createdByKey ? [createdByKey] : []),
+                        ...(createdByMachine ? [createdByMachine] : []),
+                    ];
+                    const bExtraPlaceholders = bExtra.map((_, i) => `, $${10 + i}`).join("");
                     const row = await queryOne(
-                        `INSERT INTO "stickies" (is_folder, title, content, folder_name, type, folder_color, "order", created_at, updated_at, user_id)
-                         VALUES (false, $1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
-                        [title, content, folder_name, batchType, folder_color, nextOrder++, now, now, userId]
+                        `INSERT INTO "stickies" (is_folder, title, content, folder_name, type, folder_color, "order", created_at, updated_at, user_id${bKeyClause}${bMachineClause})
+                         VALUES (false, $1, $2, $3, $4, $5, $6, $7, $8, $9${bExtraPlaceholders}) RETURNING *`,
+                        [title, content, folder_name, batchType, folder_color, nextOrder++, now, now, userId, ...bExtra]
                     );
                     results.push({ type: "note", data: row as Record<string, unknown> });
                 }
@@ -682,7 +730,8 @@ export async function POST(req: Request) {
         if (isReservedFolderName(name)) return NextResponse.json({ error: "\"Today\"/\"Yesterday\" are virtual views, not folders" }, { status: 400 });
 
         const rawColor = String(url.searchParams.get("color") || (bodyForFolderCheck?.color as string) || "").trim();
-        const parentFolder = String(url.searchParams.get("parent") || (bodyForFolderCheck?.parent_folder as string) || "").trim() || null;
+        // External callers may not create root folders — nest under CLAUDE when no parent given.
+        const parentFolder = String(url.searchParams.get("parent") || (bodyForFolderCheck?.parent_folder as string) || "").trim() || (auth.type === "external" ? "CLAUDE" : null);
 
         // Prevent duplicate folder names at the same level
         const existing = await queryOne(`SELECT id FROM "stickies" WHERE is_folder = true AND folder_name = $1 AND COALESCE(parent_folder_name, '') = $2 AND user_id = $3`, [name, parentFolder || "", userId]);
@@ -715,12 +764,18 @@ export async function POST(req: Request) {
         const now = new Date().toISOString();
         const insertPayload: Record<string, unknown> = { ...payload, updated_at: now, created_at: payload.created_at ?? now, user_id: userId };
         if (createdByKey) insertPayload.created_by_key = createdByKey;
+        if (createdByMachine) insertPayload.created_by_machine = createdByMachine;
         // Fix #2: whitelist allowed columns — reject arbitrary user-supplied column names
         const filteredPayload = Object.fromEntries(
             Object.entries(insertPayload).filter(([k]) => RAW_INSERT_ALLOWED_COLS.has(k) || k === "user_id")
         );
         if (Object.keys(filteredPayload).length === 0) {
             return NextResponse.json({ error: "No valid columns provided" }, { status: 400 });
+        }
+        // External callers may not create root folders — nest under CLAUDE when no parent given.
+        const rawIsFolder = filteredPayload.is_folder === true || filteredPayload.is_folder === "true";
+        if (auth.type === "external" && rawIsFolder && !String(filteredPayload.parent_folder_name ?? "").trim()) {
+            filteredPayload.parent_folder_name = "CLAUDE";
         }
         const cols = Object.keys(filteredPayload).map((k) => `"${k}"`).join(", ");
         // Same JSONB stringify treatment as PATCH — see PATCH_ALLOWED_COLS notes above.
@@ -935,9 +990,12 @@ export async function POST(req: Request) {
         const keyClause = createdByKey ? `, created_by_key` : "";
         const keyVal = createdByKey ? `, $${baseParams.length + 1}` : "";
         if (createdByKey) baseParams.push(createdByKey);
+        const machineClause = createdByMachine ? `, created_by_machine` : "";
+        const machineVal = createdByMachine ? `, $${baseParams.length + 1}` : "";
+        if (createdByMachine) baseParams.push(createdByMachine);
         data = await queryOne(
-            `INSERT INTO "stickies" (title, content, folder_name, folder_color, is_folder, type, icon, "order", created_at, updated_at, user_id${folderIdClause}${keyClause})
-             VALUES ($1, $2, $3, $4, false, $5, $6, $7, $8, $9, $10${folderIdVal}${keyVal}) RETURNING *`,
+            `INSERT INTO "stickies" (title, content, folder_name, folder_color, is_folder, type, icon, "order", created_at, updated_at, user_id${folderIdClause}${keyClause}${machineClause})
+             VALUES ($1, $2, $3, $4, false, $5, $6, $7, $8, $9, $10${folderIdVal}${keyVal}${machineVal}) RETURNING *`,
             baseParams
         );
     }

@@ -5,6 +5,8 @@ import { createPortal } from "react-dom";
 // Supabase removed — auth now via NextAuth (see auth.ts at project root).
 import { usePageMeta } from "@/lib/usePageMeta";
 import { extractSmartTags, mergeSmartTags, DRAFT_BACKUP_KEY, serializeDraft, parseDraftBackup, backupHasWork, folderTileForeground, noteTileForeground, mergeRecentNotes, cmdkMatchTier, CMDK_NO_MATCH } from "@/lib/editor-ui";
+import { appIconForKey } from "@/lib/app-icons";
+import { machineIcon } from "@/lib/machines";
 import { matchNoteIcon, pickNoteIcon } from "@/lib/note-icons";
 import { isReservedFolderName } from "@/lib/reserved-folders";
 import dynamic from "next/dynamic";
@@ -237,6 +239,7 @@ function wrapHtmlWithTheme(content: string, isDark: boolean): string {
     // Theme DEFAULTS — no !important, so any author rule/inline style overrides.
     const themeCss = `html,body{background:${bg};color:${fg};margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,system-ui,sans-serif;line-height:1.6;font-size:15px}`
         + `a{color:${link}}`
+        + `body{zoom:0.67}`   // render HTML notes at 67% so wide dashboards fit without manual browser zoom
         + noSwingCss;
     // Defaults must lose to author styles, so inject them FIRST (before author CSS).
     const themeStyle = `<style>${scrollbarCss}${themeCss}</style>`;
@@ -1004,6 +1007,9 @@ export default function NotesMaster() {
     const [folderCountsById, setFolderCountsById] = useState<Record<string, number>>({});
     const [todayCount, setTodayCount] = useState(0); // server-authoritative count of notes created < 24h (Today virtual view)
     const [todayNotes, setTodayNotes] = useState<any[]>([]); // notes for the Today view, from recent=today — decoupled from the 500-capped dbData
+    const [todayDays, setTodayDays] = useState(1); // Today window in 24h steps; "Load more" widens it (1=24h, 2=48h, …)
+    const [todayLoadingMore, setTodayLoadingMore] = useState(false);
+    const [createdByFilter, setCreatedByFilter] = useState<string | null>(null); // filter list to one posting app (created_by_key)
     const [folderLatestById, setFolderLatestById] = useState<Record<string, string>>({});
     const [folderNotesLoading, setFolderNotesLoading] = useState(false);
     const folderNotesLoadingRef = useRef(false);
@@ -1278,6 +1284,8 @@ export default function NotesMaster() {
     const [userEmail, setUserEmail] = useState<string | null>(null);
     const isAdmin = userEmail === "bheng.code@gmail.com";
     const [mainListMode, setMainListMode] = useState<"thumb" | "list" | "tabs" | "graph">("thumb");
+    const mainListModeRef = useRef(mainListMode);
+    mainListModeRef.current = mainListMode;
     const [defaultFolder, setDefaultFolder] = useState<string>("CLAUDE");
     const [showDefaultFolderPicker, setShowDefaultFolderPicker] = useState(false);
     const [showNotebookPicker, setShowNotebookPicker] = useState(false);
@@ -1327,6 +1335,9 @@ export default function NotesMaster() {
     const [cmdKCursor, setCmdKCursor] = useState(0);
     const [cmdKGlobal, setCmdKGlobal] = useState(false);
     const [cmdKInFile, setCmdKInFile] = useState(false);
+    // Server-side hits for the Cmd-K palette. The local index (cmdKIndex) only covers the
+    // ~500 notes loaded into dbData, so notes outside that window need a DB query to surface.
+    const [cmdKServerResults, setCmdKServerResults] = useState<any[]>([]);
     const cmdKInputRef = useRef<HTMLInputElement | null>(null);
     const [showFindBar, setShowFindBar] = useState(false);
     const [findQuery, setFindQuery] = useState("");
@@ -1502,10 +1513,10 @@ export default function NotesMaster() {
 
     // Load the Today virtual view: notes created < 24h, straight from the server, merged
     // in non-destructively. Independent of the 500-row full-list cap so it never under-fills.
-    const loadTodayNotes = async () => {
+    const loadTodayNotes = async (days = 1) => {
         try {
             const token = await getAuthToken();
-            const res = await fetch(`/api/stickies?recent=today`, { headers: { Authorization: `Bearer ${token}` } });
+            const res = await fetch(`/api/stickies?recent=today&days=${days}`, { headers: { Authorization: `Bearer ${token}` } });
             if (!res.ok) return;
             const { notes = [] } = await res.json();
             // Dedicated state is the view's source of truth, so a later loadAllNotes (which
@@ -1916,6 +1927,8 @@ export default function NotesMaster() {
             else if (viewParam === "tabs") { setMainListMode("tabs"); setKanbanMode(false); }
             else if (viewParam === "graph") { setMainListMode("graph"); setKanbanMode(false); }
             else if (viewParam === "kanban") { setMainListMode("thumb"); setKanbanMode(true); }
+            const keyParam = urlParams.get("key");
+            if (keyParam) setCreatedByFilter(keyParam);
             const navParam = urlParams.get("nav");
             const gdriveParam = urlParams.get("gdrive");
             if (gdriveParam === "connected") {
@@ -2060,6 +2073,20 @@ export default function NotesMaster() {
             window.history.replaceState({}, "", url.toString());
         }
     }, [mainListMode, kanbanMode]);
+
+    // Sync the "Posted by" (created_by_key) filter to URL param `key` so refresh/share preserves it
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+        const url = new URL(window.location.href);
+        if (createdByFilter) {
+            url.searchParams.set("key", createdByFilter);
+        } else {
+            url.searchParams.delete("key");
+        }
+        if (url.toString() !== window.location.href) {
+            window.history.replaceState({}, "", url.toString());
+        }
+    }, [createdByFilter]);
 
     // Auto-load today's notes and open latest when entering tabs mode (desktop only)
     const tabsAutoOpenedRef = useRef(false);
@@ -2291,6 +2318,14 @@ const fireIntegrations = (trigger: string, note: any) => {
             showToast(`+ ${note.title || "New note"}`, color);
             flashQueueRef.current.push({ note, color });
             processFlashQueue();
+
+            // In tabs mode, focus the tab on the note that just came in — unless the
+            // owner is actively typing, in which case don't yank their caret away.
+            if (!note.is_folder && mainListModeRef.current === "tabs") {
+                const el = document.activeElement as HTMLElement | null;
+                const typing = !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable);
+                if (!typing) void openNoteRef.current?.(note);
+            }
 
             // 🔌 Integration engine — fire matching triggers
             fireIntegrations("note_created", note);
@@ -2830,16 +2865,16 @@ const fireIntegrations = (trigger: string, note: any) => {
         if (activeFolder) {
             // Today folder: virtual — show all notes updated in last 24h OR with folder_name "Today"
             if (activeFolder === "Today") {
-                const last24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+                const windowStart = new Date(Date.now() - todayDays * 24 * 60 * 60 * 1000);
                 // Source of truth: the uncapped recent=today fetch (todayNotes). Union with any
-                // <24h notes already in dbData (e.g. just-created optimistic ones) so new posts
-                // appear instantly. Dedup by id, drop anything that aged past 24h, sort.
+                // in-window notes already in dbData (e.g. just-created optimistic ones) so new posts
+                // appear instantly. Dedup by id, drop anything older than the window, sort.
                 const seen = new Set<string>();
                 const notes = [
                     ...todayNotes,
-                    ...dbData.filter((n) => !n.is_folder && !n.trashed_at && new Date(n.created_at || 0) >= last24h),
+                    ...dbData.filter((n) => !n.is_folder && !n.trashed_at && new Date(n.created_at || 0) >= windowStart),
                 ]
-                    .filter((n) => !n.is_folder && !n.trashed_at && new Date(n.created_at || 0) >= last24h)
+                    .filter((n) => !n.is_folder && !n.trashed_at && new Date(n.created_at || 0) >= windowStart)
                     .filter((n) => { const id = String(n.id); if (seen.has(id)) return false; seen.add(id); return true; })
                     .sort(byUpdated);
                 return showFileIcons ? [...currentLevelFolders, ...notes] : [...notes, ...currentLevelFolders];
@@ -2847,16 +2882,21 @@ const fireIntegrations = (trigger: string, note: any) => {
             // Inside a folder: icons on = subfolders first; icons off = notes first, folders at bottom
             const activeFolderId = folderStack.at(-1)?.id ?? null;
             const useUuid = activeFolderId && !activeFolderId.startsWith("virtual-");
-            const notes = dbData.filter((n) => !n.is_folder && (
-                n.folder_id
+            const notes = dbData.filter((n) => {
+                if (n.is_folder) return false;
+                // TRASH holds soft-deleted notes that keep their original folder_id, so
+                // match by folder_name here, not the folder_id UUID.
+                if (activeFolder === "TRASH") return n.folder_name === "TRASH";
+                const inFolder = n.folder_id
                     ? (useUuid && String(n.folder_id) === activeFolderId)
-                    : n.folder_name === activeFolder
-            ) && (activeFolder === "TRASH" || (n.folder_name !== "TRASH" && !n.trashed_at))).sort(byUpdated);
+                    : n.folder_name === activeFolder;
+                return inFolder && n.folder_name !== "TRASH" && !n.trashed_at;
+            }).sort(byUpdated);
             return showFileIcons ? [...currentLevelFolders, ...notes] : [...notes, ...currentLevelFolders];
         }
         // Root: show folders
         return currentLevelFolders;
-    }, [dbData, activeFolder, folderStack, search, currentLevelFolders, pendingNoteOrder, pinnedIds, todayNotes]);
+    }, [dbData, activeFolder, folderStack, search, currentLevelFolders, pendingNoteOrder, pinnedIds, todayNotes, todayDays]);
 
     // Available type chips for the filter row (only types present in current view, notes only)
     // Debounced content — heavy computations (JSON parse, tree walk, line split) only run 400ms after typing stops
@@ -2877,9 +2917,11 @@ const fireIntegrations = (trigger: string, note: any) => {
 
     // Filtered display items (type filter applied)
     const filteredDisplayItems = useMemo(() => {
-        if (!typeFilter) return displayItems;
-        return displayItems.filter((item: any) => item.is_folder || item._header || item.type === typeFilter);
-    }, [displayItems, typeFilter]);
+        let items = displayItems;
+        if (createdByFilter) items = items.filter((item: any) => item.is_folder || item._header || item.created_by_key === createdByFilter);
+        if (typeFilter) items = items.filter((item: any) => item.is_folder || item._header || item.type === typeFilter);
+        return items;
+    }, [displayItems, typeFilter, createdByFilter]);
 
 
 
@@ -2905,6 +2947,24 @@ const fireIntegrations = (trigger: string, note: any) => {
         const t = setTimeout(() => setDeferredCmdKQuery(cmdKQuery), 120);
         return () => clearTimeout(t);
     }, [cmdKQuery]);
+
+    // Server-side search for the palette: the local index is capped at ~500 rows, so query
+    // the DB (title/content ILIKE, all rows) and merge the hits into cmdKResults below.
+    useEffect(() => {
+        const q = deferredCmdKQuery.trim();
+        if (cmdKInFile || !q) { setCmdKServerResults([]); return; }
+        let cancelled = false;
+        (async () => {
+            try {
+                const token = await getAuthToken();
+                const res = await fetch(`/api/stickies?q=${encodeURIComponent(q)}`, { headers: { Authorization: `Bearer ${token}` } });
+                if (!res.ok) return;
+                const { notes = [] } = await res.json();
+                if (!cancelled) setCmdKServerResults(notes);
+            } catch { /* offline / transient — local index still applies */ }
+        })();
+        return () => { cancelled = true; };
+    }, [deferredCmdKQuery, cmdKInFile]);
 
     // Pre-built folder name → db row map — avoids O(n×m) dbData.find() inside cmdKResults
     const folderLookup = useMemo(() => {
@@ -2948,12 +3008,24 @@ const fireIntegrations = (trigger: string, note: any) => {
         const scoreEntry = (e: typeof cmdKIndex[0]): number =>
             cmdkMatchTier(e.t, e.c, q, pinnedIds.has(String(e._orig.id)));
         const scored = cmdKIndex
-            .map(e => ({ e, s: scoreEntry(e) }))
-            .filter(x => x.s < CMDK_NO_MATCH)
-            .sort((a, b) => a.s !== b.s ? a.s - b.s : b.e.date.localeCompare(a.e.date))
+            .map(e => ({ row: e._orig, s: scoreEntry(e), date: e.date }))
+            .filter(x => x.s < CMDK_NO_MATCH);
+        // Merge server hits that aren't already in the local index. The search endpoint omits
+        // content, so a row whose title doesn't contain q must have matched on body → tier 4.
+        const localIds = new Set(scored.map(x => String(x.row.id)));
+        const serverScored = cmdKServerResults
+            .filter((n: any) => !n.is_folder && !n.trashed_at && !localIds.has(String(n.id)))
+            .map((n: any) => {
+                const s = (n.title || "").toLowerCase().includes(q)
+                    ? cmdkMatchTier(n.title || "", "", q, pinnedIds.has(String(n.id)))
+                    : CMDK_NO_MATCH - 1;
+                return { row: n, s, date: String(n.updated_at || "") };
+            });
+        const merged = [...scored, ...serverScored]
+            .sort((a, b) => a.s !== b.s ? a.s - b.s : b.date.localeCompare(a.date))
             .slice(0, 30);
-        return [...matchingFolders, ...scored.map(x => x.e._orig)];
-    }, [cmdKIndex, deferredCmdKQuery, pinnedIds, folders, cmdKInFile, deferredContent, folderLookup]);
+        return [...matchingFolders, ...merged.map(x => x.row)];
+    }, [cmdKIndex, deferredCmdKQuery, pinnedIds, folders, cmdKInFile, deferredContent, folderLookup, cmdKServerResults]);
 
     const [deferredFindQuery, setDeferredFindQuery] = useState(findQuery);
     useEffect(() => {
@@ -3024,7 +3096,7 @@ const fireIntegrations = (trigger: string, note: any) => {
         return folderCounts[activeFolder] ?? dbData.filter((row) => !row.is_folder && String(row.folder_name || "") === activeFolder).length;
     }, [activeFolder, folders, dbData, folderCounts, folderCountsById]);
     const canDeleteActiveFolder = Boolean(activeFolder);
-    const isEmptyView = isDataLoaded && !editorOpen && !search.trim() && !folderNotesLoading && displayItems.length === 0 && dbData.some(r => r.is_folder);
+    const isEmptyView = isDataLoaded && !editorOpen && !search.trim() && !folderNotesLoading && displayItems.length === 0 && dbData.some(r => r.is_folder) && activeFolder !== "TRASH";
     const folderNames = useMemo(() => {
         const names = new Set<string>();
         // Only include folders that actually exist as is_folder rows — no ghost names
@@ -4417,19 +4489,21 @@ const fireIntegrations = (trigger: string, note: any) => {
             if (note.id && note.mindmap_mode) setMindmapModeNotes((p: Set<string>) => new Set([...p, String(note.id)]));
         }
     }, [activeFolder, folders]);
+    const openNoteRef = useRef(openNote);
+    openNoteRef.current = openNote;
 
-    // ← / → arrows flip through open tabs (Gmail-style). Guarded so it never
-    // hijacks the arrows once the user has clicked into the editor (title input,
-    // body textarea, or rich contentEditable) — at that point arrows are caret
-    // movement. Tab switching is only active when nothing in the editor is
-    // focused, which is the default state right after opening a note.
+    // ← / → arrows flip through open tabs (Gmail-style). The body textarea is
+    // intentionally NOT exempt: left/right always switch tabs even while the
+    // txt/markdown editor is focused (caret horizontal movement is sacrificed
+    // there by design — up/down still move the caret). Still guarded for the
+    // title input and rich contentEditable, where arrows must stay caret moves.
     useEffect(() => {
         if (IS_PHONE) return;
         const handler = (e: KeyboardEvent) => {
             if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
             if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
             const el = document.activeElement as HTMLElement | null;
-            if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable)) return;
+            if (el && (el.tagName === "INPUT" || el.isContentEditable)) return;
             if (!editorOpen) return;
             const { notes, activeId } = tabNavRef.current;
             if (!notes || notes.length < 2) return;
@@ -5259,9 +5333,24 @@ const fireIntegrations = (trigger: string, note: any) => {
     // "order" ASC LIMIT 500 drops the newest notes (exactly the Today ones) once the
     // library passes 500 notes. Graph mode still uses the full list.
     useEffect(() => {
-        if (activeFolder === "Today") { void loadTodayNotes(); return; }
+        setCreatedByFilter(null); // posting-app filter is per-view; clear on navigation
+        if (activeFolder === "Today") { setTodayDays(1); void loadTodayNotes(1); return; }
+        setTodayDays(1); // reset the Load-more window when leaving Today
         if (mainListMode === "graph") { folderNotesLoadingRef.current = false; void loadAllNotes(); }
     }, [mainListMode, activeFolder]);
+
+    // "Load more" on the Today view — widen the window by one more 24h step and refetch.
+    const loadMoreToday = async () => {
+        if (todayLoadingMore) return;
+        setTodayLoadingMore(true);
+        const next = todayDays + 1;
+        try {
+            await loadTodayNotes(next);
+            setTodayDays(next);
+        } finally {
+            setTodayLoadingMore(false);
+        }
+    };
 
     // Compute exact square cell size via ResizeObserver → set as CSS var on grid container
     useEffect(() => {
@@ -6532,10 +6621,13 @@ const fireIntegrations = (trigger: string, note: any) => {
                         const allNotes = (inFolder
                             ? dbData.filter(n => !n.is_folder && !n.trashed_at && !dismissedTabs.has(String(n.id)) && n.folder_name === activeFolder)
                             : tabDayOffset === 0
-                            ? dedupeById([...todayNotes, ...dbData.filter(n => new Date(n.created_at || 0) >= last24h)])
+                            // todayNotes may hold a wider Load-more window; re-clamp to 24h so
+                            // the tab bar's per-day navigation stays a true single-day view.
+                            ? dedupeById([...todayNotes, ...dbData].filter(n => new Date(n.created_at || 0) >= last24h))
                                 .filter(n => !n.is_folder && !n.trashed_at && !dismissedTabs.has(String(n.id)))
                             : dbData.filter(n => !n.is_folder && !n.trashed_at && !dismissedTabs.has(String(n.id)) && (() => { const d = new Date(n.created_at || 0); return d >= dayStart && d < dayEnd; })())
-                        ).sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")));
+                        ).filter(n => !createdByFilter || n.created_by_key === createdByFilter)
+                         .sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")));
                         // Inject unsaved new-note draft as a synthetic tab so the user sees
                         // their in-progress work immediately (autosave fires after a 2s
                         // debounce / on blur, which is too late for "where did my note go").
@@ -7560,7 +7652,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                                 className={`flex items-center gap-1.5 font-normal tracking-tight truncate sm:max-w-[150px] flex-shrink-0 px-0.5 sm:px-1 transition text-xs ${i === folderStack.length - 1 ? "text-white hover:text-zinc-300" : "text-white hover:text-zinc-300"}`}
                                                                 title={i === folderStack.length - 1 ? `${frame.name} settings` : frame.name}>
                                                                 <span className="flex-shrink-0 w-6 h-6 flex items-center justify-center text-sm font-black leading-none overflow-hidden" style={{ background: frame.name === "CLAUDE" ? "#fff" : (folderColors[frame.name] || frame.color || "#888"), color: folderTileForeground(appTheme, frame.name === "CLAUDE"), borderRadius: 4 } as React.CSSProperties}>
-                                                                    {frame.name === "CLAUDE" ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-0.5" /> : <FolderIconDisplay value={folderIcons[frame.name] || ""} folderName={frame.name} className="w-3.5 h-3.5" />}
+                                                                    {frame.name === "CLAUDE" ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-0.5" /> : <FolderIconDisplay value={frame.name === "Today" ? "__hero:CalendarDaysIcon" : (folderIcons[frame.name] || "")} folderName={frame.name} className="w-3.5 h-3.5" />}
                                                                 </span>
                                                                 <span className={`uppercase ${i === folderStack.length - 1 && folderStack.length <= 2 ? "inline" : "hidden sm:inline"}`}>{frame.name}</span>
                                                             </button>
@@ -7902,6 +7994,17 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                 })}
                             </div>
                         )}
+                        {createdByFilter && (
+                            <div style={!isListMode ? { gridColumn: "1 / -1" } : undefined} className="px-4 py-2">
+                                <button type="button" onClick={() => setCreatedByFilter(null)}
+                                    className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[12px] font-semibold transition-colors"
+                                    style={{ color: "rgb(var(--foreground-rgb))", background: "rgba(52,199,89,0.14)", border: "1px solid rgba(52,199,89,0.4)" }}>
+                                    {appIconForKey(createdByFilter) && <img src={appIconForKey(createdByFilter)!} alt={createdByFilter} className="w-4 h-4 rounded-sm object-contain" />}
+                                    Posted by {createdByFilter}
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                                </button>
+                            </div>
+                        )}
                         {!(kanbanMode && isFolderGridView) && filteredDisplayItems.map((item, idx) => {
                             // Section header sentinel
                             if (item._header) {
@@ -8116,8 +8219,34 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                     {(() => { const days = 7 - Math.floor((Date.now() - new Date((item as any).trashed_at).getTime()) / 86400000); return days > 0 ? `${days}d left` : "expiring"; })()}
                                                 </span>
                                             )}
+                                            {!item.is_folder && (item as any).created_by_key && (() => {
+                                                const key = (item as any).created_by_key as string;
+                                                const icon = appIconForKey(key);
+                                                const active = createdByFilter === key;
+                                                const toggle = (e: React.MouseEvent) => { e.stopPropagation(); setCreatedByFilter(active ? null : key); };
+                                                return icon ? (
+                                                    <button type="button" onClick={toggle} title={active ? `Filtering by ${key} — click to clear` : `Show only ${key}`}
+                                                        className="flex-shrink-0 rounded-sm transition-all hover:scale-110"
+                                                        style={active ? { outline: "2px solid #34c759", outlineOffset: 1 } : undefined}>
+                                                        <img src={icon} alt={key} className="w-4 h-4 rounded-sm object-contain" />
+                                                    </button>
+                                                ) : (
+                                                    <button type="button" onClick={toggle} title={active ? `Filtering by ${key} — click to clear` : `Show only ${key}`}
+                                                        className="text-[9px] font-mono font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded whitespace-nowrap flex-shrink-0 border transition-all hover:scale-105"
+                                                        style={{ borderColor: active ? "#34c759" : "var(--row-color, rgba(255,255,255,0.25))", color: active ? "#34c759" : "var(--row-color, rgba(255,255,255,0.6))", opacity: 0.85 }}>{key}</button>
+                                                );
+                                            })()}
+                                            {!item.is_folder && (item as any).created_by_machine && (() => {
+                                                const machine = (item as any).created_by_machine as string;
+                                                const mIcon = machineIcon(machine);
+                                                return mIcon ? (
+                                                    <img src={mIcon} alt={machine} title={`Posted from ${machine}`} className="w-4 h-4 object-contain flex-shrink-0 opacity-80" />
+                                                ) : (
+                                                    <span className="text-[9px] font-mono font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded whitespace-nowrap flex-shrink-0 border" style={{ borderColor: "var(--row-color, rgba(255,255,255,0.2))", color: "var(--row-color, rgba(255,255,255,0.5))", opacity: 0.8 }} title={`Posted from ${machine}`}>{machine}</span>
+                                                );
+                                            })()}
                                             {!item.is_folder && !(item as any).trashed_at && item.updated_at && (
-                                                <span className={`text-[10px] whitespace-nowrap flex-shrink-0 ${!showFileIcons ? "text-white/40" : "text-zinc-500"}`}>{timeAgo(item.updated_at)} · {new Date(item.updated_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
+                                                <span className={`text-[10px] whitespace-nowrap flex-shrink-0 inline-block text-right min-w-[96px] ${!showFileIcons ? "text-white/40" : "text-zinc-500"}`}>{timeAgo(item.updated_at)} · {new Date(item.updated_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
                                             )}
                                             {item.is_folder && (
                                                 <div className="flex items-center gap-1.5 flex-shrink-0">
@@ -8195,6 +8324,23 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                 </div>
                             );
                         })}
+                        {/* Today: Load-more widens the window by another 24h each click */}
+                        {activeFolder === "Today" && !kanbanMode && filteredDisplayItems.some((i: any) => !i._header && !i.is_folder) && (
+                            <div style={!isListMode ? { gridColumn: "1 / -1" } : undefined} className="flex flex-col items-center gap-1.5 py-5">
+                                <button
+                                    type="button"
+                                    onClick={loadMoreToday}
+                                    disabled={todayLoadingMore}
+                                    className="inline-flex items-center gap-2 rounded-full px-5 py-2 text-[12px] font-semibold transition-colors disabled:opacity-50"
+                                    style={{ color: "rgb(var(--foreground-rgb))", background: "rgba(127,127,127,0.12)", border: "1px solid rgba(127,127,127,0.28)" }}>
+                                    {todayLoadingMore
+                                        ? <span className="w-3.5 h-3.5 border-2 rounded-full animate-spin" style={{ borderColor: "rgba(127,127,127,0.4)", borderTopColor: "rgb(var(--foreground-rgb))" }} />
+                                        : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>}
+                                    Load next 24h
+                                </button>
+                                <span className="text-[10px] font-medium select-none" style={{ color: "rgb(var(--foreground-rgb))", opacity: 0.45 }}>Showing last {todayDays * 24}h</span>
+                            </div>
+                        )}
                         {/* Infinite scroll sentinel + loading indicator */}
                         {activeFolder && !kanbanMode && (
                             <div
@@ -9089,7 +9235,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                         className="w-8 h-8 flex-shrink-0 flex items-center justify-center text-sm font-black leading-none overflow-hidden rounded-lg cursor-pointer hover:brightness-110 transition"
                                         style={{ backgroundColor: activeFolder === "CLAUDE" ? "#fff" : (activeFolderColor || "#888"), color: activeFolder === "CLAUDE" ? "#000" : "#fff" }}
                                         title="Change color">
-                                        {activeFolder === "CLAUDE" ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-1" /> : <FolderIconDisplay value={folderIcons[activeFolder] || ""} folderName={activeFolder} className="w-4 h-4" />}
+                                        {activeFolder === "CLAUDE" ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-1" /> : <FolderIconDisplay value={activeFolder === "Today" ? "__hero:CalendarDaysIcon" : (folderIcons[activeFolder] || "")} folderName={activeFolder} className="w-4 h-4" />}
                                     </button>
                                     {isEditingFolderTitle ? (
                                         <input autoFocus
