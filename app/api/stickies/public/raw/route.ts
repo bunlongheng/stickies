@@ -308,8 +308,8 @@ html,body{height:100%;background:radial-gradient(ellipse at 50% 30%,#181818 0%,#
 .entry input{flex:1;background:transparent;border:0;outline:0;color:#fff;font-size:16px;font-family:ui-monospace,monospace;letter-spacing:0.25em;padding:10px 0;text-shadow:0 0 4px rgba(255,255,255,0.3);-webkit-text-security:disc;text-security:disc}
 .entry input::placeholder{color:#3a3a3a;letter-spacing:0.15em;font-size:12px}
 .unlock{
-  flex-shrink:0;height:40px;padding:0 18px;border:0;border-radius:8px;cursor:pointer;
-  font-family:ui-monospace,monospace;font-size:11px;font-weight:800;letter-spacing:0.25em;
+  flex-shrink:0;height:40px;width:52px;padding:0;border-radius:8px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
   color:#8a8a8a;
   border:1px solid #232323;
   background:linear-gradient(180deg,#1a1a1a 0%,#0a0a0a 100%);
@@ -321,6 +321,12 @@ html,body{height:100%;background:radial-gradient(ellipse at 50% 30%,#181818 0%,#
 }
 .unlock:hover{color:#f4f4f4;box-shadow:inset 0 1px 0 rgba(255,255,255,0.08),inset 0 -1px 0 rgba(0,0,0,0.6),0 2px 10px rgba(0,0,0,0.85),0 0 16px rgba(255,255,255,0.06)}
 .unlock:active{transform:translateY(1px);box-shadow:inset 0 2px 4px rgba(0,0,0,0.6),0 1px 2px rgba(0,0,0,0.8)}
+/* keyhole glyph (circle + tapered stem), turns like a key on submit */
+.keyhole{position:relative;width:16px;height:22px;transition:transform 0.55s cubic-bezier(0.5,0,0.2,1)}
+.keyhole::before{content:"";position:absolute;top:0;left:50%;margin-left:-7px;width:14px;height:14px;border-radius:50%;background:currentColor}
+.keyhole::after{content:"";position:absolute;bottom:1px;left:50%;margin-left:-5px;width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-bottom:13px solid currentColor}
+.unlock.turning{color:#f4f4f4}
+.unlock.turning .keyhole{transform:rotate(90deg)}
 .meta{margin-top:18px;display:flex;align-items:center;justify-content:space-between;font-size:9px;letter-spacing:0.25em;color:#3a3a3a;font-family:ui-monospace,monospace;font-weight:600}
 .meta .dot{width:4px;height:4px;border-radius:50%;background:#3a3a3a;display:inline-block;margin:0 8px;vertical-align:middle}
 </style>
@@ -339,10 +345,25 @@ html,body{height:100%;background:radial-gradient(ellipse at 50% 30%,#181818 0%,#
 
   <div class="entry">
     <input name="password" type="text" autofocus autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore data-bwignore data-form-type="other" required placeholder="enter passcode">
-    <button class="unlock" type="submit">UNLOCK</button>
+    <button class="unlock" type="submit" aria-label="Unlock"><span class="keyhole"></span></button>
   </div>
 </form>
 </div>
+<script>
+(function(){
+  var f=document.querySelector('form.safe');
+  if(!f) return;
+  var b=f.querySelector('.unlock');
+  f.addEventListener('submit', function(e){
+    if(f.dataset.go) return;            // second pass - let it through
+    if(!f.checkValidity()) return;      // empty field - native validation handles it
+    e.preventDefault();
+    if(b) b.classList.add('turning');   // turn the key (clockwise)
+    f.dataset.go='1';
+    setTimeout(function(){ f.submit(); }, 560);
+  });
+})();
+</script>
 </body></html>`;
     return new NextResponse(html, {
         status: badPassword ? 401 : 200,
