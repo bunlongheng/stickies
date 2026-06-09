@@ -27,7 +27,7 @@ export async function GET(req: Request) {
     if (row.locked && row.lock_password_hash) {
         const cookie = readCookie(req, unlockCookieName(noteId));
         if (!verifyUnlockCookie(noteId, row.lock_password_hash, cookie)) {
-            return gatePage(noteId, row.title || "Locked note", false);
+            return gatePage(req, noteId, row.title || "Locked note", false);
         }
     }
 
@@ -53,7 +53,7 @@ export async function POST(req: Request) {
     }
 
     if (!verifyLockPassword(password, row.lock_password_hash)) {
-        return gatePage(noteId, row.title || "Locked note", true);
+        return gatePage(req, noteId, row.title || "Locked note", true);
     }
 
     const token = signUnlockCookie(noteId, row.lock_password_hash);
@@ -235,16 +235,16 @@ html,body{height:100%;background:radial-gradient(circle at 50% 40%,#181818 0%,#0
 </body></html>`;
 }
 
-function gatePage(noteId: string, title: string, badPassword: boolean) {
+function gatePage(req: Request, noteId: string, title: string, badPassword: boolean) {
     const safeTitle = escapeHtml(title);
     const errorBlock = badPassword
         ? `<div class="alert">ACCESS DENIED</div>`
         : `<div class="alert hidden">&nbsp;</div>`;
-    const ledClass = badPassword ? "led led-fast" : "led led-slow";
     const html = `<!DOCTYPE html><html lang="en"><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>SAFE // ${safeTitle}</title>
+${ogMeta(req, noteId, title)}
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;background:radial-gradient(ellipse at 50% 30%,#181818 0%,#000 80%);color:#bdbdbd;font-family:'SF Pro Display',-apple-system,BlinkMacSystemFont,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
@@ -328,11 +328,6 @@ html,body{height:100%;background:radial-gradient(ellipse at 50% 30%,#181818 0%,#
   <span class="rivet tl"></span><span class="rivet tr"></span>
   <span class="rivet bl"></span><span class="rivet br"></span>
 
-  <div class="bar">
-    <div class="brand"><b>STICKIES</b> &middot; SAFE&nbsp;01</div>
-    <div class="status"><span class="${ledClass}"></span>${badPassword ? "DENIED" : "LOCKED"}</div>
-  </div>
-
   <div class="lcd">
     <div class="label">CONTENTS</div>
     <div class="name">${safeTitle}</div>
@@ -341,14 +336,8 @@ html,body{height:100%;background:radial-gradient(ellipse at 50% 30%,#181818 0%,#
   ${errorBlock}
 
   <div class="entry">
-    <input name="password" type="password" autofocus autocomplete="off" required placeholder="enter passcode">
+    <input name="password" type="password" autofocus autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore data-bwignore data-form-type="other" required placeholder="enter passcode">
     <button class="unlock" type="submit">UNLOCK</button>
-  </div>
-
-  <div class="meta">
-    <span>AES&middot;256</span>
-    <span><span class="dot"></span>SECURE&nbsp;CHANNEL<span class="dot"></span></span>
-    <span>STK&middot;v1</span>
   </div>
 </form>
 </div>
