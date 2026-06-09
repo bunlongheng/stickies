@@ -92,39 +92,23 @@ function escapeHtml(s: string): string {
 }
 
 // Build the Open Graph / Twitter meta block so shared /raw links render a rich
-// preview (note title + text snippet + generated card image) in iMessage, Slack, etc.
-function ogMeta(req: Request, noteId: string, title: string, content: string): string {
+// preview (note title + generated card image) in iMessage, Slack, etc. No
+// description - the note body dumps messy raw text, so title + card only.
+function ogMeta(req: Request, noteId: string, title: string): string {
     const origin = new URL(req.url).origin;
     const safeTitle = escapeHtml(title || "Stickies");
-    const desc = content
-        .replace(/<head[\s\S]*?<\/head>/gi, " ")
-        .replace(/<(script|style)[\s\S]*?<\/\1>/gi, " ")
-        .replace(/<[^>]+>/g, " ")
-        .replace(/&nbsp;/gi, " ")
-        .replace(/&middot;/gi, "·")
-        .replace(/&amp;/gi, "&")
-        .replace(/&lt;/gi, "<")
-        .replace(/&gt;/gi, ">")
-        .replace(/&quot;/gi, '"')
-        .replace(/&#39;/gi, "'")
-        .replace(/\s+/g, " ")
-        .trim()
-        .slice(0, 180);
-    const safeDesc = escapeHtml(desc || "Shared note");
     const img = `${origin}/api/stickies/public/og?noteId=${encodeURIComponent(noteId)}`;
     const pageUrl = `${origin}/raw?noteId=${encodeURIComponent(noteId)}`;
     return [
         `<meta property="og:type" content="article">`,
         `<meta property="og:site_name" content="Stickies">`,
         `<meta property="og:title" content="${safeTitle}">`,
-        `<meta property="og:description" content="${safeDesc}">`,
         `<meta property="og:url" content="${pageUrl}">`,
         `<meta property="og:image" content="${img}">`,
         `<meta property="og:image:width" content="1200">`,
         `<meta property="og:image:height" content="630">`,
         `<meta name="twitter:card" content="summary_large_image">`,
         `<meta name="twitter:title" content="${safeTitle}">`,
-        `<meta name="twitter:description" content="${safeDesc}">`,
         `<meta name="twitter:image" content="${img}">`,
     ].join("");
 }
@@ -136,7 +120,7 @@ function contentResponse(req: Request, noteId: string, row: { title: string; con
     if (!isHtml) {
         body = row.content;
     } else {
-        const meta = ogMeta(req, noteId, row.title, row.content);
+        const meta = ogMeta(req, noteId, row.title);
         const isFullDoc = /<html[\s>]/i.test(row.content) || /^\s*<!DOCTYPE/i.test(row.content);
         if (!isFullDoc) {
             body = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(row.title || "Stickies")}</title>${meta}</head><body>${row.content}</body></html>`;
