@@ -31,7 +31,7 @@ export async function GET(req: Request) {
         }
     }
 
-    return contentResponse(row, forceText);
+    return contentResponse(req, noteId, row, forceText);
 }
 
 export async function POST(req: Request) {
@@ -91,12 +91,62 @@ function escapeHtml(s: string): string {
     return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
-function contentResponse(row: { title: string; content: string; type: string | null }, forceText: boolean) {
+// Build the Open Graph / Twitter meta block so shared /raw links render a rich
+// preview (note title + text snippet + generated card image) in iMessage, Slack, etc.
+function ogMeta(req: Request, noteId: string, title: string, content: string): string {
+    const origin = new URL(req.url).origin;
+    const safeTitle = escapeHtml(title || "Stickies");
+    const desc = content
+        .replace(/<head[\s\S]*?<\/head>/gi, " ")
+        .replace(/<(script|style)[\s\S]*?<\/\1>/gi, " ")
+        .replace(/<[^>]+>/g, " ")
+        .replace(/&nbsp;/gi, " ")
+        .replace(/&middot;/gi, "·")
+        .replace(/&amp;/gi, "&")
+        .replace(/&lt;/gi, "<")
+        .replace(/&gt;/gi, ">")
+        .replace(/&quot;/gi, '"')
+        .replace(/&#39;/gi, "'")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 180);
+    const safeDesc = escapeHtml(desc || "Shared note");
+    const img = `${origin}/api/stickies/public/og?noteId=${encodeURIComponent(noteId)}`;
+    const pageUrl = `${origin}/raw?noteId=${encodeURIComponent(noteId)}`;
+    return [
+        `<meta property="og:type" content="article">`,
+        `<meta property="og:site_name" content="Stickies">`,
+        `<meta property="og:title" content="${safeTitle}">`,
+        `<meta property="og:description" content="${safeDesc}">`,
+        `<meta property="og:url" content="${pageUrl}">`,
+        `<meta property="og:image" content="${img}">`,
+        `<meta property="og:image:width" content="1200">`,
+        `<meta property="og:image:height" content="630">`,
+        `<meta name="twitter:card" content="summary_large_image">`,
+        `<meta name="twitter:title" content="${safeTitle}">`,
+        `<meta name="twitter:description" content="${safeDesc}">`,
+        `<meta name="twitter:image" content="${img}">`,
+    ].join("");
+}
+
+function contentResponse(req: Request, noteId: string, row: { title: string; content: string; type: string | null }, forceText: boolean) {
     const isHtml = !forceText && row.type === "html";
     const contentType = isHtml ? "text/html; charset=utf-8" : "text/plain; charset=utf-8";
-    const body = isHtml && !/<html[\s>]/i.test(row.content) && !/^\s*<!DOCTYPE/i.test(row.content)
-        ? `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(row.title || "Stickies")}</title></head><body>${row.content}</body></html>`
-        : row.content;
+    let body: string;
+    if (!isHtml) {
+        body = row.content;
+    } else {
+        const meta = ogMeta(req, noteId, row.title, row.content);
+        const isFullDoc = /<html[\s>]/i.test(row.content) || /^\s*<!DOCTYPE/i.test(row.content);
+        if (!isFullDoc) {
+            body = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(row.title || "Stickies")}</title>${meta}</head><body>${row.content}</body></html>`;
+        } else if (/<head[\s>]/i.test(row.content)) {
+            body = row.content.replace(/<head([^>]*)>/i, `<head$1>${meta}`);
+        } else {
+            // Full doc without a <head> - splice one in right after <html ...>
+            body = row.content.replace(/<html([^>]*)>/i, `<html$1><head>${meta}</head>`);
+        }
+    }
 
     return new NextResponse(body, {
         status: 200,
