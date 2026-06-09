@@ -303,22 +303,24 @@ html,body{height:100%;background:radial-gradient(ellipse at 50% 30%,#181818 0%,#
   padding:6px 6px 6px 14px;
   box-shadow:inset 0 2px 6px rgba(0,0,0,0.9),0 1px 0 rgba(255,255,255,0.03);
 }
-.entry input{flex:1;background:transparent;border:0;outline:0;color:#fff;font-size:16px;font-family:ui-monospace,monospace;letter-spacing:0.25em;padding:10px 0;text-shadow:0 0 4px rgba(255,255,255,0.3)}
+/* type=text + text-security masks input WITHOUT being a password field, so
+   LastPass/1Password never attach their autofill icon. */
+.entry input{flex:1;background:transparent;border:0;outline:0;color:#fff;font-size:16px;font-family:ui-monospace,monospace;letter-spacing:0.25em;padding:10px 0;text-shadow:0 0 4px rgba(255,255,255,0.3);-webkit-text-security:disc;text-security:disc}
 .entry input::placeholder{color:#3a3a3a;letter-spacing:0.15em;font-size:12px}
 .unlock{
   flex-shrink:0;height:40px;padding:0 18px;border:0;border-radius:8px;cursor:pointer;
   font-family:ui-monospace,monospace;font-size:11px;font-weight:800;letter-spacing:0.25em;
-  color:#050505;
-  background:linear-gradient(180deg,#f4f4f4 0%,#9c9c9c 100%);
+  color:#8a8a8a;
+  border:1px solid #232323;
+  background:linear-gradient(180deg,#1a1a1a 0%,#0a0a0a 100%);
   box-shadow:
-    inset 0 1px 0 rgba(255,255,255,0.6),
-    inset 0 -1px 0 rgba(0,0,0,0.3),
-    0 2px 6px rgba(0,0,0,0.7),
-    0 0 12px rgba(255,255,255,0.1);
-  transition:transform 80ms ease,box-shadow 80ms ease;
+    inset 0 1px 0 rgba(255,255,255,0.05),
+    inset 0 -1px 0 rgba(0,0,0,0.6),
+    0 2px 6px rgba(0,0,0,0.7);
+  transition:transform 80ms ease,box-shadow 80ms ease,color 120ms ease;
 }
-.unlock:hover{box-shadow:inset 0 1px 0 rgba(255,255,255,0.6),inset 0 -1px 0 rgba(0,0,0,0.3),0 2px 8px rgba(0,0,0,0.8),0 0 22px rgba(255,255,255,0.25)}
-.unlock:active{transform:translateY(1px);box-shadow:inset 0 2px 4px rgba(0,0,0,0.5),0 1px 2px rgba(0,0,0,0.7)}
+.unlock:hover{color:#f4f4f4;box-shadow:inset 0 1px 0 rgba(255,255,255,0.08),inset 0 -1px 0 rgba(0,0,0,0.6),0 2px 10px rgba(0,0,0,0.85),0 0 16px rgba(255,255,255,0.06)}
+.unlock:active{transform:translateY(1px);box-shadow:inset 0 2px 4px rgba(0,0,0,0.6),0 1px 2px rgba(0,0,0,0.8)}
 .meta{margin-top:18px;display:flex;align-items:center;justify-content:space-between;font-size:9px;letter-spacing:0.25em;color:#3a3a3a;font-family:ui-monospace,monospace;font-weight:600}
 .meta .dot{width:4px;height:4px;border-radius:50%;background:#3a3a3a;display:inline-block;margin:0 8px;vertical-align:middle}
 </style>
@@ -336,7 +338,7 @@ html,body{height:100%;background:radial-gradient(ellipse at 50% 30%,#181818 0%,#
   ${errorBlock}
 
   <div class="entry">
-    <input name="password" type="password" autofocus autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore data-bwignore data-form-type="other" required placeholder="enter passcode">
+    <input name="password" type="text" autofocus autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore data-bwignore data-form-type="other" required placeholder="enter passcode">
     <button class="unlock" type="submit">UNLOCK</button>
   </div>
 </form>
