@@ -184,6 +184,14 @@ function triggerHue(color: string) {
 // "user"     = browser JWT for other users → scoped by user_id in stickies table
 type AuthResult = { type: "external" | "owner" | "user"; userId: string };
 
+// On the production deployment the external /ext surface is locked to a single
+// API key (this label). The shared static key and every other per-app key are
+// rejected in prod; they all still work on local/LAN where VERCEL_ENV is unset.
+const PROD_KEY_LABEL = process.env.STICKIES_PROD_KEY_LABEL?.trim() || "claude-routine";
+function isProdLocked(): boolean {
+    return process.env.VERCEL_ENV === "production";
+}
+
 // Guards the main /api/stickies route against static API key access.
 // External callers (AI, scripts, automations) MUST use /api/stickies/ext instead.
 // Returns a friendly 403 response if the API key is being used on the wrong route.
@@ -218,6 +226,8 @@ async function authenticate(req: Request): Promise<AuthResult | null> {
         if (auth.length === expected.length) {
             try {
                 if (crypto.timingSafeEqual(Buffer.from(auth), Buffer.from(expected))) {
+                    // Prod is locked to the claude-routine key only — reject the shared static key there.
+                    if (isProdLocked()) return null;
                     return { type: "external", userId: process.env.OWNER_USER_ID?.trim() ?? "" };
                 }
             } catch {}
@@ -227,8 +237,10 @@ async function authenticate(req: Request): Promise<AuthResult | null> {
     // Per-machine API key (api_keys table) → external caller owned by the owner.
     if (bearer && bearer !== apiKey) {
         try {
-            const rows = await query<{ id: string }>(`SELECT id FROM api_keys WHERE key_hash = $1 AND revoked_at IS NULL`, [hashApiKey(bearer)]);
+            const rows = await query<{ id: string; label: string }>(`SELECT id, label FROM api_keys WHERE key_hash = $1 AND revoked_at IS NULL`, [hashApiKey(bearer)]);
             if (rows[0]) {
+                // On prod, only the allow-listed key (claude-routine) may call /ext at all.
+                if (isProdLocked() && rows[0].label !== PROD_KEY_LABEL) return null;
                 // Fire-and-forget last-used bump so per-app keys are tracked on every
                 // request (not just POSTs that hit identifyCaller). Never block on it.
                 execute(`UPDATE api_keys SET last_used_at = now() WHERE id = $1`, [rows[0].id]).catch(() => {});
@@ -583,15 +595,19 @@ export async function POST(req: Request) {
     // owner browser/local creates (jwt/local) are stamped 'stickies' so notes made
     // in the web app itself show the Stickies icon like any other app.
     const caller = await identifyCaller(req);
-    const createdByKey =
-        (caller.via === "apikey" || caller.via === "static") ? caller.label ?? null
-        : (caller.via === "jwt" || caller.via === "local") ? "stickies"
-        : null;
-    if (createdByKey) await ensureCreatedByKeyColumn();
 
     // Which machine the API call came from (X-Stickies-Machine header, e.g. "M4").
     const createdByMachine = machineFromRequest(req);
     if (createdByMachine) await ensureCreatedByMachineColumn();
+
+    const createdByKey =
+        caller.via === "apikey" ? caller.label ?? null
+        // Static bearer is hardcoded label 'legacy' in _auth; prefer the calling
+        // machine so notes attribute to their origin instead of a generic 'legacy'.
+        : caller.via === "static" ? (createdByMachine ?? caller.label ?? null)
+        : (caller.via === "jwt" || caller.via === "local") ? "stickies"
+        : null;
+    if (createdByKey) await ensureCreatedByKeyColumn();
 
     const url = new URL(req.url);
     const isJsonBody = /application\/json/i.test(req.headers.get("content-type") ?? "");
@@ -1025,6 +1041,15 @@ export async function DELETE(req: Request) {
     if (blocked) return blocked;
     const auth = await authenticate(req);
     if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    // No API key may delete. Deletion is owner-browser-only (JWT/local), so a
+    // leaked key cannot destroy notes — the strongest guard for prod data.
+    if (auth.type === "external") {
+        return NextResponse.json({
+            error: "Deletion is not permitted via API key.",
+            message: "Notes can only be deleted from the owner's browser session.",
+        }, { status: 403 });
+    }
 
     broadcastRequest(req, auth);
 
