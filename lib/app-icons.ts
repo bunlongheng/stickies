@@ -12,6 +12,7 @@ const APP_ICON_FILES: Record<string, string> = {
     "chrome": "chrome.svg",
     "cl-poster": "cl-poster.png",
     "claude": "claude.png",
+    "claude-routine": "claude-routine.png",
     "claude-live": "claude-live.svg",
     "claude-mascot": "claude-mascot.svg",
     "clip": "clip.png",

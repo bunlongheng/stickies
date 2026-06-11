@@ -76,7 +76,11 @@ const SUPPORTED_SET = new Set(SUPPORTED_NOTE_ICONS.map(n => n.toLowerCase()));
  */
 export function normalizeIcon(input: unknown): string | null {
     if (typeof input !== "string") return null;
-    const bare = input.trim().replace(/^__hero:/i, "");
+    const raw = input.trim();
+    // Brand icons: routine/agent posts can self-identify (Claude logo, GitHub mark).
+    if (/^(__claude|__img:claude|claude)$/i.test(raw)) return "__claude";
+    if (/^(__github|__img:github|github)$/i.test(raw)) return "__github";
+    const bare = raw.replace(/^__hero:/i, "");
     if (!bare) return null;
     const match = SUPPORTED_NOTE_ICONS.find(n => n.toLowerCase() === bare.toLowerCase());
     return match ? `__hero:${match}` : null;
