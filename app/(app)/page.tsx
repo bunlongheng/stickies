@@ -3134,11 +3134,14 @@ const fireIntegrations = (trigger: string, note: any) => {
             const prevTitle = editingNote.title || "Untitled";
             const prevContent = editingNote.content || "";
             const prevFolder = editingNote.folder_name || "General";
-            const prevColor = editingNote.folder_color || palette12[0];
+            // Mirror openNote's color fallback chain so merely opening a note whose
+            // row has no folder_color never reads as a change (which would latch
+            // noteEverDirtyRef and fire a false "updated" toast on close).
+            const prevColor = editingNote.folder_color || folders.find((f: any) => f.name === editingNote.folder_name)?.color || "#888";
             return nextTitle !== prevTitle || content !== prevContent || nextFolder !== prevFolder || nextColor !== prevColor;
         }
         return Boolean(title.trim() || content.trim() || nextFolder !== "General");
-    }, [editorOpen, title, content, targetFolder, activeFolder, noteColor, editingNote]);
+    }, [editorOpen, title, content, targetFolder, activeFolder, noteColor, editingNote, folders]);
 
     // Keep a ref so timers can check isDraftDirty without stale closures
     const isDraftDirtyRef = useRef(isDraftDirty);
@@ -7686,10 +7689,10 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                                 }}
                                                                 className={`flex items-center gap-1.5 font-normal tracking-tight truncate sm:max-w-[150px] flex-shrink-0 px-0.5 sm:px-1 transition text-xs ${i === folderStack.length - 1 ? "text-white hover:text-zinc-300" : "text-white hover:text-zinc-300"}`}
                                                                 title={i === folderStack.length - 1 ? `${frame.name} settings` : frame.name}>
-                                                                <span className="flex-shrink-0 w-6 h-6 flex items-center justify-center text-sm font-black leading-none overflow-hidden" style={{ background: frame.name === "CLAUDE" ? "#fff" : (folderColors[frame.name] || frame.color || "#888"), color: folderTileForeground(appTheme, frame.name === "CLAUDE"), borderRadius: 4 } as React.CSSProperties}>
+                                                                <span className="flex-shrink-0 w-6 h-6 flex items-center justify-center text-sm font-black leading-none overflow-hidden" style={{ background: frame.name === "CLAUDE" ? "#fff" : frame.name === "Today" ? palette12[0] : (folderColors[frame.name] || frame.color || "#888"), color: folderTileForeground(appTheme, frame.name === "CLAUDE"), borderRadius: 4 } as React.CSSProperties}>
                                                                     {frame.name === "CLAUDE" ? <img src="/claude-icon.png" alt="Claude" className="w-full h-full object-contain p-0.5" /> : <FolderIconDisplay value={frame.name === "Today" ? "__hero:CalendarDaysIcon" : (folderIcons[frame.name] || "")} folderName={frame.name} className="w-3.5 h-3.5" />}
                                                                 </span>
-                                                                <span className={`uppercase ${i === folderStack.length - 1 && folderStack.length <= 2 ? "inline" : "hidden sm:inline"}`} style={i === folderStack.length - 1 && frame.name !== "CLAUDE" ? { color: folderColors[frame.name] || frame.color || "#888" } : undefined}>{frame.name}</span>
+                                                                <span className={`uppercase ${i === folderStack.length - 1 && folderStack.length <= 2 ? "inline" : "hidden sm:inline"}`} style={i === folderStack.length - 1 && frame.name !== "CLAUDE" ? { color: frame.name === "Today" ? palette12[0] : (folderColors[frame.name] || frame.color || "#888") } : undefined}>{frame.name}</span>
                                                             </button>
                                                         </React.Fragment>
                                                     ))}
@@ -8281,7 +8284,7 @@ hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
                                                 );
                                             })()}
                                             {!item.is_folder && !(item as any).trashed_at && item.updated_at && (
-                                                <span className={`text-[10px] whitespace-nowrap flex-shrink-0 inline-block text-right min-w-[96px] ${!showFileIcons ? "text-white/40" : "text-zinc-500"}`}>{timeAgo(item.updated_at)} · {new Date(item.updated_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
+                                                <span className={`text-[10px] whitespace-nowrap flex-shrink-0 inline-block text-right min-w-[96px] ${!showFileIcons ? "text-white/40" : "text-zinc-500"}`}>{timeAgo(item.updated_at)}{activeFolder === "Today" ? "" : ` · ${new Date(item.updated_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`}</span>
                                             )}
                                             {item.is_folder && (
                                                 <div className="flex items-center gap-1.5 flex-shrink-0">
