@@ -1,0 +1,44 @@
+import { defineConfig } from "vitest/config";
+import path from "path";
+
+export default defineConfig({
+    test: {
+        globals: true,
+        environment: "node",
+        setupFiles: ["./tests/setup.ts"],
+        include: [
+            "lib/**/*.test.ts",
+            "tests/unit/**/*.test.ts",
+            "tests/integration/**/*.test.ts",
+            // Component tests (React Testing Library + jsdom). Each component test
+            // file opts into the jsdom environment with a `// @vitest-environment
+            // jsdom` docblock so the node-env API/lib tests are unaffected.
+            "tests/components/**/*.test.tsx",
+        ],
+        coverage: {
+            provider: "v8",
+            // json-summary is required by the CI PR-comment action
+            // (davelosert/vitest-coverage-report-action) - without it the step errors
+            // "no such file coverage-summary.json" and reds the whole run.
+            reporter: ["text", "json", "json-summary", "html"],
+            // Thresholds reflect the state on 2026-05-19 after the auth migration
+            // and the test push. They're floors — anyone dropping below this on a
+            // PR will see CI fail. Push them up; don't lower them.
+            thresholds: { lines: 83, functions: 73, branches: 67, statements: 79 },
+            include: ["lib/**/*.ts", "app/api/**/*.ts", "components/**/*.{ts,tsx}"],
+            exclude: [
+                "lib/db.ts",
+                "lib/db-driver.ts",
+                "lib/usePageMeta.ts",       // client-only React hook — not testable in node
+                "app/api/auth/**",           // NextAuth handlers — tested via e2e
+                "app/api/hue/**",            // hardware integration — tested manually
+                "app/api/stickies/ext/**",   // re-exports from main route — already covered
+                "app/api/stickies/integrations/diagrams/**",  // external data source
+                "app/api/stickies/integrations/mindmaps/**",  // external data source
+            ],
+        },
+    },
+    resolve: {
+        alias: { "@": path.resolve(__dirname, ".") },
+    },
+});

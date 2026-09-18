@@ -1,0 +1,543 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Keyboard-only focus ring: a visible default for every focusable element that
+   does not set its own (closes the WCAG 2.4.7 gap - no global focus indicator).
+   Pointer focus stays clean because this is :focus-visible, not :focus. */
+:focus-visible {
+  outline: 2px solid #FFCC00;
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+.ai-prompt-input::placeholder { color: rgba(0, 0, 0, 0.5) !important; }
+
+/* View mode flip transition - masks intermediate state flicker */
+@keyframes viewFlipIn {
+  0%   { transform: perspective(800px) rotateY(70deg); opacity: 0; }
+  40%  { opacity: 0; }
+  100% { transform: perspective(800px) rotateY(0deg); opacity: 1; }
+}
+.view-flip-in {
+  animation: viewFlipIn 0.25s ease-out forwards;
+}
+/* Default textarea wrapping */
+textarea { white-space: pre-wrap; word-break: normal; overflow-wrap: break-word; }
+
+
+/* iOS: prevent text-size-adjust from inflating ANY fonts */
+html { -webkit-text-size-adjust: none !important; text-size-adjust: none !important; }
+* { -webkit-text-size-adjust: none !important; text-size-adjust: none !important; }
+/* iOS textarea: small font, full width, no zoom */
+@media (max-width: 1024px) and (pointer: coarse) {
+  textarea.ios-editor-scroll {
+    font-size: 9px !important;
+    -webkit-text-size-adjust: none !important;
+    text-size-adjust: none !important;
+    white-space: pre-wrap !important;
+    word-break: normal !important;
+    overflow-wrap: break-word !important;
+  }
+  /* Prevent iOS zoom: 16px scaled to 9px visual */
+  textarea.ios-editor-scroll:focus {
+    font-size: 16px !important;
+    transform: scale(0.5625);
+    transform-origin: top left;
+    width: 177.8% !important;
+    height: 177.8% !important;
+    padding: 21px !important;
+  }
+}
+
+/* Square grid tiles — JS-measured height via CSS var (works on all browsers incl. iOS Safari) */
+.grid-square-tile {
+  height: var(--cell-size, 100px);
+  min-height: var(--cell-size, 100px);
+  overflow: hidden;
+  position: relative;
+}
+
+:root {
+  --foreground-rgb: 0, 0, 0;
+  --background-start-rgb: 255, 255, 255;
+  --background-end-rgb: 255, 255, 255;
+}
+
+/* Light mode: all icons, text, strokes, borders → black */
+[data-theme="light"] {
+  color: #1a1a1a;
+}
+[data-theme="light"] svg {
+  color: inherit;
+  stroke: currentColor;
+}
+[data-theme="light"] .text-white { color: #1a1a1a !important; }
+[data-theme="light"] .text-white\/30 { color: rgba(0,0,0,0.3) !important; }
+[data-theme="light"] .text-white\/35 { color: rgba(0,0,0,0.35) !important; }
+[data-theme="light"] .text-white\/40 { color: rgba(0,0,0,0.4) !important; }
+[data-theme="light"] .text-white\/50 { color: rgba(0,0,0,0.5) !important; }
+[data-theme="light"] .text-white\/60 { color: rgba(0,0,0,0.6) !important; }
+[data-theme="light"] .text-white\/70 { color: rgba(0,0,0,0.7) !important; }
+[data-theme="light"] .text-zinc-300 { color: #444 !important; }
+[data-theme="light"] .text-zinc-400 { color: #555 !important; }
+[data-theme="light"] .text-zinc-500 { color: #666 !important; }
+[data-theme="light"] .text-zinc-600 { color: #777 !important; }
+[data-theme="light"] .text-zinc-700 { color: #888 !important; }
+[data-theme="light"] .border-white\/5,
+[data-theme="light"] .border-white\/10,
+[data-theme="light"] .border-white\/\[0\.06\] { border-color: rgba(0,0,0,0.08) !important; }
+[data-theme="light"] .border-r-transparent { border-right-color: transparent !important; }
+[data-theme="light"] .hover\:bg-white\/5:hover { background: rgba(0,0,0,0.04) !important; }
+[data-theme="light"] .hover\:bg-white\/10:hover { background: rgba(0,0,0,0.06) !important; }
+[data-theme="light"] .active\:bg-white\/10:active { background: rgba(0,0,0,0.08) !important; }
+[data-theme="light"] .bg-white\/10 { background: rgba(0,0,0,0.06) !important; }
+[data-theme="light"] .bg-white\/15 { background: rgba(0,0,0,0.08) !important; }
+[data-theme="light"] .hover\:text-white:hover { color: #000 !important; }
+[data-theme="light"] .text-sky-400 { color: #38bdf8 !important; }
+[data-theme="light"] .text-emerald-400 { color: #34d399 !important; }
+[data-theme="light"] .text-red-400 { color: #f87171 !important; }
+[data-theme="light"] .text-red-500 { color: #ef4444 !important; }
+/* Light mode = DARK icon/initial stroke on every badge/tile (all view modes). */
+[data-theme="light"] .folder-icon-badge svg,
+[data-theme="light"] [data-icon-sq] svg { color: #1c1c1e !important; stroke: #1c1c1e !important; }
+[data-theme="light"] .folder-icon-badge,
+[data-theme="light"] [data-icon-sq] { color: #1c1c1e !important; }
+[data-theme="light"] [data-icon-sq]:hover { box-shadow: 0 0 0 2px #1a1a1a !important; }
+[data-theme="light"] .list-row-hover:hover { background: rgba(0,0,0,0.04) !important; }
+[data-theme="light"] .list-row-hover:active { background: rgba(0,0,0,0.08) !important; }
+/* CLAUDE icon PNG is transparent now — it renders like any other folder icon,
+   no white box. (White special-casing removed.) */
+
+/* Dark mode: ensure white text/icons/strokes everywhere */
+[data-theme="dark"] {
+  color: #fff;
+}
+[data-theme="dark"] svg { color: inherit; stroke: currentColor; }
+[data-theme="dark"] .folder-icon-badge svg,
+[data-theme="dark"] [data-icon-sq] svg { color: #fff !important; stroke: #fff !important; }
+[data-theme="dark"] .folder-icon-badge,
+[data-theme="dark"] [data-icon-sq] { color: #fff !important; }
+[data-theme="dark"] [data-icon-sq]:hover { box-shadow: 0 0 0 2px rgba(255,255,255,0.4) !important; }
+
+* {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html {
+  scroll-behavior: smooth;
+  text-rendering: optimizeSpeed;
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  background: rgb(var(--background-start-rgb));
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* iTerm2-style glowing block cursor for note textarea */
+.note-textarea {
+  caret-color: #ffffff !important;
+  caret-shape: block;
+}
+@supports not (caret-shape: block) {
+  .note-textarea {
+    caret-color: #ffffff !important;
+  }
+}
+.note-textarea:focus {
+  animation: caretGlow 1s ease-in-out infinite alternate;
+}
+@keyframes caretGlow {
+  from { filter: drop-shadow(0 0 2px rgba(255,255,255,0.6)); }
+  to   { filter: drop-shadow(0 0 6px rgba(255,255,255,1)); }
+}
+
+.safe-area {
+  padding-top: 0;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Landscape notch padding — avoid content behind side notch/home indicator */
+@media (orientation: landscape) {
+  .safe-shell {
+    padding-left: env(safe-area-inset-left, 0px) !important;
+    padding-right: env(safe-area-inset-right, 0px) !important;
+  }
+}
+
+
+/* Dark scrollbars globally */
+* { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.12) transparent; }
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 6px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.22); }
+
+
+/* ── Themes ─────────────────────────────────────────────── */
+
+/* light: explicit overrides — no filter hack */
+[data-theme="light"] {
+  color-scheme: light;
+}
+[data-theme="light"] body {
+  background: #f2f2f7 !important;
+  color: #1c1c1e !important;
+}
+
+/* Backgrounds */
+[data-theme="light"] .bg-black          { background: #f2f2f7 !important; }
+[data-theme="light"] .bg-zinc-950       { background: #f2f2f7 !important; }
+[data-theme="light"] .bg-zinc-900       { background: #e5e5ea !important; }
+[data-theme="light"] .bg-zinc-800       { background: #d1d1d6 !important; }
+[data-theme="light"] .bg-zinc-700       { background: #c7c7cc !important; }
+[data-theme="light"] .bg-black\/30      { background: rgba(0,0,0,0.06) !important; }
+[data-theme="light"] .bg-black\/50      { background: rgba(0,0,0,0.12) !important; }
+[data-theme="light"] .bg-black\/60      { background: rgba(0,0,0,0.18) !important; }
+[data-theme="light"] .bg-white\/\[0\.04\] { background: rgba(0,0,0,0.03) !important; }
+[data-theme="light"] .bg-white\/\[0\.06\] { background: rgba(0,0,0,0.04) !important; }
+[data-theme="light"] .bg-white\/5       { background: rgba(0,0,0,0.03) !important; }
+[data-theme="light"] .bg-white\/10      { background: rgba(0,0,0,0.06) !important; }
+[data-theme="light"] .bg-white\/20      { background: rgba(0,0,0,0.10) !important; }
+
+/* Text */
+[data-theme="light"] .text-white           { color: #1c1c1e !important; }
+[data-theme="light"] .text-white\/\[0\.04\]{ color: rgba(0,0,0,0.04) !important; }
+[data-theme="light"] .text-white\/30       { color: rgba(0,0,0,0.35) !important; }
+[data-theme="light"] .text-white\/35       { color: rgba(0,0,0,0.40) !important; }
+[data-theme="light"] .text-white\/50       { color: rgba(0,0,0,0.50) !important; }
+[data-theme="light"] .text-white\/60       { color: rgba(0,0,0,0.60) !important; }
+[data-theme="light"] .text-white\/70       { color: rgba(0,0,0,0.70) !important; }
+[data-theme="light"] .text-white\/85       { color: rgba(0,0,0,0.85) !important; }
+[data-theme="light"] .text-zinc-100     { color: #2c2c2e !important; }
+[data-theme="light"] .text-zinc-200     { color: #3a3a3c !important; }
+[data-theme="light"] .text-zinc-300     { color: #48484a !important; }
+[data-theme="light"] .text-zinc-400     { color: #636366 !important; }
+[data-theme="light"] .text-zinc-500     { color: #8e8e93 !important; }
+[data-theme="light"] .text-zinc-600     { color: #aeaeb2 !important; }
+
+/* Borders — stronger in light mode for visibility */
+[data-theme="light"] .border-white\/5  { border-color: rgba(0,0,0,0.08) !important; }
+[data-theme="light"] .border-white\/10 { border-color: rgba(0,0,0,0.12) !important; }
+[data-theme="light"] .border-white\/15 { border-color: rgba(0,0,0,0.15) !important; }
+[data-theme="light"] .border-white\/20 { border-color: rgba(0,0,0,0.18) !important; }
+[data-theme="light"] .border-white\/25 { border-color: rgba(0,0,0,0.20) !important; }
+[data-theme="light"] .border-b { border-bottom-color: rgba(0,0,0,0.10) !important; }
+[data-theme="light"] .border-t { border-top-color: rgba(0,0,0,0.10) !important; }
+[data-theme="light"] .divide-white\/10 > * + * { border-color: rgba(0,0,0,0.10) !important; }
+
+/* Hover states */
+[data-theme="light"] .hover\:bg-white\/5:hover  { background: rgba(0,0,0,0.04) !important; }
+[data-theme="light"] .hover\:bg-white\/10:hover { background: rgba(0,0,0,0.07) !important; }
+[data-theme="light"] .hover\:text-white:hover   { color: #000000 !important; }
+
+/* Active/selected states */
+[data-theme="light"] .active\:bg-white\/10:active { background: rgba(0,0,0,0.09) !important; }
+
+/* backdrop-blur passes through */
+[data-theme="light"] .backdrop-blur-sm { backdrop-filter: blur(8px); }
+
+/* Header / top nav */
+[data-theme="light"] header.ios-mobile-header { border-bottom: 1px solid rgba(0,0,0,0.12) !important; }
+[data-theme="light"] .safe-top-bar { background: #f2f2f7 !important; }
+
+/* Panels and modals */
+[data-theme="light"] .note-actions-panel { background: #ffffff !important; border-color: rgba(0,0,0,0.15) !important; box-shadow: 0 8px 30px rgba(0,0,0,0.12) !important; }
+[data-theme="light"] .bg-zinc-900 { background: #ffffff !important; }
+[data-theme="light"] .bg-zinc-800 { background: #f2f2f7 !important; }
+
+/* FAB */
+[data-theme="light"] .fab-alive { box-shadow: 0 2px 12px rgba(0,0,0,0.18) !important; }
+
+/* Status bar */
+[data-theme="light"] [style*="#1e1e1e"] { background: #f2f2f7 !important; }
+[data-theme="light"] [style*="#1a1a1a"] { background: #f2f2f7 !important; }
+
+/* Inline style overrides (hardcoded dark hex values in JSX) */
+[data-theme="light"] [style*="#0a0a0a"] { background: #e5e5ea !important; border-color: rgba(0,0,0,0.1) !important; }
+[data-theme="light"] [style*="#222222"] { background: #f2f2f7 !important; }
+[data-theme="light"] [style*="#2a2a2a"] { background: #f2f2f7 !important; }
+
+/* Cmd+K palette */
+[data-theme="light"] .bg-black\/60 { background: rgba(0,0,0,0.25) !important; }
+[data-theme="light"] .bg-black\/70 { background: rgba(0,0,0,0.30) !important; }
+
+/* Input fields */
+[data-theme="light"] input.bg-transparent { color: #1c1c1e !important; }
+[data-theme="light"] input.bg-transparent::placeholder { color: rgba(0,0,0,0.35) !important; }
+[data-theme="light"] .bg-black { background: #ffffff !important; }
+
+/* Icons — dark in light mode */
+[data-theme="light"] .text-zinc-400 { color: #48484a !important; }
+[data-theme="light"] .text-zinc-500 { color: #636366 !important; }
+[data-theme="light"] .text-zinc-600 { color: #8e8e93 !important; }
+[data-theme="light"] .text-zinc-700 { color: #aeaeb2 !important; }
+
+/* Title text */
+[data-theme="light"] .text-white { color: #1c1c1e !important; }
+[data-theme="light"] .font-bold.text-white { color: #000000 !important; }
+
+/* Editor header */
+[data-theme="light"] .hover\:bg-white\/10:hover { background: rgba(0,0,0,0.06) !important; }
+
+/* Main content area */
+[data-theme="light"] .bg-black { background: #ffffff !important; }
+[data-theme="light"] [style*="background: black"] { background: #ffffff !important; }
+
+/* Toast */
+[data-theme="light"] .text-white\/85 { color: rgba(0,0,0,0.85) !important; }
+[data-theme="light"] .text-white\/70 { color: rgba(0,0,0,0.70) !important; }
+[data-theme="light"] .text-white\/50 { color: rgba(0,0,0,0.50) !important; }
+[data-theme="light"] .text-white\/40 { color: rgba(0,0,0,0.40) !important; }
+/* Modal backdrops */
+[data-theme="light"] .bg-black\/60 { background: rgba(0,0,0,0.35) !important; }
+
+/* Scrollbar */
+[data-theme="light"] * { scrollbar-color: rgba(0,0,0,0.2) transparent; }
+[data-theme="light"] ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.2) !important; }
+[data-theme="light"] ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.35) !important; }
+
+
+/* Folder icon badge — solid folder color, icon color adapts for light bg */
+.folder-icon-badge {
+  background: var(--fc, #888);
+  color: var(--ic, #fff);
+  border-radius: 6px;
+  transition: background 0.15s, color 0.15s, opacity 0.15s;
+}
+.folder-icon-badge:hover {
+  opacity: 0.85;
+}
+/* Folder grid tile — own color bg by default */
+.folder-grid-tile {
+  background: var(--fc, #888);
+  transition: background 0.15s;
+}
+.folder-grid-tile:hover {
+  filter: brightness(1.12);
+}
+.folder-grid-tile .folder-icon-badge {
+  background: rgba(0,0,0,0.08);
+}
+/* CLAUDE is the one folder with a fixed white tile (brand "app icon" look),
+   both themes. The robot PNG is transparent, so it sits cleanly on the white. */
+.folder-grid-tile-claude,
+.folder-icon-badge-claude { background: #fff !important; border: 1px solid rgba(0,0,0,0.12) !important; }
+
+
+@keyframes confettiShoot {
+  0%   { transform: translate(0, 0) scale(0); opacity: 1; }
+  60%  { transform: translate(var(--cx), var(--cy)) scale(1); opacity: 1; }
+  100% { transform: translate(var(--cx), var(--cy)) scale(0); opacity: 0; }
+}
+@keyframes toastSpin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+@keyframes noteIncoming {
+  0%   { background-color: transparent; }
+  20%  { background-color: var(--row-color, rgba(52, 199, 89, 0.18)); opacity: 0.25; }
+  40%  { background-color: transparent; opacity: 1; }
+  65%  { background-color: var(--row-color, rgba(52, 199, 89, 0.12)); opacity: 0.18; }
+  100% { background-color: transparent; opacity: 1; }
+}
+.note-incoming {
+  animation: noteIncoming 1.2s ease forwards;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 0.6; transform: scale(1); }
+  50%       { opacity: 1;   transform: scale(1.08); }
+}
+@keyframes fabFanIn {
+  from { opacity: 0; transform: scale(0.3) translateY(20px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes iconShake {
+  0%, 100% { transform: rotate(0deg); }
+  25%      { transform: rotate(-8deg); }
+  75%      { transform: rotate(8deg); }
+}
+@keyframes iconSpin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+@keyframes iconWindSwirl {
+  0%   { transform: rotate(0deg) scale(1); opacity: 0.7; }
+  25%  { transform: rotate(90deg) scale(1.3); opacity: 0.4; }
+  50%  { transform: rotate(180deg) scale(1); opacity: 0.7; }
+  75%  { transform: rotate(270deg) scale(1.3); opacity: 0.3; }
+  100% { transform: rotate(360deg) scale(1); opacity: 0.7; }
+}
+@keyframes iconBlink3 {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  16%      { opacity: 0.2; transform: scale(0.8); }
+  33%      { opacity: 1; transform: scale(1.1); }
+  50%      { opacity: 0.2; transform: scale(0.8); }
+  66%      { opacity: 1; transform: scale(1.1); }
+  83%      { opacity: 0.2; transform: scale(0.8); }
+}
+
+@keyframes noteRemoving {
+  0%   { background-color: rgba(255,59,48,0); transform: translateX(0); opacity: 1; max-height: 64px; }
+  8%   { background-color: rgba(255,59,48,0.45); }
+  16%  { background-color: rgba(255,59,48,0); }
+  24%  { background-color: rgba(255,59,48,0.45); }
+  36%  { background-color: rgba(255,59,48,0); transform: translateX(0); opacity: 1; max-height: 64px; }
+  75%  { transform: translateX(-100%); opacity: 0; max-height: 64px; }
+  100% { transform: translateX(-100%); opacity: 0; max-height: 0; padding-top: 0; padding-bottom: 0; border: none; }
+}
+.note-removing {
+  /* Blink red twice (feedback the delete registered) then slide left + collapse. */
+  animation: noteRemoving 0.7s ease forwards;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* Folder search / move picker — arrow-key active highlight */
+.folder-search-item[data-fi-active="1"] {
+  border-color: rgba(255,255,255,0.45) !important;
+  background-color: rgba(255,255,255,0.10) !important;
+  color: #fff !important;
+}
+
+/* ── Rich (TipTap) editor surface ─────────────────────────────────────
+ * Always renders black on white, regardless of note color or app theme.
+ * The note color shows up via the surrounding frame border (set in page.tsx),
+ * not the content background — matches the Apple-Notes/iA-Writer pattern. */
+.rich-editor-root { background: #ffffff; color: #1a1a1a; }
+.rich-editor-prose {
+  /* The auto-fit effect in RichEditor.tsx sets --rich-prose-font so the widest
+     line ~fills the editor width, clamped to 9-15px: it grows to use available
+     space (no tiny text in white space) and only shrinks for very wide tables,
+     never below a readable floor. The 13px default covers the pre-JS flash. */
+  font-size: var(--rich-prose-font, 13px);
+  line-height: 1.55;
+  color: #1a1a1a;
+}
+.rich-editor-prose > * + * { margin-top: 0.45em; }
+.rich-editor-prose h1 { font-size: 20px; font-weight: 800; line-height: 1.25; margin-top: 1em;   color: #000; }
+.rich-editor-prose h2 { font-size: 16px; font-weight: 800; line-height: 1.3;  margin-top: 0.9em; color: #000; }
+.rich-editor-prose h3 { font-size: 13px; font-weight: 700; line-height: 1.35; margin-top: 0.8em; color: #000; }
+.rich-editor-prose p  { white-space: pre-wrap; }
+.rich-editor-prose strong { color: #000; }
+.rich-editor-prose em { font-style: italic; }
+.rich-editor-prose a  { color: #2563eb; text-decoration: underline; text-underline-offset: 2px; }
+.rich-editor-prose ul, .rich-editor-prose ol { padding-left: 1.6em; }
+.rich-editor-prose ul { list-style: disc; }
+.rich-editor-prose ol { list-style: decimal; }
+.rich-editor-prose li > p { margin: 0; }
+.rich-editor-prose blockquote {
+  border-left: 3px solid rgba(0,0,0,0.2);
+  padding: 0.15em 0.9em;
+  color: #52525b;
+  font-style: italic;
+}
+.rich-editor-prose code {
+  background: rgba(0,0,0,0.06);
+  padding: 0.1em 0.4em;
+  border-radius: 3px;
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9em;
+  color: #111;
+}
+.rich-editor-prose .rich-code-block {
+  background: rgba(0,0,0,0.05);
+  border: 1px solid rgba(0,0,0,0.1);
+  border-radius: 6px;
+  padding: 0.9em 1em;
+  overflow-x: auto;
+}
+.rich-editor-prose .rich-code-block code { background: none; padding: 0; font-size: 13px; color: #111; }
+.rich-editor-prose img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+  display: block;
+  margin: 0.3em 0;
+}
+.rich-editor-prose .rich-table {
+  border-collapse: collapse;
+  table-layout: fixed;
+  width: 100%;
+  margin: 0.6em 0;
+  overflow: hidden;
+}
+.rich-editor-prose .rich-table th,
+.rich-editor-prose .rich-table td {
+  border: 1px solid rgba(0,0,0,0.15);
+  padding: 6px 10px;
+  vertical-align: top;
+  min-width: 60px;
+  color: #1a1a1a;
+}
+.rich-editor-prose .rich-table th {
+  background: rgba(0,0,0,0.04);
+  font-weight: 700;
+  text-align: left;
+}
+.rich-editor-prose ul[data-type="taskList"] { list-style: none; padding-left: 0.2em; }
+.rich-editor-prose ul[data-type="taskList"] li { display: flex; align-items: flex-start; gap: 0.5em; }
+/* ── Resizable image NodeView ──────────────────────────────────────────────
+ * Wraps every image in a positioned div so we can attach a drag handle.
+ * Click selects (adds .is-selected), drag the corner handle resizes. */
+.rich-editor-prose .resizable-image-wrapper { line-height: 0; }
+.rich-editor-prose .resizable-image-wrapper img {
+  display: block;
+  border-radius: 4px;
+  cursor: default;
+}
+.rich-editor-prose .resizable-image-wrapper.is-selected img {
+  outline: 3px solid var(--rich-accent, #FFCC00);
+  outline-offset: 3px;
+}
+.rich-editor-prose .resizable-image-wrapper .resize-handle {
+  position: absolute;
+  right: -7px;
+  bottom: -7px;
+  width: 14px;
+  height: 14px;
+  background: var(--rich-accent, #FFCC00);
+  border: 2px solid #fff;
+  border-radius: 50%;
+  cursor: nwse-resize;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  z-index: 2;
+}
+
+/* Upload placeholder: NodeView marks images with data-placeholder="1" while
+ * the upload is in flight. Show a dashed-border spinner box. */
+.rich-editor-prose img[data-placeholder] {
+  min-width: 200px;
+  min-height: 140px;
+  width: 240px;
+  border: 2px dashed rgba(0,0,0,0.2);
+  border-radius: 6px;
+  background:
+    center / 28px no-repeat
+      url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 50 50'><circle cx='25' cy='25' r='20' fill='none' stroke='%23999' stroke-width='4' stroke-linecap='round' stroke-dasharray='80 50'><animateTransform attributeName='transform' type='rotate' from='0 25 25' to='360 25 25' dur='1s' repeatCount='indefinite'/></circle></svg>"),
+    repeating-linear-gradient(45deg, #f5f5f5, #f5f5f5 10px, #ececec 10px, #ececec 20px);
+}
+
+.rich-editor-prose p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: rgba(0,0,0,0.3);
+  float: left;
+  pointer-events: none;
+  height: 0;
+}
+
+/* Respect the OS "reduce motion" setting: collapse all animations/transitions.
+   The app is animation-heavy (confetti, 3D flips, pulses) - honor accessibility. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

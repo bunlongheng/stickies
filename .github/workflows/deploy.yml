@@ -1,0 +1,69 @@
+name: Deploy to Vercel
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  # Gate: a red typecheck, lint, or test run blocks the deploy entirely.
+  verify:
+    name: Typecheck, lint & tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Typecheck tests
+        run: npm run typecheck:tests
+      - name: Lint
+        run: npm run lint
+      - name: Tests
+        run: npx vitest run
+        env:
+          NODE_ENV: test
+
+  deploy:
+    name: Build & deploy (Vercel)
+    needs: verify
+    # Disabled by default: production deploys via Vercel's own git integration, and
+    # the Vercel CLI secrets (VERCEL_TOKEN / VERCEL_ORG_ID / VERCEL_PROJECT_ID) are not
+    # set - so this job only produced red-CI noise on every push. To deploy through
+    # Actions instead, set those three secrets, add a repo variable
+    # ENABLE_ACTIONS_DEPLOY=true, and disable Vercel's git auto-deploy.
+    if: ${{ vars.ENABLE_ACTIONS_DEPLOY == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      # Pull Vercel project config + env vars
+      - name: Pull Vercel env
+        run: npx vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      # Build on GitHub — saves Vercel build minutes
+      - name: Build
+        run: npx vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      # Upload prebuilt output — Vercel skips its own build
+      - name: Deploy
+        run: npx vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}

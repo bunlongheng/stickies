@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Template. Substitute __STICKIES_DIR__, __NODE_BIN__ and __NODE_BIN_DIR__ before loading.
+     See scripts/launchd/README.md. -->
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.bheng.stickies</string>
+	<key>WorkingDirectory</key>
+	<string>__STICKIES_DIR__</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>__NODE_BIN__</string>
+		<string>scripts/hub-serve.mjs</string>
+	</array>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>PATH</key>
+		<string>__NODE_BIN_DIR__:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+		<key>STICKIES_LAN_TRUST</key>
+		<string>1</string>
+		<key>AUTH_TRUST_HOST</key>
+		<string>true</string>
+	</dict>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>KeepAlive</key>
+	<true/>
+	<key>ThrottleInterval</key>
+	<integer>15</integer>
+	<key>StandardOutPath</key>
+	<string>/tmp/stickies-hub.log</string>
+	<key>StandardErrorPath</key>
+	<string>/tmp/stickies-hub.log</string>
+</dict>
+</plist>

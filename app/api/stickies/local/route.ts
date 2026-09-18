@@ -1,0 +1,93 @@
+import { NextResponse } from "next/server";
+import { livePayload } from "@/lib/live-payload";
+import { authorizeOwner } from "@/app/api/stickies/_auth";
+import { queryOne } from "@/lib/db-driver";
+import Pusher from "pusher";
+
+// Module-level flash queue — serializes Hue + Pusher so each cycle
+// completes before the next one starts (important for rapid-fire posts).
+let flashQueue: Promise<void> = Promise.resolve();
+
+function getPusher() {
+    return new Pusher({
+        appId: process.env.PUSHER_APP_ID!,
+        key: process.env.PUSHER_KEY!,
+        secret: process.env.PUSHER_SECRET!,
+        cluster: process.env.PUSHER_CLUSTER!,
+        useTLS: true,
+    });
+}
+
+// POST /api/stickies/local
+// Auth: Bearer <STICKIES_API_KEY>
+//    or Bearer <STICKIES_API_KEY><STICKIES_LOCAL_SALT>  (FE)
+// Content-Type: text/plain  →  first "# " line = title, rest = content (stored as text)
+// Content-Type: application/json → { title, content, folder? }
+// ?folder=CLAUDE  (default: CLAUDE)
+export async function POST(req: Request) {
+    if (!await authorizeOwner(req)) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const url = new URL(req.url);
+    const folderParam = url.searchParams.get("folder")?.trim() || "CLAUDE";
+    const contentType = req.headers.get("content-type") ?? "";
+
+    let title = "";
+    let content = "";
+    let folder_name = folderParam;
+
+    if (/text\/(plain|markdown|x-markdown)/i.test(contentType)) {
+        const raw = await req.text();
+        const lines = raw.split("\n");
+        const h1 = lines.findIndex((l) => /^#\s+/.test(l));
+        if (h1 !== -1) {
+            title = lines[h1].replace(/^#\s+/, "").trim();
+            content = [...lines.slice(0, h1), ...lines.slice(h1 + 1)].join("\n").trim();
+        } else {
+            title = (lines.find((l) => l.trim()) ?? "Untitled").replace(/^#+\s*/, "").trim();
+            content = raw.trim();
+        }
+    } else {
+        let body: Record<string, unknown>;
+        try { body = await req.json(); }
+        catch { return NextResponse.json({ error: "Invalid body" }, { status: 400 }); }
+        title = String(body.title ?? "").trim();
+        content = String(body.content ?? "").trim();
+        folder_name = String(body.folder ?? body.folder_name ?? folderParam).trim() || "CLAUDE";
+    }
+
+    if (!title) return NextResponse.json({ error: "title required" }, { status: 400 });
+    if (!content) return NextResponse.json({ error: "content required" }, { status: 400 });
+
+    const color = url.searchParams.get("color")?.trim() || "#B0B0B8";
+    const now = new Date().toISOString();
+    const userId = process.env.OWNER_USER_ID?.trim() ?? "";
+
+    const maxRow = await queryOne<{ order: number }>(`SELECT "order" FROM "stickies" WHERE is_folder = false AND user_id = $1 ORDER BY "order" DESC LIMIT 1`, [userId]);
+    const nextOrder = typeof maxRow?.order === "number" ? maxRow.order + 1 : 0;
+
+    const data = await queryOne<Record<string, unknown>>(
+        `INSERT INTO "stickies" (title, content, folder_name, is_folder, folder_color, "order", created_at, updated_at, user_id)
+         VALUES ($1, $2, $3, false, $4, $5, $6, $7, $8) RETURNING *`,
+        [title, content, folder_name, color, nextOrder, now, now, userId]
+    );
+
+    if (!data) return NextResponse.json({ error: "Database error" }, { status: 500 });
+
+    // Enqueue flash: Hue + Pusher run sequentially per-request so rapid-fire
+    // posts don't overlap. Hue starts first (~300ms head-start) so the light
+    // and screen flash arrive at roughly the same time.
+    flashQueue = flashQueue.then(async () => {
+        const hueReady = fetch("http://localhost:4444/api/hue/trigger", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ color }),
+        }).catch(() => {});
+
+        await new Promise(r => setTimeout(r, 300));
+        try { await getPusher().trigger("stickies", "note-created", livePayload(data)); } catch {}
+        await hueReady;
+    });
+
+    return NextResponse.json({ note: data }, { status: 201 });
+}

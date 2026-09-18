@@ -1,0 +1,28 @@
+/**
+ * Realtime (Pusher) payload guard.
+ *
+ * Pusher rejects events over 10KB with HTTP 413. The API broadcast the full
+ * note row, so every note bigger than that (773 of them: audits, cheat sheets,
+ * reports) silently never arrived live. livePayload() drops the heavy body
+ * fields from oversized rows and flags them; hydrateLive() on the client
+ * fetches the full row by id when it sees the flag.
+ */
+const LIMIT = 8 * 1024; // headroom under Pusher's 10KB cap for the event envelope
+
+export function livePayload<T extends Record<string, unknown>>(row: T): T | (Omit<T, "content" | "doc"> & { content_omitted: true }) {
+    if (!row || JSON.stringify(row).length <= LIMIT) return row;
+    const { content: _c, doc: _d, ...rest } = row;
+    return { ...rest, content_omitted: true as const };
+}
+
+export async function hydrateLive<T extends { id?: unknown; content_omitted?: boolean }>(note: T): Promise<T> {
+    if (!note?.content_omitted || !note.id) return note;
+    try {
+        const res = await fetch(`/api/stickies?id=${encodeURIComponent(String(note.id))}`);
+        if (res.ok) {
+            const j = await res.json();
+            if (j?.note?.id) return j.note as T;
+        }
+    } catch { /* keep the slim row; the next catch-up poll fills it in */ }
+    return note;
+}
