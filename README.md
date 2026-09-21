@@ -13,7 +13,7 @@ Colourful, draggable notes with folders, rich HTML content, a REST API, and real
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-required-4169E1?logo=postgresql&logoColor=white)
 ![Tests](https://img.shields.io/badge/tests-754%20unit%20%2B%2091%20e2e-34C759)
 
-<img src="docs/screenshots/board.png" alt="The Stickies board: a folder of notes in list view" width="880">
+<img src="docs/screenshots/hero.png" alt="Stickies running on an iPhone Duo: colour-coded folders and notes in list view" width="900">
 
 </div>
 
@@ -205,3 +205,15 @@ public issue.
 ## License
 
 [MIT](LICENSE) (c) Bunlong Heng
+
+---
+
+<div align="center">
+
+**Built by Bunlong Heng**
+
+[Portfolio](https://bunlongheng.com) &nbsp;·&nbsp; [All projects](https://bunlongheng.com/projects) &nbsp;·&nbsp; [GitHub](https://github.com/bunlongheng)
+
+<sub>Stickies is one of a set of small, self-hosted tools. The rest live on the projects page.</sub>
+
+</div>
