@@ -1,12 +1,11 @@
 <div align="center">
 
-# Stickies
+# <img src="docs/icon.png" width="36" height="36" align="top" alt=""> Stickies
 
 **A self-hosted sticky-notes board that syncs across every device you own.**
 
 Colourful, draggable notes with folders, rich HTML content, a REST API, and real-time sync.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![Next.js](https://img.shields.io/badge/Next.js-16-000000?logo=next.js&logoColor=white)
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)
@@ -137,25 +136,14 @@ flowchart LR
 
 ## How a note is saved
 
-```mermaid
-sequenceDiagram
-    participant U as You
-    participant E as Editor
-    participant A as API route
-    participant D as PostgreSQL
-    participant P as Pusher
-    U->>E: Type, then Cmd+S
-    E->>A: PATCH /api/stickies
-    A->>A: Identify caller (session or key)
-    A->>D: UPDATE stickies
-    D-->>A: Row
-    A->>P: Broadcast the change
-    P-->>U: Other devices update live
-    A-->>E: 200, toast
-```
+<a href="https://sequences-bheng.vercel.app/d/93e7075b-d9f2-46f8-aff8-9ea40194a67b">
+  <img src="https://sequences-bheng.vercel.app/svg/93e7075b-d9f2-46f8-aff8-9ea40194a67b" alt="Sequence: saving a Stickies note" width="760">
+</a>
 
 Autosave is deliberately off for plain-text and checklist notes: they save on `Cmd+S`.
 Rich-text notes debounce-save as you type.
+
+<sub>Diagram made with [Sequences](https://sequences-bheng.vercel.app) - another one of mine.</sub>
 
 ## Tech stack
 
@@ -210,10 +198,8 @@ public issue.
 
 <div align="center">
 
-**Built by Bunlong Heng**
+Built by **[Bunlong](https://bunlongheng.com)**
 
-[Portfolio](https://bunlongheng.com) &nbsp;·&nbsp; [All projects](https://bunlongheng.com/projects) &nbsp;·&nbsp; [GitHub](https://github.com/bunlongheng)
-
-<sub>Stickies is one of a set of small, self-hosted tools. The rest live on the projects page.</sub>
+<sub>[See the other apps](https://bunlongheng.com/projects)</sub>
 
 </div>
