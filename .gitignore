@@ -60,3 +60,6 @@ audit-report.html
 
 # One-off local import artifact: holds private note titles and ids
 scripts/.import-manifest.json
+
+# Build output
+dist/

@@ -1,190 +1,207 @@
 <div align="center">
 
-# stickies
+# Stickies
 
-**A real-time, AI-powered sticky notes board that syncs across every device.**
+**A self-hosted sticky-notes board that syncs across every device you own.**
 
-Colorful draggable notes with folder organization, rich HTML content, and live cross-device sync.
+Colourful, draggable notes with folders, rich HTML content, a REST API, and real-time sync.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)
 ![Next.js](https://img.shields.io/badge/Next.js-16-000000?logo=next.js&logoColor=white)
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?logo=postgresql&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-required-4169E1?logo=postgresql&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-754%20unit%20%2B%2091%20e2e-34C759)
 
-<img src="assets/hero.svg" alt="Stickies notes board" width="660">
+<img src="docs/screenshots/board.png" alt="The Stickies board: a folder of notes in list view" width="880">
 
 </div>
 
-## Why
+## Read this before you clone
 
-Sticky notes are the fastest way to capture a thought, but most note apps are either
-single-device or slow to sync. Stickies keeps a board of colorful, draggable notes in sync
-across every device in real time, adds folders so the board never turns into chaos, and
-layers in AI for diagram generation and content help. It also exposes a full REST API and
-a CLI, so notes can be created and read programmatically, not just by hand.
+**This is not a product you sign up for, and it will not work out of the box.** It is a
+self-hosted application. You run it, on infrastructure you provide and pay for.
+
+Concretely, before it will start you need:
+
+| You must provide | Why | Free option? |
+|------------------|-----|--------------|
+| **A PostgreSQL database** | Every note, folder and session is stored here. There is no bundled database, no SQLite fallback, no hosted backend | Yes - local Postgres, Neon, Supabase, Railway |
+| **Google OAuth credentials** | Google is the only sign-in provider. Without it you cannot log in at all | Yes - Google Cloud Console |
+| **Somewhere to run it** | It is a Next.js server, not a static site. Vercel, Fly, Railway, a VPS, or just your own machine | Yes - Vercel free tier, or localhost |
+
+**Where your notes live:** in *your* Postgres database. Nothing is sent to a service
+run by me, and there is no account with anyone. That is the point - but it also means
+backups, uptime and cost are yours.
+
+**It is single-owner by design.** Only the one Google account matching `OWNER_EMAIL`
+can sign in. There is no sign-up, no multi-user mode, no sharing between accounts.
+If you want a notes app several people log into, this is the wrong repo.
+
+**Optional extras**, each of which the app runs fine without:
+
+| Skip it and... | Service |
+|----------------|---------|
+| No live updates between devices; you refresh to see changes | Pusher |
+| The AI prompt bar and diagram generation are unavailable | Anthropic API key |
+| File uploads are unavailable | Google Drive OAuth |
+
+## Contents
+
+- [Read this before you clone](#read-this-before-you-clone)
+- [Features](#features)
+- [Quick start](#quick-start)
+- [Configuration](#configuration)
+- [Architecture](#architecture)
+- [How a note is saved](#how-a-note-is-saved)
+- [Tech stack](#tech-stack)
+- [Project layout](#project-layout)
+- [Testing](#testing)
+- [Contributing](#contributing)
+- [License](#license)
 
 ## Features
 
-- Colorful draggable sticky notes with folder organization
-- Real-time sync across devices via Pusher WebSockets
-- AI-powered diagram generation (Mermaid) and content assistance via Claude
-- Rich HTML notes plus code syntax highlighting (Prism.js)
-- QR code sharing for individual notes
-- PDF parsing and import
-- Google Drive integration plus backup and restore
-- Automation workflows (trigger/condition/action engine with per-automation logs)
-- A full REST API for programmatic access, plus a CLI (`npm run stickies`)
-- Owner-gated auth with Google OAuth (NextAuth v5)
-
-## Tech stack
-
-| Layer | Technology |
-|-------|-----------|
-| Framework | Next.js 16 (App Router) |
-| Language | TypeScript, React 19 |
-| Styling | Tailwind CSS |
-| Database | PostgreSQL (self-hosted, `pg`) |
-| Auth | NextAuth v5 (Auth.js) + Google OAuth |
-| Real-time | Pusher WebSockets |
-| AI | Claude API (`@anthropic-ai/sdk`) |
-| Testing | Vitest + Playwright |
-| Hosting | Vercel |
-
-## Install
-
-```bash
-git clone https://github.com/bunlongheng/stickies
-cd stickies
-npm install
-```
-
-Then copy `.env.example` to `.env.local` and fill it in - it documents every runtime variable (required, optional, and script-only), including the required `OWNER_USER_ID` that the ext API resolves notes against. The table below is a quick summary; `.env.example` is the source of truth.
-
-### Database
-
-Point `DATABASE_URL` at a PostgreSQL database, then create the schema:
-
-```bash
-npm run migrate
-```
-
-The runner applies every unrun file in `supabase/migrations/` in order and records it
-in a `schema_migrations` ledger, so it is safe to re-run. Against a database that
-already has a `stickies` table it baselines instead, marking the existing migrations
-as applied without executing any SQL.
+- Colourful, draggable notes organised into nestable folders
+- Plain-text, checklist and rich HTML notes, with code syntax highlighting
+- Real-time sync across devices over WebSockets (when Pusher is configured)
+- A full REST API plus a CLI, so notes can be created and read by scripts and agents
+- Scoped API keys: per-app tokens, stored hashed, revocable one at a time
+- AI prompt bar and Mermaid diagram generation (when an Anthropic key is configured)
+- Public share links and embeddable single-note views
+- Soft delete to TRASH with a 7-day window, and `Cmd+Delete` to skip the confirm
+- Backup and restore, plus Google Drive file uploads
+- An automation engine (trigger / condition / action) with per-automation logs
 
 ## Quick start
 
 ```bash
-npm run dev      # start the dev server on port 4444
-npm run build    # production build
-npm run start    # start the production server
-npm run prod     # build then start on port 4444
+git clone https://github.com/bunlongheng/stickies.git
+cd stickies
+npm install
+cp .env.example .env.local     # then fill in the REQUIRED block
+npm run migrate                # create the schema in your database
+npm run dev                    # http://localhost:4444
 ```
 
-Open [http://localhost:4444](http://localhost:4444).
+`npm run migrate` applies every unrun file in `supabase/migrations/` in order and
+records it in a `schema_migrations` ledger, so it is safe to re-run. Against a
+database that already has a `stickies` table it baselines instead, marking the
+existing migrations as applied without executing any SQL.
 
-## Usage
+If the app starts but every request fails, `DATABASE_URL` is almost certainly wrong -
+the connection pool throws on its first query rather than at boot.
 
-### Scripts
+## Configuration
 
-```bash
-npm run dev              # Start dev server on port 4444
-npm run build            # Production build
-npm run start            # Start production server
-npm run prod             # Build + start on port 4444
-npm run stickies         # CLI for posting and reading notes
-npm run test             # Run Vitest unit tests
-npm run test:watch       # Vitest in watch mode
-npm run test:coverage    # Vitest with coverage
-npm run test:e2e         # Playwright end-to-end tests
-npm run test:ui:headed   # Playwright with browser UI
+`.env.example` is the source of truth and documents every variable. The essentials:
+
+| Env var | Required | Purpose |
+|---------|----------|---------|
+| `DATABASE_URL` | **yes** | Postgres connection string. Empty means the pool crashes on first query |
+| `AUTH_SECRET` | **yes** | NextAuth session signing secret. `openssl rand -base64 32` |
+| `OWNER_EMAIL` | **yes** | The one Google account allowed to sign in |
+| `OWNER_USER_ID` | **yes** | The owner id every note is filed under |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | **yes** | Google OAuth app credentials |
+| `DATABASE_CA_CERT` | recommended | Server CA for verified DB TLS. Without it, remote Postgres TLS is unverified |
+| `PUSHER_*` / `NEXT_PUBLIC_PUSHER_*` | no | Real-time sync. Omit and the board still works, just without live updates |
+| `ANTHROPIC_API_KEY` | no | AI prompt bar and diagram generation |
+| `STICKIES_API_KEY` | no | Static bearer token for the REST API and CLI |
+
+## Architecture
+
+A Next.js App Router application talking to Postgres directly through `pg`. Every
+mutation is broadcast over Pusher so other devices update without polling. Auth has two
+distinct paths: a browser owner session, and bearer API keys for scripts and agents.
+
+```mermaid
+flowchart LR
+    Browser["Browser<br/>(owner session)"] --> API["Next.js API<br/>/api/stickies/*"]
+    Agents["Scripts, agents, CLI<br/>(bearer API key)"] --> API
+    API --> Auth{"Auth:<br/>owner or key?"}
+    Auth -->|owner| DB[("PostgreSQL")]
+    Auth -->|scoped key| DB
+    API --> Pusher["Pusher"]
+    Pusher --> Devices["Your other devices"]
+    API -.optional.-> Claude["Anthropic API"]
+    API -.optional.-> Drive["Google Drive"]
 ```
 
-### CLI
+| Layer | Responsibility |
+|-------|----------------|
+| `app/(app)` | The board: list and tabs views, the editor, folders, search |
+| `app/api/stickies/*` | REST surface for CRUD, AI, uploads, backups, automations, keys |
+| `auth.ts` + `middleware.ts` | NextAuth v5 owner gate |
+| `lib/` | Pure logic: tile styling, note icons, editor state, realtime hook |
+| `supabase/migrations/` | Schema, applied in order by `db/migrate.mjs` |
 
-The `stickies` CLI talks to the REST API from your terminal:
+## How a note is saved
 
-```bash
-npm run stickies -- new "My Note" "Content here" --folder NOTES
-npm run stickies -- list --folder NOTES
-npm run stickies -- folders
-npm run stickies -- get <id>
-npm run stickies -- search "keyword"
-echo "# Title\n\nContent" | npm run stickies -- post
+```mermaid
+sequenceDiagram
+    participant U as You
+    participant E as Editor
+    participant A as API route
+    participant D as PostgreSQL
+    participant P as Pusher
+    U->>E: Type, then Cmd+S
+    E->>A: PATCH /api/stickies
+    A->>A: Identify caller (session or key)
+    A->>D: UPDATE stickies
+    D-->>A: Row
+    A->>P: Broadcast the change
+    P-->>U: Other devices update live
+    A-->>E: 200, toast
 ```
 
-Commands: `new`, `list`, `folders`, `get`, `search`, and `post` (pipe stdin as note
-content). Deletes are owner-browser only - the ext API rejects delete from API keys, so
-there is no CLI delete.
+Autosave is deliberately off for plain-text and checklist notes: they save on `Cmd+S`.
+Rich-text notes debounce-save as you type.
 
-## How it works
+## Tech stack
 
-Stickies is a Next.js App Router app organized into route groups: `(app)` for the main
-board, `sign-in` for auth, `share` for public note links, and `tools` for utilities. The
-API layer under `/api/stickies/*` exposes a full REST interface for CRUD, AI generation,
-file uploads, backups, automations, and integrations. Pusher broadcasts every mutation to
-all connected clients for real-time sync, a self-hosted PostgreSQL database (accessed
-through the `pg` pool) handles persistence, NextAuth v5 (Auth.js) with Google OAuth handles
-owner-gated sign-in with sessions stored in Postgres, and Claude powers the AI features.
+- **Next.js 16** (App Router), **React 19**, **TypeScript**
+- **PostgreSQL** via `pg` - no ORM
+- **NextAuth v5** (Auth.js) with Google OAuth, sessions in Postgres
+- **Pusher** WebSockets for real-time sync
+- **Tailwind CSS**, **TipTap** for rich text, **Prism** for code
+- **Vitest** + **Playwright** for tests
+- Deployed on **Vercel**; any Node host works
 
-### Project structure
+## Project layout
 
 ```
 app/
-  (app)/                    # Main board (route group)
-  api/
-    auth/                   # OAuth callback, email check
-    hue/                    # Smart light integration
-    stickies/
-      ai/                   # Claude-powered note assist (streaming)
-      automation-logs/      # Automation history
-      automations/          # Server-side trigger/action engine
-      backup/               # Backup & restore
-      ext/                  # External REST API (agents, CLI, automations)
-      folder-icon/          # Folder icon management
-      gdrive/               # Google Drive sync
-      integrations/         # Third-party integrations (Hue, Drive)
-      keys/                 # Per-app API key mint/revoke
-      local/                # Local-only endpoints
-      logout/               # Session logout
-      public/               # Public share endpoints
-      push-subscribe/       # Push subscription
-      share/                # Share via link/email
-      upload/               # File uploads
-  embed/                    # Embeddable single-note view (iframe)
-  raw/                      # Raw note content endpoint
-  share/                    # Public shared note page
-  sign-in/                  # Auth page
-  tools/stickies/           # Stickies tooling
+  (app)/          the board UI: list, tabs, editor, folders, search
+  api/stickies/   REST API: CRUD, ext, ai, keys, gdrive, backup, automations
+  embed/ share/   public single-note views
+auth.ts           NextAuth v5 config (Google, owner gate)
+middleware.ts     route protection
+components/       shared React components
+lib/              pure logic: tile styles, note icons, realtime, editor state
+db/migrate.mjs    migration runner
+supabase/migrations/  schema, applied in order
+scripts/          CLI, hub server, maintenance scripts
+tests/            unit, integration, e2e, perf
 ```
 
-### Environment variables
+## Testing
 
-| Variable | Purpose |
-|----------|---------|
-| `ANTHROPIC_API_KEY` | Claude API for AI features |
-| `DATABASE_URL` | PostgreSQL connection string |
-| `AUTH_SECRET` | NextAuth session encryption secret |
-| `GOOGLE_CLIENT_ID` | Google OAuth client ID |
-| `GOOGLE_CLIENT_SECRET` | Google OAuth client secret |
-| `OWNER_EMAIL` | Email allowed to sign in (owner-gated) |
-| `OWNER_USER_ID` | Owner UUID the ext API resolves notes against (required) |
-| `STICKIES_API_KEY` | Bearer key for the ext API (agents/CLI) |
-| `PUSHER_APP_ID` | Pusher app identifier |
-| `PUSHER_KEY` | Pusher server key |
-| `PUSHER_SECRET` | Pusher server secret |
-| `PUSHER_CLUSTER` | Pusher cluster region |
-| `NEXT_PUBLIC_PUSHER_KEY` | Pusher client key |
-| `NEXT_PUBLIC_PUSHER_CLUSTER` | Pusher client cluster |
+```bash
+npm run test       # 754 unit + integration tests, no database needed
+npm run test:e2e   # 91 Playwright tests across Chrome, iPad and iPhone
+npm run lint
+npx tsc --noEmit
+```
+
+The unit suite mocks the database, so it runs anywhere. The e2e suite drives a real
+server against a real database and reuses whatever is serving port 4444.
 
 ## Contributing
 
-Bug reports and pull requests are welcome - see [CONTRIBUTING.md](CONTRIBUTING.md) for
-setup and the checks to run before opening one. For anything security-related, follow
-[SECURITY.md](SECURITY.md) rather than filing a public issue.
+Bug reports and pull requests are welcome - see [CONTRIBUTING.md](CONTRIBUTING.md).
+For anything security-related, follow [SECURITY.md](SECURITY.md) rather than filing a
+public issue.
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE) (c) Bunlong Heng
