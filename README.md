@@ -198,8 +198,13 @@ public issue.
 
 <div align="center">
 
-Built by **[Bunlong](https://bunlongheng.com)**
+<a href="https://bunlongheng.com"><img src="https://img.shields.io/badge/bunlongheng.com-3A3A3C?style=for-the-badge&logo=data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUBAMAAAB/pwA+AAAAMFBMVEXv7O3z8/DORSv49/b39fP843Try1/70U/1oaTj2c+QtHt1iWe8u71coMzqoC+1ol+4x6A0AAAABHRSTlP4E/2fL4NU3gAAAAlwSFlzAAALEgAACxIB0t1+/AAAALNJREFUCNdjEDRwAQNmQQYBEN0BxIwMJkDSUyl0ioMzA4tnaGidUnkHiwODC2t5OZCZccAFyHz3POzd84w7LmDRsHflFbemAJmh8fn56WAmR2h+fn5q2CkwMywtrSwUwkxLS0sN7WKBMkPDf0GZqaGPeoDMGaGpoaFhSmAmkJX2e/ceIJPr2+/dd+/eBTJZPFfv3r3r7q2VDAwmDJxzzqxateuAM9DpDgwMDDPPTGFkQHgIAAKvS9xXDHpYAAAAAElFTkSuQmCC" alt="bunlongheng.com"></a>
+<a href="https://www.linkedin.com/in/bunlongheng/"><img src="https://img.shields.io/badge/LinkedIn-0A66C2?style=for-the-badge&logo=linkedin&logoColor=white" alt="LinkedIn"></a>
+<a href="https://www.instagram.com/ibunlong/"><img src="https://img.shields.io/badge/Instagram-C13584?style=for-the-badge&logo=instagram&logoColor=white" alt="Instagram"></a>
+<a href="mailto:bheng.code@gmail.com"><img src="https://img.shields.io/badge/Email-2E7D32?style=for-the-badge&logo=gmail&logoColor=white" alt="Email"></a>
 
-<sub>[See the other apps](https://bunlongheng.com/projects)</sub>
+<br>
+
+Built by **[Bunlong](https://bunlongheng.com)** &nbsp;·&nbsp; [more apps](https://bunlongheng.com/projects)
 
 </div>
