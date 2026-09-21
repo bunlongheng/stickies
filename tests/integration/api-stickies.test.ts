@@ -339,10 +339,15 @@ describe("POST /api/stickies", () => {
 
     describe("Batch creation", () => {
         it("creates multiple notes and returns results array", async () => {
-            mockQuery.mockResolvedValue([{ folder_color: "#FF3B30" }]); // color pick
-            mockQueryOne
-                .mockResolvedValueOnce({ order: 10 }) // max order
-                .mockResolvedValue(noteRow());          // each INSERT
+            // Notes are inserted as ONE multi-row statement, so the INSERT goes through
+            // query() (many rows back), not queryOne() per note.
+            mockQuery.mockImplementation(async (sql: string) => {
+                if (String(sql).includes("INSERT INTO")) {
+                    return [{ ...noteRow(), order: 11 }, { ...noteRow(), order: 12 }];
+                }
+                return [{ folder_color: "#FF3B30" }]; // colour-count SELECT
+            });
+            mockQueryOne.mockResolvedValueOnce({ order: 10 }); // max order
 
             const res = await POST(apiReq("/api/stickies", {
                 method: "POST",
@@ -355,6 +360,32 @@ describe("POST /api/stickies", () => {
             const body = await json(res);
             expect(body.results).toHaveLength(2);
             expect(body.total).toBe(2);
+            expect(body.failed).toBe(0);
+        });
+
+        it("inserts the whole batch in a single statement (no N+1 round trips)", async () => {
+            const inserts: string[] = [];
+            mockQuery.mockImplementation(async (sql: string) => {
+                if (String(sql).includes("INSERT INTO")) {
+                    inserts.push(String(sql));
+                    return [{ ...noteRow(), order: 11 }, { ...noteRow(), order: 12 }, { ...noteRow(), order: 13 }];
+                }
+                return [{ folder_color: "#FF3B30" }];
+            });
+            mockQueryOne.mockResolvedValueOnce({ order: 10 });
+
+            await POST(apiReq("/api/stickies", {
+                method: "POST",
+                body: { batch: [
+                    { type: "note", title: "A", content: "a", folder_name: "Work" },
+                    { type: "note", title: "B", content: "b", folder_name: "Work" },
+                    { type: "note", title: "C", content: "c", folder_name: "Work" },
+                ]},
+            }));
+
+            // One statement for three notes, carrying three VALUES tuples.
+            expect(inserts).toHaveLength(1);
+            expect(inserts[0].match(/\(false,/g) ?? []).toHaveLength(3);
         });
 
         it("rejects batch with >500 items", async () => {

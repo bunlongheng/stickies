@@ -9,7 +9,9 @@ export default defineConfig({
     // that transient load without masking real failures (traces on retry).
     retries: 2,
     use: {
-        baseURL: "http://localhost:4444",
+        // CI (and any parallel local run) points this elsewhere; the default keeps the
+        // usual "reuse whatever is already serving 4444" behaviour.
+        baseURL: process.env.E2E_BASE_URL || "http://localhost:4444",
         trace: "on-first-retry",
     },
     projects: [
@@ -21,8 +23,8 @@ export default defineConfig({
         { name: "iPhone 14",      use: { ...devices["iPhone 14"] } },
     ],
     webServer: {
-        command: "npm run dev -- -p 4444",
-        url: "http://localhost:4444",
+        command: process.env.E2E_WEB_SERVER || "npm run dev -- -p 4444",
+        url: process.env.E2E_BASE_URL || "http://localhost:4444",
         reuseExistingServer: true,
         timeout: 60_000,
     },

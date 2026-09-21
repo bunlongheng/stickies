@@ -1,0 +1,90 @@
+name: E2E
+
+# PR-only, same as the unit workflow. The suite needs a database and a running
+# server, so this provisions both from scratch: a Postgres service, the migrations,
+# a seed, then the production build.
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  e2e:
+    name: Playwright (Desktop Chrome)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: stickies
+          POSTGRES_PASSWORD: stickies
+          POSTGRES_DB: stickies_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      # @localhost keeps lib/db.ts on the no-TLS path - correct for a service container.
+      DATABASE_URL: postgres://stickies:stickies@localhost:5432/stickies_ci
+      AUTH_SECRET: ci-only-secret-not-used-outside-ci
+      OWNER_EMAIL: ci@example.com
+      OWNER_USER_ID: 00000000-0000-4000-8000-000000000001
+      # Google OAuth is required to boot; sign-in is never exercised here.
+      GOOGLE_CLIENT_ID: ci-dummy
+      GOOGLE_CLIENT_SECRET: ci-dummy
+      STICKIES_API_KEY: ci-test-key
+      STICKIES_LAN_TRUST: "1"
+      AUTH_TRUST_HOST: "true"
+      E2E_BASE_URL: http://localhost:4455
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Install the Chromium build Playwright expects
+        run: npx playwright install --with-deps chromium
+
+      - name: Create the schema
+        run: npm run migrate
+
+      - name: Build
+        run: npm run build
+
+      - name: Start the server
+        run: |
+          npx next start -p 4455 > /tmp/app.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -sf -o /dev/null http://localhost:4455/; then echo "up"; exit 0; fi
+            sleep 2
+          done
+          echo "server never came up"; cat /tmp/app.log; exit 1
+
+      - name: Seed the data the nav helpers expect
+        run: node scripts/seed-e2e.mjs
+
+      - name: Run the suite
+        # Chromium only: the iPad and iPhone projects are WebKit, which needs a much
+        # heavier install for little extra signal on a headless CI box.
+        run: npx playwright test --project="Desktop Chrome"
+
+      - name: Upload the report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
+      - name: Server log on failure
+        if: failure()
+        run: cat /tmp/app.log || true

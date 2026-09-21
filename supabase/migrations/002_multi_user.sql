@@ -1,12 +1,13 @@
 -- ============================================================
 -- Multi-user support: NEW users_stickies table
 -- Your existing `notes` table is completely untouched.
--- Run this once in the Supabase SQL editor.
+-- Originally run against Supabase; the auth.users FK and RLS policies were
+-- dropped when Supabase Auth was replaced by NextAuth v5 (2026-05-19).
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS users_stickies (
   id               UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id          UUID         NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  user_id          UUID         NOT NULL,
   title            TEXT         NOT NULL DEFAULT '',
   content          TEXT         NOT NULL DEFAULT '',
   folder_name      TEXT         NOT NULL DEFAULT 'General',
@@ -22,14 +23,14 @@ CREATE TABLE IF NOT EXISTS users_stickies (
 CREATE INDEX IF NOT EXISTS users_stickies_user_id_idx ON users_stickies(user_id);
 CREATE INDEX IF NOT EXISTS users_stickies_folder_idx  ON users_stickies(user_id, folder_name);
 
--- Enable RLS so the anon client can never leak rows across users
-ALTER TABLE users_stickies ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS "users_own_notes" ON users_stickies;
-CREATE POLICY "users_own_notes" ON users_stickies
-  FOR ALL
-  USING  (user_id = auth.uid())
-  WITH CHECK (user_id = auth.uid());
+-- RLS policies removed with Supabase Auth: every query now runs server-side
+-- through the owner gate in app/api/stickies/_auth.ts, never from an anon client.
 
 -- ── push_subscriptions: scope to user (unchanged table, just add user_id) ──
-ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE;
+-- push_subscriptions is created later (006). On a fresh database this ALTER would
+-- fail, so it only runs when the table already exists; 006 creates it with user_id.
+DO $$ BEGIN
+  IF to_regclass('public.push_subscriptions') IS NOT NULL THEN
+    ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS user_id UUID;
+  END IF;
+END $$;

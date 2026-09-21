@@ -674,8 +674,14 @@ export async function POST(req: Request) {
         const maxOrderRow = await queryOne<{ order: number }>(`SELECT "order" FROM "stickies" WHERE user_id = $1 ORDER BY "order" DESC LIMIT 1`, [userId]);
         let nextOrder = typeof maxOrderRow?.order === "number" ? maxOrderRow.order + 1 : 0;
         const results: Array<{ type: string; data: Record<string, unknown> | null; error?: string }> = [];
+        // Notes are buffered and flushed as ONE multi-row INSERT below. The old code ran a
+        // statement per item, so a 20-note batch paid 20 sequential round trips to a remote
+        // Postgres. Folders stay sequential: each needs its own duplicate check, and a later
+        // folder can reference an earlier one by name.
+        const pendingNotes: Array<{ slot: number; order: number; values: unknown[] }> = [];
 
         for (const item of items) {
+            const slot = results.length;
             const type = String(item.type ?? "note");
             if (item.__error) { results.push({ type, data: null, error: String(item.__error) }); continue; }
             try {
@@ -712,16 +718,59 @@ export async function POST(req: Request) {
                         ...(createdByKey ? [createdByKey] : []),
                         ...(createdByMachine ? [createdByMachine] : []),
                     ];
-                    const bExtraPlaceholders = bExtra.map((_, i) => `, $${10 + i}`).join("");
-                    const row = await queryOne(
-                        `INSERT INTO "stickies" (is_folder, title, content, folder_name, type, folder_color, "order", created_at, updated_at, user_id${bKeyClause}${bMachineClause})
-                         VALUES (false, $1, $2, $3, $4, $5, $6, $7, $8, $9${bExtraPlaceholders}) RETURNING *`,
-                        [title, content, folder_name, batchType, folder_color, nextOrder++, now, now, userId, ...bExtra]
-                    );
-                    results.push({ type: "note", data: row as Record<string, unknown> });
+                    void bKeyClause; void bMachineClause;
+                    const thisOrder = nextOrder++;
+                    // Buffer; the single INSERT after the loop fills this slot in.
+                    pendingNotes.push({ slot, order: thisOrder, values: [title, content, folder_name, batchType, folder_color, thisOrder, now, now, userId, ...bExtra] });
+                    results.push({ type: "note", data: null });
                 }
             } catch (err: any) {
                 results.push({ type, data: null, error: err?.message ?? "unknown error" });
+            }
+        }
+
+        // ── Flush the buffered notes in ONE statement ────────────────────────────
+        if (pendingNotes.length > 0) {
+            const bKeyCol = createdByKey ? `, created_by_key` : "";
+            const bMachineCol = createdByMachine ? `, created_by_machine` : "";
+            const perRow = pendingNotes[0].values.length; // 9 fixed + optional key/machine
+            const valuesSql = pendingNotes
+                .map((_, r) => `(false, ${Array.from({ length: perRow }, (_, c) => `$${r * perRow + c + 1}`).join(", ")})`)
+                .join(", ");
+            const flat = pendingNotes.flatMap((n) => n.values);
+            try {
+                const rows = await query<Record<string, unknown>>(
+                    `INSERT INTO "stickies" (is_folder, title, content, folder_name, type, folder_color, "order", created_at, updated_at, user_id${bKeyCol}${bMachineCol})
+                     VALUES ${valuesSql} RETURNING *`,
+                    flat
+                );
+                // Postgres returns RETURNING rows in VALUES order, so position is the
+                // primary mapping. Fall back to matching on "order" (unique per row in
+                // this batch) if the row count ever differs.
+                const byOrder = new Map(rows.map((r) => [Number(r.order), r]));
+                pendingNotes.forEach((n, i) => {
+                    const row = (rows.length === pendingNotes.length ? rows[i] : byOrder.get(n.order)) ?? null;
+                    results[n.slot] = row
+                        ? { type: "note", data: row }
+                        : { type: "note", data: null, error: "insert returned no row" };
+                });
+            } catch (err: any) {
+                // One bad row fails the whole statement, so fall back to per-row inserts and
+                // keep the old behaviour: each item succeeds or fails on its own.
+                console.error("[stickies] batch insert failed, falling back per row:", err?.message);
+                for (const n of pendingNotes) {
+                    const ph = Array.from({ length: perRow }, (_, c) => `$${c + 1}`).join(", ");
+                    try {
+                        const row = await queryOne<Record<string, unknown>>(
+                            `INSERT INTO "stickies" (is_folder, title, content, folder_name, type, folder_color, "order", created_at, updated_at, user_id${bKeyCol}${bMachineCol})
+                             VALUES (false, ${ph}) RETURNING *`,
+                            n.values
+                        );
+                        results[n.slot] = { type: "note", data: row as Record<string, unknown> };
+                    } catch (e: any) {
+                        results[n.slot] = { type: "note", data: null, error: e?.message ?? "unknown error" };
+                    }
+                }
             }
         }
 

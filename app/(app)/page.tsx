@@ -1451,20 +1451,29 @@ export default function NotesMaster() {
     useEffect(() => {
         if (!editorOpen) return;
         const timer = window.setTimeout(() => {
+            const base = {
+                noteId: editingNote?.id ? String(editingNote.id) : null,
+                folder_name: targetFolder || activeFolder || editingNote?.folder_name || "General",
+                folder_color: noteColor,
+                title,
+                updated_at: new Date().toISOString(),
+            };
+            // A big note (rich text with embedded images) blows past the ~5MB localStorage
+            // quota, and the throw loses the WHOLE draft - including the title. Past a safe
+            // size, persist metadata only so what survives is still useful.
+            const MAX_DRAFT_CONTENT = 512 * 1024;
+            const payload = content.length > MAX_DRAFT_CONTENT ? base : { ...base, content };
             try {
-                localStorage.setItem(
-                    ACTIVE_DRAFT_KEY,
-                    JSON.stringify({
-                        noteId: editingNote?.id ? String(editingNote.id) : null,
-                        folder_name: targetFolder || activeFolder || editingNote?.folder_name || "General",
-                        folder_color: noteColor,
-                        title,
-                        content,
-                        updated_at: new Date().toISOString(),
-                    }),
-                );
+                localStorage.setItem(ACTIVE_DRAFT_KEY, JSON.stringify(payload));
             } catch (err) {
-                console.error("Failed to persist active draft:", err);
+                // Still over quota (or storage disabled): drop the stale key first, then retry
+                // metadata-only. Leaving the old draft behind is worse than losing the body.
+                try {
+                    localStorage.removeItem(ACTIVE_DRAFT_KEY);
+                    localStorage.setItem(ACTIVE_DRAFT_KEY, JSON.stringify(base));
+                } catch {
+                    console.error("Failed to persist active draft:", err);
+                }
             }
         }, 180);
         return () => window.clearTimeout(timer);
