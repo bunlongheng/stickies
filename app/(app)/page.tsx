@@ -369,6 +369,8 @@ export default function NotesMaster() {
     const [automationLogsLoading, setAutomationLogsLoading] = useState(false);
     useEffect(() => { if (!sharePickerOpen) (document.activeElement as HTMLElement)?.blur(); }, [sharePickerOpen]);
     const [showNoteActions, setShowNoteActions] = useState(false);
+    // Id of the note currently playing the Cmd+Delete firefly vanish, or null.
+    const [fireflyNoteId, setFireflyNoteId] = useState<string | null>(null);
     const [confirmDelete, setConfirmDelete] = useState<{ type: "note"; noteId: string | null; noteName: string; noteColor?: string } | { type: "folder"; folderName: string } | null>(null);
     const [showCreateFolder, setShowCreateFolder] = useState(false);
     const [showFabMenu, setShowFabMenu] = useState(false);
@@ -2656,6 +2658,34 @@ export default function NotesMaster() {
         [closeEditorTools, dbData, noteColor, showTabs, mainListMode],
     );
 
+    // Cmd+Delete → send the open note to TRASH, skipping the confirm dialog. Same
+    // contract as Noto ("Move to TRASH (Cmd+Delete skips this)"). The note dissolves
+    // first, then the normal delete path runs, so the toast, sound, undo entry and
+    // TRASH semantics are all unchanged - this only adds the shortcut and the vanish.
+    const FIREFLY_MS = 600;
+    useEffect(() => {
+        const handler = (e: KeyboardEvent) => {
+            if (!(e.metaKey || e.ctrlKey) || (e.key !== "Backspace" && e.key !== "Delete")) return;
+            if (!editorOpen || !editingNote?.id || fireflyNoteId) return;
+            e.preventDefault();
+            const id = String(editingNote.id);
+            // Mirror deleteCurrentNote's guard up front: a locked note must not appear
+            // to dissolve and then quietly come back when the delete is refused.
+            if (dbData.find((r) => String(r.id) === id)?.frozen) {
+                showToast("Locked — unlock to delete", "#f59e0b");
+                return;
+            }
+            const name = title;
+            setFireflyNoteId(id);
+            window.setTimeout(() => {
+                setFireflyNoteId(null);
+                void deleteCurrentNote(id, name);
+            }, FIREFLY_MS);
+        };
+        window.addEventListener("keydown", handler);
+        return () => window.removeEventListener("keydown", handler);
+    }, [editorOpen, editingNote?.id, title, dbData, deleteCurrentNote, fireflyNoteId]);
+
     // Fast delete from toolbar — soft deletes to TRASH (recoverable), permanent if already in TRASH
 
 
@@ -4700,7 +4730,24 @@ export default function NotesMaster() {
                         );
                     })()}
 
-                    <div className={`editor-frame relative flex-1 flex flex-col overflow-hidden ${appTheme === "light" ? "bg-white" : "bg-black"}`} style={{ display: aiPromptOpen ? "none" : "flex", ["--frame-color" as any]: noteColor || "#888" }}>
+                    <div className={`editor-frame relative flex-1 flex flex-col overflow-hidden ${appTheme === "light" ? "bg-white" : "bg-black"} ${fireflyNoteId && editingNote?.id && String(editingNote.id) === fireflyNoteId ? "note-firefly" : ""}`} style={{ display: aiPromptOpen ? "none" : "flex", ["--frame-color" as any]: noteColor || "#888" }}>
+                        {/* Firefly motes — only mounted during the Cmd+Delete vanish. Scattered
+                            across the lower half so they read as rising off the note itself. */}
+                        {fireflyNoteId && editingNote?.id && String(editingNote.id) === fireflyNoteId && (
+                            <div aria-hidden className="absolute inset-0 overflow-hidden z-50 pointer-events-none">
+                                {Array.from({ length: 14 }).map((_, i) => (
+                                    <span key={i} className="firefly-mote" style={{
+                                        left: `${8 + Math.random() * 84}%`,
+                                        top: `${45 + Math.random() * 45}%`,
+                                        ["--mote" as any]: noteColor || "#ffd166",
+                                        ["--mx" as any]: `${(Math.random() - 0.5) * 90}px`,
+                                        ["--my" as any]: `${-70 - Math.random() * 90}px`,
+                                        ["--dur" as any]: `${520 + Math.random() * 260}ms`,
+                                        ["--delay" as any]: `${Math.random() * 130}ms`,
+                                    } as React.CSSProperties} />
+                                ))}
+                            </div>
+                        )}
                     {/* iPad edge floats — big grey prev/next buttons pinned to the left/right
                         edges, vertically centered, so notes can be paged by thumb. Tablet only
                         (touch, no arrow keys); hidden on phones (too cramped) and desktop (mouse +

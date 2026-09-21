@@ -398,6 +398,44 @@ body {
   pointer-events: none;
 }
 
+/* ── Firefly vanish (Cmd+Delete) ──────────────────────────────────────────
+   The open note dissolves rather than just closing: it dims and lifts away while
+   a handful of motes drift up and wink out, tinted to the note's own colour.
+   Paired with the existing "delete" sound, which lands as the last mote fades. */
+@keyframes noteFirefly {
+  0%   { opacity: 1;    transform: scale(1);                    filter: blur(0); }
+  30%  { opacity: 0.9;  transform: scale(0.99);                 filter: blur(0.4px); }
+  100% { opacity: 0;    transform: scale(0.95) translateY(-8px); filter: blur(3px); }
+}
+.note-firefly {
+  animation: noteFirefly 0.6s cubic-bezier(0.4, 0, 0.6, 1) forwards;
+  pointer-events: none;
+}
+
+@keyframes fireflyMote {
+  0%   { opacity: 0;   transform: translate(0, 0) scale(0.4); }
+  20%  { opacity: 1;   transform: translate(calc(var(--mx) * 0.2), -8px) scale(1); }
+  65%  { opacity: 0.85; }
+  100% { opacity: 0;   transform: translate(var(--mx), var(--my)) scale(0.3); }
+}
+.firefly-mote {
+  position: absolute;
+  width: 6px; height: 6px;
+  border-radius: 9999px;
+  background: var(--mote);
+  box-shadow: 0 0 7px 2px var(--mote);
+  animation: fireflyMote var(--dur) ease-out forwards;
+  animation-delay: var(--delay);
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+
+/* Motion-sensitive users get the outcome without the flight. */
+@media (prefers-reduced-motion: reduce) {
+  .note-firefly { animation-duration: 0.15s; }
+  .firefly-mote { display: none; }
+}
+
 /* Folder search / move picker — arrow-key active highlight */
 .folder-search-item[data-fi-active="1"] {
   border-color: rgba(255,255,255,0.45) !important;
