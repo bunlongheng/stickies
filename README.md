@@ -12,7 +12,7 @@ Colourful, draggable notes with folders, rich HTML content, a REST API, and real
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-required-4169E1?logo=postgresql&logoColor=white)
 ![Tests](https://img.shields.io/badge/tests-754%20unit%20%2B%2091%20e2e-34C759)
 
-<img src="docs/screenshots/hero.png" alt="Stickies running on an iPhone Duo: colour-coded folders and notes in list view" width="900">
+<img src="docs/screenshots/hero.png" alt="Stickies: the folder board, colour-coded with note counts" width="900">
 
 </div>
 
