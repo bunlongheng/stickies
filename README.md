@@ -18,59 +18,28 @@ Colourful, draggable notes with folders, rich HTML content, a REST API, and real
 
 ## Read this before you clone
 
-**This is not a product you sign up for, and it will not work out of the box.** It is a
-self-hosted application. You run it, on infrastructure you provide and pay for.
+**This will not work out of the box.** It is self-hosted: you run it on infrastructure you provide.
 
-Concretely, before it will start you need:
+| You provide | Why | Free option |
+|---|---|---|
+| **PostgreSQL** | Every note, folder and session lives here. No bundled DB, no SQLite fallback | local, Neon, Supabase, Railway |
+| **Google OAuth** | The only sign-in provider. Without it you cannot log in | Google Cloud Console |
+| **A host** | A Next.js server, not a static site | Vercel free tier, or localhost |
 
-| You must provide | Why | Free option? |
-|------------------|-----|--------------|
-| **A PostgreSQL database** | Every note, folder and session is stored here. There is no bundled database, no SQLite fallback, no hosted backend | Yes - local Postgres, Neon, Supabase, Railway |
-| **Google OAuth credentials** | Google is the only sign-in provider. Without it you cannot log in at all | Yes - Google Cloud Console |
-| **Somewhere to run it** | It is a Next.js server, not a static site. Vercel, Fly, Railway, a VPS, or just your own machine | Yes - Vercel free tier, or localhost |
+**Your notes live in your database.** Nothing reaches a service of mine, and there is no account with anyone. Backups, uptime and cost are equally yours.
 
-**Where your notes live:** in *your* Postgres database. Nothing is sent to a service
-run by me, and there is no account with anyone. That is the point - but it also means
-backups, uptime and cost are yours.
+**Single-owner by design.** Only the Google account matching `OWNER_EMAIL` can sign in. No sign-up, no multi-user mode. If you want a board several people log into, this is the wrong repo.
 
-**It is single-owner by design.** Only the one Google account matching `OWNER_EMAIL`
-can sign in. There is no sign-up, no multi-user mode, no sharing between accounts.
-If you want a notes app several people log into, this is the wrong repo.
-
-**Optional extras**, each of which the app runs fine without:
-
-| Skip it and... | Service |
-|----------------|---------|
-| No live updates between devices; you refresh to see changes | Pusher |
-| The AI prompt bar and diagram generation are unavailable | Anthropic API key |
-| File uploads are unavailable | Google Drive OAuth |
-
-## Contents
-
-- [Read this before you clone](#read-this-before-you-clone)
-- [Features](#features)
-- [Quick start](#quick-start)
-- [Configuration](#configuration)
-- [Architecture](#architecture)
-- [How a note is saved](#how-a-note-is-saved)
-- [Tech stack](#tech-stack)
-- [Project layout](#project-layout)
-- [Testing](#testing)
-- [Contributing](#contributing)
-- [License](#license)
+**Optional:** Pusher (without it, no live updates), an Anthropic key (no AI bar), Google Drive (no uploads).
 
 ## Features
 
-- Colourful, draggable notes organised into nestable folders
-- Plain-text, checklist and rich HTML notes, with code syntax highlighting
-- Real-time sync across devices over WebSockets (when Pusher is configured)
-- A full REST API plus a CLI, so notes can be created and read by scripts and agents
-- Scoped API keys: per-app tokens, stored hashed, revocable one at a time
-- AI prompt bar and Mermaid diagram generation (when an Anthropic key is configured)
-- Public share links and embeddable single-note views
-- Soft delete to TRASH with a 7-day window, and `Cmd+Delete` to skip the confirm
-- Backup and restore, plus Google Drive file uploads
-- An automation engine (trigger / condition / action) with per-automation logs
+- Colourful, draggable notes in nestable folders; plain text, checklists or rich HTML
+- Real-time sync across your devices over WebSockets
+- A REST API and a CLI, so scripts and agents can read and write notes
+- Scoped API keys: per-app, stored hashed, revocable one at a time
+- Public share links and embeddable single notes
+- Soft delete to TRASH with a 7-day window; `Cmd+Delete` skips the confirm
 
 ## Quick start
 
@@ -93,39 +62,19 @@ the connection pool throws on its first query rather than at boot.
 
 ## Configuration
 
-`.env.example` is the source of truth and documents every variable. The essentials:
-
-| Env var | Required | Purpose |
-|---------|----------|---------|
-| `DATABASE_URL` | **yes** | Postgres connection string. Empty means the pool crashes on first query |
-| `AUTH_SECRET` | **yes** | NextAuth session signing secret. `openssl rand -base64 32` |
-| `OWNER_EMAIL` | **yes** | The one Google account allowed to sign in |
-| `OWNER_USER_ID` | **yes** | The owner id every note is filed under |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | **yes** | Google OAuth app credentials |
-| `DATABASE_CA_CERT` | recommended | Server CA for verified DB TLS. Without it, remote Postgres TLS is unverified |
-| `PUSHER_*` / `NEXT_PUBLIC_PUSHER_*` | no | Real-time sync. Omit and the board still works, just without live updates |
-| `ANTHROPIC_API_KEY` | no | AI prompt bar and diagram generation |
-| `STICKIES_API_KEY` | no | Static bearer token for the REST API and CLI |
+`.env.example` documents every variable. Required to boot: `DATABASE_URL`, `AUTH_SECRET`,
+`OWNER_EMAIL`, `OWNER_USER_ID`, `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
+Set `DATABASE_CA_CERT` too, or remote Postgres TLS goes unverified.
 
 ## Architecture
 
-A Next.js App Router application talking to Postgres directly through `pg`. Every
-mutation is broadcast over Pusher so other devices update without polling. Auth has two
-distinct paths: a browser owner session, and bearer API keys for scripts and agents.
+A Next.js App Router app talking to Postgres through `pg`, broadcasting every change over Pusher. Two auth paths: a browser owner session, and bearer API keys for scripts.
 
 <a href="https://flows-bheng.vercel.app/?id=725b4551-4440-49b6-a90b-d9fcadef7cbb">
   <img src="docs/diagrams/architecture.svg" alt="Stickies architecture" width="820">
 </a>
 
 <sub>Diagram made with [Flows](https://flows-bheng.vercel.app).</sub>
-
-| Layer | Responsibility |
-|-------|----------------|
-| `app/(app)` | The board: list and tabs views, the editor, folders, search |
-| `app/api/stickies/*` | REST surface for CRUD, AI, uploads, backups, automations, keys |
-| `auth.ts` + `middleware.ts` | NextAuth v5 owner gate |
-| `lib/` | Pure logic: tile styling, note icons, editor state, realtime hook |
-| `supabase/migrations/` | Schema, applied in order by `db/migrate.mjs` |
 
 ## How a note is saved
 
@@ -138,50 +87,15 @@ Rich-text notes debounce-save as you type.
 
 <sub>Made with [Sequences](https://sequences-bheng.vercel.app).</sub>
 
+Autosave is off for text and checklist notes on purpose: they save on `Cmd+S`. Rich text debounces as you type.
+
 ## Tech stack
 
-- **Next.js 16** (App Router), **React 19**, **TypeScript**
-- **PostgreSQL** via `pg` - no ORM
-- **NextAuth v5** (Auth.js) with Google OAuth, sessions in Postgres
-- **Pusher** WebSockets for real-time sync
-- **Tailwind CSS**, **TipTap** for rich text, **Prism** for code
-- **Vitest** + **Playwright** for tests
-- Deployed on **Vercel**; any Node host works
-
-## Project layout
-
-```
-app/
-  (app)/          the board UI: list, tabs, editor, folders, search
-  api/stickies/   REST API: CRUD, ext, ai, keys, gdrive, backup, automations
-  embed/ share/   public single-note views
-auth.ts           NextAuth v5 config (Google, owner gate)
-middleware.ts     route protection
-components/       shared React components
-lib/              pure logic: tile styles, note icons, realtime, editor state
-db/migrate.mjs    migration runner
-supabase/migrations/  schema, applied in order
-scripts/          CLI, hub server, maintenance scripts
-tests/            unit, integration, e2e, perf
-```
-
-## Testing
-
-```bash
-npm run test       # 754 unit + integration tests, no database needed
-npm run test:e2e   # 91 Playwright tests across Chrome, iPad and iPhone
-npm run lint
-npx tsc --noEmit
-```
-
-The unit suite mocks the database, so it runs anywhere. The e2e suite drives a real
-server against a real database and reuses whatever is serving port 4444.
+Next.js 16 · React 19 · TypeScript · PostgreSQL (`pg`, no ORM) · NextAuth v5 · Pusher · Tailwind · TipTap · Vitest + Playwright
 
 ## Contributing
 
-Bug reports and pull requests are welcome - see [CONTRIBUTING.md](CONTRIBUTING.md).
-For anything security-related, follow [SECURITY.md](SECURITY.md) rather than filing a
-public issue.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup and the checks to run. Security issues go through [SECURITY.md](SECURITY.md), never a public issue.
 
 ## License
 
