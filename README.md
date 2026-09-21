@@ -113,18 +113,11 @@ A Next.js App Router application talking to Postgres directly through `pg`. Ever
 mutation is broadcast over Pusher so other devices update without polling. Auth has two
 distinct paths: a browser owner session, and bearer API keys for scripts and agents.
 
-```mermaid
-flowchart LR
-    Browser["Browser<br/>(owner session)"] --> API["Next.js API<br/>/api/stickies/*"]
-    Agents["Scripts, agents, CLI<br/>(bearer API key)"] --> API
-    API --> Auth{"Auth:<br/>owner or key?"}
-    Auth -->|owner| DB[("PostgreSQL")]
-    Auth -->|scoped key| DB
-    API --> Pusher["Pusher"]
-    Pusher --> Devices["Your other devices"]
-    API -.optional.-> Claude["Anthropic API"]
-    API -.optional.-> Drive["Google Drive"]
-```
+<a href="https://flows-bheng.vercel.app/?id=725b4551-4440-49b6-a90b-d9fcadef7cbb">
+  <img src="docs/diagrams/architecture.svg" alt="Stickies architecture" width="820">
+</a>
+
+<sub>Diagram made with [Flows](https://flows-bheng.vercel.app).</sub>
 
 | Layer | Responsibility |
 |-------|----------------|
@@ -136,14 +129,14 @@ flowchart LR
 
 ## How a note is saved
 
-<a href="https://sequences-bheng.vercel.app/d/93e7075b-d9f2-46f8-aff8-9ea40194a67b">
-  <img src="https://sequences-bheng.vercel.app/svg/93e7075b-d9f2-46f8-aff8-9ea40194a67b" alt="Sequence: saving a Stickies note" width="760">
+<a href="https://sequences-bheng.vercel.app/d/c974e83b-441b-4535-990f-38629466bdf7">
+  <img src="docs/diagrams/save-flow.svg" alt="Sequence: saving a Stickies note" width="760">
 </a>
 
 Autosave is deliberately off for plain-text and checklist notes: they save on `Cmd+S`.
 Rich-text notes debounce-save as you type.
 
-<sub>Diagram made with [Sequences](https://sequences-bheng.vercel.app) - another one of mine.</sub>
+<sub>Made with [Sequences](https://sequences-bheng.vercel.app).</sub>
 
 ## Tech stack
 
@@ -198,7 +191,7 @@ public issue.
 
 <div align="center">
 
-<a href="https://bunlongheng.com"><img src="https://img.shields.io/badge/bunlongheng.com-3A3A3C?style=for-the-badge&logo=data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUBAMAAAB/pwA+AAAAMFBMVEXv7O3z8/DORSv49/b39fP843Try1/70U/1oaTj2c+QtHt1iWe8u71coMzqoC+1ol+4x6A0AAAABHRSTlP4E/2fL4NU3gAAAAlwSFlzAAALEgAACxIB0t1+/AAAALNJREFUCNdjEDRwAQNmQQYBEN0BxIwMJkDSUyl0ioMzA4tnaGidUnkHiwODC2t5OZCZccAFyHz3POzd84w7LmDRsHflFbemAJmh8fn56WAmR2h+fn5q2CkwMywtrSwUwkxLS0sN7WKBMkPDf0GZqaGPeoDMGaGpoaFhSmAmkJX2e/ceIJPr2+/dd+/eBTJZPFfv3r3r7q2VDAwmDJxzzqxateuAM9DpDgwMDDPPTGFkQHgIAAKvS9xXDHpYAAAAAElFTkSuQmCC" alt="bunlongheng.com"></a>
+<a href="https://bunlongheng.com"><img src="https://img.shields.io/badge/bunlongheng.com-3A3A3C?style=for-the-badge&logo=data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABYAAAAWAQMAAAD+ev54AAAABlBMVEVMaXH///+a4ocPAAAAAXRSTlMAQObYZgAAAAlwSFlzAAAD6AAAA+gBtXtSawAAAC1JREFUCNdjYEADzP+A+D8INzAwvwfi4w0QNlCMcX8DAyOQzfgcKgcVB+lBAwANvRHlhhcQugAAAABJRU5ErkJggg==" alt="bunlongheng.com"></a>
 <a href="https://www.linkedin.com/in/bunlongheng/"><img src="https://img.shields.io/badge/LinkedIn-0A66C2?style=for-the-badge&logo=linkedin&logoColor=white" alt="LinkedIn"></a>
 <a href="https://www.instagram.com/ibunlong/"><img src="https://img.shields.io/badge/Instagram-C13584?style=for-the-badge&logo=instagram&logoColor=white" alt="Instagram"></a>
 <a href="mailto:bheng.code@gmail.com"><img src="https://img.shields.io/badge/Email-2E7D32?style=for-the-badge&logo=gmail&logoColor=white" alt="Email"></a>
