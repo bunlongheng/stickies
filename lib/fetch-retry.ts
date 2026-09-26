@@ -5,6 +5,8 @@
  * Retries on a thrown fetch (network) or a 5xx. A 4xx returns immediately: an
  * auth failure must surface at once so the sign-in redirect is not delayed.
  */
+import { apiFetch } from "@/lib/api-client";
+
 export async function fetchRetry(
     input: RequestInfo | URL,
     init?: RequestInit,
@@ -14,7 +16,9 @@ export async function fetchRetry(
     let lastErr: unknown;
     for (let i = 0; i < attempts; i++) {
         try {
-            const res = await fetch(input, init);
+            // Through the seam so a string path reaches stickies-api when it is
+            // configured. A Request or URL object is already absolute; leave it.
+            const res = typeof input === "string" ? await apiFetch(input, init ?? {}) : await fetch(input, init);
             if (res.status < 500 || i === attempts - 1) return res;
             lastErr = new Error(`HTTP ${res.status}`);
         } catch (e) {

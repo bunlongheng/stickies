@@ -1,3 +1,4 @@
+import { apiFetch } from "@/lib/api-client";
 /**
  * Realtime (Pusher) payload guard.
  *
@@ -18,7 +19,7 @@ export function livePayload<T extends Record<string, unknown>>(row: T): T | (Omi
 export async function hydrateLive<T extends { id?: unknown; content_omitted?: boolean }>(note: T): Promise<T> {
     if (!note?.content_omitted || !note.id) return note;
     try {
-        const res = await fetch(`/api/stickies?id=${encodeURIComponent(String(note.id))}`);
+        const res = await apiFetch(`/api/stickies?id=${encodeURIComponent(String(note.id))}`);
         if (res.ok) {
             const j = await res.json();
             if (j?.note?.id) return j.note as T;

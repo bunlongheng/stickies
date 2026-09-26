@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { apiFetch } from "@/lib/api-client";
 
 function extractText(content: string): string {
     try {
@@ -49,7 +50,7 @@ export default function StickiesShare() {
 
         const noteId = params.get("noteId");
         if (noteId) {
-            fetch(`/api/stickies/public?noteId=${encodeURIComponent(noteId)}`)
+            apiFetch(`/api/stickies/public?noteId=${encodeURIComponent(noteId)}`)
                 .then(async (res) => {
                     if (!res.ok) { setState("error"); return; }
                     const data = await res.json();

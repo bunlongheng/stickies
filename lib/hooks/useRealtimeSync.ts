@@ -1,10 +1,11 @@
 import { useEffect, useRef, useCallback } from "react";
 import { fetchRetry } from "@/lib/fetch-retry";
 import { hydrateLive } from "@/lib/live-payload";
-import PusherClient from "pusher-js";
+import { openRealtimeChannel } from "@/lib/realtime-channel";
 import { mergeRecentNotes } from "@/lib/editor-ui";
 import { COUNTS_CACHE_KEY } from "@/lib/storage-keys";
 import type { JSONContent } from "@tiptap/react";
+import { apiFetch } from "@/lib/api-client";
 
 
 export interface UseRealtimeSyncParams {
@@ -83,21 +84,17 @@ export function useRealtimeSync(params: UseRealtimeSyncParams) {
         finally { catchUpInFlightRef.current = false; }
     }, []);
 
-    // Pusher — real-time note events
+    // Real-time note events, over SSE or Pusher depending on the transport.
     useEffect(() => {
         if (!mounted) return;
-        const pusherKey = process.env.NEXT_PUBLIC_PUSHER_KEY;
-        const pusherCluster = process.env.NEXT_PUBLIC_PUSHER_CLUSTER;
-        if (!pusherKey || !pusherCluster) return;
-        const pusher = new PusherClient(pusherKey, { cluster: pusherCluster });
-        pusher.connection.bind("connected", () => {
-            localWriteRef.current.set("__socket_id__", pusher.connection.socket_id as any);
+        const channel = openRealtimeChannel(() => {
+            localWriteRef.current.set("__socket_id__", channel?.socketId() as any);
             // (Re)connected — the socket may have slept (backgrounded tab / network
             // blip) and missed note-created events. Pull the recent notes so the list
             // catches up in the same second, no manual refresh.
             void catchUp();
         });
-        const channel = pusher.subscribe("stickies");
+        if (!channel) return;
 
 const fireIntegrations = (trigger: string, note: any) => {
             for (const integration of integrationsRef.current) {
@@ -108,7 +105,7 @@ const fireIntegrations = (trigger: string, note: any) => {
                 if (integration.type === "hue") {
                     const { group_id } = integration.config;
                     // Server-side relay — avoids browser cert/CORS issues (IFTTT-style)
-                    fetch("/api/hue/trigger", {
+                    apiFetch("/api/hue/trigger", {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
                         // source lets the route honor the "Note Created → Hue Flash" toggle
@@ -236,7 +233,7 @@ const fireIntegrations = (trigger: string, note: any) => {
             if (data?.url) window.location.href = data.url;
         });
 
-        return () => { channel.unbind_all(); pusher.unsubscribe("stickies"); pusher.disconnect(); };
+        return () => channel.close();
     }, [mounted]);
 
     // Supabase Realtime removed — Pusher handles all real-time events.
