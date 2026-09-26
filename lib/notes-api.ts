@@ -3,9 +3,10 @@
 // cookie (the server reads it via auth()); no Authorization header is needed for the
 // owner browser.
 
+import { apiFetch } from "@/lib/api-client";
 export const notesApi = {
     update: async (id: string, fields: Record<string, unknown>) => {
-        const res = await fetch("/api/stickies", {
+        const res = await apiFetch("/api/stickies", {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ id, ...fields }),
@@ -18,7 +19,7 @@ export const notesApi = {
         return res.json() as Promise<{ note: Record<string, unknown> }>;
     },
     bulkUpdate: async (updates: Array<{ id: string } & Record<string, unknown>>) => {
-        const res = await fetch("/api/stickies", {
+        const res = await apiFetch("/api/stickies", {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ updates }),
@@ -27,7 +28,7 @@ export const notesApi = {
         if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error ?? "bulk update failed"); }
     },
     insert: async (payload: Record<string, unknown>) => {
-        const res = await fetch("/api/stickies?raw=1", {
+        const res = await apiFetch("/api/stickies?raw=1", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),
@@ -36,15 +37,15 @@ export const notesApi = {
         return res.json() as Promise<{ note: Record<string, unknown> }>;
     },
     delete: async (id: string) => {
-        const res = await fetch(`/api/stickies?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+        const res = await apiFetch(`/api/stickies?id=${encodeURIComponent(id)}`, { method: "DELETE" });
         if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error ?? "delete failed"); }
     },
     deleteByFolder: async (folderName: string) => {
-        const res = await fetch(`/api/stickies?folder_name=${encodeURIComponent(folderName)}`, { method: "DELETE" });
+        const res = await apiFetch(`/api/stickies?folder_name=${encodeURIComponent(folderName)}`, { method: "DELETE" });
         if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error ?? "delete folder failed"); }
     },
     renameFolder: async (from: string, to: string) => {
-        const res = await fetch("/api/stickies", {
+        const res = await apiFetch("/api/stickies", {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ rename_folder: { from, to } }),

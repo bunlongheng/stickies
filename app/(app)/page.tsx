@@ -70,6 +70,7 @@ import GlobeAltIcon from "@heroicons/react/24/outline/GlobeAltIcon";
 import LockClosedIcon from "@heroicons/react/24/outline/LockClosedIcon";
 import LockOpenIcon from "@heroicons/react/24/outline/LockOpenIcon";
 import { QrModal } from "@/components/QrModal";
+import { apiFetch, apiUrl } from "@/lib/api-client";
 
 
 
@@ -461,7 +462,7 @@ export default function NotesMaster() {
     const [pinnedFolders, setPinnedFolders] = useState<Set<string>>(() => { try { if (typeof window === "undefined") return new Set(); const raw = localStorage.getItem(PINNED_FOLDERS_KEY); return raw ? new Set(JSON.parse(raw)) : new Set(); } catch { return new Set(); } });
     const savePinnedToDb = useCallback(async (folders: Set<string>) => {
         try {
-            await fetch("/api/stickies", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pinned_folders: [...folders] }) });
+            await apiFetch("/api/stickies", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pinned_folders: [...folders] }) });
         } catch {}
     }, []);
     const togglePinFolder = useCallback((name: string) => {
@@ -1076,7 +1077,7 @@ export default function NotesMaster() {
             tabsAutoOpenedRef.current = true;
             (async () => {
                 try {
-                    const res = await fetch("/api/stickies?recent=today", { headers: {  } });
+                    const res = await apiFetch("/api/stickies?recent=today", { headers: {  } });
                     if (!res.ok) return;
                     const { notes = [] } = await res.json();
                     if (notes.length > 0) {
@@ -1307,7 +1308,7 @@ export default function NotesMaster() {
             if (!matchedNote) {
                 void (async () => {
                     try {
-                        const res = await fetch(`/api/stickies?id=${noteIdToken}`, { headers: {  } });
+                        const res = await apiFetch(`/api/stickies?id=${noteIdToken}`, { headers: {  } });
                         if (!res.ok) return;
                         const { note } = await res.json();
                         if (!note) return;
@@ -1660,7 +1661,7 @@ export default function NotesMaster() {
         let cancelled = false;
         const t = window.setTimeout(async () => {
             try {
-                const res = await fetch(`/api/stickies?q=${encodeURIComponent(q)}`);
+                const res = await apiFetch(`/api/stickies?q=${encodeURIComponent(q)}`);
                 if (!res.ok) return;
                 const data = await res.json();
                 if (!cancelled) setSearchResults(Array.isArray(data?.notes) ? data.notes : []);
@@ -2170,7 +2171,7 @@ export default function NotesMaster() {
         const savedTitle = title;
         setAiLoading(true);
         try {
-            const res = await fetch("/api/stickies/ai", {
+            const res = await apiFetch("/api/stickies/ai", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ prompt: aiPrompt.trim(), content, title }),
@@ -2209,7 +2210,7 @@ export default function NotesMaster() {
         const savedTitle = title;
         setAiLoading(true);
         try {
-            const res = await fetch("/api/stickies/ai", {
+            const res = await apiFetch("/api/stickies/ai", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ prompt: "Please clean up my grammar only! Make it precisely clear. Keep the same tone and meaning. Do not add or remove content.", content, title }),
@@ -2348,7 +2349,7 @@ export default function NotesMaster() {
         const fd = new FormData();
         fd.append("file", optimized);
         fd.append("folder", targetFolder || activeFolder || "unsorted");
-        const res = await fetch("/api/stickies/gdrive", {
+        const res = await apiFetch("/api/stickies/gdrive", {
             method: "POST",
             headers: {  },
             body: fd,
@@ -2482,7 +2483,7 @@ export default function NotesMaster() {
                     fd.append("file", file, `image-${i + 1}.${file.type.split("/")[1] ?? "png"}`);
                     if (nid) fd.append("noteId", nid);
                     // Try Google Drive first
-                    const gdriveRes = await fetch("/api/stickies/gdrive", {
+                    const gdriveRes = await apiFetch("/api/stickies/gdrive", {
                         method: "POST",
                         headers: {  },
                         body: fd,
@@ -2492,7 +2493,7 @@ export default function NotesMaster() {
                         if (gdata.url) return gdata.url as string;
                     }
                     // Fallback: Supabase
-                    const res = await fetch("/api/stickies/upload", {
+                    const res = await apiFetch("/api/stickies/upload", {
                         method: "POST",
                         headers: {  },
                         body: fd,
@@ -2862,7 +2863,7 @@ export default function NotesMaster() {
                 if (openingNoteIdRef.current !== noteId) return;
                 if (attempt > 0) await new Promise((r) => setTimeout(r, 350 * attempt));
                 try {
-                    const res = await fetch(`/api/stickies?id=${encodeURIComponent(note.id)}`, {
+                    const res = await apiFetch(`/api/stickies?id=${encodeURIComponent(note.id)}`, {
                         headers: {  },
                     });
                     if (res.ok) {
@@ -3133,7 +3134,7 @@ export default function NotesMaster() {
 
     const saveFolderIconToDb = useCallback(async (folderName: string, icon: string) => {
         try {
-            const res = await fetch("/api/stickies/folder-icon", {
+            const res = await apiFetch("/api/stickies/folder-icon", {
                 method: "PATCH",
                 headers: {
                     "Content-Type": "application/json",
@@ -5511,14 +5512,14 @@ export default function NotesMaster() {
                                             try {
                                                 // Upload the PDF as-is; the server (pdf-parse) extracts its text.
                                                 const { extractedText, ...img } = await uploadImage(file);
-                                                const res = await fetch("/api/stickies", {
+                                                const res = await apiFetch("/api/stickies", {
                                                     method: "POST",
                                                     headers: { "Content-Type": "application/json" },
                                                     body: JSON.stringify({ title, content: extractedText || `PDF: ${file.name}`, folder_name: folderName, folder_color: color, type: "text" }),
                                                 });
                                                 if (res.ok) {
                                                     const { id } = await res.json();
-                                                    await fetch("/api/stickies", {
+                                                    await apiFetch("/api/stickies", {
                                                         method: "PATCH",
                                                         headers: { "Content-Type": "application/json" },
                                                         body: JSON.stringify({ id, images: [img] }),
@@ -5530,7 +5531,7 @@ export default function NotesMaster() {
                                             const text = await file.text();
                                             const type = "text";
                                             try {
-                                                await fetch("/api/stickies", {
+                                                await apiFetch("/api/stickies", {
                                                     method: "POST",
                                                     headers: { "Content-Type": "application/json" },
                                                     body: JSON.stringify({ title, content: text, folder_name: folderName, folder_color: color, type }),
@@ -5612,14 +5613,14 @@ export default function NotesMaster() {
                                         if (file.type === "application/pdf") {
                                             // Upload the PDF as-is; the server (pdf-parse) extracts its text.
                                             const { extractedText, ...img } = await uploadImage(file);
-                                            const res = await fetch("/api/stickies", {
+                                            const res = await apiFetch("/api/stickies", {
                                                 method: "POST",
                                                 headers: { "Content-Type": "application/json" },
                                                 body: JSON.stringify({ title, content: extractedText || `PDF: ${file.name}`, folder_name: folderName, folder_color: color, type: "text" }),
                                             });
                                             if (res.ok) {
                                                 const { id } = await res.json();
-                                                await fetch("/api/stickies", {
+                                                await apiFetch("/api/stickies", {
                                                     method: "PATCH",
                                                     headers: { "Content-Type": "application/json" },
                                                     body: JSON.stringify({ id, images: [img] }),
@@ -5627,7 +5628,7 @@ export default function NotesMaster() {
                                                 created++;
                                             }
                                         } else if (file.type.startsWith("image/")) {
-                                            const res = await fetch("/api/stickies", {
+                                            const res = await apiFetch("/api/stickies", {
                                                 method: "POST",
                                                 headers: { "Content-Type": "application/json" },
                                                 body: JSON.stringify({ title, content: "", folder_name: folderName, folder_color: color, type: "text" }),
@@ -5635,7 +5636,7 @@ export default function NotesMaster() {
                                             if (res.ok) {
                                                 const { id } = await res.json();
                                                 const upload = await uploadImage(file);
-                                                await fetch("/api/stickies", {
+                                                await apiFetch("/api/stickies", {
                                                     method: "PATCH",
                                                     headers: { "Content-Type": "application/json" },
                                                     body: JSON.stringify({ id, images: [{ url: upload.url, name: upload.name, type: upload.type }] }),
@@ -5645,7 +5646,7 @@ export default function NotesMaster() {
                                         } else {
                                             const text = await file.text();
                                             const type = extToType[ext] || "text";
-                                            await fetch("/api/stickies", {
+                                            await apiFetch("/api/stickies", {
                                                 method: "POST",
                                                 headers: { "Content-Type": "application/json" },
                                                 body: JSON.stringify({ title, content: text, folder_name: folderName, folder_color: color, type }),
@@ -6421,7 +6422,7 @@ export default function NotesMaster() {
                                                     setConfiguringIntegration(ig);
                                                     if (ig.type === "hue") {
                                                         setHueGroupsLoading(true);
-                                                        fetch("/api/hue/groups", { headers: {  } })
+                                                        apiFetch("/api/hue/groups", { headers: {  } })
                                                             .then(r => r.json())
                                                             .then(d => { setHueGroups(d.groups ?? []); })
                                                             .catch(() => {})
@@ -6481,7 +6482,7 @@ export default function NotesMaster() {
                                                 <button type="button"
                                                     className="w-full px-5 py-3.5 flex items-center gap-4 text-left hover:bg-white/5 active:bg-white/10 transition"
                                                     onClick={async () => {
-                                                        const res = await fetch("/api/stickies/gdrive/status", { headers: {  } });
+                                                        const res = await apiFetch("/api/stickies/gdrive/status", { headers: {  } });
                                                         const { connected } = await res.json().catch(() => ({ connected: false }));
                                                         setGdriveConnected(connected);
                                                         if (connected) {
@@ -6492,12 +6493,12 @@ export default function NotesMaster() {
                                                                 const fd = new FormData();
                                                                 fd.append("file", new File([blob], ".stickies-test.txt", { type: "text/plain" }));
                                                                 fd.append("folder", "test");
-                                                                const testRes = await fetch("/api/stickies/gdrive", { method: "POST", headers: {  }, body: fd });
+                                                                const testRes = await apiFetch("/api/stickies/gdrive", { method: "POST", headers: {  }, body: fd });
                                                                 if (testRes.ok) { showToast("Google Drive working", "#34C759"); }
-                                                                else { showError("Token expired - reconnecting..."); setGdriveConnected(false); window.location.href = "/api/stickies/gdrive/auth"; }
+                                                                else { showError("Token expired - reconnecting..."); setGdriveConnected(false); window.location.href = apiUrl("/api/stickies/gdrive/auth"); }
                                                             } catch { showError("Upload test failed"); setGdriveConnected(false); }
                                                         } else {
-                                                            window.location.href = "/api/stickies/gdrive/auth";
+                                                            window.location.href = apiUrl("/api/stickies/gdrive/auth");
                                                         }
                                                     }}>
                                                     <div className="w-9 h-9 flex-shrink-0 flex items-center justify-center">
@@ -6517,7 +6518,7 @@ export default function NotesMaster() {
                                                     className="w-full px-5 py-3.5 flex items-center gap-4 text-left hover:bg-white/5 active:bg-white/10 transition"
                                                     onClick={async () => {
                                                         setShowAutomationsPanel(true);
-                                                        fetch("/api/stickies/automations", { headers: {  } })
+                                                        apiFetch("/api/stickies/automations", { headers: {  } })
                                                             .then(r => r.json())
                                                             .then(d => setAutomationsList(Array.isArray(d) ? d : []))
                                                             .catch(() => {});
@@ -6585,7 +6586,7 @@ export default function NotesMaster() {
                                                                     // Persist to DB
                                                                     if (configuringIntegration.id) {
                                                                         try {
-                                                                            await fetch(`/api/stickies/integrations/${configuringIntegration.id}`, {
+                                                                            await apiFetch(`/api/stickies/integrations/${configuringIntegration.id}`, {
                                                                                 method: "PATCH",
                                                                                 headers: {
                                                                                     "Content-Type": "application/json",
@@ -6646,7 +6647,7 @@ export default function NotesMaster() {
                                                         onClick={async () => {
                                                             const next = !auto.active;
                                                             setAutomationsList(prev => prev.map(a => a.id === auto.id ? { ...a, active: next } : a));
-                                                            await fetch(`/api/stickies/automations/${auto.id}`, {
+                                                            await apiFetch(`/api/stickies/automations/${auto.id}`, {
                                                                 method: "PATCH",
                                                                 headers: { "Content-Type": "application/json" },
                                                                 body: JSON.stringify({ active: next }),
@@ -6661,7 +6662,7 @@ export default function NotesMaster() {
                                                         onClick={async () => {
                                                             setSelectedAutomation(auto);
                                                             setAutomationLogsLoading(true);
-                                                            fetch(`/api/stickies/automation-logs?automation_id=${auto.id}&limit=20`, { headers: {  } })
+                                                            apiFetch(`/api/stickies/automation-logs?automation_id=${auto.id}&limit=20`, { headers: {  } })
                                                                 .then(r => r.json())
                                                                 .then(d => setAutomationLogs(Array.isArray(d) ? d : []))
                                                                 .catch(() => setAutomationLogs([]))
@@ -7065,7 +7066,7 @@ export default function NotesMaster() {
                                     </div>
                                 </button>
                                 <button type="button" className="w-full flex items-center gap-4 px-6 py-4 text-left text-zinc-300 hover:bg-white/5 hover:text-white active:bg-white/10 transition"
-                                    onClick={async () => { setShowFolderActions(false); setIsGlobalSettings(false); setShowImportGuide(true); if (!importApiKey) { try { const res = await fetch("/api/stickies?apikey=1"); if (res.ok) { const { key } = await res.json(); setImportApiKey(key); } } catch {} } }}>
+                                    onClick={async () => { setShowFolderActions(false); setIsGlobalSettings(false); setShowImportGuide(true); if (!importApiKey) { try { const res = await apiFetch("/api/stickies?apikey=1"); if (res.ok) { const { key } = await res.json(); setImportApiKey(key); } } catch {} } }}>
                                     <RobotIcon className="w-5 h-5 flex-shrink-0" />
                                     <span className="text-xs font-black tracking-wide flex-1">AI Import Guide</span>
                                     <ArrowRightIcon className="w-4 h-4 text-zinc-600 flex-shrink-0" />
@@ -7094,7 +7095,7 @@ export default function NotesMaster() {
                                         setIsGlobalSettings(false);
                                         const farewells = ["Later!", "See ya!", "Peace out!", "Catch you later!", "Adios!", "So long!", "Bye for now!", "Take care!", "Until next time!"];
                                         showToast(farewells[Math.floor(Math.random() * farewells.length)]);
-                                        await fetch("/api/stickies/logout", { method: "POST" });
+                                        await apiFetch("/api/stickies/logout", { method: "POST" });
                                         setTimeout(() => { window.location.href = "/sign-in"; }, 1800);
                                     }}
                                     className="flex items-center gap-2 px-5 py-3 rounded-xl bg-red-500 text-white hover:bg-red-600 active:bg-red-700 transition font-black uppercase text-xs tracking-wide">
