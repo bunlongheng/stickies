@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import type React from "react";
 import type { NoteRow } from "@/lib/types";
+import { apiFetch } from "@/lib/api-client";
 
 // State + effects for the Cmd-K palette, lifted out of the page God component.
 // Owns the palette's own state and its two self-contained effects (query debounce
@@ -48,7 +49,7 @@ export function useCmdK(): CmdKState {
         let cancelled = false;
         (async () => {
             try {
-                const res = await fetch(`/api/stickies?q=${encodeURIComponent(q)}`);
+                const res = await apiFetch(`/api/stickies?q=${encodeURIComponent(q)}`);
                 if (!res.ok) return;
                 const { notes = [] } = await res.json();
                 if (!cancelled) setCmdKServerResults(notes);

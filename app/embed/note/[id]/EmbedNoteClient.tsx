@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { JSONContent } from "@tiptap/react";
+import { apiFetch } from "@/lib/api-client";
 
 const RichEditor = dynamic(() => import("@/components/RichEditor"), {
     ssr: false,
@@ -38,7 +39,7 @@ export default function EmbedNoteClient({ note, apiKey }: { note: Note; apiKey: 
     const save = useCallback(async () => {
         setSavingState("saving");
         try {
-            const res = await fetch("/api/stickies/ext", {
+            const res = await apiFetch("/api/stickies/ext", {
                 method: "PATCH",
                 headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -109,7 +110,7 @@ export default function EmbedNoteClient({ note, apiKey }: { note: Note; apiKey: 
                     const fd = new FormData();
                     fd.append("file", file);
                     fd.append("folder", "unsorted");
-                    const r = await fetch("/api/stickies/gdrive", {
+                    const r = await apiFetch("/api/stickies/gdrive", {
                         method: "POST",
                         headers: { Authorization: `Bearer ${apiKey}` },
                         body: fd,
