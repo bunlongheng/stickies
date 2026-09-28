@@ -220,6 +220,40 @@ describe("GET /api/stickies", () => {
         });
     });
 
+    describe("?recent=all", () => {
+        it("pages the full list when there is no since", async () => {
+            mockQuery.mockResolvedValueOnce([{ ...noteRow(), _total: "1486" }]);
+            const body = await json(await GET(apiReq("/api/stickies?recent=all&limit=100&offset=200")));
+            expect(body.notes).toHaveLength(1);
+            expect(body.total).toBe(1486);
+            expect(body.delta).toBeUndefined();
+            const sql = mockQuery.mock.calls[0][0] as string;
+            expect(sql).toMatch(/trashed_at IS NULL/);
+            expect(sql).toMatch(/LIMIT/);
+        });
+
+        it("since= returns only rows touched since then, trashed ones included", async () => {
+            const trashed = noteRow({ id: "n2", title: "Gone", trashed_at: "2026-09-28T21:37:11.000Z" });
+            mockQuery.mockResolvedValueOnce([noteRow(), trashed]);
+            const body = await json(await GET(apiReq("/api/stickies?recent=all&since=2026-09-28T21:00:00.000Z")));
+            expect(body.delta).toBe(true);
+            expect(typeof body.syncedAt).toBe("string");
+            expect(body.notes).toHaveLength(2);
+            expect(body.notes[1].trashed_at).toBe("2026-09-28T21:37:11.000Z");
+            const [sql, params] = mockQuery.mock.calls[0] as [string, unknown[]];
+            expect(sql).toMatch(/updated_at >= \$1/);
+            expect(sql).not.toMatch(/trashed_at IS NULL/);
+            expect(params[0]).toBe("2026-09-28T21:00:00.000Z");
+        });
+
+        it("an unparseable since falls back to the full page", async () => {
+            mockQuery.mockResolvedValueOnce([{ ...noteRow(), _total: "1" }]);
+            const body = await json(await GET(apiReq("/api/stickies?recent=all&since=nope")));
+            expect(body.delta).toBeUndefined();
+            expect(body.total).toBe(1);
+        });
+    });
+
     describe("?q=search", () => {
         it("returns matching notes with search term", async () => {
             mockQuery.mockResolvedValue([noteRow({ title: "Meeting notes" })]);
