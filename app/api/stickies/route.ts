@@ -401,6 +401,24 @@ export async function GET(req: Request) {
         const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get("limit") ?? "20") || 20));
         const offset = Math.max(0, parseInt(url.searchParams.get("offset") ?? "0") || 0);
         const ALL_COLS = `id, title, folder_name, folder_color, folder_id, parent_folder_name, "order", updated_at, created_at, type, is_folder, is_public, trashed_at, icon, list_mode, locked, frozen, created_by_key, created_by_machine`;
+        // Delta: `since=<ISO>` returns only notes touched at or after that instant,
+        // trashed ones included so a client can drop them. syncedAt is taken BEFORE
+        // the query so a write racing it shows up again next time (harmless upsert)
+        // instead of being missed. Absent or unparseable `since` = the full page below.
+        const since = url.searchParams.get("since");
+        if (since) {
+            const sinceDate = new Date(since);
+            if (!isNaN(sinceDate.getTime())) {
+                const syncedAt = new Date().toISOString();
+                const { sql, params } = withUser(
+                    `SELECT ${ALL_COLS} FROM "${table}" WHERE is_folder = false AND updated_at >= $1`,
+                    [sinceDate.toISOString()],
+                    userId
+                );
+                const changed = await query<Record<string, unknown>>(`${sql} ORDER BY created_at DESC`, params);
+                return NextResponse.json({ notes: changed, delta: true, syncedAt });
+            }
+        }
         const { sql, params } = withUser(
             `SELECT ${ALL_COLS}, COUNT(*) OVER() AS _total FROM "${table}" WHERE is_folder = false AND trashed_at IS NULL`,
             [],
