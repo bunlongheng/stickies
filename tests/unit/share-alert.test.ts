@@ -42,17 +42,22 @@ describe("notifyShareUnlock", () => {
     it("logs the visit, then emails when Resend is configured", async () => {
         process.env.RESEND_API_KEY = "re_test";
         process.env.OWNER_EMAIL = "owner@example.com";
-        const fetchMock = vi.fn(async () => new Response("{}", { status: 200 }));
+        const fetchMock = vi.fn(async (url: string) => String(url).includes("ipinfo.io")
+            ? new Response(JSON.stringify({ city: "Springfield", region: "Massachusetts", country: "US", loc: "42.1,-72.5", org: "AS7922 Comcast" }), { status: 200 })
+            : new Response("{}", { status: 200 }));
         vi.stubGlobal("fetch", fetchMock);
 
         await notifyShareUnlock(readVisit(req({ "x-forwarded-for": "203.0.113.7" }), "n1", "Invoice 0000255"));
 
-        expect(fetchMock).toHaveBeenCalledOnce();
-        const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+        const resend = fetchMock.mock.calls.find(c => String(c[0]).includes("resend.com"))!;
+        expect(resend).toBeTruthy();
+        const body = JSON.parse((resend[1] as RequestInit).body as string);
         expect(body.to).toEqual(["owner@example.com"]);
         expect(body.subject).toBe("Opened: Invoice 0000255 - 203.0.113.7");
         expect(body.html).toContain("203.0.113.7");
-        expect(body.html).toContain("view 3");
+        expect(body.html).toContain("view <b>3</b>");
+        expect(body.html).toContain("Massachusetts");
+        expect(body.html).toContain("static-maps.yandex.ru");
         vi.unstubAllGlobals();
     });
 

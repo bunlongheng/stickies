@@ -15,6 +15,35 @@ export interface ShareVisit {
     userAgent: string | null;
     referer: string | null;
     at: Date;
+    geo?: IpGeo;
+}
+
+/** ipinfo.io fields for the visitor's IP (the old SSH-login email layout). */
+export interface IpGeo {
+    hostname: string | null;
+    city: string | null;
+    region: string | null;
+    country: string | null;
+    loc: string | null;
+    org: string | null;
+    postal: string | null;
+    timezone: string | null;
+}
+
+const PRIVATE_IP = /^(unknown|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|::1$|fc|fd|fe80)/i;
+
+/** Enrich a public IP via ipinfo.io (keyless; IPINFO_TOKEN lifts the rate limit). 3 s cap, null on any failure. */
+export async function lookupIp(ip: string): Promise<IpGeo | null> {
+    if (PRIVATE_IP.test(ip)) return null;
+    try {
+        const token = process.env.IPINFO_TOKEN ? `?token=${process.env.IPINFO_TOKEN}` : "";
+        const res = await fetch(`https://ipinfo.io/${encodeURIComponent(ip)}/json${token}`, { signal: AbortSignal.timeout(3000) });
+        if (!res.ok) return null;
+        const j = await res.json();
+        const pick = (k: string) => (typeof j[k] === "string" && j[k] ? j[k] : null);
+        return { hostname: pick("hostname"), city: pick("city"), region: pick("region"), country: pick("country"),
+            loc: pick("loc"), org: pick("org"), postal: pick("postal"), timezone: pick("timezone") };
+    } catch { return null; }
 }
 
 /** First hop of x-forwarded-for is the real client on Vercel; others are proxies. */
@@ -59,21 +88,36 @@ async function logVisit(v: ShareVisit): Promise<void> {
 }
 
 function emailBody(v: ShareVisit, viewNumber: number): string {
-    const where = [v.city, v.country].filter(Boolean).join(", ") || "unknown";
-    const row = (k: string, val: string) =>
-        `<tr><td style="padding:6px 14px 6px 0;color:#71717a;font-size:13px;white-space:nowrap">${k}</td>` +
-        `<td style="padding:6px 0;color:#18181b;font-size:14px;font-weight:600">${val}</td></tr>`;
-    return `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:560px;margin:0 auto;padding:24px">
-  <div style="font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:#a1a1aa;font-weight:700">Stickies share</div>
-  <h1 style="font-size:20px;line-height:1.3;margin:6px 0 2px;color:#18181b">Someone opened "${escapeHtml(v.title)}"</h1>
-  <p style="margin:0 0 18px;color:#71717a;font-size:14px">They entered the passcode. This is view ${viewNumber}.</p>
-  <table style="border-collapse:collapse;width:100%;max-width:100%">
-    ${row("IP", escapeHtml(v.ip))}
-    ${row("Location", escapeHtml(where))}
-    ${row("Time", v.at.toLocaleString("en-US", { timeZone: "America/New_York", dateStyle: "medium", timeStyle: "short" }) + " ET")}
-    ${row("Referrer", escapeHtml(v.referer || "direct"))}
+    const g = v.geo;
+    const city = g?.city || v.city;
+    const country = g?.country || v.country;
+    const when = v.at.toLocaleString("en-US", { timeZone: "America/New_York", dateStyle: "medium", timeStyle: "short" }) + " ET";
+    const [lat, lon] = (g?.loc || "").split(",");
+    const mapUrl = lat && lon
+        ? `https://static-maps.yandex.ru/1.x/?lang=en_US&ll=${lon},${lat}&z=9&size=600,300&l=map&pt=${lon},${lat},pm2rdm`
+        : null;
+    const row = (k: string, val: string | null) =>
+        `<tr><td style="padding:7px 16px 7px 0;color:#71717a;font-size:13px;white-space:nowrap;vertical-align:top">${k}</td>` +
+        `<td style="padding:7px 0;color:#18181b;font-size:14px;font-weight:600;word-break:break-word">${val ? escapeHtml(val) : "<span style=\"color:#a1a1aa;font-weight:400\">unknown</span>"}</td></tr>`;
+    return `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;max-width:640px;margin:0 auto;padding:8px 0 24px;color:#18181b">
+  <div style="font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:#a1a1aa;font-weight:700;margin-bottom:6px">Stickies share - passcode unlock</div>
+  <h1 style="font-size:20px;line-height:1.35;margin:0 0 14px;color:#18181b">Someone opened "${escapeHtml(v.title)}"</h1>
+  <p style="margin:0 0 18px;font-size:15px;line-height:1.6;color:#3f3f46">Someone from <b>${escapeHtml(v.ip)}</b> entered the passcode on <b>${when}</b>${country ? ` from <b style="color:#ef4444">${escapeHtml(country)}</b>` : ""}. This is view <b>${viewNumber}</b> of this note.</p>
+  <table style="border-collapse:collapse;width:100%;max-width:100%;border-top:1px solid #e4e4e7;border-bottom:1px solid #e4e4e7;margin:0 0 18px">
+    ${row("Target IP", v.ip)}
+    ${row("Hostname", g?.hostname ?? null)}
+    ${row("City", city)}
+    ${row("Region", g?.region ?? null)}
+    ${row("Country", country)}
+    ${row("Coordinates", g?.loc ?? null)}
+    ${row("Org", g?.org ?? null)}
+    ${row("Postal", g?.postal ?? null)}
+    ${row("Timezone", g?.timezone ?? null)}
+    ${row("Referrer", v.referer || "direct")}
   </table>
-  <p style="margin:16px 0 0;color:#a1a1aa;font-size:12px;word-break:break-all">${escapeHtml(v.userAgent || "no user agent")}</p>
+  ${mapUrl ? `<img src="${mapUrl}" alt="Map near ${escapeHtml(city || v.ip)}" width="600" height="300" style="display:block;max-width:100%;height:auto;border-radius:10px;border:1px solid #e4e4e7;margin:0 0 18px">` : ""}
+  <p style="margin:0 0 6px;font-size:14px;color:#3f3f46">More detail: <a href="https://ipinfo.io/${encodeURIComponent(v.ip)}" style="color:#2563eb">ipinfo.io/${escapeHtml(v.ip)}</a></p>
+  <p style="margin:0;color:#a1a1aa;font-size:12px;word-break:break-all">${escapeHtml(v.userAgent || "no user agent")}</p>
 </div>`;
 }
 
@@ -107,11 +151,11 @@ async function postAlertNote(v: ShareVisit, viewNumber: number): Promise<void> {
     const userId = process.env.OWNER_USER_ID;
     if (!userId) return;
     await execute(
-        `INSERT INTO "stickies" (user_id, title, content, folder_name, folder_color, is_folder, type, "order", created_by_key, created_by_machine)
-         VALUES ($1, $2, $3, 'Alerts', '#FF3B30', false, 'html', 0, 'share-alert', 'hub')`,
+        `INSERT INTO "stickies" (user_id, title, content, folder_name, folder_color, is_folder, type, "order", created_by_key, created_by_machine, icon)
+         VALUES ($1, $2, $3, 'Alerts', '#FF3B30', false, 'html', 0, 'share-alert', 'hub', '__hero:LockOpenIcon')`,
         [
             userId,
-            `Opened: ${v.title}`,
+            `Opened: ${v.title.replace(/^(Opened:\s*)+/, "")}`,
             emailBody(v, viewNumber),
         ]
     );
@@ -125,6 +169,7 @@ export async function notifyShareUnlock(v: ShareVisit): Promise<void> {
             `SELECT COUNT(*) AS n FROM share_unlock_log WHERE note_id = $1`, [v.noteId]
         );
         const viewNumber = Number(rows[0]?.n ?? 1);
+        v.geo = (await lookupIp(v.ip)) ?? undefined;
         if (await sendEmail(v, viewNumber)) {
             await execute(
                 `UPDATE share_unlock_log SET emailed = true WHERE id = (
