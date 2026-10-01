@@ -67,6 +67,8 @@ export const SUPPORTED_NOTE_ICONS: readonly string[] = Array.from(new Set([
     "MapPinIcon", "ClockIcon", "ShieldCheckIcon", "SparklesIcon", "TrophyIcon",
     "ExclamationTriangleIcon", "QuestionMarkCircleIcon", "InboxIcon", "ServerIcon",
     "MagnifyingGlassIcon", "UserIcon", "IdentificationIcon", "FingerPrintIcon",
+    // "who opened my share link" alerts from the sibling apps (same eye as our own).
+    "EyeIcon",
 ])).sort();
 
 /**

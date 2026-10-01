@@ -67,6 +67,7 @@ function publicUrl(req: Request): string {
     const u = new URL(req.url);
     const host = req.headers.get("x-forwarded-host") || req.headers.get("host");
     if (host) {
+        u.port = "";
         u.host = host;
         u.protocol = req.headers.get("x-forwarded-proto") === "https" || host.endsWith(".vercel.app") ? "https:" : u.protocol;
     }
