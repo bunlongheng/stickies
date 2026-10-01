@@ -15,7 +15,14 @@ export interface ShareVisit {
     userAgent: string | null;
     referer: string | null;
     at: Date;
+    /** "unlock" = passcode entered, "view" = open link opened. */
+    kind: "unlock" | "view";
     geo?: IpGeo;
+}
+
+/** Link-preview crawlers (iMessage, Slack, WhatsApp, Twitter, Facebook) fetch a shared URL without a person behind it. */
+export function isBot(userAgent: string | null): boolean {
+    return /bot|crawler|spider|preview|facebookexternalhit|slackbot|twitterbot|whatsapp|telegram|discord|skype|linkedin|embedly|quora|pinterest|vkshare|w3c_validator|applebot|google-structured|headless/i.test(userAgent || "");
 }
 
 /** ipinfo.io fields for the visitor's IP (the old SSH-login email layout). */
@@ -53,10 +60,11 @@ export function clientIp(req: Request): string {
     return raw.split(",")[0].trim() || "unknown";
 }
 
-export function readVisit(req: Request, noteId: string, title: string): ShareVisit {
+export function readVisit(req: Request, noteId: string, title: string, kind: "unlock" | "view" = "unlock"): ShareVisit {
     const h = req.headers;
     return {
         noteId,
+        kind,
         title: title || "Untitled",
         ip: clientIp(req),
         city: h.get("x-vercel-ip-city") ? decodeURIComponent(h.get("x-vercel-ip-city")!) : null,
@@ -80,10 +88,11 @@ async function logVisit(v: ShareVisit): Promise<void> {
         emailed BOOLEAN NOT NULL DEFAULT false,
         created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )`);
+    await execute(`ALTER TABLE share_unlock_log ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'unlock'`);
     await execute(
-        `INSERT INTO share_unlock_log (note_id, title, ip, city, country, user_agent, referer, emailed)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-        [v.noteId, v.title, v.ip, v.city, v.country, v.userAgent, v.referer, false]
+        `INSERT INTO share_unlock_log (note_id, title, ip, city, country, user_agent, referer, emailed, kind)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [v.noteId, v.title, v.ip, v.city, v.country, v.userAgent, v.referer, false, v.kind]
     );
 }
 
@@ -100,9 +109,9 @@ function emailBody(v: ShareVisit, viewNumber: number): string {
         `<tr><td style="padding:7px 16px 7px 0;color:#71717a;font-size:13px;white-space:nowrap;vertical-align:top">${k}</td>` +
         `<td style="padding:7px 0;color:#18181b;font-size:14px;font-weight:600;word-break:break-word">${val ? escapeHtml(val) : "<span style=\"color:#a1a1aa;font-weight:400\">unknown</span>"}</td></tr>`;
     return `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;max-width:640px;margin:0 auto;padding:8px 0 24px;color:#18181b">
-  <div style="font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:#a1a1aa;font-weight:700;margin-bottom:6px">Stickies share - passcode unlock</div>
+  <div style="font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:#a1a1aa;font-weight:700;margin-bottom:6px">Stickies share - ${v.kind === "unlock" ? "passcode unlock" : "link opened"}</div>
   <h1 style="font-size:20px;line-height:1.35;margin:0 0 14px;color:#18181b">Someone opened "${escapeHtml(v.title)}"</h1>
-  <p style="margin:0 0 18px;font-size:15px;line-height:1.6;color:#3f3f46">Someone from <b>${escapeHtml(v.ip)}</b> entered the passcode on <b>${when}</b>${country ? ` from <b style="color:#ef4444">${escapeHtml(country)}</b>` : ""}. This is view <b>${viewNumber}</b> of this note.</p>
+  <p style="margin:0 0 18px;font-size:15px;line-height:1.6;color:#3f3f46">Someone from <b>${escapeHtml(v.ip)}</b> ${v.kind === "unlock" ? "entered the passcode" : "opened the shared link"} on <b>${when}</b>${country ? ` from <b style="color:#ef4444">${escapeHtml(country)}</b>` : ""}. This is view <b>${viewNumber}</b> of this note.</p>
   <table style="border-collapse:collapse;width:100%;max-width:100%;border-top:1px solid #e4e4e7;border-bottom:1px solid #e4e4e7;margin:0 0 18px">
     ${row("Target IP", v.ip)}
     ${row("Hostname", g?.hostname ?? null)}

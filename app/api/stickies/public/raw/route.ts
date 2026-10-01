@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { verifyLockPassword, signUnlockCookie, verifyUnlockCookie, unlockCookieName } from "@/lib/lock-password";
 import { wrapHtmlWithTheme } from "@/lib/html";
 import { unlockedSuccessPage, REVEAL_STYLE } from "@/lib/share-pages";
-import { notifyShareUnlock, readVisit } from "@/lib/share-alert";
+import { notifyShareUnlock, readVisit, isBot } from "@/lib/share-alert";
 
 /**
  * GET /api/stickies/public/raw?noteId=...
@@ -48,6 +48,11 @@ export async function GET(req: Request) {
         }
     }
 
+    // Every real view tells the owner - open links and the first read after a
+    // passcode unlock alike. Not awaited; link-preview crawlers are ignored.
+    if (!isBot(req.headers.get("user-agent"))) {
+        void notifyShareUnlock(readVisit(req, noteId, row.title, unlocked ? "unlock" : "view"));
+    }
     return contentResponse(req, noteId, row, forceText, theme, unlocked);
 }
 
@@ -96,10 +101,7 @@ export async function POST(req: Request) {
         return gatePage(req, noteId, row.title || "Locked note", true, theme);
     }
 
-    // Correct passcode: tell the owner who just opened it. Not awaited - the
-    // reader must never wait on an email, and a failed alert never blocks them.
-    void notifyShareUnlock(readVisit(req, noteId, row.title));
-
+    // The alert fires on the content GET that follows (unlocked=1), not here.
     const token = signUnlockCookie(noteId, row.lock_password_hash);
     const target = `/share?noteId=${encodeURIComponent(noteId)}&theme=${theme}&unlocked=1`;
     const res = new NextResponse(unlockedSuccessPage(target, theme === "dark"), {

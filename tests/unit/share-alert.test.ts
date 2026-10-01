@@ -4,7 +4,7 @@ const execute = vi.fn(async () => undefined);
 const query = vi.fn(async () => [{ n: "3" }]);
 vi.mock("@/lib/db-driver", () => ({ execute: (...a: unknown[]) => execute(...a), query: (...a: unknown[]) => query(...a) }));
 
-import { clientIp, readVisit, notifyShareUnlock } from "@/lib/share-alert";
+import { clientIp, readVisit, notifyShareUnlock, isBot } from "@/lib/share-alert";
 
 function req(headers: Record<string, string>) {
     return new Request("https://stickies-bheng.vercel.app/share?noteId=n1", { headers });
@@ -38,6 +38,15 @@ describe("readVisit", () => {
     });
 });
 
+describe("isBot", () => {
+    it("skips link-preview crawlers and keeps real browsers", () => {
+        expect(isBot("Mozilla/5.0 (compatible; Slackbot-LinkExpanding 1.0)")).toBe(true);
+        expect(isBot("WhatsApp/2.23.20.0")).toBe(true);
+        expect(isBot("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) Safari/605.1")).toBe(false);
+        expect(isBot(null)).toBe(false);
+    });
+});
+
 describe("notifyShareUnlock", () => {
     it("logs the visit, then emails when Resend is configured", async () => {
         process.env.RESEND_API_KEY = "re_test";
@@ -57,6 +66,7 @@ describe("notifyShareUnlock", () => {
         expect(body.html).toContain("203.0.113.7");
         expect(body.html).toContain("view <b>3</b>");
         expect(body.html).toContain("Massachusetts");
+        expect(body.html).toContain("entered the passcode");
         expect(body.html).toContain("static-maps.yandex.ru");
         vi.unstubAllGlobals();
     });
