@@ -57,20 +57,25 @@ test.describe("Navigation", () => {
 
     test("view-mode toggle cycles the main list layout", async ({ page }) => {
         await waitForHome(page);
-        // There are exactly two main list modes now - list and tabs (the thumbnail
-        // grid was dropped in #67, so "Thumb"/"Graph" no longer exist). The toggle is
-        // labelled by the mode it is currently showing.
-        const viewBtn = page.locator('header [aria-label="List"], header [aria-label="Tabs"]').first();
+        // 3 main list modes, cycled in this order: list -> thumbnails -> tabs. The
+        // toggle is labelled by the mode it is currently showing.
+        const viewBtn = page.locator('header [aria-label="List"], header [aria-label="Thumbnails"], header [aria-label="Tabs"]').first();
         await expect(viewBtn).toBeVisible({ timeout: 10_000 });
         expect(await viewBtn.getAttribute("aria-label")).toBe("List");
 
+        // First click: the thumbnail grid. Still a list header, so the toggle is
+        // on screen and has relabelled itself.
         await viewBtn.click();
+        await expect(page).toHaveURL(/mode=thumb/, { timeout: 10_000 });
+        await expect(page.locator('header [aria-label="Thumbnails"]').first()).toBeVisible({ timeout: 10_000 });
 
-        // Tabs mode hides the whole list header (the tab strip becomes the navigation),
-        // so asserting the toggle is still on screen would contradict the design. The
-        // observable outcome is the mode switch itself: the URL flips and the tab strip
-        // with its New-note tab takes over. View mode lives in client storage, and each
-        // test runs in a fresh context, so there is nothing to restore for the next spec.
+        // Second click: tabs. Tabs mode hides the whole list header (the tab strip
+        // becomes the navigation), so asserting the toggle is still on screen would
+        // contradict the design. The observable outcome is the mode switch itself:
+        // the URL flips and the tab strip with its New-note tab takes over. View mode
+        // lives in client storage, and each test runs in a fresh context, so there is
+        // nothing to restore for the next spec.
+        await page.locator('header [aria-label="Thumbnails"]').first().click();
         await expect(page).toHaveURL(/mode=tabs/, { timeout: 10_000 });
         await expect(page.locator('button[title="New note"]').first()).toBeVisible({ timeout: 20_000 });
     });

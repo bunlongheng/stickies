@@ -1048,7 +1048,9 @@ export default function NotesMaster() {
         if (typeof window === "undefined") return;
         const url = new URL(window.location.href);
         const modeVal = mainListMode;
-        if (modeVal === "tabs") {
+        // list is the default, so it stays out of the URL; thumb and tabs are both
+        // written so a refresh (or a shared link) lands back on the same layout.
+        if (modeVal !== "list") {
             url.searchParams.set("mode", modeVal);
         } else {
             url.searchParams.delete("mode");

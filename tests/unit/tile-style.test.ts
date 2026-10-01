@@ -47,3 +47,37 @@ describe("noteTileClassName", () => {
         expect(cls).toContain("list-row-hover");
     });
 });
+
+describe("thumbnail mode", () => {
+    const o = { showFileIcons: false, activeFolder: false, parentColor: "#111111", appTheme: "dark" as const, idx: 0, total: 1, thumb: true };
+
+    it("paints a card in the item's own colour, with no row rule", () => {
+        const s = noteTileStyle({ color: "#FFB84D" }, o);
+        expect(s.background).toBe("#FFB84D1f");
+        expect(s.border).toBe("1px solid #FFB84D59");
+        expect(s.borderBottom).toBeUndefined();
+        expect(s["--row-color"]).toBe("#FFB84D");
+    });
+
+    it("lifts the tint in light mode, and takes the parent colour inside a folder", () => {
+        expect(noteTileStyle({ color: "#FFB84D" }, { ...o, appTheme: "light" }).background).toBe("#FFB84D26");
+        expect(noteTileStyle({ color: "#FFB84D" }, { ...o, activeFolder: true }).background).toBe("#1111111f");
+        // a folder keeps its own colour even inside another folder
+        expect(noteTileStyle({ is_folder: true, color: "#00FF00" }, { ...o, activeFolder: true }).background).toBe("#00FF001f");
+    });
+
+    it("stacks the card contents instead of laying them out as a row", () => {
+        const cls = noteTileClassName({}, { isDragging: false, dropMode: null, incoming: false, removing: false, isSelectMode: false, selected: false, thumb: true });
+        expect(cls).toContain("flex-col");
+        expect(cls).toContain("rounded-xl");
+        expect(cls).not.toContain("min-h-[56px]");
+    });
+
+    it("still carries the drag, drop and selection states", () => {
+        const o2 = { isDragging: true, dropMode: "into" as const, incoming: true, removing: true, isSelectMode: true, selected: true, thumb: true };
+        expect(noteTileClassName({}, o2)).toContain("opacity-30");
+        expect(noteTileClassName({}, { ...o2, isDragging: false })).toContain("ring-cyan-400");
+        expect(noteTileClassName({}, { ...o2, isDragging: false, dropMode: null })).toContain("ring-blue-400");
+        expect(noteTileClassName({}, { ...o2, isDragging: false, dropMode: null })).toContain("note-incoming");
+    });
+});
