@@ -24,6 +24,7 @@ import { RobotIcon, FolderIconDisplay, FOLDER_HERO_ICONS } from "@/components/Fo
 import { HeaderIconBtn } from "@/components/HeaderIconBtn";
 import { noteTileStyle, noteTileClassName } from "@/lib/tile-style";
 import { NoteTileListBody } from "@/components/NoteTileListBody";
+import { NoteTileThumbBody } from "@/components/NoteTileThumbBody";
 import { isLightColor, palette12, taskColor } from "@/lib/colors";
 import { listStatsSummary } from "@/lib/list-stats";
 import { meaningfulInitial, timeAgo, toUrlToken } from "@/lib/text";
@@ -61,6 +62,7 @@ import ChevronRightIcon from "@heroicons/react/24/outline/ChevronRightIcon";
 import ChevronLeftIcon from "@heroicons/react/24/outline/ChevronLeftIcon";
 import BoltIcon from "@heroicons/react/24/outline/BoltIcon";
 import RectangleStackIcon from "@heroicons/react/24/outline/RectangleStackIcon";
+import Squares2X2Icon from "@heroicons/react/24/outline/Squares2X2Icon";
 
 import HeartIcon from "@heroicons/react/24/outline/HeartIcon";
 import HeartSolidIcon from "@heroicons/react/24/solid/HeartIcon";
@@ -437,7 +439,7 @@ export default function NotesMaster() {
 
     const [quoteIndex, setQuoteIndex] = useState(0);
     const [pusherFlash, setPusherFlash] = useState(false);
-    const [mainListMode, setMainListMode] = useState<"list" | "tabs">("list");
+    const [mainListMode, setMainListMode] = useState<"list" | "thumb" | "tabs">("list");
     const mainListModeRef = useRef(mainListMode);
     mainListModeRef.current = mainListMode;
     const [defaultFolder, setDefaultFolder] = useState<string>("CLAUDE");
@@ -905,9 +907,8 @@ export default function NotesMaster() {
         try {
             const rawMainList = localStorage.getItem(MAIN_LIST_MODE_KEY);
             if (rawMainList) {
-                // Legacy values ("true"/"false"/"thumb") all collapse to list - the
-                // thumbnail grid is gone, list and tabs are the only two layouts.
-                setMainListMode(rawMainList === "tabs" ? "tabs" : "list");
+                // Legacy "true"/"false" predate the named modes and mean list.
+                setMainListMode(rawMainList === "tabs" ? "tabs" : rawMainList === "thumb" ? "thumb" : "list");
             }
         } catch { /* ignore */ }
         try {
@@ -930,6 +931,7 @@ export default function NotesMaster() {
             if (themeParam === "light" || themeParam === "dark" || themeParam === "auto") setAppThemeMode(themeParam);
             const viewParam = urlParams.get("view") || urlParams.get("mode");
             if (viewParam === "list") setMainListMode("list");
+            else if (viewParam === "thumb" || viewParam === "grid") setMainListMode("thumb");
             else if (viewParam === "tabs") setMainListMode("tabs");
             const keyParam = urlParams.get("key");
             if (keyParam) setCreatedByFilter(keyParam);
@@ -3517,8 +3519,9 @@ export default function NotesMaster() {
     }, [newFolderName, folderNames, pickRandomPaletteColor, enterFolder, goBack]);
 
     const isFolderGridView = !search.trim() && !activeFolder;
-    const viewModeIcon = mainListMode === "list" ? Bars3Icon : RectangleStackIcon;
-    const viewModeLabel = mainListMode === "list" ? "List" : "Tabs";
+    const isThumbView = mainListMode === "thumb";
+    const viewModeIcon = mainListMode === "list" ? Bars3Icon : isThumbView ? Squares2X2Icon : RectangleStackIcon;
+    const viewModeLabel = mainListMode === "list" ? "List" : isThumbView ? "Thumbnails" : "Tabs";
     const viewPanelRef = useRef<HTMLDivElement>(null);
     const cycleViewMode = useCallback(() => {
         // Trigger flip animation via DOM - no remount
@@ -3528,7 +3531,8 @@ export default function NotesMaster() {
             void el.offsetWidth; // force reflow
             el.classList.add("view-flip-in");
         }
-        setMainListMode(v => (v === "list" ? "tabs" : "list"));
+        // list -> thumbnails -> tabs -> list
+        setMainListMode(v => (v === "list" ? "thumb" : v === "thumb" ? "tabs" : "list"));
     }, []);
 
     // Today is a virtual <24h view. Load it from the authoritative recent=today endpoint
@@ -5662,8 +5666,8 @@ export default function NotesMaster() {
                                 playSound("create");
                             })();
                         }}
-                        className="ios-mobile-main relative flex-1 overflow-x-hidden overflow-y-auto touch-pan-y overscroll-none bg-black pb-16 sm:pb-24"
-                        style={{ display: "block" }}
+                        className={`ios-mobile-main relative flex-1 overflow-x-hidden overflow-y-auto touch-pan-y overscroll-none bg-black pb-16 sm:pb-24 ${isThumbView ? "grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 p-2 content-start" : ""}`}
+                        style={isThumbView ? undefined : { display: "block" }}
                     >
                         {createdByFilter && (
                             <div className="px-4 py-2">
@@ -5681,7 +5685,7 @@ export default function NotesMaster() {
                             if (item._header) {
                                 return (
                                     <div key={item.id || `hdr-${idx}`}
-                                        className="px-4 pt-4 pb-1 text-[9px] font-black tracking-[0.2em] text-zinc-600 uppercase select-none">
+                                        className={`px-4 pt-4 pb-1 text-[9px] font-black tracking-[0.2em] text-zinc-600 uppercase select-none ${isThumbView ? "col-span-full" : ""}`}>
                                         {item._header}
                                     </div>
                                 );
@@ -5834,6 +5838,7 @@ export default function NotesMaster() {
                                         appTheme,
                                         idx,
                                         total: filteredDisplayItems.length,
+                                        thumb: isThumbView,
                                     }) as React.CSSProperties}
                                     className={noteTileClassName(item, {
                                         isDragging,
@@ -5842,6 +5847,7 @@ export default function NotesMaster() {
                                         removing: removingNoteIds.has(String(item.id)),
                                         isSelectMode,
                                         selected: selectedIds.has(String(item.id)),
+                                        thumb: isThumbView,
                                     })}>
                                     {/* Cursor spotlight glow — DOM-only, no React state */}
                                     <div data-glow className="absolute inset-0 pointer-events-none z-[-1]" style={{ transition: "background 0.4s ease" }} />
@@ -5853,6 +5859,15 @@ export default function NotesMaster() {
                                     {dt?.mode === "after" && (
                                         <div className="absolute z-20 bg-cyan-400 pointer-events-none left-0 right-0 bottom-0 h-0.5" />
                                     )}
+                                    {isThumbView ? (
+                                        <NoteTileThumbBody
+                                            item={item}
+                                            selected={selectedIds.has(String(item.id))}
+                                            isSelectMode={isSelectMode}
+                                            pinned={pinnedIds.has(String(item.id))}
+                                            onEnterFolder={() => { navTimestampRef.current = Date.now(); suppressOpenRef.current = true; setTimeout(() => { suppressOpenRef.current = false; }, 1000); enterFolder({ id: String(item.id), name: item.name, color: item.color || palette12[0] }); }}
+                                        />
+                                    ) : (
                                     <NoteTileListBody
                                             item={item}
                                             selected={selectedIds.has(String(item.id))}
@@ -5869,6 +5884,7 @@ export default function NotesMaster() {
                                             onEnterFolder={() => { navTimestampRef.current = Date.now(); suppressOpenRef.current = true; setTimeout(() => { suppressOpenRef.current = false; }, 1000); enterFolder({ id: String(item.id), name: item.name, color: item.color || palette12[0] }); }}
                                             onSetFilter={setCreatedByFilter}
                                     />
+                                    )}
                                 </div>
                             );
                         })}
