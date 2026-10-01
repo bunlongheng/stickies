@@ -18,6 +18,7 @@ export interface TileStyleOpts {
     appTheme: AppTheme;
     idx: number;
     total: number;
+    thumb?: boolean;         // thumbnail grid instead of a full-width row
 }
 
 /**
@@ -26,6 +27,17 @@ export interface TileStyleOpts {
  */
 export function noteTileStyle(item: TileStyleItem, o: TileStyleOpts): Record<string, string> {
     const c = item.color || item.folder_color || "#888888";
+    // A thumbnail is read at a glance across a grid, so the colour has to carry
+    // the whole identity: a flat card of its own hue, no row gradient, no rule.
+    if (o.thumb) {
+        const tc = item.is_folder ? (item.color || item.folder_color || c) : (o.activeFolder ? o.parentColor : c);
+        return {
+            position: "relative", isolation: "isolate",
+            "--row-color": tc, "--fc": tc,
+            background: `${tc}${o.appTheme === "light" ? "26" : "1f"}`,
+            border: `1px solid ${tc}59`,
+        };
+    }
     {
         if (!o.showFileIcons) {
             const isRootFolder = !o.activeFolder && !!item.is_folder;
@@ -54,9 +66,14 @@ export interface TileClassOpts {
     removing: boolean;
     isSelectMode: boolean;
     selected: boolean;
+    thumb?: boolean;
 }
 
 /** Class list for a tile. */
 export function noteTileClassName(item: TileStyleItem, o: TileClassOpts): string {
+    const shared = `${!item.is_folder && o.incoming ? "note-incoming" : ""} ${!item.is_folder && o.removing ? "note-removing" : ""} ${o.isDragging ? "opacity-30" : o.dropMode === "into" ? "ring-1 ring-inset ring-cyan-400" : ""} ${o.isSelectMode && !item.is_folder && o.selected ? "ring-1 ring-inset ring-blue-400" : ""}`;
+    if (o.thumb) {
+        return `group list-row-hover flex flex-col items-start gap-1 p-3 h-[104px] rounded-xl cursor-pointer select-none transition-colors overflow-hidden ${shared}`;
+    }
     return `group list-row-hover flex items-center gap-3 pl-3 pr-3 min-h-[56px] sm:min-h-[54px] cursor-pointer select-none transition-colors active:bg-white/10 overflow-hidden ${!item.is_folder && o.incoming ? "note-incoming" : ""} ${!item.is_folder && o.removing ? "note-removing" : ""} ${o.isDragging ? "opacity-30" : o.dropMode === "into" ? "bg-cyan-950/60 ring-1 ring-inset ring-cyan-400" : ""} ${o.isSelectMode && !item.is_folder && o.selected ? "bg-blue-950/50" : ""} border-r-[3px] border-r-transparent`;
 }

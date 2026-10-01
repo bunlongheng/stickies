@@ -28,7 +28,7 @@ export interface UseRealtimeSyncParams {
     integrationsRef: React.RefObject<Array<{ trigger: string; condition: Record<string, string>; type: string; config: Record<string, string> }>>;
     isFlashingRef: React.RefObject<boolean>;
     flashQueueRef: React.RefObject<Array<{ note: any; color: string }>>;
-    mainListModeRef: React.RefObject<"list" | "tabs">;
+    mainListModeRef: React.RefObject<"list" | "thumb" | "tabs">;
     openNoteRef: React.RefObject<(note: any) => any>;
     latestRichDocRef: React.RefObject<JSONContent | null>;
     pendingDeleteRef: React.RefObject<{ note: any; title: string; content: string; noteColor: string; targetFolder: string; timeoutId: ReturnType<typeof setTimeout> } | null>;
