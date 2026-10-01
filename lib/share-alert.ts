@@ -1,6 +1,7 @@
-// Who opened a passcode-gated share link. Fires once per successful unlock:
-// every view is written to share_unlock_log (so nothing is lost before an email
-// provider is configured) and emailed to OWNER_EMAIL when RESEND_API_KEY is set.
+// Who opened a share link. Every view is written to share_unlock_log, posted as
+// a note in the owner's Alerts folder, and emailed to OWNER_EMAIL: through
+// Resend when RESEND_API_KEY is set, otherwise through the keyless Formspree
+// form the release-approve skill already mails with (plain text).
 //
 // Never throws and never blocks the response - a failed alert must not stop a
 // paying client from reading the invoice.
@@ -167,8 +168,48 @@ async function sendEmail(v: ShareVisit, viewNumber: number): Promise<boolean> {
     return res.ok;
 }
 
+/** Plain-text twin of emailBody for the Formspree route, which cannot carry HTML. */
+function textBody(v: ShareVisit, viewNumber: number): string {
+    const g = v.geo;
+    const when = v.at.toLocaleString("en-US", { timeZone: "America/New_York", dateStyle: "medium", timeStyle: "short" }) + " ET";
+    const [lat, lon] = (g?.loc || "").split(",");
+    const rows: [string, string | null | undefined][] = [
+        ["Link", v.url],
+        ["Target IP", v.ip],
+        ["Hostname", g?.hostname],
+        ["City", g?.city || v.city],
+        ["Region", g?.region],
+        ["Country", g?.country || v.country],
+        ["Coordinates", g?.loc],
+        ["Org", g?.org],
+        ["Postal", g?.postal],
+        ["Timezone", g?.timezone],
+        ["Map", lat && lon ? `https://www.google.com/maps?q=${lat},${lon}` : null],
+        ["More detail", `https://ipinfo.io/${v.ip}`],
+        ["User agent", v.userAgent],
+    ];
+    return [
+        `Someone from ${v.ip} ${v.kind === "unlock" ? "entered the passcode for" : "opened"} "${v.title}" on ${when}. This is view ${viewNumber} of this note.`,
+        "",
+        ...rows.filter(([, val]) => val).map(([k, val]) => `${k}: ${val}`),
+    ].join("\n");
+}
+
+/** Keyless fallback: the same Formspree form the zeta-release-approve skill mails through. */
+async function sendFormspree(v: ShareVisit, viewNumber: number): Promise<boolean> {
+    const to = process.env.OWNER_EMAIL;
+    if (!to) return false;
+    const form = process.env.FORMSPREE_FORM || "mbddjovk";
+    const res = await fetch(`https://formspree.io/f/${form}`, {
+        method: "POST",
+        headers: { Accept: "application/json", "Content-Type": "application/json" },
+        body: JSON.stringify({ email: to, _subject: `Opened: ${v.title} - ${v.ip}`, message: textBody(v, viewNumber) }),
+    });
+    return res.ok;
+}
+
 /**
- * No email provider configured yet: drop the alert into the owner's own board
+ * The alert as a note in the owner's own board
  * instead, so a visit is never silent. Same database, no API key, and it shows
  * up on the phone like any other note.
  */
@@ -195,14 +236,13 @@ export async function notifyShareUnlock(v: ShareVisit): Promise<void> {
         );
         const viewNumber = Number(rows[0]?.n ?? 1);
         v.geo = (await lookupIp(v.ip)) ?? undefined;
-        if (await sendEmail(v, viewNumber)) {
+        await postAlertNote(v, viewNumber);
+        if ((await sendEmail(v, viewNumber)) || (await sendFormspree(v, viewNumber))) {
             await execute(
                 `UPDATE share_unlock_log SET emailed = true WHERE id = (
                      SELECT id FROM share_unlock_log WHERE note_id = $1 ORDER BY created_at DESC LIMIT 1)`,
                 [v.noteId]
             );
-        } else {
-            await postAlertNote(v, viewNumber);
         }
     } catch (e) {
         console.error("[share-alert] failed", e);

@@ -10,7 +10,7 @@ function req(headers: Record<string, string>) {
     return new Request("https://stickies-bheng.vercel.app/share?noteId=n1", { headers });
 }
 
-beforeEach(() => { execute.mockClear(); query.mockClear(); delete process.env.RESEND_API_KEY; delete process.env.OWNER_USER_ID; });
+beforeEach(() => { execute.mockClear(); query.mockClear(); delete process.env.RESEND_API_KEY; delete process.env.OWNER_EMAIL; delete process.env.OWNER_USER_ID; });
 
 describe("clientIp", () => {
     it("takes the first hop of x-forwarded-for", () => {
@@ -71,12 +71,32 @@ describe("notifyShareUnlock", () => {
         vi.unstubAllGlobals();
     });
 
-    it("posts an alert note instead when no email provider is set", async () => {
+    it("always posts an alert note, and mails through Formspree when there is no Resend key", async () => {
         process.env.OWNER_USER_ID = "u1";
+        process.env.OWNER_EMAIL = "owner@example.com";
+        const fetchMock = vi.fn(async () => new Response("{}", { status: 200 }));
+        vi.stubGlobal("fetch", fetchMock);
         await notifyShareUnlock(readVisit(req({ "x-forwarded-for": "203.0.113.7" }), "n1", "Invoice"));
         const sql = execute.mock.calls.map(c => String(c[0])).join("\n");
         expect(sql).toContain('INSERT INTO "stickies"');
         expect(sql).toContain("'Alerts'");
+        const fs = fetchMock.mock.calls.find(c => String(c[0]).includes("formspree.io/f/"))!;
+        expect(fs).toBeTruthy();
+        const body = JSON.parse((fs[1] as RequestInit).body as string);
+        expect(body.email).toBe("owner@example.com");
+        expect(body._subject).toContain("Invoice");
+        expect(body.message).toContain("Target IP: 203.0.113.7");
+        expect(body.message).toContain("Link: ");
+        expect(sql).toContain("emailed = true");
+    });
+
+    it("stays quiet on email when no address is set, but still posts the note", async () => {
+        process.env.OWNER_USER_ID = "u1";
+        const fetchMock = vi.fn(async () => new Response("{}", { status: 200 }));
+        vi.stubGlobal("fetch", fetchMock);
+        await notifyShareUnlock(readVisit(req({ "x-forwarded-for": "203.0.113.7" }), "n1", "Invoice"));
+        expect(fetchMock.mock.calls.some(c => String(c[0]).includes("formspree.io"))).toBe(false);
+        expect(execute.mock.calls.map(c => String(c[0])).join("\n")).toContain('INSERT INTO "stickies"');
     });
 
     it("never throws when the database is down", async () => {
