@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { verifyLockPassword, signUnlockCookie, verifyUnlockCookie, unlockCookieName } from "@/lib/lock-password";
 import { wrapHtmlWithTheme } from "@/lib/html";
 import { unlockedSuccessPage, REVEAL_STYLE } from "@/lib/share-pages";
+import { notifyShareUnlock, readVisit } from "@/lib/share-alert";
 
 /**
  * GET /api/stickies/public/raw?noteId=...
@@ -94,6 +95,10 @@ export async function POST(req: Request) {
     if (!(await verifyLockPassword(password, row.lock_password_hash))) {
         return gatePage(req, noteId, row.title || "Locked note", true, theme);
     }
+
+    // Correct passcode: tell the owner who just opened it. Not awaited - the
+    // reader must never wait on an email, and a failed alert never blocks them.
+    void notifyShareUnlock(readVisit(req, noteId, row.title));
 
     const token = signUnlockCookie(noteId, row.lock_password_hash);
     const target = `/share?noteId=${encodeURIComponent(noteId)}&theme=${theme}&unlocked=1`;
