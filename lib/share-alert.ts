@@ -152,7 +152,7 @@ async function postAlertNote(v: ShareVisit, viewNumber: number): Promise<void> {
     if (!userId) return;
     await execute(
         `INSERT INTO "stickies" (user_id, title, content, folder_name, folder_color, is_folder, type, "order", created_by_key, created_by_machine, icon)
-         VALUES ($1, $2, $3, 'Alerts', '#FF3B30', false, 'html', 0, 'share-alert', 'hub', '__hero:LockOpenIcon')`,
+         VALUES ($1, $2, $3, 'Alerts', '#FF3B30', false, 'html', 0, 'share-alert', 'hub', '__hero:EyeIcon')`,
         [
             userId,
             `Opened: ${v.title.replace(/^(Opened:\s*)+/, "")}`,
