@@ -14,6 +14,8 @@ export interface ShareVisit {
     country: string | null;
     userAgent: string | null;
     referer: string | null;
+    /** The share link as the visitor requested it. */
+    url: string;
     at: Date;
     /** "unlock" = passcode entered, "view" = open link opened. */
     kind: "unlock" | "view";
@@ -71,6 +73,7 @@ export function readVisit(req: Request, noteId: string, title: string, kind: "un
         country: h.get("x-vercel-ip-country"),
         userAgent: h.get("user-agent"),
         referer: h.get("referer"),
+        url: req.url,
         at: new Date(),
     };
 }
@@ -123,6 +126,7 @@ function emailBody(v: ShareVisit, viewNumber: number): string {
     ${row("Postal", g?.postal ?? null)}
     ${row("Timezone", g?.timezone ?? null)}
     ${row("Referrer", v.referer || "direct")}
+    <tr><td style="padding:7px 16px 7px 0;color:#71717a;font-size:13px;white-space:nowrap;vertical-align:top">Link</td><td style="padding:7px 0;font-size:14px;font-weight:600;word-break:break-all"><a href="${escapeHtml(v.url)}" style="color:#2563eb">${escapeHtml(v.url)}</a></td></tr>
   </table>
   ${mapUrl ? `<img src="${mapUrl}" alt="Map near ${escapeHtml(city || v.ip)}" width="600" height="300" style="display:block;max-width:100%;height:auto;border-radius:10px;border:1px solid #e4e4e7;margin:0 0 18px">` : ""}
   <p style="margin:0 0 6px;font-size:14px;color:#3f3f46">More detail: <a href="https://ipinfo.io/${encodeURIComponent(v.ip)}" style="color:#2563eb">ipinfo.io/${escapeHtml(v.ip)}</a></p>

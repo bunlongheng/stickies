@@ -102,6 +102,7 @@ const APP_ICON_FILES: Record<string, string> = {
     "scanme": "scanme.png",
     "score-card": "score-card.png",
     "stickies": "stickies.png",
+    "share-alert": "stickies.png",
     "flows": "flows.png",
     "think": "think.png",
     "tools": "tools.png",
