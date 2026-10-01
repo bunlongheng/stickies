@@ -62,6 +62,17 @@ export function clientIp(req: Request): string {
     return raw.split(",")[0].trim() || "unknown";
 }
 
+/** The URL as the visitor saw it (the hub binds 0.0.0.0, so req.url lies about the host). */
+function publicUrl(req: Request): string {
+    const u = new URL(req.url);
+    const host = req.headers.get("x-forwarded-host") || req.headers.get("host");
+    if (host) {
+        u.host = host;
+        u.protocol = req.headers.get("x-forwarded-proto") === "https" || host.endsWith(".vercel.app") ? "https:" : u.protocol;
+    }
+    return u.toString();
+}
+
 export function readVisit(req: Request, noteId: string, title: string, kind: "unlock" | "view" = "unlock"): ShareVisit {
     const h = req.headers;
     return {
@@ -73,7 +84,7 @@ export function readVisit(req: Request, noteId: string, title: string, kind: "un
         country: h.get("x-vercel-ip-country"),
         userAgent: h.get("user-agent"),
         referer: h.get("referer"),
-        url: req.url,
+        url: publicUrl(req),
         at: new Date(),
     };
 }
