@@ -2,6 +2,7 @@
 // Icons are mirrored from the local-apps favicon registry into /public/app-icons so
 // they resolve in production (Vercel can't reach the localhost:9876 source at runtime).
 const APP_ICON_FILES: Record<string, string> = {
+  "fc": "fc.png",
   "building-blocks": "building-blocks.png",
   "typing-hero": "typing-hero.png",
   "quick-launch": "quick-launch.png",
@@ -55,6 +56,7 @@ const APP_ICON_FILES: Record<string, string> = {
     "countries": "countries.png",
     "geometry": "geometry.png",
     "decks": "decks.png",
+    "iframe": "iframe.png",
     "sequences": "sequences.png",
     "distributor-portal": "distributor-portal.png",
     "drop": "drop.png",
