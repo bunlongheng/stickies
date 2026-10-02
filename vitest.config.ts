@@ -9,6 +9,7 @@ export default defineConfig({
         include: [
             "lib/**/*.test.ts",
             "tests/unit/**/*.test.ts",
+            "tests/unit/**/*.test.js",
             "tests/integration/**/*.test.ts",
             // Component tests (React Testing Library + jsdom). Each component test
             // file opts into the jsdom environment with a `// @vitest-environment
