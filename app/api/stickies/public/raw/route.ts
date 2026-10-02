@@ -3,7 +3,19 @@ import { NextResponse } from "next/server";
 import { verifyLockPassword, signUnlockCookie, verifyUnlockCookie, unlockCookieName } from "@/lib/lock-password";
 import { wrapHtmlWithTheme } from "@/lib/html";
 import { unlockedSuccessPage, REVEAL_STYLE } from "@/lib/share-pages";
-import { notifyShareUnlock, readVisit, isBot } from "@/lib/share-alert";
+import { notifyShareView, readVisit, isBot } from "@/lib/share-alert";
+
+/** The URL as the visitor saw it (the hub binds 0.0.0.0, so req.url lies about the host). */
+function publicUrl(req: Request): string {
+    const u = new URL(req.url);
+    const host = req.headers.get("x-forwarded-host") || req.headers.get("host");
+    if (host) {
+        u.port = "";
+        u.host = host;
+        u.protocol = req.headers.get("x-forwarded-proto") === "https" || host.endsWith(".vercel.app") ? "https:" : u.protocol;
+    }
+    return u.toString();
+}
 
 /**
  * GET /api/stickies/public/raw?noteId=...
@@ -51,7 +63,7 @@ export async function GET(req: Request) {
     // Every real view tells the owner - open links and the first read after a
     // passcode unlock alike. Not awaited; link-preview crawlers are ignored.
     if (!isBot(req.headers.get("user-agent"))) {
-        void notifyShareUnlock(readVisit(req, noteId, row.title, unlocked ? "unlock" : "view"));
+        void notifyShareView(readVisit(req.headers, { id: noteId, title: row.title, link: publicUrl(req) }, unlocked ? "unlock" : "view"));
     }
     return contentResponse(req, noteId, row, forceText, theme, unlocked);
 }
