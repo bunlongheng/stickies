@@ -4,6 +4,7 @@ import { verifyLockPassword, signUnlockCookie, verifyUnlockCookie, unlockCookieN
 import { wrapHtmlWithTheme } from "@/lib/html";
 import { unlockedSuccessPage, REVEAL_STYLE } from "@/lib/share-pages";
 import { notifyShareView, readVisit, isBot } from "@/lib/share-alert";
+import { htmlToPlainLines } from "@/lib/note-format";
 
 /** The URL as the visitor saw it (the hub binds 0.0.0.0, so req.url lies about the host). */
 function publicUrl(req: Request): string {
@@ -45,8 +46,8 @@ export async function GET(req: Request) {
     const unlocked = url.searchParams.get("unlocked") === "1";
     if (!noteId) return notFound();
 
-    const row = await queryOne<{ title: string; content: string; type: string | null; is_public: boolean; locked: boolean; lock_password_hash: string | null }>(
-        `SELECT title, content, type, is_public, locked, lock_password_hash FROM "stickies" WHERE id = $1 AND trashed_at IS NULL`,
+    const row = await queryOne<{ title: string; content: string; type: string | null; is_public: boolean; locked: boolean; lock_password_hash: string | null; folder_color: string | null }>(
+        `SELECT title, content, type, is_public, locked, lock_password_hash, folder_color FROM "stickies" WHERE id = $1 AND trashed_at IS NULL`,
         [noteId]
     );
 
@@ -56,7 +57,7 @@ export async function GET(req: Request) {
     if (row.locked && row.lock_password_hash) {
         const cookie = readCookie(req, unlockCookieName(noteId));
         if (!verifyUnlockCookie(noteId, row.lock_password_hash, cookie)) {
-            return gatePage(req, noteId, row.title || "Locked note", false, theme);
+            return gatePage(req, noteId, row.title || "Locked note", false, theme, lockBackdrop(row.content, row.folder_color));
         }
     }
 
@@ -99,8 +100,8 @@ export async function POST(req: Request) {
     const form = await req.formData().catch(() => null);
     const password = String(form?.get("password") ?? "").trim();
 
-    const row = await queryOne<{ title: string; lock_password_hash: string | null; is_public: boolean; locked: boolean }>(
-        `SELECT title, lock_password_hash, is_public, locked FROM "stickies" WHERE id = $1 AND trashed_at IS NULL`,
+    const row = await queryOne<{ title: string; lock_password_hash: string | null; is_public: boolean; locked: boolean; content: string; folder_color: string | null }>(
+        `SELECT title, lock_password_hash, is_public, locked, content, folder_color FROM "stickies" WHERE id = $1 AND trashed_at IS NULL`,
         [noteId]
     );
     if (!row || !row.is_public) return notFound();
@@ -110,7 +111,7 @@ export async function POST(req: Request) {
     }
 
     if (!(await verifyLockPassword(password, row.lock_password_hash))) {
-        return gatePage(req, noteId, row.title || "Locked note", true, theme);
+        return gatePage(req, noteId, row.title || "Locked note", true, theme, lockBackdrop(row.content, row.folder_color));
     }
 
     // The alert fires on the content GET that follows (unlocked=1), not here.
@@ -210,14 +211,33 @@ function contentResponse(req: Request, noteId: string, row: { title: string; con
     return new NextResponse(body, { status: 200, headers });
 }
 
-function gatePage(req: Request, noteId: string, title: string, badPassword: boolean, theme: "dark" | "light" = "light") {
+// The shape of the locked note, with none of its words: each non-empty line
+// becomes a bar as long as the line, on a sheet tinted by the folder colour. It
+// sits behind the gate blurred, so the glass has real content to diffuse without
+// a single character of the note reaching the browser.
+function lockBackdrop(content: string | null, folderColor: string | null): string | null {
+    const lines = htmlToPlainLines(content || "").split("\n").map((l) => l.trim()).filter(Boolean).slice(0, 34);
+    if (!lines.length) return null;
+    const accent = folderColor && /^#[0-9a-f]{6}$/i.test(folderColor) ? folderColor : "#c7cbe3";
+    const W = 1280, H = 800, left = 300, inner = 680, top = 72, step = 22;
+    const bars = lines.map((line, i) => {
+        const w = Math.max(60, Math.min(inner, Math.round((line.length / 72) * inner)));
+        const heading = i === 0 || (line.length < 28 && !/[.,;:]$/.test(line));
+        const h = heading ? 14 : 8;
+        return `<rect x="${left}" y="${top + i * step}" width="${w}" height="${h}" rx="4" fill="${heading ? "#2b2f45" : "#6b7390"}"/>`;
+    }).join("");
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}"><rect width="${W}" height="${H}" fill="#f4f5fa"/><rect x="${left - 60}" y="0" width="${inner + 120}" height="${H}" fill="#ffffff"/><rect x="${left - 60}" y="0" width="${inner + 120}" height="26" fill="${accent}"/>${bars}</svg>`;
+    return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
+function gatePage(req: Request, noteId: string, title: string, badPassword: boolean, theme: "dark" | "light" = "light", backdrop: string | null = null) {
     const safeTitle = escapeHtml(title);
     // Liquid glass lock: an optical glass card (iridescent rim, edge flares, glass
     // field) on a softly lit room. The stickies row has no preview PNG to blur behind it.
     const errorBlock = badPassword
         ? `<div class="alert" role="alert">Wrong passcode</div>`
         : `<div class="alert hidden">&nbsp;</div>`;
-    const html = `<!DOCTYPE html><html lang="en"><head>
+    const html = `<!DOCTYPE html><html lang="en"${backdrop ? ` class="has-blur"` : ""}><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex">
@@ -319,9 +339,17 @@ body{background:
 .go:active{transform:translateY(0) scale(0.97)}
 .go:focus-visible{outline:3px solid rgba(129,140,248,0.6);outline-offset:2px}
 .go svg{width:18px;height:18px;position:relative}
+/* the note's shape behind the gate, softened once here and again through the glass */
+.blur{position:fixed;inset:-40px;z-index:0;background:#f4f5fa url("${backdrop || ""}") center/cover no-repeat;filter:blur(9px) saturate(1.05)}
+.veil{position:fixed;inset:0;z-index:0;background:
+  radial-gradient(55% 60% at 8% 4%,rgba(255,200,182,0.3) 0%,rgba(255,200,182,0) 75%),
+  radial-gradient(50% 58% at 94% 94%,rgba(186,170,255,0.28) 0%,rgba(186,170,255,0) 75%),
+  rgba(255,255,255,0.32)}
+.has-blur .room{position:relative;z-index:1}
 @media (prefers-reduced-motion:reduce){.glass,.alert,.go,.entry{animation:none;transition:none}}
 </style>
 </head><body>
+${backdrop ? `<div class="blur" aria-hidden="true"></div><div class="veil" aria-hidden="true"></div>` : ""}
 <div class="room">
 <form class="glass" method="POST" action="/share?noteId=${encodeURIComponent(noteId)}&theme=${theme}">
   <img class="logo" src="/icon.png" alt="Stickies" width="76" height="76">
