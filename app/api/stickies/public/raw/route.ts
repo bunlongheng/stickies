@@ -212,8 +212,8 @@ function contentResponse(req: Request, noteId: string, row: { title: string; con
 
 function gatePage(req: Request, noteId: string, title: string, badPassword: boolean, theme: "dark" | "light" = "light") {
     const safeTitle = escapeHtml(title);
-    // Liquid glass lock, same look as the Flows gate (flows/lib/passcode-pages.js).
-    // The stickies row has no tiny PNG preview, so the card sits on the gradient wash.
+    // Liquid glass lock: an optical glass card (iridescent rim, edge flares, glass
+    // field) on a softly lit room. The stickies row has no preview PNG to blur behind it.
     const errorBlock = badPassword
         ? `<div class="alert" role="alert">Wrong passcode</div>`
         : `<div class="alert hidden">&nbsp;</div>`;
@@ -225,40 +225,101 @@ function gatePage(req: Request, noteId: string, title: string, badPassword: bool
 ${ogMeta(req, noteId, title)}
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-html,body{height:100%;background:linear-gradient(160deg,#f7f8fb 0%,#eceef5 100%);color:#1c1e21;font-family:Inter,-apple-system,BlinkMacSystemFont,'SF Pro Display',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+html,body{height:100%;color:#0f172a;font-family:Inter,-apple-system,BlinkMacSystemFont,'SF Pro Display',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+/* the lit room the glass refracts: 3 soft lights on a pale ground, no filters */
+body{background:
+  radial-gradient(55% 60% at 8% 4%,rgba(255,200,182,0.34) 0%,rgba(255,200,182,0) 75%),
+  radial-gradient(50% 58% at 94% 94%,rgba(186,170,255,0.3) 0%,rgba(186,170,255,0) 75%),
+  radial-gradient(42% 48% at 90% 6%,rgba(176,222,255,0.26) 0%,rgba(176,222,255,0) 75%),
+  radial-gradient(36% 42% at 6% 96%,rgba(176,236,244,0.22) 0%,rgba(176,236,244,0) 75%),
+  linear-gradient(160deg,#f6f7fb 0%,#eceef6 100%)}
 .room{min-height:100%;display:flex;align-items:center;justify-content:center;padding:32px 16px}
-/* liquid glass: the page shows through, a prismatic rim catches the light */
-.glass{position:relative;width:max-content;min-width:min(480px,calc(100vw - 32px));max-width:min(760px,calc(100vw - 32px));padding:44px 44px 36px;border-radius:32px;text-align:center;isolation:isolate;
-  background:linear-gradient(135deg,rgba(255,255,255,0.62) 0%,rgba(255,255,255,0.34) 55%,rgba(255,255,255,0.5) 100%);
-  -webkit-backdrop-filter:blur(28px) saturate(170%);backdrop-filter:blur(28px) saturate(170%);
-  box-shadow:0 30px 80px -20px rgba(60,70,120,0.22),0 2px 6px rgba(60,70,120,0.06),inset 0 1px 0 rgba(255,255,255,0.95),inset 0 0 0 1px rgba(255,255,255,0.45)}
-.glass::before{content:"";position:absolute;inset:0;border-radius:inherit;padding:1.5px;pointer-events:none;z-index:1;
-  background:linear-gradient(135deg,rgba(255,178,150,0.9) 0%,rgba(255,230,210,0.35) 18%,rgba(255,255,255,0.5) 45%,rgba(190,170,255,0.3) 70%,rgba(140,190,255,0.85) 100%);
+/* ── liquid glass ──────────────────────────────────────────────────────── */
+.glass{position:relative;width:100%;max-width:440px;padding:40px;border-radius:36px;text-align:center;isolation:isolate;
+  /* 1 white base, 2 diagonal reflection, 3 pearl core, 4 perimeter colour */
+  background:
+    linear-gradient(118deg,rgba(255,255,255,0) 30%,rgba(255,255,255,0.55) 46%,rgba(255,255,255,0.14) 54%,rgba(255,255,255,0) 68%),
+    radial-gradient(90% 70% at 50% 40%,rgba(255,255,255,0.42) 0%,rgba(255,255,255,0) 100%),
+    radial-gradient(60% 40% at 0% 0%,rgba(255,205,190,0.22) 0%,rgba(255,205,190,0) 70%),
+    radial-gradient(60% 40% at 100% 100%,rgba(190,175,255,0.24) 0%,rgba(190,175,255,0) 70%),
+    radial-gradient(45% 35% at 0% 100%,rgba(160,228,245,0.16) 0%,rgba(160,228,245,0) 70%),
+    linear-gradient(135deg,rgba(255,255,255,0.58) 0%,rgba(255,255,255,0.3) 50%,rgba(255,255,255,0.46) 100%);
+  -webkit-backdrop-filter:blur(40px) saturate(180%);backdrop-filter:blur(40px) saturate(180%);
+  /* glass thickness: a crisp white top lip, a violet lower lip, ambient shadow */
+  box-shadow:
+    inset 0 1.5px 0 rgba(255,255,255,0.95),
+    inset 1px 0 0 rgba(255,255,255,0.55),
+    inset 0 -1.5px 0 rgba(160,140,230,0.28),
+    inset -1px 0 0 rgba(170,160,235,0.16),
+    inset 0 0 0 1px rgba(255,255,255,0.35),
+    inset 0 22px 36px -24px rgba(255,255,255,0.9),
+    inset 0 -30px 40px -36px rgba(150,135,230,0.2),
+    0 2px 4px rgba(50,55,100,0.05),
+    0 24px 60px -18px rgba(70,70,130,0.26),
+    0 60px 100px -40px rgba(120,110,200,0.22);
+  animation:rise 450ms cubic-bezier(.2,.8,.2,1) both}
+.glass>*{position:relative;z-index:1}
+/* iridescent bubble rim: a conic sweep masked to a 1.5px ring */
+.glass::before{content:"";position:absolute;inset:0;border-radius:inherit;padding:1.5px;pointer-events:none;z-index:2;
+  background:conic-gradient(from 210deg at 50% 50%,
+    rgba(255,255,255,0.95) 0deg,
+    rgba(255,205,200,0.85) 28deg,
+    rgba(255,215,190,0.7) 50deg,
+    rgba(255,255,255,0.9) 82deg,
+    rgba(185,225,255,0.75) 118deg,
+    rgba(170,235,245,0.6) 150deg,
+    rgba(255,255,255,0.55) 185deg,
+    rgba(200,185,255,0.8) 225deg,
+    rgba(215,195,255,0.7) 262deg,
+    rgba(255,220,235,0.7) 300deg,
+    rgba(255,255,255,0.95) 360deg);
   -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);mask-composite:exclude}
-.glass::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:-1;
-  background:radial-gradient(42% 32% at 4% 6%,rgba(255,190,170,0.3) 0%,rgba(255,190,170,0) 70%),radial-gradient(40% 32% at 97% 96%,rgba(170,150,255,0.3) 0%,rgba(170,150,255,0) 70%),radial-gradient(30% 25% at 96% 6%,rgba(150,215,255,0.18) 0%,rgba(150,215,255,0) 70%)}
-.logo{display:block;margin:0 auto 20px;width:76px;height:76px;border-radius:20px;box-shadow:0 10px 26px rgba(28,30,33,0.3),inset 0 0 0 1px rgba(255,255,255,0.3)}
-.caption{font-size:14px;color:#6b7280;margin-top:8px;line-height:1.5}
-.name{font-size:28px;line-height:1.2;font-weight:800;letter-spacing:-0.03em;color:#111827;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.alert{margin:18px 0 -6px;font-size:13.5px;font-weight:600;color:#d92d20;animation:shake 0.4s ease-in-out}
+/* lens flares, embedded in the glass and held to the edges */
+.glass::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:0;overflow:hidden;
+  background:
+    radial-gradient(6px 6px at 9% 7%,rgba(255,255,255,1) 0%,rgba(255,255,255,0.9) 40%,rgba(255,255,255,0) 100%),
+    radial-gradient(22% 14% at 6% 5%,rgba(255,200,185,0.55) 0%,rgba(255,200,185,0) 100%),
+    linear-gradient(125deg,rgba(255,255,255,0) 4%,rgba(255,255,255,0.75) 9%,rgba(255,255,255,0) 15%),
+    radial-gradient(18% 10% at 94% 4%,rgba(255,255,255,0.6) 0%,rgba(255,255,255,0) 100%),
+    radial-gradient(20% 14% at 4% 96%,rgba(165,230,245,0.45) 0%,rgba(165,230,245,0) 100%),
+    radial-gradient(26% 18% at 96% 97%,rgba(185,165,255,0.5) 0%,rgba(185,165,255,0) 100%),
+    radial-gradient(60% 9% at 88% 100%,rgba(255,255,255,0.55) 0%,rgba(255,255,255,0) 100%)}
+@keyframes rise{from{opacity:0;transform:translateY(8px) scale(0.97)}to{opacity:1;transform:none}}
+/* no backdrop-filter (older Firefox): a milkier base so text still sits on something */
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+  .glass{background:linear-gradient(135deg,rgba(255,255,255,0.92) 0%,rgba(255,255,255,0.84) 100%)}
+  .entry{background:rgba(255,255,255,0.9)}}
+/* ── content ───────────────────────────────────────────────────────────── */
+.logo{display:block;margin:0 auto 18px;width:76px;height:76px;border-radius:20px;box-shadow:0 10px 26px rgba(28,30,33,0.28),inset 0 0 0 1px rgba(255,255,255,0.3)}
+.name{font-size:22px;line-height:1.2;font-weight:700;letter-spacing:-0.03em;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.caption{font-size:13.5px;color:#6b7280;margin-top:6px;line-height:1.5}
+.alert{margin:16px 0 -8px;font-size:13.5px;font-weight:600;color:#d92d20;animation:shake 0.4s ease-in-out}
 @keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-6px)}40%{transform:translateX(6px)}60%{transform:translateX(-4px)}80%{transform:translateX(4px)}}
 .alert.hidden{visibility:hidden;animation:none}
-.entry{margin-top:30px;display:flex;align-items:center;gap:10px;padding:6px 6px 6px 20px;border-radius:999px;
-  background:rgba(255,255,255,0.55);border:1px solid rgba(255,255,255,0.9);
-  box-shadow:inset 0 1px 1px rgba(255,255,255,0.9),0 12px 34px -8px rgba(110,100,200,0.22),0 0 0 1px rgba(120,110,200,0.08);transition:box-shadow .15s}
-.entry:focus-within{box-shadow:inset 0 1px 1px rgba(255,255,255,0.9),0 12px 34px -8px rgba(110,100,200,0.3),0 0 0 4px rgba(129,140,248,0.28)}
+/* the field is a smaller slab of the same glass, set into the card */
+.entry{margin-top:28px;height:64px;display:flex;align-items:center;gap:10px;padding:0 10px 0 18px;border-radius:20px;
+  background:linear-gradient(180deg,rgba(255,255,255,0.7) 0%,rgba(255,255,255,0.42) 100%);
+  -webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);
+  border:1px solid rgba(255,255,255,0.85);
+  box-shadow:inset 0 1.5px 0 rgba(255,255,255,1),inset 0 -1px 0 rgba(150,140,220,0.18),inset 0 8px 14px -10px rgba(90,90,150,0.18),0 1px 2px rgba(255,255,255,0.6),0 10px 24px -14px rgba(90,80,170,0.28);
+  transition:box-shadow .15s}
+.entry:focus-within{box-shadow:inset 0 1.5px 0 rgba(255,255,255,1),inset 0 -1px 0 rgba(150,140,220,0.18),inset 0 8px 14px -10px rgba(90,90,150,0.18),0 10px 24px -14px rgba(90,80,170,0.3),0 0 0 4px rgba(129,140,248,0.28)}
 .entry svg.lock{flex:none;width:22px;height:22px;color:#6b7280}
 /* type=text + text-security masks input WITHOUT being a password field, so
    LastPass/1Password never attach their autofill icon. */
-.entry input{flex:1;min-width:0;background:transparent;border:0;outline:0;color:#1f2937;font-size:18px;font-weight:600;font-family:inherit;letter-spacing:0.18em;padding:12px 0;-webkit-text-security:disc;text-security:disc}
+.entry input{flex:1;min-width:0;background:transparent;border:0;outline:0;color:#1f2937;font-size:17px;font-weight:600;font-family:inherit;letter-spacing:0.18em;padding:12px 0;-webkit-text-security:disc;text-security:disc}
 .entry input::placeholder{color:#8b93a5;font-weight:400;letter-spacing:0.01em}
-.go{flex:none;width:48px;height:48px;border:0;border-radius:50%;cursor:pointer;display:grid;place-items:center;color:#fff;
-  background:linear-gradient(145deg,#a5a8ff 0%,#8f8bf4 100%);box-shadow:0 8px 18px -6px rgba(110,100,230,0.6),inset 0 1px 0 rgba(255,255,255,0.5);transition:transform .12s,box-shadow .12s}
-.go:hover{transform:translateY(-1px);box-shadow:0 10px 22px -6px rgba(110,100,230,0.7),inset 0 1px 0 rgba(255,255,255,0.5)}
+/* the submit is a small lavender bubble */
+.go{position:relative;flex:none;width:44px;height:44px;border:1px solid rgba(255,255,255,0.55);border-radius:50%;cursor:pointer;display:grid;place-items:center;color:#fff;overflow:hidden;
+  background:linear-gradient(150deg,#b7b4ff 0%,#9a93f6 55%,#8a80ee 100%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.7),inset 0 -6px 10px -6px rgba(90,70,200,0.5),0 8px 18px -6px rgba(110,100,230,0.6);transition:transform .12s,box-shadow .12s}
+.go::before{content:"";position:absolute;left:18%;top:8%;width:62%;height:40%;border-radius:50%;pointer-events:none;
+  background:linear-gradient(180deg,rgba(255,255,255,0.75) 0%,rgba(255,255,255,0) 100%)}
+.go:hover{transform:translateY(-1px);box-shadow:inset 0 1px 0 rgba(255,255,255,0.7),inset 0 -6px 10px -6px rgba(90,70,200,0.5),0 10px 22px -6px rgba(110,100,230,0.7)}
 .go:active{transform:translateY(0) scale(0.97)}
 .go:focus-visible{outline:3px solid rgba(129,140,248,0.6);outline-offset:2px}
-.go svg{width:20px;height:20px}
-@media (prefers-reduced-motion:reduce){.alert,.go{animation:none;transition:none}}
+.go svg{width:18px;height:18px;position:relative}
+@media (prefers-reduced-motion:reduce){.glass,.alert,.go,.entry{animation:none;transition:none}}
 </style>
 </head><body>
 <div class="room">
