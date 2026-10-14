@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { verifyLockPassword, signUnlockCookie, verifyUnlockCookie, unlockCookieName } from "@/lib/lock-password";
 import { wrapHtmlWithTheme } from "@/lib/html";
 import { unlockReveal } from "@/lib/share-pages";
+import { lockBackdropImage } from "@/lib/lock-backdrop";
 import { notifyShareView, readVisit, isBot } from "@/lib/share-alert";
 import { htmlToPlainLines } from "@/lib/note-format";
 
@@ -57,7 +58,7 @@ export async function GET(req: Request) {
     if (row.locked && row.lock_password_hash) {
         const cookie = readCookie(req, unlockCookieName(noteId));
         if (!verifyUnlockCookie(noteId, row.lock_password_hash, cookie)) {
-            return gatePage(req, noteId, row.title || "Locked note", false, theme, lockBackdrop(row.content, row.folder_color));
+            return gatePage(req, noteId, row.title || "Locked note", false, theme, await lockBackdrop(noteId, row.title, row.content, row.folder_color));
         }
     }
 
@@ -111,7 +112,7 @@ export async function POST(req: Request) {
     }
 
     if (!(await verifyLockPassword(password, row.lock_password_hash))) {
-        return gatePage(req, noteId, row.title || "Locked note", true, theme, lockBackdrop(row.content, row.folder_color));
+        return gatePage(req, noteId, row.title || "Locked note", true, theme, await lockBackdrop(noteId, row.title, row.content, row.folder_color));
     }
 
     // The alert fires on the content GET that follows (unlocked=1), not here.
@@ -209,11 +210,18 @@ function contentResponse(req: Request, noteId: string, row: { title: string; con
     return new NextResponse(body, { status: 200, headers });
 }
 
+// Behind the lock: the note's real text, rendered, shrunk and blurred on the
+// server (lib/lock-backdrop.tsx) so the browser never holds a readable copy. If
+// that render fails, the older shape-only sheet below stands in.
+async function lockBackdrop(noteId: string, title: string, content: string | null, folderColor: string | null): Promise<string | null> {
+    return (await lockBackdropImage(noteId, title || "", content, folderColor)) ?? lockBackdropShape(content, folderColor);
+}
+
 // The shape of the locked note, with none of its words: each non-empty line
 // becomes a bar as long as the line, on a sheet tinted by the folder colour. It
 // sits behind the gate blurred, so the glass has real content to diffuse without
 // a single character of the note reaching the browser.
-function lockBackdrop(content: string | null, folderColor: string | null): string | null {
+function lockBackdropShape(content: string | null, folderColor: string | null): string | null {
     const lines = htmlToPlainLines(content || "").split("\n").map((l) => l.trim()).filter(Boolean).slice(0, 34);
     if (!lines.length) return null;
     const accent = folderColor && /^#[0-9a-f]{6}$/i.test(folderColor) ? folderColor : "#c7cbe3";

@@ -74,7 +74,8 @@
     "qrcode.react": "^4.2.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
-    "react-simple-code-editor": "^0.14.1"
+    "react-simple-code-editor": "^0.14.1",
+    "sharp": "^0.35.3"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2",
