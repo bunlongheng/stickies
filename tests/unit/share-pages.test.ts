@@ -1,38 +1,32 @@
 /**
- * Unit: lib/share-pages.ts - the dark unlock beat + the reveal style.
+ * Unit: lib/share-pages.ts - the firefly reveal a note plays after a right passcode.
  */
 import { describe, it, expect } from "vitest";
-import { unlockedSuccessPage, REVEAL_STYLE, SHARE_BG } from "@/lib/share-pages";
+import { unlockReveal } from "@/lib/share-pages";
 
-describe("unlockedSuccessPage", () => {
-    it("stays in the black safe room (no light flash) and veils into the note's theme color", () => {
-        const light = unlockedSuccessPage("/share?noteId=n&theme=light&unlocked=1", false);
-        expect(light).toContain("#181818 0%,#000 80%"); // same room as the gate
-        expect(light).not.toContain("#f6f9fd");          // the old light scene is gone
-        expect(light).toContain(`.veil{position:fixed;inset:0;background:${SHARE_BG.light}`);
-        const dark = unlockedSuccessPage("/share?noteId=n&theme=dark&unlocked=1", true);
-        expect(dark).toContain(`background:${SHARE_BG.dark}`);
+describe("unlockReveal", () => {
+    it("frosts the note and wipes it away over 3 s with 1000 fireflies", () => {
+        const html = unlockReveal(true);
+        expect(html).toContain("#stickiesReveal");
+        expect(html).toContain("backdrop-filter:blur(22px)");
+        expect(html).toContain("DURATION=3000");
+        expect(html).toContain("COUNT=1000");
+        expect(html).toContain("linear-gradient(to bottom, transparent");
     });
-    it("scans the file with a radar sweep and flips the readout to ACCESS GRANTED", () => {
-        const html = unlockedSuccessPage("/x", true);
-        expect(html).toContain('class="sweep"');
-        expect(html).toContain("SCANNING FILE");
-        expect(html).toContain("ACCESS GRANTED");
-        expect(html).not.toContain('class="dial"');
+    it("only plays on the unlocked=1 arrival, drops the flag, and respects reduced motion", () => {
+        const html = unlockReveal(false);
+        expect(html).toContain('/[?&]unlocked=1(&|$)/.test(location.search)');
+        expect(html).toContain('searchParams.delete("unlocked")');
+        expect(html).toContain("prefers-reduced-motion: reduce");
     });
-    it("navigates to the given target with the reveal flag, escaped as JSON", () => {
-        const html = unlockedSuccessPage("/share?noteId=a&theme=dark&unlocked=1", true);
-        expect(html).toContain('window.location.replace("/share?noteId=a&theme=dark&unlocked=1")');
-    });
-    it("hands off in under 2s", () => {
-        const m = unlockedSuccessPage("/x", true).match(/\}, (\d+)\);/);
-        expect(Number(m?.[1])).toBeLessThanOrEqual(2000);
-    });
-});
-
-describe("REVEAL_STYLE", () => {
-    it("fades the body in and respects reduced motion", () => {
-        expect(REVEAL_STYLE).toContain("stickiesReveal");
-        expect(REVEAL_STYLE).toContain("prefers-reduced-motion");
+    it("screens light blue points over a dark note and draws saturated blue on a white one", () => {
+        const dark = unlockReveal(true);
+        expect(dark).toContain("mix-blend-mode:screen");
+        expect(dark).toContain("rgba(15,15,15,0.28)");
+        expect(dark).toContain('"170,215,255"');
+        const light = unlockReveal(false);
+        expect(light).toContain("mix-blend-mode:normal");
+        expect(light).toContain("rgba(255,255,255,0.35)");
+        expect(light).toContain('"70,150,255"');
     });
 });

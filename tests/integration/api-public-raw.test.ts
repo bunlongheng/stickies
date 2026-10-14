@@ -121,12 +121,12 @@ describe("POST /api/stickies/public/raw (unlock)", () => {
         expect(res.status).toBe(401); // gate page rejects with 401, no unlock cookie
         expect(res.headers.get("set-cookie")).toBeNull();
     });
-    it("correct password -> 200 + signed httpOnly unlock cookie", async () => {
+    it("correct password -> 303 to the note + signed httpOnly unlock cookie", async () => {
         const hash = await hashLockPassword("correct");
         mockQueryOne.mockResolvedValue({ title: "t", lock_password_hash: hash, is_public: true, locked: true });
         const { POST } = await import("@/app/api/stickies/public/raw/route");
         const res = await POST(REQ_POST("note-1", "correct"));
-        expect(res.status).toBe(200);
+        expect(res.status).toBe(303);
         const sc = res.headers.get("set-cookie") ?? "";
         expect(sc).toContain(unlockCookieName("note-1"));
         expect(sc.toLowerCase()).toContain("httponly");
@@ -186,11 +186,15 @@ describe("GET share parity (HTML notes)", () => {
         expect(body).toContain("html,body{background:#1a1a1a!important");
     });
 
-    it("adds the reveal fade when arriving from the unlock page", async () => {
+    it("adds the firefly reveal when arriving from the passcode gate", async () => {
         mockQueryOne.mockResolvedValue(html);
         const { GET } = await import("@/app/api/stickies/public/raw/route");
         const body = await (await GET(REQ("?noteId=pub&unlocked=1"))).text();
         expect(body).toContain("stickiesReveal");
+        expect(body).toContain("COUNT=1000");
+        expect(body).toContain("mix-blend-mode:normal");
+        const dark = await (await GET(REQ("?noteId=pub&unlocked=1&theme=dark"))).text();
+        expect(dark).toContain("mix-blend-mode:screen");
     });
 
     it("leaves plain-text notes and ?as=text untouched", async () => {
@@ -203,16 +207,15 @@ describe("GET share parity (HTML notes)", () => {
 });
 
 describe("unlock flow hand-off", () => {
-    it("gate form carries the theme; success page is dark and lands on the reveal URL", async () => {
+    it("gate form carries the theme; a right passcode redirects straight to the reveal URL", async () => {
         const hash = await hashLockPassword("pw");
         mockQueryOne.mockResolvedValue({ title: "t", content: "x", type: "html", is_public: true, locked: true, lock_password_hash: hash });
         const { GET, POST } = await import("@/app/api/stickies/public/raw/route");
         const gate = await (await GET(REQ("?noteId=n1&theme=dark"))).text();
         expect(gate).toContain('action="/share?noteId=n1&theme=dark"');
         const res = await POST(new Request("https://stickies.example.com/api/stickies/public/raw?noteId=n1&theme=dark", { method: "POST", body: new URLSearchParams({ password: "pw" }) }));
-        const body = await res.text();
-        expect(res.status).toBe(200);
-        expect(body).not.toContain("#f6f9fd");
-        expect(body).toContain('window.location.replace("/share?noteId=n1&theme=dark&unlocked=1")');
+        expect(res.status).toBe(303);
+        expect(res.headers.get("location")).toBe("/share?noteId=n1&theme=dark&unlocked=1");
+        expect(res.headers.get("set-cookie")).toContain("HttpOnly");
     });
 });

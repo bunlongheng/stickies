@@ -1,106 +1,64 @@
 /**
- * Pure HTML builders for the public share flow (no React, no DB). The safe
- * gate page stays in the route (it needs OG meta); these are the 2 pieces that
- * run after a correct passcode.
+ * Pure HTML builder for the public share flow (no React, no DB): the reveal a
+ * shared note plays right after a correct passcode. Ported from Flows
+ * (src/components/UnlockReveal.jsx), in plain script because the note is a
+ * server-rendered document, not a React tree.
  */
 
-/** Theme surface colors, kept identical to lib/html.ts wrapHtmlWithTheme. */
-export const SHARE_BG = { dark: "#1a1a1a", light: "#ffffff" } as const;
-
-/**
- * Injected into a shared note's <head> when it arrives from the unlock page:
- * the body fades in over the theme background so the black safe -> note
- * hand-off reads as one continuous reveal, never a white flash + hard cut.
- */
-export const REVEAL_STYLE =
-    `<style>@keyframes stickiesReveal{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}` +
-    `body{animation:stickiesReveal .55s ease-out both}` +
-    `@media (prefers-reduced-motion:reduce){body{animation:none}}</style>`;
+const DURATION = 3000;
+const COUNT = 1000;
 
 /**
- * The "access granted" beat between the black safe and the note. Same dark
- * room as the gate: a radar sweeps the file (rings, crosshair, a green beam
- * with a fading trail, blips that light as it passes), the readout flips from
- * SCANNING to ACCESS GRANTED, then the scene dissolves into a veil of the
- * note's own theme color before navigating, so the next page paints on the
- * same surface it fades on.
+ * Injected into a shared note's <head> when it arrives from the passcode gate
+ * (&unlocked=1): the note starts frosted, the frost wipes away top to bottom
+ * over 3 s, and 1000 single-pixel blue fireflies scatter across the page while
+ * it does, brightest at the moving edge. Runs once, removes itself and the
+ * ?unlocked flag. Reduced motion skips straight to the note.
+ *
+ * The note page is sandboxed to an opaque origin, so everything here is inline
+ * and self-contained; history.replaceState may throw there and is best-effort.
  */
-export function unlockedSuccessPage(target: string, isDark: boolean): string {
-    const veil = isDark ? SHARE_BG.dark : SHARE_BG.light;
-    return `<!DOCTYPE html><html lang="en"><head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ACCESS GRANTED</title>
-<style>
-*{box-sizing:border-box;margin:0;padding:0}
-html,body{height:100%;overflow:hidden;-webkit-font-smoothing:antialiased}
-body{background:radial-gradient(ellipse at 50% 30%,#181818 0%,#000 80%);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
-.scene{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:26px;
-  animation:appear .28s ease-out both,dissolve .48s ease-in 1.42s forwards}
-@keyframes appear{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:none}}
-@keyframes dissolve{to{opacity:0;filter:blur(18px);transform:scale(1.04)}}
-.veil{position:fixed;inset:0;background:${veil};opacity:0;pointer-events:none;animation:veil .55s ease-in 1.4s forwards}
-@keyframes veil{to{opacity:1}}
-/* radar dish: rings + crosshair etched into dark glass */
-.radar{position:relative;width:46vmin;height:46vmin;max-width:340px;max-height:340px;border-radius:50%;overflow:hidden;
-  background:
-    repeating-radial-gradient(circle at 50% 50%,rgba(74,201,143,.16) 0 1px,transparent 1px 25%),
-    linear-gradient(rgba(74,201,143,.16),rgba(74,201,143,.16)) 50% 0/1px 100% no-repeat,
-    linear-gradient(rgba(74,201,143,.16),rgba(74,201,143,.16)) 0 50%/100% 1px no-repeat,
-    radial-gradient(circle at 50% 50%,#0f1512 0%,#070908 70%,#000 100%);
-  box-shadow:0 0 0 1px rgba(74,201,143,.22),0 0 40px rgba(74,201,143,.12),inset 0 0 40px rgba(0,0,0,.8)}
-/* the beam: a thin bright edge with a long fading trail behind it */
-.sweep{position:absolute;inset:0;border-radius:50%;
-  background:conic-gradient(from 0deg,rgba(74,201,143,0) 0deg,rgba(74,201,143,.05) 220deg,rgba(74,201,143,.28) 330deg,rgba(120,255,190,.9) 359deg,rgba(74,201,143,0) 360deg);
-  animation:sweep 1.25s linear .15s 1 forwards;transform:rotate(0deg)}
-@keyframes sweep{to{transform:rotate(720deg)}}
-.center{position:absolute;top:50%;left:50%;width:6px;height:6px;margin:-3px;border-radius:50%;background:#4ac98f;box-shadow:0 0 10px #4ac98f}
-/* blips light up as the beam passes, then linger */
-.blip{position:absolute;width:7px;height:7px;margin:-3.5px;border-radius:50%;background:#7dffbe;opacity:0;
-  box-shadow:0 0 10px 2px rgba(125,255,190,.8);animation:blip 1.1s ease-out forwards}
-.b1{top:32%;left:64%;animation-delay:.42s}.b2{top:66%;left:40%;animation-delay:.68s}.b3{top:44%;left:26%;animation-delay:.94s}
-@keyframes blip{0%{opacity:0;transform:scale(.4)}15%{opacity:1;transform:scale(1.4)}100%{opacity:.75;transform:scale(1)}}
-/* LCD readout under the dish */
-.lcd{position:relative;height:18px;width:46vmin;max-width:340px;text-align:center;font-size:12px;letter-spacing:.34em;font-weight:700}
-.lcd span{position:absolute;inset:0;white-space:nowrap}
-.scan{color:rgba(74,201,143,.75);animation:scanTxt 1.2s steps(1) forwards}
-@keyframes scanTxt{0%{opacity:1}100%{opacity:0}}
-.ok{color:#7dffbe;text-shadow:0 0 12px rgba(125,255,190,.8);opacity:0;animation:okTxt .3s ease-out 1.2s forwards}
-@keyframes okTxt{to{opacity:1}}
-.scan i{font-style:normal;animation:dots 1.2s steps(4) infinite}
-@keyframes dots{0%{content:""}}
-@media (prefers-reduced-motion:reduce){.scene,.sweep,.blip,.veil,.scan,.ok{animation-duration:.01ms;animation-delay:0s}}
-</style>
-</head><body>
-<div class="scene">
-  <div class="radar">
-    <div class="sweep"></div>
-    <span class="blip b1"></span><span class="blip b2"></span><span class="blip b3"></span>
-    <span class="center"></span>
-  </div>
-  <div class="lcd"><span class="scan">SCANNING FILE</span><span class="ok">ACCESS GRANTED</span></div>
-</div>
-<div class="veil"></div>
-<script>
-(function(){
-  try {
-    var AC = window.AudioContext || window.webkitAudioContext;
-    if (AC) {
-      var ctx = new AC();
-      var beep = function(freq, start, dur){
-        var o = ctx.createOscillator(), g = ctx.createGain();
-        o.type = "square"; o.frequency.value = freq;
-        g.gain.setValueAtTime(0, ctx.currentTime + start);
-        g.gain.linearRampToValueAtTime(0.08, ctx.currentTime + start + 0.01);
-        g.gain.linearRampToValueAtTime(0, ctx.currentTime + start + dur);
-        o.connect(g); g.connect(ctx.destination);
-        o.start(ctx.currentTime + start); o.stop(ctx.currentTime + start + dur + 0.02);
-      };
-      beep(523.25, 0.42, 0.06); beep(523.25, 0.68, 0.06); beep(523.25, 0.94, 0.06); beep(987.77, 1.2, 0.26);
+export function unlockReveal(isDark: boolean): string {
+    // Dark notes get light points screened over them; on a white note screen
+    // blending is invisible, so the flies draw as saturated blue instead.
+    const frost = isDark ? "rgba(15,15,15,0.28)" : "rgba(255,255,255,0.35)";
+    const blend = isDark ? "screen" : "normal";
+    const colors = isDark ? ["170,215,255", "255,255,255"] : ["70,150,255", "125,195,255"];
+    return `<style>#stickiesReveal{position:fixed;inset:0;z-index:2147483647;pointer-events:none}
+#stickiesReveal .frost{position:absolute;inset:0;background:${frost};-webkit-backdrop-filter:blur(22px) saturate(1.1);backdrop-filter:blur(22px) saturate(1.1)}
+#stickiesReveal canvas{position:absolute;inset:0;width:100%;height:100%;mix-blend-mode:${blend}}</style>
+<script>(function(){
+  if(!/[?&]unlocked=1(&|$)/.test(location.search))return;
+  try{var u=new URL(location.href);u.searchParams.delete("unlocked");history.replaceState(history.state,"",u)}catch(e){}
+  if(window.matchMedia&&matchMedia("(prefers-reduced-motion: reduce)").matches)return;
+  var DURATION=${DURATION},COUNT=${COUNT},COLORS=${JSON.stringify(colors)};
+  function go(){
+    var root=document.createElement("div");root.id="stickiesReveal";root.setAttribute("aria-hidden","true");
+    var veil=document.createElement("div");veil.className="frost";
+    var cv=document.createElement("canvas");root.appendChild(veil);root.appendChild(cv);document.body.appendChild(root);
+    var ctx=cv.getContext("2d");if(!ctx){root.remove();return}
+    var dpr=window.devicePixelRatio||1,W=window.innerWidth,H=window.innerHeight;
+    cv.width=W*dpr;cv.height=H*dpr;ctx.scale(dpr,dpr);
+    var flies=[];for(var i=0;i<COUNT;i++)flies.push({x:Math.random()*W,y:Math.random()*H,vx:(Math.random()-.5)*60,vy:(Math.random()-.5)*60-10,tw:Math.random()*Math.PI*2,sp:4+Math.random()*8,c:Math.random()<.7?COLORS[0]:COLORS[1]});
+    var t0=performance.now();
+    function frame(now){
+      var t=Math.min(1,(now-t0)/DURATION);
+      var ease=t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;
+      var edge=-20+ease*140;
+      var mask="linear-gradient(to bottom, transparent "+edge+"%, #000 "+(edge+20)+"%)";
+      veil.style.maskImage=mask;veil.style.webkitMaskImage=mask;
+      ctx.clearRect(0,0,W,H);
+      var dt=1/60,front=(edge+10)/100*H;
+      for(var i=0;i<flies.length;i++){var f=flies[i];f.x+=f.vx*dt;f.y+=f.vy*dt;
+        var near=Math.max(0,1-Math.abs(f.y-front)/(H*.35));
+        var a=(.25+.75*near)*(.55+.45*Math.sin(f.tw+now/1000*f.sp))*(t<.85?1:(1-t)/.15);
+        if(a<=.02)continue;
+        ctx.fillStyle="rgba("+f.c+","+(a*.25).toFixed(3)+")";ctx.fillRect(f.x-1.5,f.y-1.5,4,4);
+        ctx.fillStyle="rgba("+f.c+","+a.toFixed(3)+")";ctx.fillRect(f.x,f.y,1,1);}
+      if(t<1)requestAnimationFrame(frame);else root.remove();
     }
-  } catch(e){}
-  setTimeout(function(){ window.location.replace(${JSON.stringify(target)}); }, 1950);
-})();
-</script>
-</body></html>`;
+    requestAnimationFrame(frame);
+  }
+  if(document.body)go();else document.addEventListener("DOMContentLoaded",go);
+})();</script>`;
 }
