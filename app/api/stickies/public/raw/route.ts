@@ -2,7 +2,7 @@ import { queryOne } from "@/lib/db-driver";
 import { NextResponse } from "next/server";
 import { verifyLockPassword, signUnlockCookie, verifyUnlockCookie, unlockCookieName } from "@/lib/lock-password";
 import { wrapHtmlWithTheme } from "@/lib/html";
-import { unlockedSuccessPage, REVEAL_STYLE } from "@/lib/share-pages";
+import { unlockReveal } from "@/lib/share-pages";
 import { notifyShareView, readVisit, isBot } from "@/lib/share-alert";
 import { htmlToPlainLines } from "@/lib/note-format";
 
@@ -115,14 +115,12 @@ export async function POST(req: Request) {
     }
 
     // The alert fires on the content GET that follows (unlocked=1), not here.
+    // A right passcode goes straight to the note, which plays its own reveal.
     const token = signUnlockCookie(noteId, row.lock_password_hash);
     const target = `/share?noteId=${encodeURIComponent(noteId)}&theme=${theme}&unlocked=1`;
-    const res = new NextResponse(unlockedSuccessPage(target, theme === "dark"), {
-        status: 200,
-        headers: {
-            "Content-Type": "text/html; charset=utf-8",
-            "Cache-Control": "no-store",
-        },
+    const res = new NextResponse(null, {
+        status: 303,
+        headers: { Location: target, "Cache-Control": "no-store" },
     });
     res.cookies.set(unlockCookieName(noteId), token, {
         httpOnly: true, sameSite: "lax", secure: req.url.startsWith("https://"),
@@ -192,7 +190,7 @@ function contentResponse(req: Request, noteId: string, row: { title: string; con
         const head = `<meta name="viewport" content="width=device-width,initial-scale=1">`
             + (/<title[\s>]/i.test(doc) ? "" : `<title>${escapeHtml(row.title || "Stickies")}</title>`)
             + ogMeta(req, noteId, row.title)
-            + (unlocked ? REVEAL_STYLE : "");
+            + (unlocked ? unlockReveal(theme === "dark") : "");
         body = doc.replace(/<head([^>]*)>/i, `<head$1>${head}`);
     }
 
