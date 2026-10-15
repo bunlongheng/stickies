@@ -24,7 +24,7 @@ export async function lockBackdropImage(noteId: string, title: string, content: 
     try {
         const accent = folderColor && /^#[0-9a-f]{6}$/i.test(folderColor) ? folderColor : "#c7cbe3";
         const png = Buffer.from(await new ImageResponse(sheet(title, lines, accent), { width: W, height: H }).arrayBuffer());
-        const jpg = await sharp(png).resize(480).blur(1).jpeg({ quality: 60 }).toBuffer();
+        const jpg = await sharp(png).resize(480).blur(2.2).jpeg({ quality: 60 }).toBuffer();
         const uri = `data:image/jpeg;base64,${jpg.toString("base64")}`;
         if (cache.size > 200) cache.clear();
         cache.set(key, uri);
