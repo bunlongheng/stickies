@@ -5,9 +5,9 @@ import { htmlToPlainLines } from "@/lib/note-format";
 
 /**
  * The frosted sheet behind the passcode lock: the note's REAL text, drawn
- * server-side as a document, then shrunk 4x and blurred BEFORE it leaves the
- * server. The browser only ever receives a 320px-wide smear where a line of
- * 15px type is under 4px tall, so removing the page's CSS blur, saving the
+ * server-side as a document, then shrunk and blurred BEFORE it leaves the
+ * server. The browser only ever receives a 480px-wide smear where a line of
+ * 15px type is under 6px tall, so removing the page's CSS blur, saving the
  * image or reading the source shows shapes and colours, never a word. Falls
  * back to null (plain gradient) if rendering fails.
  */
@@ -24,7 +24,7 @@ export async function lockBackdropImage(noteId: string, title: string, content: 
     try {
         const accent = folderColor && /^#[0-9a-f]{6}$/i.test(folderColor) ? folderColor : "#c7cbe3";
         const png = Buffer.from(await new ImageResponse(sheet(title, lines, accent), { width: W, height: H }).arrayBuffer());
-        const jpg = await sharp(png).resize(320).blur(1.6).jpeg({ quality: 55 }).toBuffer();
+        const jpg = await sharp(png).resize(480).blur(1).jpeg({ quality: 60 }).toBuffer();
         const uri = `data:image/jpeg;base64,${jpg.toString("base64")}`;
         if (cache.size > 200) cache.clear();
         cache.set(key, uri);

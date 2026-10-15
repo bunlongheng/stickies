@@ -345,7 +345,7 @@ body{background:
 .go:focus-visible{outline:3px solid rgba(255,255,255,0.9);outline-offset:2px}
 .go svg{width:18px;height:18px;position:relative}
 /* the note's shape behind the gate: softened a touch, sharp enough to bend */
-.blur{position:fixed;inset:-40px;z-index:0;background:#f4f5fa url("${backdrop || ""}") center/cover no-repeat;filter:blur(3px)}
+.blur{position:fixed;inset:-40px;z-index:0;background:#f4f5fa url("${backdrop || ""}") center/cover no-repeat;filter:blur(2px)}
 .veil{position:fixed;inset:0;z-index:0;background:
   radial-gradient(55% 60% at 8% 4%,rgba(255,255,255,0.5) 0%,rgba(255,255,255,0) 75%),
   radial-gradient(42% 48% at 90% 6%,rgba(176,222,255,0.22) 0%,rgba(176,222,255,0) 75%),
