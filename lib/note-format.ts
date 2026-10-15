@@ -35,6 +35,7 @@ export function stripEmoji(s: string): string {
 export function htmlToPlainLines(html: string): string {
     if (!/<[a-z][^>]*>/i.test(html)) return html;
     return html
+        .replace(/<(head|style|script|title|noscript|template)\b[\s\S]*?<\/\1\s*>/gi, "")
         .replace(/<br\s*\/?>/gi, "\n")
         .replace(/<\/li>/gi, "\n")
         .replace(/<li[^>]*>/gi, "")
